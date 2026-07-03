@@ -88,11 +88,11 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [x] Also fold in if Phase 2 didn't: `UILaunchScreen: {}` in Info.plist properties (fixes simulator letterboxing/compatibility mode)
 
 ### Phase 3 — Engine
-- [ ] Factor providers + `WeightedScorer` with reasons, in `RideOnCore`, pure functions over `DailyContext`
-- [ ] Novelty: ride-log recency decay + geometric overlap between routes
-- [ ] Time-window weather scoring (hourly slices over the predicted ride window)
-- [ ] "Best day this week" scan (threshold; absent below it)
-- [ ] Unit tests: golden scenarios (windy day flips route direction preference, short window drops far routes, novelty decay, intent reweighting)
+- [x] Factor providers + `WeightedScorer` with reasons, in `Packages/Engine`, pure functions over `DailyContext`
+- [x] Novelty: ride-log recency decay + geometric overlap between routes
+- [x] Time-window weather scoring (hourly slices over the predicted ride window)
+- [x] "Best day this week" scan (threshold; absent below it)
+- [x] Unit tests: golden scenarios (windy day flips route direction preference, short window drops far routes, novelty decay, intent reweighting)
 
 ### Phase 4 — UI shell & screens
 - [ ] Tab structure + `NavigationSplitView` adaptation (Mac/iPad); Liquid Glass audit per DESIGN-SYSTEM.md §2
@@ -143,7 +143,7 @@ Sequencing: 0 ∥ 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8, with design start
 Goal: bullet-proof confidence — every phase closes only when its slice of this pyramid is green, and the full suite stays green thereafter.
 
 ### App — unit (RideOnCore, `swift test`)
-- [ ] Engine golden-scenario tests: windy day flips direction preference; short time window drops far routes; novelty decay curve; intent reweighting; weights-panel changes alter ranking deterministically; "best day this week" threshold (present/absent)
+- [x] Engine golden-scenario tests: windy day flips direction preference; short time window drops far routes; novelty decay curve; intent reweighting; weights-panel changes alter ranking deterministically; "best day this week" threshold (present/absent)
 - [ ] GPX parsing against a fixtures folder of real exports (cycle.travel, Strava, Garmin Connect, RideWithGPS) incl. malformed/truncated files
 - [ ] Elevation smoothing + gain against known-answer fixtures; geometry utils (bearing segments, route-overlap %) property-tested with roundtrip/symmetry invariants
 - [ ] Speed model: estimate accuracy against fixture activities; Strava-derived defaults computation

@@ -16,6 +16,10 @@ public struct DailyContext: Codable, Sendable, Hashable {
     public var backBy: Date?
     public var intent: RideIntent
     public var bike: Bike
+    /// Hourly forecast covering (at least) the predicted ride window, used by
+    /// the weather factors (wind/temperature/sky/rain) for time-window
+    /// scoring rather than a whole-day average.
+    public var hourlyForecast: [HourlyWeather]
 
     public init(
         date: Date,
@@ -23,7 +27,8 @@ public struct DailyContext: Codable, Sendable, Hashable {
         hoursAvailable: Double,
         backBy: Date? = nil,
         intent: RideIntent,
-        bike: Bike
+        bike: Bike,
+        hourlyForecast: [HourlyWeather] = []
     ) {
         self.date = date
         self.startLocation = startLocation
@@ -31,5 +36,6 @@ public struct DailyContext: Codable, Sendable, Hashable {
         self.backBy = backBy
         self.intent = intent
         self.bike = bike
+        self.hourlyForecast = hourlyForecast
     }
 }

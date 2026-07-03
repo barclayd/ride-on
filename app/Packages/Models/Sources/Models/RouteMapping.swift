@@ -24,7 +24,9 @@ public extension RouteModel {
             surfaces: surfaces ?? SurfaceBreakdown(distanceKmBySurface: [:]),
             suggestedBikeType: bikeType,
             start: coordinates.first,
-            end: coordinates.last
+            end: coordinates.last,
+            coordinates: coordinates,
+            bearingSegments: bearingSegments
         )
     }
 }
@@ -39,9 +41,10 @@ public extension Route {
             name: name,
             distanceKm: distanceKm,
             elevationGainM: elevationGainM,
-            coordinates: [start, end].compactMap { $0 },
+            coordinates: coordinates.isEmpty ? [start, end].compactMap { $0 } : coordinates,
             surfaces: surfaces,
             suggestedType: suggestedBikeType.asSuggestedRouteType,
+            bearingSegments: bearingSegments,
             source: source
         )
     }

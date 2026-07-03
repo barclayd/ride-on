@@ -119,6 +119,8 @@ Testing strategy).
 ## Plan
 
 `PLAN.md` has the full architecture, phase checklist, and testing strategy. Phase 0
-(this scaffold) and Phase 2.5 (modular package restructure) are done; see the checklist for
-what's stubbed vs. real (e.g. `TimeBudgetFactor` is real, the other six scoring factors are
-neutral 0.5 placeholders until Phase 3).
+(this scaffold), Phase 2.5 (modular package restructure), and Phase 3 (Engine) are done —
+all eight `RideFactor` providers (time budget, wind, temperature, sky, rain, surface match,
+intent, novelty) are real, weighted by `WeightedScorer`, with golden-scenario tests in
+`app/Packages/Engine/Tests/EngineTests/GoldenScenarioTests.swift`. See the checklist for
+what's still stubbed (UI screens land in Phase 4).
