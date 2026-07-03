@@ -1,0 +1,21 @@
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+
+# XcodeGen: project.pbxproj is generated from app/project.yml — regenerate
+# with `xcodegen generate`, don't hand-edit or commit it.
+app/RideOn.xcodeproj/
+app/Generated/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Bun / worker (Phase 1)
+node_modules/
+.wrangler/
