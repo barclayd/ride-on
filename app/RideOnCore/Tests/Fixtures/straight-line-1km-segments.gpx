@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="RideOn fixture" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Straight Line East</name>
+    <trkseg>
+      <trkpt lat="51.7520" lon="-0.80100"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.78647"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.77194"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.75741"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.74288"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.72835"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.71382"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.69929"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.68476"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.67023"><ele>100.0</ele></trkpt>
+      <trkpt lat="51.7520" lon="-0.65570"><ele>100.0</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

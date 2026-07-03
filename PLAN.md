@@ -186,6 +186,6 @@ Multi-day trips · notifications/morning briefing + good-weather alerts · widge
 
 ## Open questions (non-blocking)
 
-- App icon direction (Dan deciding later)
+None.
 
-Settled: worker runs on workers.dev (no custom domain yet — the `*.workers.dev` URL is what gets registered as the Strava callback domain; swapping to a custom domain later means updating Strava app settings). Accent color: burnt orange `#BE5103`.
+Settled: worker runs on workers.dev (no custom domain yet — the `*.workers.dev` URL is what gets registered as the Strava callback domain; swapping to a custom domain later means updating Strava app settings). Accent color: burnt orange `#BE5103`. App icon: Icon Composer bundle at `app/RideOn.icon` (glass bike over route map) — wire into project.yml (`ASSETCATALOG_COMPILER_APPICON_NAME: RideOn` + add the .icon to the target) during the Phase 2.5 restructure. Apple Developer Program membership: Dan already has it (Release signing can move to Automatic + real team when Phase 6 needs WeatherKit).

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="RideOn fixture" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Chilterns Test Loop</name>
+    <trkseg>
+      <trkpt lat="51.7520" lon="-0.8010"><ele>120.0</ele><time>2026-01-01T08:00:00Z</time></trkpt>
+      <trkpt lat="51.7524" lon="-0.7995"><ele>122.5</ele><time>2026-01-01T08:01:00Z</time></trkpt>
+      <trkpt lat="51.7529" lon="-0.7978"><ele>126.0</ele><time>2026-01-01T08:02:00Z</time></trkpt>
+      <trkpt lat="51.7535" lon="-0.7960"><ele>131.0</ele><time>2026-01-01T08:03:00Z</time></trkpt>
+      <trkpt lat="51.7541" lon="-0.7942"><ele>138.5</ele><time>2026-01-01T08:04:00Z</time></trkpt>
+      <trkpt lat="51.7548" lon="-0.7924"><ele>147.0</ele><time>2026-01-01T08:05:00Z</time></trkpt>
+      <trkpt lat="51.7554" lon="-0.7906"><ele>153.0</ele><time>2026-01-01T08:06:00Z</time></trkpt>
+      <trkpt lat="51.7561" lon="-0.7888"><ele>158.0</ele><time>2026-01-01T08:07:00Z</time></trkpt>
+      <trkpt lat="51.7567" lon="-0.7870"><ele>160.5</ele><time>2026-01-01T08:08:00Z</time></trkpt>
+      <trkpt lat="51.7572" lon="-0.7851"><ele>159.0</ele><time>2026-01-01T08:09:00Z</time></trkpt>
+      <trkpt lat="51.7576" lon="-0.7832"><ele>154.0</ele><time>2026-01-01T08:10:00Z</time></trkpt>
+      <trkpt lat="51.7579" lon="-0.7813"><ele>146.0</ele><time>2026-01-01T08:11:00Z</time></trkpt>
+      <trkpt lat="51.7581" lon="-0.7794"><ele>137.0</ele><time>2026-01-01T08:12:00Z</time></trkpt>
+      <trkpt lat="51.7580" lon="-0.7813"><ele>129.0</ele><time>2026-01-01T08:13:00Z</time></trkpt>
+      <trkpt lat="51.7577" lon="-0.7832"><ele>124.0</ele><time>2026-01-01T08:14:00Z</time></trkpt>
+      <trkpt lat="51.7572" lon="-0.7851"><ele>121.0</ele><time>2026-01-01T08:15:00Z</time></trkpt>
+      <trkpt lat="51.7565" lon="-0.7870"><ele>119.5</ele><time>2026-01-01T08:16:00Z</time></trkpt>
+      <trkpt lat="51.7555" lon="-0.7900"><ele>119.0</ele><time>2026-01-01T08:17:00Z</time></trkpt>
+      <trkpt lat="51.7540" lon="-0.7950"><ele>119.5</ele><time>2026-01-01T08:18:00Z</time></trkpt>
+      <trkpt lat="51.7520" lon="-0.8010"><ele>120.0</ele><time>2026-01-01T08:20:00Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>
