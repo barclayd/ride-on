@@ -13,9 +13,11 @@ app/
 │   ├─ Sources/RideOnCore/{Models,Engine,GPX}
 │   └─ Tests/{RideOnCoreTests,Fixtures}
 ├─ RideOn/                    app target: SwiftUI views, DesignSystem/, Services/ (DI + fixtures)
+│   ├─ Data/                   SwiftData @Model types (RouteModel, RideLogModel, SavedPlaceModel), PreferencesStore, ModelContainer factory
+│   └─ Import/                 GPX import pipeline (RouteImporter) + MKMapSnapshotter route thumbnails (RouteSnapshotService)
 ├─ RideOnTests/                app-layer XCTest integration tests
 └─ RideOnUITests/              XCUITest E2E tests (launch with --fixture-world)
-worker/                       (Phase 1 — not built yet)
+worker/                       Cloudflare Worker (Hono): /classify (Valhalla surface classification), /strava/* OAuth — see worker/CLAUDE.md
 ```
 
 ## Build & test commands
@@ -61,7 +63,10 @@ macOS build:
 xcodebuild -project app/RideOn.xcodeproj -scheme RideOn -destination 'platform=macOS' build
 ```
 
-Worker commands: see `worker/CLAUDE.md` (doesn't exist yet — Phase 1).
+Worker commands: see `worker/CLAUDE.md`. The classification worker is deployed and live at
+`https://ride-on-api.barclaysd.workers.dev` — `RideOn/Services/ClassifyService.swift`'s
+`LiveClassifyClient` hits it directly (see `RideOnTests/LiveClassifyIntegrationTests.swift`
+for a skipped-by-default live-network check against it).
 
 ## Signing (no paid Apple Developer team yet)
 

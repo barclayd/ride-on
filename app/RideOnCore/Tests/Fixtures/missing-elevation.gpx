@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GenericGPSUnit" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>No Elevation Track</name>
+    <trkseg>
+      <trkpt lat="51.7000" lon="-0.9000"></trkpt>
+      <trkpt lat="51.7010" lon="-0.8985"></trkpt>
+      <trkpt lat="51.7020" lon="-0.8970"></trkpt>
+      <trkpt lat="51.7030" lon="-0.8955"></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

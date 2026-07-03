@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "01234567-89AB-CDEF-0123-456789ABCDEF",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testExecutionOrdering" : "random"
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:RideOn.xcodeproj",
+        "identifier" : "B403C65BFD5285A79AF8ECB9",
+        "name" : "RideOnTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:RideOn.xcodeproj",
+        "identifier" : "A234C2BB3061CDEE9444EF55",
+        "name" : "RideOnUITests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:RideOnCore",
+        "identifier" : "RideOnCoreTests",
+        "name" : "RideOnCoreTests"
+      }
+    }
+  ],
+  "version" : 1
+}

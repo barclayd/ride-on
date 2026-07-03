@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="RideWithGPS" xmlns="http://www.topografix.com/GPX/1/1">
+  <rte>
+    <name>Cotswolds Route</name>
+    <rtept lat="51.8000" lon="-1.8500"><ele>110.0</ele></rtept>
+    <rtept lat="51.8050" lon="-1.8400"><ele>118.0</ele></rtept>
+    <rtept lat="51.8100" lon="-1.8300"><ele>132.0</ele></rtept>
+    <rtept lat="51.8140" lon="-1.8200"><ele>121.0</ele></rtept>
+    <rtept lat="51.8170" lon="-1.8100"><ele>109.0</ele></rtept>
+  </rte>
+</gpx>
