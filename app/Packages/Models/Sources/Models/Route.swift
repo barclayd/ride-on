@@ -32,6 +32,14 @@ public struct SurfaceBreakdown: Codable, Sendable, Hashable {
     public var totalKm: Double {
         distanceKmBySurface.values.reduce(0, +)
     }
+
+    /// Fraction of `totalKm` on each surface; empty if there's no distance
+    /// data yet. Shared by `SpeedModel`-driven duration estimates and the
+    /// weather time-window calc.
+    public var shareBySurface: [SurfaceType: Double] {
+        guard totalKm > 0 else { return [:] }
+        return distanceKmBySurface.mapValues { $0 / totalKm }
+    }
 }
 
 public struct Route: Identifiable, Codable, Sendable, Hashable {
@@ -43,6 +51,11 @@ public struct Route: Identifiable, Codable, Sendable, Hashable {
     public var suggestedBikeType: BikeType
     public var start: Coordinate?
     public var end: Coordinate?
+    /// Full track polyline, for the novelty factor's geometric overlap check
+    /// (Phase 3). Empty for routes that only have start/end on hand.
+    public var coordinates: [Coordinate]
+    /// ~1km bearing segments, for the wind-alignment factor (Phase 3).
+    public var bearingSegments: [BearingSegment]
 
     public init(
         id: UUID = UUID(),
@@ -52,7 +65,9 @@ public struct Route: Identifiable, Codable, Sendable, Hashable {
         surfaces: SurfaceBreakdown,
         suggestedBikeType: BikeType,
         start: Coordinate? = nil,
-        end: Coordinate? = nil
+        end: Coordinate? = nil,
+        coordinates: [Coordinate] = [],
+        bearingSegments: [BearingSegment] = []
     ) {
         self.id = id
         self.name = name
@@ -62,5 +77,7 @@ public struct Route: Identifiable, Codable, Sendable, Hashable {
         self.suggestedBikeType = suggestedBikeType
         self.start = start
         self.end = end
+        self.coordinates = coordinates
+        self.bearingSegments = bearingSegments
     }
 }

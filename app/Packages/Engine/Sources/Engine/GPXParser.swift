@@ -110,6 +110,64 @@ enum GPXGeometry {
         return (bearing + 360).truncatingRemainder(dividingBy: 360)
     }
 
+    /// Fraction of `a`'s length that runs within `thresholdKm` of some
+    /// *segment* of `b` (not just a `b` vertex — real GPS traces of the same
+    /// road rarely share vertex positions) — a cheap proxy for "these routes
+    /// share roads," used by the novelty factor's geometric overlap check.
+    /// Not symmetric: `overlapFraction(a, b)` is "how much of a is covered by b."
+    static func overlapFraction(_ a: [Coordinate], _ b: [Coordinate], thresholdKm: Double = 0.05) -> Double {
+        guard a.count > 1, b.count > 1 else { return 0 }
+        var overlappingKm = 0.0
+        var totalKm = 0.0
+        for i in 1..<a.count {
+            let segStart = a[i - 1]
+            let segEnd = a[i]
+            let segmentLength = haversineKm(segStart, segEnd)
+            totalKm += segmentLength
+            let midpoint = Coordinate(
+                latitude: (segStart.latitude + segEnd.latitude) / 2,
+                longitude: (segStart.longitude + segEnd.longitude) / 2
+            )
+            var nearestDistance = Double.infinity
+            for j in 1..<b.count {
+                let distance = pointToSegmentDistanceKm(midpoint, b[j - 1], b[j])
+                if distance < nearestDistance { nearestDistance = distance }
+            }
+            if nearestDistance <= thresholdKm {
+                overlappingKm += segmentLength
+            }
+        }
+        return totalKm > 0 ? overlappingKm / totalKm : 0
+    }
+
+    /// Distance from `point` to the segment `segStart -> segEnd`, via a flat
+    /// equirectangular projection centered on `segStart`. Fine at the
+    /// sub-threshold (tens-to-hundreds of meters) scale this is used at —
+    /// no need for exact geodesic point-to-arc math.
+    private static func pointToSegmentDistanceKm(_ point: Coordinate, _ segStart: Coordinate, _ segEnd: Coordinate) -> Double {
+        let latRad = segStart.latitude * .pi / 180
+        func project(_ c: Coordinate) -> (x: Double, y: Double) {
+            let x = (c.longitude - segStart.longitude) * cos(latRad) * earthRadiusKm * .pi / 180
+            let y = (c.latitude - segStart.latitude) * earthRadiusKm * .pi / 180
+            return (x, y)
+        }
+        let start = project(segStart)
+        let end = project(segEnd)
+        let target = project(point)
+
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+        guard lengthSquared > 0 else { return haversineKm(point, segStart) }
+
+        let t = min(max(((target.x - start.x) * dx + (target.y - start.y) * dy) / lengthSquared, 0), 1)
+        let projectedX = start.x + t * dx
+        let projectedY = start.y + t * dy
+        let deltaX = target.x - projectedX
+        let deltaY = target.y - projectedY
+        return sqrt(deltaX * deltaX + deltaY * deltaY)
+    }
+
     static func bearingSegments(coordinates: [Coordinate], segmentLengthKm: Double) -> [BearingSegment] {
         guard coordinates.count > 1, segmentLengthKm > 0 else { return [] }
 
