@@ -1,5 +1,6 @@
 {
   "name": "ride-on-api",
+  "account_id": "3343118697a4beccae42090c4520cd29",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-03",
   "observability": {

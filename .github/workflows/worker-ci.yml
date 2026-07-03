@@ -1,0 +1,19 @@
+name: worker-ci
+
+on:
+  pull_request:
+    paths:
+      - "worker/**"
+      - ".github/workflows/worker-ci.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check

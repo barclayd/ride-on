@@ -113,6 +113,19 @@ bun run deploy
 The deployed `*.workers.dev` URL is what gets registered as the Strava OAuth
 callback domain (see PLAN.md — no custom domain for v1).
 
+## CI/CD (GitHub Actions)
+
+- `.github/workflows/worker-ci.yml` — PRs touching `worker/**` run
+  `bun run check` (types + lint + unit + mocked integration). No live network:
+  smoke tests self-skip, so PR results are fast and deterministic.
+- `.github/workflows/worker-deploy.yml` — pushes to `main` touching
+  `worker/**` run check → `wrangler deploy` → smoke tests against the freshly
+  deployed URL. Deploy-then-verify: live endpoints are only tested against the
+  exact artifact that shipped, never as a PR gate (a PR-time smoke run would
+  test the *old* deployment and flake on upstream outages).
+- Requires the `CLOUDFLARE_API_TOKEN` repo secret (Workers deploy permission);
+  the account id is pinned in `wrangler.jsonc`, so no other secret is needed.
+
 ## Smoke tests (post-deploy)
 
 ```bash
