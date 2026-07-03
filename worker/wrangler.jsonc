@@ -1,0 +1,16 @@
+{
+  "name": "ride-on-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-03",
+  "observability": {
+    "enabled": true
+  },
+
+  // KV namespace for classify-route caching (route-hash keyed, see src/cache.ts)
+  "kv_namespaces": [
+    {
+      "binding": "CLASSIFY_CACHE",
+      "id": "2a198dd680b1461ca0c0010d0dbce05c"
+    }
+  ]
+}
