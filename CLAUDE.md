@@ -5,36 +5,46 @@ Full spec: `PLAN.md`. All UI decisions: `DESIGN-SYSTEM.md` — **every screen mu
 
 ## Module map
 
+Modular local SPM package architecture (keepfresh-ios style, adopted Phase 2.5): a thin `App/`
+shell composes packages under `Packages/`. Every package: swift-tools-version 6.2,
+`.library(type: .static)`, platforms `.iOS("26.0")` + `.macOS("26.0")`.
+
 ```
 app/
 ├─ project.yml              XcodeGen spec — generates RideOn.xcodeproj (gitignored, not checked in)
-├─ RideOn.xctestplan         shared test plan: RideOnTests + RideOnUITests + RideOnCore's tests
-├─ RideOnCore/                SPM package: models, scoring engine, GPX/elevation math — platform-free, no UIKit/SwiftUI
-│   ├─ Sources/RideOnCore/{Models,Engine,GPX}
-│   └─ Tests/{RideOnCoreTests,Fixtures}
-├─ RideOn/                    app target: SwiftUI views, DesignSystem/, Services/ (DI + fixtures)
-│   ├─ Data/                   SwiftData @Model types (RouteModel, RideLogModel, SavedPlaceModel), PreferencesStore, ModelContainer factory
-│   └─ Import/                 GPX import pipeline (RouteImporter) + MKMapSnapshotter route thumbnails (RouteSnapshotService)
-├─ RideOnTests/                app-layer XCTest integration tests
+├─ RideOn.xctestplan         shared test plan: RideOnTests + RideOnUITests + ModelsTests + EngineTests
+├─ App/                       app shell target: RideOnApp.swift, Assets.xcassets, entitlements — composes packages, builds AppTab → view mapping
+├─ RideOn.icon                Icon Composer app icon bundle
+├─ Packages/
+│   ├─ Models/                 SPM package: value types (Route, RideLog, Bike, Preferences, SavedPlace, DailyContext, BearingSegment) + SwiftData @Model types (RouteModel, RideLogModel, SavedPlaceModel) + RouteMapping — platform-free, no UIKit/SwiftUI. Depends on nothing else in-repo. Has ModelsTests (SwiftData round-trip)
+│   ├─ Engine/                 SPM package: scoring engine + GPX parsing + elevation smoothing — platform-free. Depends on Models. Has EngineTests (fast, no simulator)
+│   ├─ Services/               SPM package: ServiceProtocols, AppServices (DI), FixtureWorld, ClassifyService, PreferencesStore, RideOnModelContainer, RouteStats (needs Engine's SpeedModel, so lives here not in Models), Import/ pipeline (RouteImporter, RouteSnapshotService). Depends on Models + Engine + DesignSystem
+│   ├─ Router/                 SPM package: AppTab (tab identity/title/icon only — view construction stays in App/, the one target allowed to import every Features package)
+│   ├─ DesignSystem/           SPM package: ConditionPalette, AmbianceStyle, Motion tokens
+│   └─ Features/               SPM package, one manifest, multiple static-library products: TodayUI, RoutesUI, YouUI, SharedUI (near-empty until Phase 4/5). Each depends on Models/Services/DesignSystem as needed
+├─ RideOnTests/                app-layer XCTest integration tests (import pipeline, live-classify smoke check, AppServices wiring)
 └─ RideOnUITests/              XCUITest E2E tests (launch with --fixture-world)
 worker/                       Cloudflare Worker (Hono): /classify (Valhalla surface classification), /strava/* OAuth — see worker/CLAUDE.md
 ```
 
 ## Build & test commands
 
-Regenerate the Xcode project after touching `app/project.yml` or adding/removing files in the app target:
+Regenerate the Xcode project after touching `app/project.yml` or adding/removing files in any target:
 
 ```
 cd app && xcodegen generate
 ```
 
-RideOnCore unit tests (fast, no simulator needed):
+Per-package unit tests (fast, no simulator needed):
 
 ```
-cd app/RideOnCore && swift test
+cd app/Packages/Models && swift test
+cd app/Packages/Engine && swift test
 ```
 
-Full app test suite (RideOnTests + RideOnUITests + RideOnCore, via the shared test plan) on iOS Simulator:
+(Services, Router, DesignSystem, Features have no test targets yet — no non-trivial logic to cover.)
+
+Full app test suite (RideOnTests + RideOnUITests + ModelsTests + EngineTests, via the shared test plan) on iOS Simulator:
 
 ```
 xcodebuild -project app/RideOn.xcodeproj -scheme RideOn \
@@ -64,7 +74,7 @@ xcodebuild -project app/RideOn.xcodeproj -scheme RideOn -destination 'platform=m
 ```
 
 Worker commands: see `worker/CLAUDE.md`. The classification worker is deployed and live at
-`https://ride-on-api.barclaysd.workers.dev` — `RideOn/Services/ClassifyService.swift`'s
+`https://ride-on-api.barclaysd.workers.dev` — `Packages/Services/Sources/Services/ClassifyService.swift`'s
 `LiveClassifyClient` hits it directly (see `RideOnTests/LiveClassifyIntegrationTests.swift`
 for a skipped-by-default live-network check against it).
 
@@ -88,8 +98,9 @@ take effect — update `app/project.yml` then.
 ## Fixture world (deterministic E2E)
 
 Launch the app with `--fixture-world` to get seeded fake `WeatherProviding`/`ETAProviding`/
-`HealthStoreProviding`/`StravaClientProtocol` implementations (see `app/RideOn/Services/`)
-instead of real network/entitlements. `RideOnUITests` always launches this way. This is the
+`HealthStoreProviding`/`StravaClientProtocol` implementations (see
+`app/Packages/Services/Sources/Services/`) instead of real network/entitlements.
+`RideOnUITests` always launches this way. This is the
 only supported way to drive the app in CI/E2E — no live services in tests, ever (PLAN.md
 Testing strategy).
 
@@ -102,11 +113,12 @@ Testing strategy).
   forecast + time of day, never a stock illustration.
 - §6: the custom component inventory is closed at 8 components — don't add a 9th without
   updating the doc first.
-- §7 Motion: use the tokens in `app/RideOn/DesignSystem/Motion.swift`, don't hand-roll
-  `.animation()` calls.
+- §7 Motion: use the tokens in `app/Packages/DesignSystem/Sources/DesignSystem/Motion.swift`,
+  don't hand-roll `.animation()` calls.
 
 ## Plan
 
 `PLAN.md` has the full architecture, phase checklist, and testing strategy. Phase 0
-(this scaffold) is done; see its checklist for what's stubbed vs. real (e.g. `TimeBudgetFactor`
-is real, the other six scoring factors are neutral 0.5 placeholders until Phase 3).
+(this scaffold) and Phase 2.5 (modular package restructure) are done; see the checklist for
+what's stubbed vs. real (e.g. `TimeBudgetFactor` is real, the other six scoring factors are
+neutral 0.5 placeholders until Phase 3).
