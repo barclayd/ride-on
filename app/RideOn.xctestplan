@@ -28,9 +28,16 @@
     },
     {
       "target" : {
-        "containerPath" : "container:RideOnCore",
-        "identifier" : "RideOnCoreTests",
-        "name" : "RideOnCoreTests"
+        "containerPath" : "container:Packages/Models",
+        "identifier" : "ModelsTests",
+        "name" : "ModelsTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:Packages/Engine",
+        "identifier" : "EngineTests",
+        "name" : "EngineTests"
       }
     }
   ],

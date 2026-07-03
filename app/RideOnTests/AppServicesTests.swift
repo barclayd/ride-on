@@ -1,6 +1,5 @@
 import XCTest
-import RideOnCore
-@testable import RideOn
+import Services
 
 /// Proves the DI container wires up and every fixture service is reachable
 /// without touching a network or a real entitlement.

@@ -1,6 +1,6 @@
 import XCTest
-import RideOnCore
-@testable import RideOn
+import Models
+import Services
 
 /// Hits the DEPLOYED worker (not local code) — mirrors worker/test/smoke.test.ts's
 /// pattern. Skipped entirely unless RUN_LIVE_CLASSIFY_TEST=1 is set, so this
@@ -22,7 +22,7 @@ final class LiveClassifyIntegrationTests: XCTestCase {
             "Set RUN_LIVE_CLASSIFY_TEST=1 in the scheme's Test action environment to hit the live worker."
         )
 
-        // Same coordinates as RideOnCore's sample-route.gpx fixture.
+        // Same coordinates as Engine's sample-route.gpx fixture.
         let coordinates = [
             Coordinate(latitude: 51.7520, longitude: -0.8010),
             Coordinate(latitude: 51.7524, longitude: -0.7995),

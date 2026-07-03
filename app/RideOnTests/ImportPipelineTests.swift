@@ -1,7 +1,7 @@
 import XCTest
 import SwiftData
-import RideOnCore
-@testable import RideOn
+import Models
+import Services
 
 /// GPX Data -> RouteImporter -> persisted RouteModel, against fixture
 /// ClassifyClient. Covers both the classify-success and classify-failure

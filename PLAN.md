@@ -77,15 +77,15 @@ Scoring factors (each returns 0–1 + human reason): wind alignment vs segment b
 
 ### Phase 2.5 — Modular package restructure (agreed 2026-07-03, before Phase 3)
 Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfresh-ios`): thin `App/` shell + `Packages/` monorepo of local SPM packages (swift-tools-version 6.2, static libraries, platforms iOS 26 **and** macOS 26 — we're multiplatform, keepfresh is iOS-only). Keep XcodeGen (project.yml shrinks to the App shell + package references) and the shared xctestplan (extend to package test targets).
-- [ ] `App/` — RideOnApp.swift, assets, entitlements only; composes packages, `@Observable` state injected via `@Environment`
-- [ ] `Packages/Models` — value types (ex-RideOnCore/Models) + Phase 2 SwiftData models
-- [ ] `Packages/Engine` — scoring + GPX/elevation math (ex-RideOnCore/Engine+GPX); stays platform-free, fast `swift test`
-- [ ] `Packages/Services` — service protocols, AppServices, FixtureWorld, ClassifyClient; later WeatherKit/Strava/HealthKit clients
-- [ ] `Packages/Router` — AppTab, RouterDestination, sheet destinations (cross-feature navigation: Today card → Route Detail)
-- [ ] `Packages/DesignSystem` — ConditionPalette, AmbianceStyle, Motion + custom components as built
-- [ ] `Packages/Features` — one package, library targets: TodayUI, RoutesUI, YouUI, OnboardingUI, SharedUI (keepfresh `baseDeps` pattern)
-- [ ] All existing tests green after the move; update root CLAUDE.md module map + build commands
-- [ ] Also fold in if Phase 2 didn't: `UILaunchScreen: {}` in Info.plist properties (fixes simulator letterboxing/compatibility mode)
+- [x] `App/` — RideOnApp.swift, assets, entitlements only; composes packages, `@Observable` state injected via `@Environment`
+- [x] `Packages/Models` — value types (ex-RideOnCore/Models) + Phase 2 SwiftData models
+- [x] `Packages/Engine` — scoring + GPX/elevation math (ex-RideOnCore/Engine+GPX); stays platform-free, fast `swift test`
+- [x] `Packages/Services` — service protocols, AppServices, FixtureWorld, ClassifyClient; later WeatherKit/Strava/HealthKit clients
+- [x] `Packages/Router` — AppTab (view construction stays in `App/`, the one target that imports every Features package; `RouterDestination`/sheet destinations deferred until Phase 4 needs cross-feature navigation)
+- [x] `Packages/DesignSystem` — ConditionPalette, AmbianceStyle, Motion + custom components as built
+- [x] `Packages/Features` — one package, library targets: TodayUI, RoutesUI, YouUI, SharedUI (OnboardingUI deferred to Phase 5 per plan)
+- [x] All existing tests green after the move; update root CLAUDE.md module map + build commands
+- [x] Also fold in if Phase 2 didn't: `UILaunchScreen: {}` in Info.plist properties (fixes simulator letterboxing/compatibility mode)
 
 ### Phase 3 — Engine
 - [ ] Factor providers + `WeightedScorer` with reasons, in `RideOnCore`, pure functions over `DailyContext`
