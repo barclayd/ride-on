@@ -17,6 +17,7 @@ struct GPXParserTests {
     func cycleTravelStyleTrack() throws {
         let track = try GPXParser.parse(data: try fixtureData("sample-route"))
         #expect(track.name == "Chilterns Test Loop")
+        #expect(track.creator == "RideOn fixture")
         #expect(track.points.count == 20)
         #expect(track.points.allSatisfy { $0.elevationM != nil })
         #expect(track.points.allSatisfy { $0.time != nil })

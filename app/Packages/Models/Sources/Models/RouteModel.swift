@@ -45,6 +45,9 @@ public final class RouteModel {
     public var createdAt: Date = Date.now
     public var sourceRaw: String = RouteSource.gpxImport.rawValue
     public var stravaRouteID: String?
+    /// The GPX root `creator` attribute ("Garmin Connect", "cycle.travel", …)
+    /// — shown as import provenance in Route Detail.
+    public var importedFrom: String?
 
     public init(
         id: UUID = UUID(),
@@ -60,7 +63,8 @@ public final class RouteModel {
         bearingSegments: [BearingSegment] = [],
         createdAt: Date = .now,
         source: RouteSource = .gpxImport,
-        stravaRouteID: String? = nil
+        stravaRouteID: String? = nil,
+        importedFrom: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -76,6 +80,7 @@ public final class RouteModel {
         self.createdAt = createdAt
         self.sourceRaw = source.rawValue
         self.stravaRouteID = stravaRouteID
+        self.importedFrom = importedFrom
     }
 }
 
