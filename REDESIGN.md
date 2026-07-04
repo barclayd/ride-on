@@ -55,8 +55,9 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
 
 ## E. Color unification
 
-- [ ] **One score→color ramp** — FactorRow's RangeBar (red/yellow/green), ScoreRing's tint, and
-  SurfaceBar's palette are three independent ramps; unify behind `ConditionPalette`.
+- [x] **One score→color ramp** — FactorRow's RangeBar and ScoreRing disagreed on the middle
+  band (yellow vs accent); both now use `ConditionPalette.color(forScore:)`. SurfaceBar's
+  palette is categorical (per surface type, semantic system colors), not a score ramp — left as is.
 
 ## F. Code practice
 
@@ -66,7 +67,7 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
   is duplicated in `RideCard` and `RoutesView`; one `Image(platformImage:)` init in SharedUI.
 - [x] **Dead code** — removed unused `Motion.sheetPresentation` token and the always-true
   `#available(iOS 26, macOS 26)` gate around `backgroundExtensionEffect()`.
-- [ ] **Onboarding accessibility** — the manual `Group`-switch page flow posts no VoiceOver
+- [x] **Onboarding accessibility** — the manual `Group`-switch page flow posts no VoiceOver
   screen-change announcements; add `AccessibilityNotification.ScreenChanged` on step change.
 - [ ] **You tab visual-language cleanup** — mixes dial takeovers, Forms, and plain Lists; settle
   on Form-based editing per Landmarks' editing surfaces (Material, never glass, for content).

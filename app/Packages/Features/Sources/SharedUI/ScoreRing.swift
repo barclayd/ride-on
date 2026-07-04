@@ -1,4 +1,5 @@
 import SwiftUI
+import DesignSystem
 
 /// DESIGN-SYSTEM.md §6 component 8: compact 0–100 ride-score indicator used
 /// on list rows and the breakdown header. A thin wrapper around the stock
@@ -16,14 +17,6 @@ public struct ScoreRing: View {
 
     private var percent: Int { Int((score * 100).rounded()) }
 
-    private var tint: Color {
-        switch score {
-        case 0.7...: .green
-        case 0.4..<0.7: .accentColor
-        default: .red
-        }
-    }
-
     public var body: some View {
         Gauge(value: score, in: 0...1) {
             EmptyView()
@@ -32,7 +25,7 @@ public struct ScoreRing: View {
                 .font(.caption.bold().monospacedDigit())
         }
         .gaugeStyle(.accessoryCircularCapacity)
-        .tint(tint)
+        .tint(ConditionPalette.color(forScore: score))
         .frame(width: size, height: size)
         .accessibilityLabel("Score \(percent) out of 100")
     }
