@@ -44,7 +44,16 @@ public struct RouteDetailView: View {
                 ContentUnavailableView("Route Not Found", systemImage: "map")
             }
         }
-        .navigationTitle(route?.name ?? "Route")
+        // Landmarks rename idiom: an editable navigation title — the title
+        // menu on iOS, click-to-edit in the Mac toolbar — instead of a
+        // custom rename sheet.
+        .navigationTitle(Binding(
+            get: { route?.name ?? "Route" },
+            set: { newName in
+                let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { route?.name = trimmed }
+            }
+        ))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -93,6 +102,13 @@ public struct RouteDetailView: View {
 
                 #if !os(macOS)
                 rideHistorySection(for: route)
+
+                // Landmarks-style attribution footer: provenance in quiet
+                // secondary text, not a stats row. Mac shows this in the
+                // inspector's Details section instead.
+                Text("Imported from \(sourceText(for: route)) on \(route.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 #endif
             }
             .padding()
@@ -196,6 +212,10 @@ public struct RouteDetailView: View {
                 LabeledContent("Elevation Gain", value: elevationText(for: route))
                 LabeledContent("Est. Time", value: estimatedTimeText(for: route))
             }
+            Section("Details") {
+                LabeledContent("Source", value: sourceText(for: route))
+                LabeledContent("Imported", value: route.createdAt.formatted(date: .abbreviated, time: .omitted))
+            }
             if let bestDay {
                 Section("Best Day to Ride") {
                     BestDayBadge(dayName: bestDay.context.date.formatted(.dateTime.weekday(.wide)), summary: "Score \(Int((bestDay.score * 100).rounded()))")
@@ -238,6 +258,13 @@ public struct RouteDetailView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value).font(.title2.monospacedDigit().bold())
             Text(title).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func sourceText(for route: RouteModel) -> String {
+        switch route.source {
+        case .strava: "Strava"
+        case .gpxImport: route.importedFrom ?? "GPX file"
         }
     }
 

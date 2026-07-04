@@ -15,10 +15,14 @@ public struct GPXTrackPoint: Codable, Sendable, Hashable {
 
 public struct GPXTrack: Codable, Sendable, Hashable {
     public var name: String?
+    /// The root `<gpx creator="...">` attribute — "Garmin Connect",
+    /// "cycle.travel", "StravaGPX", etc. Import provenance for the UI.
+    public var creator: String?
     public var points: [GPXTrackPoint]
 
-    public init(name: String? = nil, points: [GPXTrackPoint]) {
+    public init(name: String? = nil, creator: String? = nil, points: [GPXTrackPoint]) {
         self.name = name
+        self.creator = creator
         self.points = points
     }
 
@@ -82,7 +86,7 @@ public enum GPXParser {
         guard !delegate.points.isEmpty else {
             throw GPXParserError.noTrackPoints
         }
-        return GPXTrack(name: delegate.name, points: delegate.points)
+        return GPXTrack(name: delegate.name, creator: delegate.creator, points: delegate.points)
     }
 }
 
@@ -197,6 +201,7 @@ public enum GPXGeometry {
 /// needs the one title.
 private final class GPXXMLDelegate: NSObject, XMLParserDelegate {
     var name: String?
+    var creator: String?
     var points: [GPXTrackPoint] = []
     var error: GPXParserError?
 
@@ -226,6 +231,8 @@ private final class GPXXMLDelegate: NSObject, XMLParserDelegate {
     ) {
         characterBuffer = ""
         switch elementName {
+        case "gpx":
+            creator = attributeDict["creator"]
         case "trkpt", "rtept":
             guard
                 let latString = attributeDict["lat"], let lat = Double(latString),

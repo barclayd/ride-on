@@ -62,7 +62,8 @@ public struct RouteImporter {
             elevations: elevations,
             bearingSegments: track.bearingSegments(),
             source: source,
-            stravaRouteID: stravaRouteID
+            stravaRouteID: stravaRouteID,
+            importedFrom: track.creator
         )
 
         do {
