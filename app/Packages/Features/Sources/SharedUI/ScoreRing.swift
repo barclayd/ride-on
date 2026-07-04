@@ -30,3 +30,12 @@ public struct ScoreRing: View {
         .accessibilityLabel("Score \(percent) out of 100")
     }
 }
+
+#Preview("Score bands") {
+    HStack(spacing: 16) {
+        ScoreRing(score: 0.82)
+        ScoreRing(score: 0.55)
+        ScoreRing(score: 0.2)
+    }
+    .padding()
+}

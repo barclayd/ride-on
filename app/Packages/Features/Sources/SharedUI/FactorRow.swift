@@ -65,3 +65,12 @@ private struct RangeBar: View {
         .frame(height: 12)
     }
 }
+
+#Preview {
+    VStack(spacing: 12) {
+        FactorRow(score: FactorScore(factor: .wind, value: 0.85, reason: "Light 8 km/h breeze from the southwest."))
+        FactorRow(score: FactorScore(factor: .temperature, value: 0.55, reason: "A little below your preferred range."))
+        FactorRow(score: FactorScore(factor: .rain, value: 0.2, reason: "Showers likely after noon."))
+    }
+    .padding()
+}

@@ -61,8 +61,11 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
 
 ## F. Code practice
 
-- [ ] **`#Preview` coverage** — Landmarks has one in every view file (with `@Previewable @State`);
-  this app has zero. Add previews backed by FixtureWorld data, starting with SharedUI components.
+- [x] **`#Preview` coverage** — Landmarks has one in every view file (with `@Previewable @State`);
+  this app has zero. Every SharedUI component file now has one (ElevationProfile uses
+  `@Previewable @State` for chart scrubbing). Screen-level views (Today/Routes/You/Onboarding)
+  need the full services environment — add those when FixtureWorld grows a preview-friendly
+  entry point.
 - [x] **PlatformImage dedup** — the `#if os(macOS) Image(nsImage:) #else Image(uiImage:)` branch
   is duplicated in `RideCard` and `RoutesView`; one `Image(platformImage:)` init in SharedUI.
 - [x] **Dead code** — removed unused `Motion.sheetPresentation` token and the always-true

@@ -35,3 +35,8 @@ public struct BestDayBadge: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+#Preview {
+    BestDayBadge(dayName: "Thursday", summary: "Score 78")
+        .padding()
+}

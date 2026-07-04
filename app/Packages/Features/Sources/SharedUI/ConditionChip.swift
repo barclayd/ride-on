@@ -149,3 +149,13 @@ public extension ConditionChipData {
         return chips
     }
 }
+
+#Preview {
+    ConditionChipRow(chips: [
+        ConditionChipData(symbol: "wind", text: "12 km/h wind", tint: .teal),
+        ConditionChipData(symbol: "thermometer.medium", text: "18°", tint: .yellow),
+        ConditionChipData(symbol: "sun.max", text: "Sunny", tint: .yellow),
+    ])
+    .padding()
+    .background(.black)
+}

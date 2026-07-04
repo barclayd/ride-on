@@ -144,3 +144,10 @@ private struct SurfaceChartDescriptor: AXChartDescriptorRepresentable {
         )
     }
 }
+
+#Preview {
+    SurfaceBar(surfaces: SurfaceBreakdown(distanceKmBySurface: [
+        .paved: 24, .unpaved: 9, .path: 4, .busyRoad: 2,
+    ]))
+    .padding()
+}

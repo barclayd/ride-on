@@ -137,3 +137,14 @@ private struct ElevationChartDescriptor: AXChartDescriptorRepresentable {
         )
     }
 }
+
+#Preview {
+    @Previewable @State var selected: Double?
+    ElevationProfile(
+        points: (0..<60).map { index in
+            ElevationPoint(id: index, distanceKm: Double(index) * 0.5, elevationM: 120 + 80 * sin(Double(index) / 8))
+        },
+        selectedDistanceKm: $selected
+    )
+    .padding()
+}

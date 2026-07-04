@@ -71,3 +71,13 @@ public struct PermissionPrimingSheet: View {
         .presentationDetents([.medium])
     }
 }
+
+#Preview {
+    PermissionPrimingSheet(
+        symbol: "location.fill",
+        title: "Find Rides Near You",
+        message: "Ride On uses your location to find nearby routes and estimate travel time to the start.",
+        onAllow: {},
+        onNotNow: {}
+    )
+}
