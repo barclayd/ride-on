@@ -1,4 +1,17 @@
 import SwiftUI
+import Services
+
+public extension Image {
+    /// One home for the NSImage/UIImage split — the `#if os(macOS)` branch
+    /// was duplicated in `RideCard` and `RouteRow`.
+    init(platformImage: PlatformImage) {
+        #if os(macOS)
+        self.init(nsImage: platformImage)
+        #else
+        self.init(uiImage: platformImage)
+        #endif
+    }
+}
 
 public extension View {
     /// The small trailing metadata capsule used on list rows (route type,

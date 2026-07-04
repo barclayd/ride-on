@@ -79,6 +79,10 @@ public struct RouteDetailView: View {
                 rideHistorySection(for: route)
             }
             .padding()
+            // Landmarks caps reading width in wide windows instead of
+            // stretching content edge-to-edge (no-op on iPhone).
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity)
         }
         // Landmarks toolbar idiom: share actions live in the toolbar's glass
         // capsule, not as an inline content button.
