@@ -196,3 +196,20 @@ public struct FixtureClassifyClient: ClassifyClient {
         return result
     }
 }
+
+/// Deterministic rolling-hills profile so imports without `<ele>` still get
+/// a believable non-zero gain in fixture/E2E runs — no network.
+public struct FixtureElevationClient: ElevationClient {
+    public var shouldFail: Bool
+
+    public init(shouldFail: Bool = false) {
+        self.shouldFail = shouldFail
+    }
+
+    public func elevations(coordinates: [Coordinate]) async throws -> [Double?] {
+        if shouldFail {
+            throw ElevationClientError.requestFailed(status: 503)
+        }
+        return coordinates.indices.map { 100 + 40 * sin(Double($0) / 8) }
+    }
+}

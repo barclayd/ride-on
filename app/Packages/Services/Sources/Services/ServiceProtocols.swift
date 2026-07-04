@@ -144,3 +144,14 @@ public enum ClassifyClientError: Error, Sendable {
 public protocol ClassifyClient: Sendable {
     func classify(coordinates: [Coordinate]) async throws -> ClassifyResult
 }
+
+public enum ElevationClientError: Error, Sendable {
+    case invalidResponse
+    case requestFailed(status: Int)
+}
+
+public protocol ElevationClient: Sendable {
+    /// Ground elevation in metres for each coordinate, in order; `nil` where
+    /// the source has no data for that point.
+    func elevations(coordinates: [Coordinate]) async throws -> [Double?]
+}

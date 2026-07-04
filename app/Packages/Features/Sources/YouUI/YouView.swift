@@ -143,7 +143,7 @@ public struct YouView: View {
     private func syncRoutes() {
         isSyncingRoutes = true
         Task {
-            let importer = RouteImporter(classifyClient: services.classify, modelContext: modelContext)
+            let importer = RouteImporter(classifyClient: services.classify, elevationClient: services.elevation, modelContext: modelContext)
             let sync = StravaRouteSyncService(stravaClient: services.strava, importer: importer)
             _ = try? await sync.syncRoutes()
             isSyncingRoutes = false

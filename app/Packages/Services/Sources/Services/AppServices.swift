@@ -9,19 +9,22 @@ public struct AppServices: Sendable {
     public var health: any HealthStoreProviding
     public var strava: any StravaClientProtocol
     public var classify: any ClassifyClient
+    public var elevation: any ElevationClient
 
     public init(
         weather: any WeatherProviding,
         eta: any ETAProviding,
         health: any HealthStoreProviding,
         strava: any StravaClientProtocol,
-        classify: any ClassifyClient
+        classify: any ClassifyClient,
+        elevation: any ElevationClient
     ) {
         self.weather = weather
         self.eta = eta
         self.health = health
         self.strava = strava
         self.classify = classify
+        self.elevation = elevation
     }
 
     public static let fixtures = AppServices(
@@ -29,7 +32,8 @@ public struct AppServices: Sendable {
         eta: FixtureETAProvider(),
         health: FixtureHealthStore(),
         strava: FixtureStravaClient(),
-        classify: FixtureClassifyClient()
+        classify: FixtureClassifyClient(),
+        elevation: FixtureElevationClient()
     )
 
     /// Phase 6: every service now has a real implementation. Health stays
@@ -40,7 +44,8 @@ public struct AppServices: Sendable {
         eta: LiveETAProvider(),
         health: Self.liveHealthStore,
         strava: LiveStravaClient(),
-        classify: LiveClassifyClient()
+        classify: LiveClassifyClient(),
+        elevation: LiveOpenMeteoElevationClient()
     )
 
     private static var liveHealthStore: any HealthStoreProviding {

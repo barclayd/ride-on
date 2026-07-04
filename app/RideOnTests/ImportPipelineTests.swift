@@ -25,7 +25,7 @@ final class ImportPipelineTests: XCTestCase {
     func testImportSuccessPersistsRouteWithSurfaces() async throws {
         let container = RideOnModelContainer.inMemory()
         let context = ModelContext(container)
-        let importer = RouteImporter(classifyClient: FixtureClassifyClient(), modelContext: context)
+        let importer = RouteImporter(classifyClient: FixtureClassifyClient(), elevationClient: FixtureElevationClient(), modelContext: context)
 
         let model = try await importer.importGPX(data: sampleGPX)
 
@@ -45,6 +45,7 @@ final class ImportPipelineTests: XCTestCase {
         let context = ModelContext(container)
         let importer = RouteImporter(
             classifyClient: FixtureClassifyClient(shouldFail: true),
+            elevationClient: FixtureElevationClient(),
             modelContext: context
         )
 
@@ -60,10 +61,59 @@ final class ImportPipelineTests: XCTestCase {
         XCTAssertEqual(fetched.count, 1)
     }
 
+    func testImportFillsMissingElevationsFromElevationClient() async throws {
+        let container = RideOnModelContainer.inMemory()
+        let context = ModelContext(container)
+        let importer = RouteImporter(classifyClient: FixtureClassifyClient(), elevationClient: FixtureElevationClient(), modelContext: context)
+
+        // No <ele> anywhere — the cycle.travel export shape.
+        let eleLess = """
+        <?xml version="1.0"?>
+        <gpx version="1.0" creator="cycle.travel" xmlns="http://www.topografix.com/GPX/1/0">
+          <trk><name>Flat File</name><trkseg>
+            <trkpt lat="51.7000" lon="-0.9000" />
+            <trkpt lat="51.7010" lon="-0.8985" />
+            <trkpt lat="51.7020" lon="-0.8970" />
+          </trkseg></trk>
+        </gpx>
+        """.data(using: .utf8)!
+
+        let model = try await importer.importGPX(data: eleLess)
+
+        XCTAssertEqual(model.elevations.count, 3)
+        XCTAssertFalse(model.elevations.contains(nil))
+    }
+
+    func testImportElevationFetchFailureIsNonFatal() async throws {
+        let container = RideOnModelContainer.inMemory()
+        let context = ModelContext(container)
+        let importer = RouteImporter(
+            classifyClient: FixtureClassifyClient(),
+            elevationClient: FixtureElevationClient(shouldFail: true),
+            modelContext: context
+        )
+
+        let eleLess = """
+        <?xml version="1.0"?>
+        <gpx version="1.0" creator="cycle.travel" xmlns="http://www.topografix.com/GPX/1/0">
+          <trk><trkseg>
+            <trkpt lat="51.7000" lon="-0.9000" />
+            <trkpt lat="51.7010" lon="-0.8985" />
+          </trkseg></trk>
+        </gpx>
+        """.data(using: .utf8)!
+
+        let model = try await importer.importGPX(data: eleLess)
+
+        // Route still imports with zero gain, matching the classify policy.
+        XCTAssertEqual(model.elevationGainM, 0)
+        XCTAssertGreaterThan(model.distanceKm, 0)
+    }
+
     func testImportMalformedGPXThrows() async throws {
         let container = RideOnModelContainer.inMemory()
         let context = ModelContext(container)
-        let importer = RouteImporter(classifyClient: FixtureClassifyClient(), modelContext: context)
+        let importer = RouteImporter(classifyClient: FixtureClassifyClient(), elevationClient: FixtureElevationClient(), modelContext: context)
 
         let garbage = "not xml at all".data(using: .utf8)!
         do {

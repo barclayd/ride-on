@@ -225,7 +225,7 @@ public struct RoutesView: View {
 
     private func handleImport(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result else { return }
-        let importer = RouteImporter(classifyClient: services.classify, modelContext: modelContext)
+        let importer = RouteImporter(classifyClient: services.classify, elevationClient: services.elevation, modelContext: modelContext)
         Task {
             for url in urls {
                 do {
