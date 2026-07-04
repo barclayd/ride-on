@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import Models
 import Services
+import SharedUI
 
 /// Ride history across all routes — the novelty factor's raw material.
 /// Strava/HealthKit sync (`StravaActivitySyncService`, `LiveHealthKitStore`)
@@ -27,10 +28,7 @@ struct RideLogView: View {
                 }
                 Spacer()
                 Text(log.source.rawValue.capitalized)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.secondary.opacity(0.15), in: .capsule)
+                    .tagCapsule()
             }
         }
         .overlay {

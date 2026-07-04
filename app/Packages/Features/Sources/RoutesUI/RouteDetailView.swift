@@ -76,24 +76,22 @@ public struct RouteDetailView: View {
                 }
 
                 rideHistorySection(for: route)
-
+            }
+            .padding()
+        }
+        // Landmarks toolbar idiom: share actions live in the toolbar's glass
+        // capsule, not as an inline content button.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
                 if let exportedGPXURL {
                     ShareLink(item: exportedGPXURL) {
                         Label("Export GPX", systemImage: "square.and.arrow.up")
                     }
-                    .buttonStyle(.glass)
-                } else {
-                    Button {
-                        self.exportedGPXURL = Self.exportGPX(route: route)
-                    } label: {
-                        Label("Export GPX", systemImage: "square.and.arrow.up")
-                    }
-                    .buttonStyle(.glass)
                 }
             }
-            .padding()
         }
         .task(id: route.id) {
+            exportedGPXURL = Self.exportGPX(route: route)
             await loadBestDay(for: route)
         }
     }

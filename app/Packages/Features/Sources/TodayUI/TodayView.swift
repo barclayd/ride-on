@@ -69,10 +69,11 @@ public struct TodayView: View {
                 isLocationPrimingPresented = true
             }
         }
-        .overlay(alignment: .bottom) {
+        // Landmarks idiom: floating chrome goes in the safe-area bar, not an
+        // overlay — content (the card stack) automatically lays out above it.
+        .safeAreaBar(edge: .bottom) {
             if weather != nil, !routeModels.isEmpty {
                 contextPill
-                    .padding(.bottom, 12)
             }
         }
         .sheet(isPresented: $isContextEditorPresented) {
@@ -92,28 +93,36 @@ public struct TodayView: View {
         }
     }
 
+    // Paging ScrollView instead of `TabView(.page)`: identical swipe feel on
+    // iOS, and on macOS it's a real card carousel rather than the tab strip
+    // a style-less `TabView` degrades to.
     private var cardStack: some View {
-        TabView {
-            ForEach(rankedRides, id: \.route.id) { rankedRide in
-                if let model = routeModels.first(where: { $0.id == rankedRide.route.id }) {
-                    NavigationLink(value: RouterDestination.routeDetail(routeID: model.id)) {
-                        RideCard(
-                            routeID: model.id,
-                            routeName: model.name,
-                            coordinates: model.coordinates,
-                            chips: chips(for: rankedRide),
-                            sky: weather.map(\.sky) ?? .sunny,
-                            onSwipeUpForDetails: { breakdownItem = BreakdownItem(rankedRide: rankedRide) }
-                        )
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 16) {
+                ForEach(rankedRides, id: \.route.id) { rankedRide in
+                    if let model = routeModels.first(where: { $0.id == rankedRide.route.id }) {
+                        NavigationLink(value: RouterDestination.routeDetail(routeID: model.id)) {
+                            RideCard(
+                                routeID: model.id,
+                                routeName: model.name,
+                                coordinates: model.coordinates,
+                                chips: chips(for: rankedRide),
+                                sky: weather.map(\.sky) ?? .sunny,
+                                onSwipeUpForDetails: { breakdownItem = BreakdownItem(rankedRide: rankedRide) }
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .matchedTransitionSource(id: model.id, in: namespace)
+                        .containerRelativeFrame(.horizontal)
                     }
-                    .buttonStyle(.plain)
-                    .matchedTransitionSource(id: model.id, in: namespace)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 40)
                 }
             }
+            .scrollTargetLayout()
         }
-        .pagedTabViewStyleIfAvailable()
+        .scrollTargetBehavior(.viewAligned)
+        .scrollIndicators(.hidden)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
+        .padding(.bottom, 16)
     }
 
     private var restDayCard: some View {
@@ -353,17 +362,6 @@ private extension View {
     func navigationBarTitleDisplayModeIfAvailable() -> some View {
         #if os(iOS)
         self.navigationBarTitleDisplayMode(.inline)
-        #else
-        self
-        #endif
-    }
-
-    // ponytail: `.page` `TabViewStyle` is iOS-only — Mac's card stack is a
-    // plain (non-paged) `TabView`, still swipeable/scrollable via trackpad.
-    @ViewBuilder
-    func pagedTabViewStyleIfAvailable() -> some View {
-        #if os(iOS)
-        self.tabViewStyle(.page)
         #else
         self
         #endif

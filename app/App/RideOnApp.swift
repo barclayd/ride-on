@@ -190,25 +190,13 @@ private struct SplitRoot: View {
             .navigationTitle("Ride On")
         } detail: {
             TabPage(tab: selection ?? .today)
-                .backgroundExtensionEffectIfAvailable()
+                .backgroundExtensionEffect()
         }
         .macMinWindowSize()
     }
 }
 
 private extension View {
-    // ponytail: `backgroundExtensionEffect()` is iOS 26/macOS 26-only —
-    // DESIGN-SYSTEM.md §2's Mac sidebar detail spec, gated the same way as
-    // the other iOS-26-only APIs in this file.
-    @ViewBuilder
-    func backgroundExtensionEffectIfAvailable() -> some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            self.backgroundExtensionEffect()
-        } else {
-            self
-        }
-    }
-
     @ViewBuilder
     func macMinWindowSize() -> some View {
         #if os(macOS)

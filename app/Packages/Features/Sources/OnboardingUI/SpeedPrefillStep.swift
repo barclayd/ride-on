@@ -38,7 +38,9 @@ struct SpeedPrefillStep: View {
                 }
             }
             .padding()
-            .background(.white.opacity(0.12), in: .rect(cornerRadius: 16))
+            // Real material, not white paint — respects Reduce Transparency
+            // and picks up the ambiance gradient behind it (DESIGN-SYSTEM §2).
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
         } onContinue: { onContinue() }
     }
 
