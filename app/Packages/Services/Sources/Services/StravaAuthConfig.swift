@@ -4,13 +4,13 @@ import Foundation
 /// Strava mobile app's authorize URL) — only the client secret is a secret,
 /// and that never leaves the worker (`worker/CLAUDE.md`).
 public enum StravaAuthConfig {
-    // set real client id — no worker/.dev.vars checked into this repo to read
-    // one from; fill in from the Strava API application's "Client ID" once
-    // created (PLAN.md Prerequisites: a Strava API app registration).
-    public static let clientID = "00000"
+    public static let clientID = "262735"
 
+    // Strava requires the redirect_uri host to sit within the API app's
+    // "Authorization Callback Domain" (the deployed worker domain) — the
+    // scheme can still be custom so the OS hands the callback to the app.
     public static let redirectScheme = "rideon"
-    public static let redirectURI = "\(redirectScheme)://strava-callback"
+    public static let redirectURI = "\(redirectScheme)://ride-on-api.barclaysd.workers.dev/strava-callback"
     public static let scope = "read,activity:read_all"
 
     public static var webAuthorizeURL: URL {
