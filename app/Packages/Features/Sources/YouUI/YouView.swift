@@ -21,7 +21,11 @@ public struct YouView: View {
     public var body: some View {
         @Bindable var preferencesStore = preferencesStore
 
-        List {
+        // Grouped Form, not List — one editing surface across the whole tab
+        // (Landmarks' editing idiom; REDESIGN.md F). On iOS it renders the
+        // same; on Mac it's the difference between a settings pane and a
+        // plain table.
+        Form {
             Section("Ride Preferences") {
                 NavigationLink("Temperature") {
                     TemperatureRangeEditor(range: $preferencesStore.preferences.preferredTempRangeC)
@@ -73,6 +77,7 @@ public struct YouView: View {
                 }
             }
         }
+        .formStyle(.grouped)
         .navigationTitle("You")
         .task {
             isStravaConnected = await services.strava.isConnected()
