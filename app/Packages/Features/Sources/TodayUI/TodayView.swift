@@ -27,6 +27,7 @@ public struct TodayView: View {
     @State private var isContextEditorPresented = false
     @State private var breakdownItem: BreakdownItem?
     @State private var isLocationPrimingPresented = false
+    @State private var travelMinutesByRouteID: [UUID: Int] = [:]
 
     // ponytail: below this, a route isn't worth surfacing as a
     // recommendation — the "rest day" card takes over instead of a stack of
@@ -56,6 +57,9 @@ public struct TodayView: View {
         .navigationTitle("Today")
         .task {
             weather = try? await services.weather.forecast(for: startLocation, on: .now)
+        }
+        .task(id: startLocation) {
+            await loadTravelTimes()
         }
         .task {
             // DESIGN-SYSTEM.md §9: location is primed on first Today entry,
@@ -175,9 +179,22 @@ public struct TodayView: View {
             windLabel: "\(Int(weather.windKph.rounded())) km/h wind",
             temperatureC: weather.temperatureC,
             sky: weather.sky,
-            travelMinutes: nil,
+            travelMinutes: travelMinutesByRouteID[rankedRide.route.id],
             rideHours: hoursAvailable
         )
+    }
+
+    /// Cycling ETA from `startLocation` to each route's start — regional
+    /// MapKit failures (`ETAProvidingError.unavailable`) just drop that
+    /// route's chip rather than surfacing an error (DESIGN-SYSTEM.md §9: a
+    /// missing travel chip is fine, an error banner isn't).
+    private func loadTravelTimes() async {
+        for route in routeModels {
+            guard let destination = route.coordinates.first else { continue }
+            if let seconds = try? await services.eta.travelTime(from: startLocation, to: destination, mode: .cycling) {
+                travelMinutesByRouteID[route.id] = Int((seconds / 60).rounded())
+            }
+        }
     }
 }
 

@@ -13,8 +13,9 @@ struct RideOnApp: App {
     @State private var preferencesStore = PreferencesStore()
 
     // Fixture-world gets fully-fixture services (deterministic E2E); every
-    // other launch gets `.live`, which today only means a real `/classify`
-    // — the rest of AppServices stays fixture-backed until Phase 6.
+    // other launch gets `.live` (Phase 6: real WeatherKit/MapKit/HealthKit/
+    // Strava, though WeatherKit/HealthKit only actually authorize once
+    // Release signing has a real team — see CLAUDE.md "Signing").
     private var services: AppServices { FixtureWorld.isEnabled ? .fixtures : .live }
 
     init() {
@@ -30,6 +31,9 @@ struct RideOnApp: App {
                 .environment(preferencesStore)
                 .tint(Color.accentColor)
                 .onOpenURL { url in
+                    #if os(iOS)
+                    if StravaAuthCallbackRouter.shared.handle(url: url) { return }
+                    #endif
                     Task { await importOpenedGPX(at: url) }
                 }
         }

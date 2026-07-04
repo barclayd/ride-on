@@ -108,13 +108,14 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [x] Prefill speeds from Strava when connected; land on a working Today
 
 ### Phase 6 — Integrations
-- [ ] Strava OAuth via `ASWebAuthenticationSession` (+ app-to-app when Strava app present), tokens in Keychain, refresh rotation
-- [ ] Route sync: list `/athletes/{id}/routes` → `export_gpx` → import pipeline (user-initiated, becomes app-owned data)
-- [ ] Activity fetch (3 months) → streams → per-surface speed distribution → speed model defaults; recompute on demand; respect 7-day cache rule (derive-and-discard)
-- [ ] Activity ↔ route matching (geometry overlap) → auto ride logs; "View on Strava" links + Connect-with-Strava branding
-- [ ] HealthKit: cycling workouts + `HKWorkoutRoute` matching (iOS only), contextual auth
-- [ ] WeatherKit service with day-level caching + attribution UI
-- [ ] MapKit ETAs (auto/cycling/transit) with graceful regional-failure handling
+- [x] Strava OAuth via `ASWebAuthenticationSession` (+ app-to-app when Strava app present), tokens in Keychain, refresh rotation
+- [x] Route sync: list `/athletes/{id}/routes` → `export_gpx` → import pipeline (user-initiated, becomes app-owned data)
+- [x] Activity fetch (3 months) → per-surface speed distribution → speed model defaults; recompute on demand; respects 7-day cache rule (derive-and-discard — only `RideLogModel`/`speedKphBySurface` persist, never raw Strava responses). Ponytail: derives from `map.summary_polyline` on the activities-list response rather than a per-activity `/streams` call (avoids Strava's 100-req/15-min rate limit); upgrade to real streams if matching/speed accuracy ever needs finer resolution.
+- [x] Activity ↔ route matching (geometry overlap, `Engine.ActivityMatcher` over the existing `GPXGeometry.overlapFraction`) → auto ride logs; "View on Strava" links + Connect-with-Strava button copy (real brand asset/color treatment still pending — Phase 8 branding-compliance gate)
+- [x] HealthKit: cycling workouts + `HKWorkoutRoute` matching (iOS only), contextual auth wired into the existing Ride Matching priming sheet
+- [x] WeatherKit service with day-level caching + attribution UI (existing `WeatherAttributionFooter`)
+- [x] MapKit ETAs (auto/cycling/transit) with graceful regional-failure handling (`ETAProvidingError.unavailable(mode:)`)
+- [ ] Live on-device verification of WeatherKit/HealthKit entitlements against a real Apple Developer team — blocked on real signing (see CLAUDE.md Signing section): all code above builds and passes on iOS Simulator + macOS, but the iCloud/WeatherKit/HealthKit entitlements are only wired via `CODE_SIGN_ENTITLEMENTS` in the Release config, which needs a real `DEVELOPMENT_TEAM` to take effect.
 
 ### Phase 7 — Polish & platform
 - [ ] Mac: keyboard navigation, menu bar, window sizing, sidebar polish, `backgroundExtensionEffect`
@@ -151,8 +152,8 @@ Goal: bullet-proof confidence — every phase closes only when its slice of this
 ### App — integration (XCTest, simulator)
 - [ ] Import pipeline end-to-end with a stubbed `/classify` response: GPX file → parsed → classified → persisted SwiftData route with correct stats
 - [ ] SwiftData store: CloudKit-safe schema round-trips, migration smoke, ride-log ↔ novelty queries
-- [ ] Service layer behind protocols (`WeatherProviding`, `ETAProviding`, `HealthStoreProviding`, `StravaClient`) with fixture-backed fakes — every screen's data path testable without network/entitlements
-- [ ] Strava client against recorded HTTP fixtures: token refresh rotation, pagination, rate-limit (429) handling, scope-denied errors
+- [x] Service layer behind protocols (`WeatherProviding`, `ETAProviding`, `HealthStoreProviding`, `StravaClient`) with fixture-backed fakes — every screen's data path testable without network/entitlements
+- [ ] Strava client against recorded HTTP fixtures: token refresh rotation ✅ (`ServicesTests/StravaTokenManagerTests.swift`, stubbed transport, 7 tests), pagination/rate-limit (429)/scope-denied still uncovered
 
 ### App — E2E (XCUITest, iPhone + Mac destinations, one test plan)
 Deterministic world via launch arguments: seeded SwiftData store, fixture forecast, fake location, stubbed network (no live services in E2E).

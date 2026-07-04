@@ -17,5 +17,9 @@ let package = Package(
             name: "Services",
             dependencies: ["Models", "Engine", "DesignSystem"]
         ),
+        .testTarget(
+            name: "ServicesTests",
+            dependencies: ["Services"]
+        ),
     ]
 )

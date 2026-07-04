@@ -83,15 +83,18 @@ public struct OnboardingView: View {
     private func connectStrava() {
         isConnectingStrava = true
         Task {
-            _ = try? await services.strava.exchangeToken(code: "fixture-auth-code")
-            let routes = (try? await services.strava.importedRoutes()) ?? []
+            try? await StravaConnect.connect(using: services.strava)
+            let connected = await services.strava.isConnected()
+            let routes = connected ? ((try? await services.strava.importedRoutes()) ?? []) : []
             isConnectingStrava = false
-            isStravaConnected = true
+            isStravaConnected = connected
             if !routes.isEmpty {
-                // ponytail: real per-surface speed derivation from 3 months of
-                // Strava activity streams is Phase 6 (PLAN.md). This preset
-                // just makes the prefill UX real end-to-end today — swap for
-                // `SpeedModel`-derived values once the activity fetch lands.
+                // ponytail: a static "connected" preset, not the real
+                // `SpeedModelDerivation` from 3 months of activity history
+                // (`StravaActivitySyncService`, You → Speed & Climbing) —
+                // that fetch is too slow to block an onboarding step on.
+                // Just makes the prefill UX real end-to-end; the real
+                // derivation runs post-onboarding on demand.
                 preferencesStore.preferences.speedKphBySurface = [
                     .paved: 27, .busyRoad: 24, .unpaved: 18, .path: 15,
                 ]

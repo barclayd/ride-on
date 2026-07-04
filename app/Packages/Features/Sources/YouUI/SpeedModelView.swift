@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import Models
 import Services
 
@@ -6,6 +7,11 @@ import Services
 /// time estimates (`RouteStats.estimatedRideTime`).
 struct SpeedModelView: View {
     @Environment(PreferencesStore.self) private var preferencesStore
+    @Environment(\.services) private var services
+    @Environment(\.modelContext) private var modelContext
+    @Query private var routeModels: [RouteModel]
+    @State private var isSyncing = false
+    @State private var isStravaConnected = false
 
     private static let surfaces: [SurfaceType] = [.paved, .busyRoad, .unpaved, .path]
 
@@ -37,8 +43,30 @@ struct SpeedModelView: View {
                     Slider(value: climbingPenaltyBinding, in: 0...15, step: 0.5)
                 }
             }
+            if isStravaConnected {
+                Section("Strava") {
+                    Button(isSyncing ? "Updating…" : "Recompute from Strava Activity") {
+                        recomputeFromStrava()
+                    }
+                    .disabled(isSyncing)
+                }
+            }
         }
         .navigationTitle("Speed & Climbing")
+        .task {
+            isStravaConnected = await services.strava.isConnected()
+        }
+    }
+
+    private func recomputeFromStrava() {
+        isSyncing = true
+        Task {
+            let sync = StravaActivitySyncService(stravaClient: services.strava, modelContext: modelContext)
+            if let derived = try? await sync.syncActivities(routes: routeModels, currentSpeeds: preferencesStore.preferences.speedKphBySurface) {
+                preferencesStore.preferences.speedKphBySurface = derived
+            }
+            isSyncing = false
+        }
     }
 
     private func label(for surface: SurfaceType) -> String {

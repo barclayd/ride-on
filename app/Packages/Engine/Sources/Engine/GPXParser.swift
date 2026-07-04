@@ -85,10 +85,10 @@ public enum GPXParser {
 }
 
 /// Haversine distance + bearing, and the bearing-segmenting used by
-/// `GPXTrack`. Kept internal — nothing outside GPX ingestion needs it yet;
-/// promote to `public` if route-overlap geometry (Phase 3 novelty factor)
-/// wants to share it.
-enum GPXGeometry {
+/// `GPXTrack`. Promoted to `public`: `ActivityMatcher` (Phase 6, Strava/
+/// HealthKit activity-to-route matching) shares `overlapFraction` rather
+/// than reimplementing it.
+public enum GPXGeometry {
     static let earthRadiusKm = 6371.0088
 
     static func haversineKm(_ a: Coordinate, _ b: Coordinate) -> Double {
@@ -115,7 +115,7 @@ enum GPXGeometry {
     /// road rarely share vertex positions) — a cheap proxy for "these routes
     /// share roads," used by the novelty factor's geometric overlap check.
     /// Not symmetric: `overlapFraction(a, b)` is "how much of a is covered by b."
-    static func overlapFraction(_ a: [Coordinate], _ b: [Coordinate], thresholdKm: Double = 0.05) -> Double {
+    public static func overlapFraction(_ a: [Coordinate], _ b: [Coordinate], thresholdKm: Double = 0.05) -> Double {
         guard a.count > 1, b.count > 1 else { return 0 }
         var overlappingKm = 0.0
         var totalKm = 0.0

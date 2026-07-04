@@ -32,16 +32,24 @@ public struct AppServices: Sendable {
         classify: FixtureClassifyClient()
     )
 
-    /// Weather/ETA/health/Strava stay fixture-backed until Phase 6 — only
-    /// `/classify` is deployed and live today (Phase 1), so it's the one
-    /// service worth hitting for real out of fixture-world.
+    /// Phase 6: every service now has a real implementation. Health stays
+    /// fixture-backed on macOS — HealthKit is iOS-only, Mac gets ride
+    /// history via CloudKit sync of what iOS wrote (RideOn-macOS.entitlements).
     public static let live = AppServices(
-        weather: FixtureWeatherProvider(),
-        eta: FixtureETAProvider(),
-        health: FixtureHealthStore(),
-        strava: FixtureStravaClient(),
+        weather: LiveWeatherProvider(),
+        eta: LiveETAProvider(),
+        health: Self.liveHealthStore,
+        strava: LiveStravaClient(),
         classify: LiveClassifyClient()
     )
+
+    private static var liveHealthStore: any HealthStoreProviding {
+        #if os(iOS)
+        LiveHealthKitStore()
+        #else
+        FixtureHealthStore()
+        #endif
+    }
 }
 
 public extension EnvironmentValues {

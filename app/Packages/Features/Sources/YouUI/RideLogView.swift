@@ -1,13 +1,15 @@
 import SwiftUI
 import SwiftData
 import Models
+import Services
 
-/// Ride history across all routes — the novelty factor's raw material,
-/// surfaced read-only here (Strava/HealthKit sync writes to this same store
-/// in Phase 6).
+/// Ride history across all routes — the novelty factor's raw material.
+/// Strava/HealthKit sync (`StravaActivitySyncService`, `LiveHealthKitStore`)
+/// write into this same store.
 struct RideLogView: View {
     @Query(sort: \RideLogModel.date, order: .reverse) private var logs: [RideLogModel]
     @Query private var routes: [RouteModel]
+    @Environment(\.services) private var services
 
     var body: some View {
         List(logs) { log in
@@ -18,6 +20,10 @@ struct RideLogView: View {
                     Text(log.date.formatted(date: .abbreviated, time: .omitted))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if log.source == .strava, let activityID = log.stravaActivityID {
+                        Link("View on Strava", destination: services.strava.activityWebURL(activityID: activityID))
+                            .font(.caption)
+                    }
                 }
                 Spacer()
                 Text(log.source.rawValue.capitalized)

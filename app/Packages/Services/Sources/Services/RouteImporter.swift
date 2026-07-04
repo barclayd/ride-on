@@ -28,7 +28,12 @@ public struct RouteImporter {
     }
 
     @discardableResult
-    public func importGPX(data: Data, fallbackName: String = "Imported Route") async throws -> RouteModel {
+    public func importGPX(
+        data: Data,
+        fallbackName: String = "Imported Route",
+        source: RouteSource = .gpxImport,
+        stravaRouteID: String? = nil
+    ) async throws -> RouteModel {
         let track = try GPXParser.parse(data: data)
 
         let model = RouteModel(
@@ -38,7 +43,8 @@ public struct RouteImporter {
             coordinates: track.coordinates,
             elevations: track.points.map(\.elevationM),
             bearingSegments: track.bearingSegments(),
-            source: .gpxImport
+            source: source,
+            stravaRouteID: stravaRouteID
         )
 
         do {
