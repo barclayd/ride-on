@@ -16,6 +16,15 @@ final class UnitFormatTests: XCTestCase {
         XCTAssertEqual(UnitFormat.distance(km: 42, locale: fr), "42,0\u{202F}km")
     }
 
+    func testElevationStaysInFeetOrMeters() {
+        // The unit must not rescale with magnitude — zero gain previously
+        // rendered as "0 in".
+        XCTAssertEqual(UnitFormat.elevation(m: 0, locale: gb), "0 ft")
+        XCTAssertEqual(UnitFormat.elevation(m: 0, locale: fr), "0\u{202F}m")
+        XCTAssertEqual(UnitFormat.elevation(m: 380, locale: us), "1,247 ft")
+        XCTAssertEqual(UnitFormat.elevation(m: 380, locale: fr), "380\u{202F}m")
+    }
+
     func testTemperatureRespectsLocale() {
         XCTAssertEqual(UnitFormat.temperature(c: 18, locale: gb), "18°C")
         XCTAssertEqual(UnitFormat.temperature(c: 18, locale: us), "64°F")

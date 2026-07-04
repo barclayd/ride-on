@@ -55,14 +55,16 @@ public struct RoutesView: View {
                 )
             } else {
                 VStack(spacing: 0) {
-                    Picker("Library", selection: $libraryFilter) {
-                        ForEach(LibraryFilter.allCases, id: \.self) { filter in
-                            Text(filter.rawValue).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                    // On Mac the Saved/Ridden scope switch lives in the
+                    // toolbar (HIG: scope controls belong with the window
+                    // chrome, and an in-content macOS Picker paints its
+                    // "Library" label); iPhone keeps it in-content.
+                    #if !os(macOS)
+                    libraryPicker
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                    #endif
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -91,7 +93,11 @@ public struct RoutesView: View {
                                 }
                             }
                         }
+                        #if os(macOS)
+                        .listStyle(.inset(alternatesRowBackgrounds: true))
+                        #else
                         .listStyle(.plain)
+                        #endif
                     }
                 }
             }
@@ -99,6 +105,13 @@ public struct RoutesView: View {
         .navigationTitle("Routes")
         .searchable(text: $searchText, prompt: "Search routes")
         .toolbar {
+            #if os(macOS)
+            ToolbarItem(placement: .principal) {
+                libraryPicker
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+            }
+            #endif
             ToolbarItem(placement: .primaryAction) {
                 Button("Import", systemImage: "square.and.arrow.down") {
                     isImporterPresented = true
@@ -133,6 +146,14 @@ public struct RoutesView: View {
         // over `NotificationCenter` instead.
         .onReceive(NotificationCenter.default.publisher(for: .rideOnImportGPXRequested)) { _ in
             isImporterPresented = true
+        }
+    }
+
+    private var libraryPicker: some View {
+        Picker("Library", selection: $libraryFilter) {
+            ForEach(LibraryFilter.allCases, id: \.self) { filter in
+                Text(filter.rawValue).tag(filter)
+            }
         }
     }
 
