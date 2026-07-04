@@ -55,7 +55,7 @@ struct RideOnApp: App {
     /// `project.yml`'s `CFBundleDocumentTypes`/`UTImportedTypeDeclarations`.
     @MainActor
     private func importOpenedGPX(at url: URL) async {
-        let importer = RouteImporter(classifyClient: services.classify, modelContext: modelContainer.mainContext)
+        let importer = RouteImporter(classifyClient: services.classify, elevationClient: services.elevation, modelContext: modelContainer.mainContext)
         try? await importer.importGPX(fileURL: url)
     }
 }
