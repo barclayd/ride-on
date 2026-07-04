@@ -18,6 +18,7 @@ public struct PermissionPrimingSheet: View {
     // Dismiss here so every present-er gets it for free — call sites only
     // flip their "primed" flag, which never resets the sheet binding.
     @Environment(\.dismiss) private var dismiss
+    @ScaledMetric(relativeTo: .largeTitle) private var symbolSize: CGFloat = 44
 
     public init(
         symbol: String,
@@ -38,7 +39,7 @@ public struct PermissionPrimingSheet: View {
     public var body: some View {
         VStack(spacing: 16) {
             Image(systemName: symbol)
-                .font(.system(size: 44))
+                .font(.system(size: symbolSize))
                 .foregroundStyle(.tint)
             Text(title)
                 .font(.title2.bold())

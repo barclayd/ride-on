@@ -41,7 +41,7 @@ struct SpeedPrefillStep: View {
             .padding()
             // Real material, not white paint — respects Reduce Transparency
             // and picks up the ambiance gradient behind it (DESIGN-SYSTEM §2).
-            .background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: CornerRadius.panel))
         } onContinue: { onContinue() }
     }
 

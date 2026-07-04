@@ -56,7 +56,7 @@ public struct RouteDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 mapHero(for: route, elevationPoints: elevationPoints)
                     .frame(height: 260)
-                    .clipShape(.rect(cornerRadius: 20))
+                    .clipShape(.rect(cornerRadius: CornerRadius.hero))
 
                 if let bestDay {
                     BestDayBadge(dayName: bestDay.context.date.formatted(.dateTime.weekday(.wide)), summary: "Score \(Int((bestDay.score * 100).rounded()))")

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 import Models
 import Services
 import Router
+import DesignSystem
 import SharedUI
 
 extension UTType {
@@ -245,13 +246,16 @@ private struct RouteRow: View {
     var route: RouteModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.unitSystem) private var unitSystem
+    // Scales with Dynamic Type so the thumbnail keeps pace with the row's
+    // text instead of shrinking relative to it (REDESIGN.md @ScaledMetric).
+    @ScaledMetric(relativeTo: .headline) private var thumbnailSize: CGFloat = 56
     @State private var thumbnail: PlatformImage?
 
     var body: some View {
         HStack(spacing: 12) {
             thumbnailView
-                .frame(width: 56, height: 56)
-                .clipShape(.rect(cornerRadius: 8))
+                .frame(width: thumbnailSize, height: thumbnailSize)
+                .clipShape(.rect(cornerRadius: CornerRadius.thumbnail))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(route.name)
@@ -290,7 +294,7 @@ private struct RouteRow: View {
     private var thumbnailView: some View {
         if let thumbnail {
             Image(platformImage: thumbnail).resizable().scaledToFill()
-                .frame(width: 56, height: 56)
+                .frame(width: thumbnailSize, height: thumbnailSize)
                 .clipped()
         } else {
             Rectangle().fill(.secondary.opacity(0.15))

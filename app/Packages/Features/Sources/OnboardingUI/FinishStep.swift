@@ -9,6 +9,7 @@ struct FinishStep: View {
     var pageIndex: Int
     var pageCount: Int
     var onContinue: () -> Void
+    @ScaledMetric(relativeTo: .largeTitle) private var symbolSize: CGFloat = 56
 
     var body: some View {
         DialScreen(
@@ -19,7 +20,7 @@ struct FinishStep: View {
             pageCount: pageCount
         ) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 56))
+                .font(.system(size: symbolSize))
                 .foregroundStyle(.white)
         } onContinue: { onContinue() }
     }

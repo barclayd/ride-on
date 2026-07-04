@@ -1,4 +1,5 @@
 import SwiftUI
+import DesignSystem
 
 /// DESIGN-SYSTEM.md §6 component 7: Route Detail's "Best day: Thursday" chip
 /// with a mini condition summary. Rendered only when `Recommendations.bestDay`
@@ -30,7 +31,7 @@ public struct BestDayBadge: View {
         .padding(.vertical, 10)
         // Content card, not glass — DESIGN-SYSTEM.md §2: "Content cards
         // (stats, factor rows) — Not glass."
-        .background(.regularMaterial, in: .rect(cornerRadius: 14))
+        .background(.regularMaterial, in: .rect(cornerRadius: CornerRadius.badge))
         .accessibilityElement(children: .combine)
     }
 }

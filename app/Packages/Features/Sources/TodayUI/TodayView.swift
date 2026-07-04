@@ -29,6 +29,7 @@ public struct TodayView: View {
     @State private var breakdownItem: BreakdownItem?
     @State private var isLocationPrimingPresented = false
     @State private var travelMinutesByRouteID: [UUID: Int] = [:]
+    @ScaledMetric(relativeTo: .largeTitle) private var restDaySymbolSize: CGFloat = 40
 
     // ponytail: below this, a route isn't worth surfacing as a
     // recommendation — the "rest day" card takes over instead of a stack of
@@ -129,7 +130,7 @@ public struct TodayView: View {
     private var restDayCard: some View {
         VStack(spacing: 12) {
             Image(systemName: "leaf")
-                .font(.system(size: 40))
+                .font(.system(size: restDaySymbolSize))
                 .foregroundStyle(.secondary)
             Text("Take a Rest Day")
                 .font(.title2.bold())
@@ -141,7 +142,7 @@ public struct TodayView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial, in: .rect(cornerRadius: 24))
+        .background(.regularMaterial, in: .rect(cornerRadius: CornerRadius.card))
         .padding()
     }
 
@@ -340,12 +341,13 @@ private struct ContextEditorSheet: View {
 /// weather attribution footer. System glass at partial detents (free).
 private struct BreakdownSheet: View {
     var rankedRide: RankedRide
+    @ScaledMetric(relativeTo: .title) private var ringSize: CGFloat = 64
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    ScoreRing(score: rankedRide.score, size: 64)
+                    ScoreRing(score: rankedRide.score, size: ringSize)
                     VStack(spacing: 12) {
                         ForEach(rankedRide.factorScores, id: \.factor) { score in
                             FactorRow(score: score)

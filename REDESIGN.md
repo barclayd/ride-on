@@ -40,13 +40,14 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
 
 ## D. Spacing, layout & type
 
-- [ ] **Centralized layout constants** — Landmarks keeps every radius/padding in one
-  `Constants.swift`; DesignSystem should own `cornerRadius`/`standardPadding` tokens instead of
-  the six hard-coded radii (8/14/16/20/24) scattered across views.
-- [ ] **`ConcentricRectangle` for nested corners** — DESIGN-SYSTEM §5 mandates it; currently
-  unused anywhere.
-- [ ] **`@ScaledMetric` for fixed dimensions** — thumbnail sizes, ring sizes, etc. currently
-  don't scale with Dynamic Type.
+- [x] **Centralized layout constants** — DesignSystem now owns a semantic `CornerRadius` token
+  set (card/hero/panel/badge/thumbnail); no view hard-codes a radius anymore. (`Layout.swift`)
+- [ ] **`ConcentricRectangle` for nested corners** — DESIGN-SYSTEM §5 mandates it *for nested
+  shapes*. N/A today: no rounded shape sits inset inside another rounded container — apply the
+  moment one does.
+- [x] **`@ScaledMetric` for fixed dimensions** — RouteRow thumbnail, BreakdownSheet ScoreRing,
+  and the fixed-size SF Symbols (priming sheet, rest-day leaf, finish checkmark) now scale with
+  Dynamic Type.
 - [x] **Route Detail width cap on Mac** — content stretches edge-to-edge in wide windows; cap
   with `frame(maxWidth:)` and center.
 - [ ] **Route Detail map interactivity** — `.allowsHitTesting(false)` makes the hero inert;
