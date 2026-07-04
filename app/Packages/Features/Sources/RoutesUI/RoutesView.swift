@@ -289,15 +289,9 @@ private struct RouteRow: View {
     @ViewBuilder
     private var thumbnailView: some View {
         if let thumbnail {
-            #if os(macOS)
-            Image(nsImage: thumbnail).resizable().scaledToFill()
+            Image(platformImage: thumbnail).resizable().scaledToFill()
                 .frame(width: 56, height: 56)
                 .clipped()
-            #else
-            Image(uiImage: thumbnail).resizable().scaledToFill()
-                .frame(width: 56, height: 56)
-                .clipped()
-            #endif
         } else {
             Rectangle().fill(.secondary.opacity(0.15))
         }

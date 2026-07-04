@@ -24,7 +24,7 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
   (respects Reduce Transparency). (`SpeedPrefillStep.swift`)
 - [x] **Today pill → `.safeAreaBar`** — was `.overlay(alignment: .bottom)`, violating
   DESIGN-SYSTEM §5; content now lays out above the pill automatically. (`TodayView.swift`)
-- [ ] **`GlassEffectContainer` around ContextPillButton** — required once a second glass element
+- [x] **`GlassEffectContainer` around ContextPillButton** — required once a second glass element
   shares the screen; Landmarks wraps all custom glass. (`TodayView.swift`)
 - [x] **Shared `.tagCapsule()`** — the hand-rolled opacity-fill capsule was duplicated in
   `RouteRow` and `RideLogView`; now one SharedUI helper. (`SharedUI.swift`)
@@ -34,7 +34,9 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
 - [x] **Export GPX → toolbar `ShareLink`** — was an inline content button; Landmarks puts share
   actions in the toolbar's glass capsule. (`RouteDetailView.swift`)
 - [ ] **`ToolbarSpacer` grouping** — use `.fixed`/`.flexible` spacers to split toolbar items into
-  separate glass capsules where more than one action exists (Routes: Import + scope picker).
+  separate glass capsules where more than one action exists. N/A today: no toolbar has two
+  adjacent same-placement actions (Routes' scope picker is `.principal`, Import is alone in
+  `.primaryAction`) — apply when a second trailing action lands.
 
 ## D. Spacing, layout & type
 
@@ -45,7 +47,7 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
   unused anywhere.
 - [ ] **`@ScaledMetric` for fixed dimensions** — thumbnail sizes, ring sizes, etc. currently
   don't scale with Dynamic Type.
-- [ ] **Route Detail width cap on Mac** — content stretches edge-to-edge in wide windows; cap
+- [x] **Route Detail width cap on Mac** — content stretches edge-to-edge in wide windows; cap
   with `frame(maxWidth:)` and center.
 - [ ] **Route Detail map interactivity** — `.allowsHitTesting(false)` makes the hero inert;
   consider tap-to-expand or pan-enabled map.
@@ -59,7 +61,7 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
 
 - [ ] **`#Preview` coverage** — Landmarks has one in every view file (with `@Previewable @State`);
   this app has zero. Add previews backed by FixtureWorld data, starting with SharedUI components.
-- [ ] **PlatformImage dedup** — the `#if os(macOS) Image(nsImage:) #else Image(uiImage:)` branch
+- [x] **PlatformImage dedup** — the `#if os(macOS) Image(nsImage:) #else Image(uiImage:)` branch
   is duplicated in `RideCard` and `RoutesView`; one `Image(platformImage:)` init in SharedUI.
 - [x] **Dead code** — removed unused `Motion.sheetPresentation` token and the always-true
   `#available(iOS 26, macOS 26)` gate around `backgroundExtensionEffect()`.

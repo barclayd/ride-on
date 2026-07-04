@@ -105,11 +105,7 @@ public struct RideCard: View {
         GeometryReader { proxy in
             Group {
                 if let thumbnail {
-                    #if os(macOS)
-                    Image(nsImage: thumbnail).resizable().scaledToFill()
-                    #else
-                    Image(uiImage: thumbnail).resizable().scaledToFill()
-                    #endif
+                    Image(platformImage: thumbnail).resizable().scaledToFill()
                 } else {
                     Rectangle().fill(.secondary.opacity(0.2))
                 }

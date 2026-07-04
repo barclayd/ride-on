@@ -146,8 +146,12 @@ public struct TodayView: View {
     }
 
     private var contextPill: some View {
-        ContextPillButton(bike: bike, hoursAvailable: hoursAvailable, intent: intent, backBy: backBy) {
-            isContextEditorPresented = true
+        // Landmarks wraps all custom glass in a `GlassEffectContainer` so
+        // multiple glass elements on one screen merge/morph correctly.
+        GlassEffectContainer {
+            ContextPillButton(bike: bike, hoursAvailable: hoursAvailable, intent: intent, backBy: backBy) {
+                isContextEditorPresented = true
+            }
         }
     }
 
