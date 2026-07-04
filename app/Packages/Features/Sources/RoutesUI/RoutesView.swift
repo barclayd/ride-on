@@ -343,15 +343,20 @@ private struct RouteRow: View {
     }
 }
 
-/// Confirmation step after import: shows the classifier's suggestion (or a
-/// "pending" note if classify failed) with a picker to override it.
+/// Confirmation step after import: map snapshot hero, name + stats as
+/// title/subtitle, one segmented type control (Landmarks' add-sheet idiom —
+/// a grouped Form here rendered as a jumbled label column on macOS).
 /// DESIGN-SYSTEM.md §2: system glass sheet at `.medium`, no manual
 /// `.presentationBackground`.
 private struct ImportConfirmationSheet: View {
     var route: RouteModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selection: SuggestedRouteType
+    @State private var snapshot: PlatformImage?
+
+    private static let snapshotSize = CGSize(width: 360, height: 160)
 
     init(route: RouteModel) {
         self.route = route
@@ -360,26 +365,45 @@ private struct ImportConfirmationSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Route") {
-                    LabeledContent("Name", value: route.name)
-                    LabeledContent("Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
-                    LabeledContent("Elevation Gain", value: route.hasElevationData ? UnitFormat.elevation(m: route.elevationGainM, system: unitSystem) : "No data")
-                }
-                Section("Type") {
-                    if route.needsClassification {
-                        Label("Classification unavailable — you can retry later.", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.secondary)
-                            .font(.footnote)
+            VStack(spacing: 20) {
+                Group {
+                    if let snapshot {
+                        Image(platformImage: snapshot).resizable().scaledToFill()
+                    } else {
+                        Rectangle().fill(.secondary.opacity(0.15))
                     }
+                }
+                .frame(maxWidth: Self.snapshotSize.width)
+                .frame(height: Self.snapshotSize.height)
+                .clipShape(.rect(cornerRadius: CornerRadius.hero))
+
+                VStack(spacing: 4) {
+                    Text(route.name)
+                        .font(.title2.bold())
+                        .multilineTextAlignment(.center)
+                    Text(subtitle)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(spacing: 8) {
                     Picker("Type", selection: $selection) {
                         ForEach(SuggestedRouteType.allCases, id: \.self) { type in
                             Text(type.rawValue.capitalized).tag(type)
                         }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    if route.needsClassification {
+                        Label("Classification unavailable — you can retry later.", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.secondary)
+                            .font(.footnote)
+                    }
                 }
+                .frame(maxWidth: Self.snapshotSize.width)
             }
-            .navigationTitle("Confirm Import")
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("New Route")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
@@ -391,5 +415,22 @@ private struct ImportConfirmationSheet: View {
             }
         }
         .presentationDetents([.medium])
+        #if os(macOS)
+        .frame(minWidth: 440, minHeight: 380)
+        #endif
+        .task {
+            snapshot = await RouteSnapshotService.snapshot(
+                routeID: route.id,
+                coordinates: route.coordinates,
+                size: CGSize(width: Self.snapshotSize.width * 2, height: Self.snapshotSize.height * 2),
+                colorScheme: colorScheme
+            )
+        }
+    }
+
+    private var subtitle: String {
+        let distance = UnitFormat.distance(km: route.distanceKm, system: unitSystem)
+        guard route.hasElevationData else { return "\(distance) · no elevation data" }
+        return "\(distance) · \(UnitFormat.elevation(m: route.elevationGainM, system: unitSystem)) gain"
     }
 }
