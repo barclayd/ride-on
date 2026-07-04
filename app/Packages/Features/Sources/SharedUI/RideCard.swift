@@ -123,3 +123,20 @@ public struct RideCard: View {
         return "\(routeName), recommended. \(chipText)"
     }
 }
+
+#Preview {
+    RideCard(
+        routeID: UUID(),
+        routeName: "South Downs Loop",
+        coordinates: [
+            Coordinate(latitude: 51.75, longitude: -0.80),
+            Coordinate(latitude: 51.76, longitude: -0.79),
+            Coordinate(latitude: 51.77, longitude: -0.81),
+        ],
+        chips: [ConditionChipData(symbol: "wind", text: "12 km/h wind", tint: .teal)],
+        sky: .sunny,
+        onSwipeUpForDetails: {}
+    )
+    .frame(height: 480)
+    .padding()
+}

@@ -96,3 +96,16 @@ public struct DialScreen<Control: View>: View {
         .foregroundStyle(.white)
     }
 }
+
+#Preview {
+    DialScreen(
+        title: "Rain or Shine?",
+        bodyText: "How much rain are you willing to ride through?",
+        sky: .rain,
+        pageIndex: 3,
+        pageCount: 9
+    ) {
+        Slider(value: .constant(0.4))
+            .padding(.horizontal, 40)
+    } onContinue: {}
+}
