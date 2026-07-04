@@ -209,6 +209,7 @@ private struct SplitRoot: View {
                     sidebar
                 } content: {
                     RoutesView(selection: $selectedRouteID)
+                        .navigationSplitViewColumnWidth(min: 300, ideal: 340)
                 } detail: {
                     if let selectedRouteID {
                         RouteDetailView(routeID: selectedRouteID)
