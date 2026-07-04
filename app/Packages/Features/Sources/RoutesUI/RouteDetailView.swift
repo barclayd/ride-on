@@ -27,6 +27,7 @@ public struct RouteDetailView: View {
     @State private var bestDay: (context: DailyContext, score: Double)?
     @State private var exportedGPXURL: URL?
     @State private var isInspectorPresented = true
+    @State private var isMapExpanded = false
 
     public init(routeID: UUID) {
         self.routeID = routeID
@@ -55,9 +56,17 @@ public struct RouteDetailView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // The inline hero stays inert (an interactive map inside a
+                // ScrollView steals the scroll gesture) — tapping expands to
+                // a fully pannable map sheet instead (REDESIGN.md D).
                 mapHero(for: route, elevationPoints: elevationPoints)
                     .frame(height: 260)
                     .clipShape(.rect(cornerRadius: CornerRadius.hero))
+                    .contentShape(.rect)
+                    .onTapGesture { isMapExpanded = true }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Route map")
+                    .accessibilityHint("Double tap to expand")
 
                 // On Mac these live in the inspector column instead
                 // (Landmarks idiom, REDESIGN.md A); iPhone/iPad keep them
@@ -121,6 +130,9 @@ public struct RouteDetailView: View {
             }
             #endif
         }
+        .sheet(isPresented: $isMapExpanded) {
+            expandedMap(for: route)
+        }
         .task(id: route.id) {
             exportedGPXURL = Self.exportGPX(route: route)
             await loadBestDay(for: route)
@@ -142,6 +154,29 @@ public struct RouteDetailView: View {
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
         .allowsHitTesting(false)
+    }
+
+    private func expandedMap(for route: RouteModel) -> some View {
+        NavigationStack {
+            Map(initialPosition: .region(RouteSnapshotService.region(fitting: route.coordinates))) {
+                MapPolyline(coordinates: route.coordinates.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
+                    .stroke(Color.accentColor, lineWidth: 3)
+            }
+            .mapStyle(.standard(pointsOfInterest: .excludingAll))
+            .navigationTitle(route.name)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { isMapExpanded = false }
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 700, minHeight: 500)
+        #endif
     }
 
     private func selectedMapCoordinate(route: RouteModel, elevationPoints: [ElevationPoint]) -> CLLocationCoordinate2D? {
