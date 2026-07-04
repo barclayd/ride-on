@@ -33,14 +33,16 @@ public struct GPXTrack: Codable, Sendable, Hashable {
         }
     }
 
-    /// Smoothed elevation gain via `ElevationSmoother`. Points missing `ele`
-    /// are dropped rather than interpolated — fine for the moving-average +
-    /// min-delta approach, and simplest for tracks that are missing it
-    /// entirely (gain comes back 0).
+    /// Raw positive-delta sum, matching how Garmin (and most planners)
+    /// report course gain. Embedded `<ele>` comes from a terrain model, not
+    /// noisy GPS, so smoothing here just under-reports vs the source the
+    /// user downloaded from. `ElevationSmoother` still guards the
+    /// Open-Meteo-filled path in RouteImporter. Points missing `ele` are
+    /// dropped rather than interpolated.
     public var elevationGainM: Double {
         let elevations = points.compactMap(\.elevationM)
         guard elevations.count > 1 else { return 0 }
-        return ElevationSmoother.smoothedGain(rawElevations: elevations)
+        return zip(elevations, elevations.dropFirst()).reduce(0) { $0 + max(0, $1.1 - $1.0) }
     }
 
     /// Segments the track every `segmentLengthKm` (default ~1km) and returns
