@@ -44,7 +44,14 @@ public struct RoutesView: View {
     @State private var activeChips: Set<RouteChip> = []
     @State private var libraryFilter: LibraryFilter = .saved
 
-    public init() {}
+    /// Non-nil on Mac/iPad regular width, where the list drives the split
+    /// view's detail column via selection (Landmarks idiom) instead of
+    /// pushing Route Detail over itself. nil = iPhone push navigation.
+    private var selection: Binding<UUID?>?
+
+    public init(selection: Binding<UUID?>? = nil) {
+        self.selection = selection
+    }
 
     public var body: some View {
         Group {
@@ -80,18 +87,19 @@ public struct RoutesView: View {
                     if filteredRoutes.isEmpty {
                         ContentUnavailableView.search(text: searchText)
                     } else {
-                        List {
+                        List(selection: selection) {
                             ForEach(filteredRoutes) { route in
-                                NavigationLink(value: RouterDestination.routeDetail(routeID: route.id)) {
-                                    RouteRow(route: route)
-                                }
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        modelContext.delete(route)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
+                                row(for: route)
+                                    .swipeActions(edge: .trailing) {
+                                        Button(role: .destructive) {
+                                            if selection?.wrappedValue == route.id {
+                                                selection?.wrappedValue = nil
+                                            }
+                                            modelContext.delete(route)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
                                     }
-                                }
                             }
                         }
                         #if os(macOS)
@@ -147,6 +155,18 @@ public struct RoutesView: View {
         // over `NotificationCenter` instead.
         .onReceive(NotificationCenter.default.publisher(for: .rideOnImportGPXRequested)) { _ in
             isImporterPresented = true
+        }
+    }
+
+    @ViewBuilder
+    private func row(for route: RouteModel) -> some View {
+        if selection != nil {
+            RouteRow(route: route)
+                .tag(route.id)
+        } else {
+            NavigationLink(value: RouterDestination.routeDetail(routeID: route.id)) {
+                RouteRow(route: route)
+            }
         }
     }
 

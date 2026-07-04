@@ -9,8 +9,10 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
 - [x] **Mac Today card pager** — `TabView` without `.page` renders as a literal tab strip on
   macOS. Replaced with a paging `ScrollView` (`scrollTargetBehavior(.viewAligned)` +
   `containerRelativeFrame` + `contentMargins`), identical on both platforms. (`TodayView.swift`)
-- [ ] **Routes as split-view column** — on Mac/iPad, Route Detail should be the detail column of
-  the existing `NavigationSplitView`, not a push inside one pane. (`RideOnApp.swift`, `RoutesView.swift`)
+- [x] **Routes as split-view column** — on Mac/iPad, Route Detail should be the detail column of
+  the existing `NavigationSplitView`, not a push inside one pane. Routes tab now uses a
+  three-column split (sidebar / routes list / detail); iPhone keeps push navigation.
+  (`RideOnApp.swift`, `RoutesView.swift`)
 - [ ] **Route Detail inspector** — factor breakdown / stats belong in `.inspector` on Mac/iPad
   (Landmarks uses one for landmark editing). (`RouteDetailView.swift`)
 - [x] **macOS Settings scene (⌘,)** — natural home for the units toggle (task #18) and
