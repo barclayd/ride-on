@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import Models
 import Services
+import SharedUI
 
 /// Per-surface cruising speed + climbing penalty, feeding `SpeedModel`'s ride
 /// time estimates (`RouteStats.estimatedRideTime`).
@@ -23,7 +24,7 @@ struct SpeedModelView: View {
                         HStack {
                             Text(label(for: surface))
                             Spacer()
-                            Text("\(Int(speedBinding(for: surface).wrappedValue)) km/h")
+                            Text(UnitFormat.speed(kph: speedBinding(for: surface).wrappedValue))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                         }
@@ -33,6 +34,11 @@ struct SpeedModelView: View {
             }
             Section("Climbing") {
                 VStack(alignment: .leading, spacing: 4) {
+                    // ponytail: "100m" here is the climbing-penalty rate's
+                    // fixed distance unit (minutes per 100 vertical meters of
+                    // gain), not a display of a stored value — converting it
+                    // to "per 330 ft" would need to rescale the penalty
+                    // number too, not just relabel it. Left in metric.
                     HStack {
                         Text("Penalty per 100m gain")
                         Spacer()

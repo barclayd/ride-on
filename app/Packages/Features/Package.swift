@@ -42,4 +42,7 @@ let package = Package(
         .target(
             name: "OnboardingUI",
             dependencies: baseDeps + ["SharedUI"]),
+        .testTarget(
+            name: "SharedUITests",
+            dependencies: ["SharedUI"]),
     ])

@@ -131,13 +131,13 @@ public struct RouteDetailView: View {
         // or overlapping.
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 24) {
-                statColumn(title: "Distance", value: "\(route.distanceKm.formatted(.number.precision(.fractionLength(1)))) km")
-                statColumn(title: "Elevation", value: "\(Int(route.elevationGainM)) m")
+                statColumn(title: "Distance", value: UnitFormat.distance(km: route.distanceKm))
+                statColumn(title: "Elevation", value: UnitFormat.elevation(m: route.elevationGainM))
                 statColumn(title: "Est. Time", value: estimatedTimeText(for: route))
             }
             VStack(alignment: .leading, spacing: 12) {
-                statColumn(title: "Distance", value: "\(route.distanceKm.formatted(.number.precision(.fractionLength(1)))) km")
-                statColumn(title: "Elevation", value: "\(Int(route.elevationGainM)) m")
+                statColumn(title: "Distance", value: UnitFormat.distance(km: route.distanceKm))
+                statColumn(title: "Elevation", value: UnitFormat.elevation(m: route.elevationGainM))
                 statColumn(title: "Est. Time", value: estimatedTimeText(for: route))
             }
         }

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 import Models
 import Services
 import Router
+import SharedUI
 
 extension UTType {
     /// Declared in `project.yml`'s `UTImportedTypeDeclarations`.
@@ -211,7 +212,7 @@ private struct RouteRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(route.name)
                     .font(.headline)
-                Text("\(route.distanceKm.formatted(.number.precision(.fractionLength(1)))) km · \(Int(route.elevationGainM))m gain")
+                Text("\(UnitFormat.distance(km: route.distanceKm)) · \(UnitFormat.elevation(m: route.elevationGainM)) gain")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -281,8 +282,8 @@ private struct ImportConfirmationSheet: View {
             Form {
                 Section("Route") {
                     LabeledContent("Name", value: route.name)
-                    LabeledContent("Distance", value: "\(route.distanceKm.formatted(.number.precision(.fractionLength(1)))) km")
-                    LabeledContent("Elevation Gain", value: "\(Int(route.elevationGainM)) m")
+                    LabeledContent("Distance", value: UnitFormat.distance(km: route.distanceKm))
+                    LabeledContent("Elevation Gain", value: UnitFormat.elevation(m: route.elevationGainM))
                 }
                 Section("Type") {
                     if route.needsClassification {

@@ -60,7 +60,13 @@ final class RideOnUITests: XCTestCase {
     // instead of driving `.fileImporter`, per Phase 2 spec.
     func testRoutesTabShowsSeededImportedRoute() {
         let app = XCUIApplication()
-        app.launchArguments += ["--fixture-world"]
+        // ponytail: distance is now locale-formatted (UnitFormat, km vs mi) —
+        // the simulator's default locale can be en_US, which would render
+        // this route's distance in miles and break the "42.0 km" assertion
+        // below. Pin to a metric, period-decimal locale (en_AU) so the
+        // assertion holds regardless of the host machine's simulator locale;
+        // app strings are all hardcoded English so language is unaffected.
+        app.launchArguments += ["--fixture-world", "-AppleLocale", "en_AU", "-AppleLanguages", "(en)"]
         app.launch()
 
         app.buttons["Routes"].tap()
