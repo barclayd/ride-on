@@ -83,7 +83,7 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [x] `Packages/Services` — service protocols, AppServices, FixtureWorld, ClassifyClient; later WeatherKit/Strava/HealthKit clients
 - [x] `Packages/Router` — AppTab (view construction stays in `App/`, the one target that imports every Features package; `RouterDestination`/sheet destinations deferred until Phase 4 needs cross-feature navigation)
 - [x] `Packages/DesignSystem` — ConditionPalette, AmbianceStyle, Motion + custom components as built
-- [x] `Packages/Features` — one package, library targets: TodayUI, RoutesUI, YouUI, SharedUI (OnboardingUI deferred to Phase 5 per plan)
+- [x] `Packages/Features` — one package, library targets: TodayUI, RoutesUI, YouUI, SharedUI, OnboardingUI (added Phase 5)
 - [x] All existing tests green after the move; update root CLAUDE.md module map + build commands
 - [x] Also fold in if Phase 2 didn't: `UILaunchScreen: {}` in Info.plist properties (fixes simulator letterboxing/compatibility mode)
 
@@ -102,10 +102,10 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [x] You tab: preference rows → DialScreens, priorities (weights) panel, speed model editor, saved places, Strava connection state, ride log, About + attributions
 
 ### Phase 5 — Onboarding
-- [ ] 9-step flow per decision record; feature-splash welcome; dots; skippable except welcome
-- [ ] Four DialScreens with reactive ambiance crossfades (the centrepiece — this is where the animation budget goes)
-- [ ] Contextual permission priming screens (location on first Today entry; Health before ride-matching)
-- [ ] Prefill speeds from Strava when connected; land on a working Today
+- [x] 9-step flow per decision record; feature-splash welcome; dots; skippable except welcome
+- [x] Four DialScreens with reactive ambiance crossfades (the centrepiece — this is where the animation budget goes)
+- [x] Contextual permission priming screens (location on first Today entry; Health before ride-matching)
+- [x] Prefill speeds from Strava when connected; land on a working Today
 
 ### Phase 6 — Integrations
 - [ ] Strava OAuth via `ASWebAuthenticationSession` (+ app-to-app when Strava app present), tokens in Keychain, refresh rotation
@@ -156,7 +156,7 @@ Goal: bullet-proof confidence — every phase closes only when its slice of this
 
 ### App — E2E (XCUITest, iPhone + Mac destinations, one test plan)
 Deterministic world via launch arguments: seeded SwiftData store, fixture forecast, fake location, stubbed network (no live services in E2E).
-- [ ] **First-run journey**: full onboarding — all 9 steps, dial screens change selection, skip paths, permission-priming screens — lands on a populated Today
+- [x] **First-run journey**: full onboarding — all 9 steps, dial screens change selection, skip paths, permission-priming screens — lands on a populated Today
 - [ ] **Core daily loop**: Today shows expected top card for the fixture world (assert route name + chips); swipe through stack; swipe up → factor breakdown values match engine output; change hours/intent/bike in context pill → ranking updates
 - [ ] **Import journey**: import GPX via Files → confirm suggested type → route appears in library with surface bar; re-export/share produces a valid GPX
 - [ ] **Route detail**: zoom in from card, elevation scrub syncs map dot, BestDayBadge present/absent per fixture forecast

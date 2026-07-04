@@ -21,7 +21,7 @@ app/
 │   ├─ Services/               SPM package: ServiceProtocols, AppServices (DI), FixtureWorld, ClassifyService, PreferencesStore, RideOnModelContainer, RouteStats (needs Engine's SpeedModel, so lives here not in Models), Import/ pipeline (RouteImporter, RouteSnapshotService). Depends on Models + Engine + DesignSystem
 │   ├─ Router/                 SPM package: AppTab (tab identity/title/icon only — view construction stays in App/, the one target allowed to import every Features package)
 │   ├─ DesignSystem/           SPM package: ConditionPalette, AmbianceStyle, Motion tokens
-│   └─ Features/               SPM package, one manifest, multiple static-library products: TodayUI (card stack, context pill, breakdown sheet), RoutesUI (library list, import, Route Detail), YouUI (preference rows, weights, saved places, ride log), SharedUI (the closed 8-component DESIGN-SYSTEM.md §6 inventory: RideCard, ConditionChip, FactorRow, ElevationProfile, SurfaceBar, DialScreen, BestDayBadge, ScoreRing). Each depends on Models/Services/DesignSystem as needed
+│   └─ Features/               SPM package, one manifest, multiple static-library products: TodayUI (card stack, context pill, breakdown sheet), RoutesUI (library list, import, Route Detail), YouUI (preference rows, weights, saved places, ride log), OnboardingUI (9-step first-run flow — welcome, four reactive dial steps, Strava connect, speed prefill, finish), SharedUI (the closed 8-component DESIGN-SYSTEM.md §6 inventory: RideCard, ConditionChip, FactorRow, ElevationProfile, SurfaceBar, DialScreen, BestDayBadge, ScoreRing — plus the non-inventory `PermissionPrimingSheet` helper). Each depends on Models/Services/DesignSystem as needed
 ├─ RideOnTests/                app-layer XCTest integration tests (import pipeline, live-classify smoke check, AppServices wiring)
 └─ RideOnUITests/              XCUITest E2E tests (launch with --fixture-world)
 worker/                       Cloudflare Worker (Hono): /classify (Valhalla surface classification), /strava/* OAuth — see worker/CLAUDE.md
@@ -119,10 +119,15 @@ Testing strategy).
 ## Plan
 
 `PLAN.md` has the full architecture, phase checklist, and testing strategy. Phase 0
-(this scaffold), Phase 2.5 (modular package restructure), Phase 3 (Engine), and Phase 4
-(UI shell & screens) are done — all eight `RideFactor` providers (time budget, wind,
-temperature, sky, rain, surface match, intent, novelty) are real, weighted by
-`WeightedScorer`, with golden-scenario tests in
+(this scaffold), Phase 2.5 (modular package restructure), Phase 3 (Engine), Phase 4
+(UI shell & screens), and Phase 5 (Onboarding) are done — all eight `RideFactor` providers
+(time budget, wind, temperature, sky, rain, surface match, intent, novelty) are real,
+weighted by `WeightedScorer`, with golden-scenario tests in
 `app/Packages/Engine/Tests/EngineTests/GoldenScenarioTests.swift`; Today, Route Detail,
-Routes, and You are all built per DESIGN-SYSTEM.md. See the checklist for what's next
-(onboarding lands in Phase 5).
+Routes, You, and the first-run onboarding flow are all built per DESIGN-SYSTEM.md.
+Onboarding shows once on first launch (`PreferencesStore.hasCompletedOnboarding`);
+`--reset-onboarding` forces it back on for E2E (`RideOnUITests`'s
+`testOnboardingHappyPathThroughAllStepsLandsOnToday`/`testOnboardingSkipPathLandsOnToday`).
+Real permission requests (`CLLocationManager`/HealthKit) and Strava's live OAuth/activity
+fetch are still Phase 6 — onboarding today only primes/fixtures them. See the checklist
+for what's next.

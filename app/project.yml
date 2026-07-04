@@ -39,6 +39,8 @@ targets:
         product: RoutesUI
       - package: Features
         product: YouUI
+      - package: Features
+        product: OnboardingUI
     # GENERATE_INFOPLIST_FILE only supports flat string/bool keys via
     # INFOPLIST_KEY_* — the GPX document-type declarations below are arrays
     # of dicts, so XcodeGen generates a real Info.plist from `properties`
