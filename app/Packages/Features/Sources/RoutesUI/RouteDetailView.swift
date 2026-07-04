@@ -125,10 +125,21 @@ public struct RouteDetailView: View {
     }
 
     private func statsRow(for route: RouteModel) -> some View {
-        HStack(spacing: 24) {
-            statColumn(title: "Distance", value: "\(route.distanceKm.formatted(.number.precision(.fractionLength(1)))) km")
-            statColumn(title: "Elevation", value: "\(Int(route.elevationGainM)) m")
-            statColumn(title: "Est. Time", value: estimatedTimeText(for: route))
+        // ponytail: `ViewThatFits` (native, no custom layout math) falls back
+        // to a stacked column when the three side-by-side stats don't fit —
+        // e.g. at accessibility Dynamic Type sizes — instead of truncating
+        // or overlapping.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 24) {
+                statColumn(title: "Distance", value: "\(route.distanceKm.formatted(.number.precision(.fractionLength(1)))) km")
+                statColumn(title: "Elevation", value: "\(Int(route.elevationGainM)) m")
+                statColumn(title: "Est. Time", value: estimatedTimeText(for: route))
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                statColumn(title: "Distance", value: "\(route.distanceKm.formatted(.number.precision(.fractionLength(1)))) km")
+                statColumn(title: "Elevation", value: "\(Int(route.elevationGainM)) m")
+                statColumn(title: "Est. Time", value: estimatedTimeText(for: route))
+            }
         }
     }
 

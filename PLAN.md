@@ -118,10 +118,10 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [ ] Live on-device verification of WeatherKit/HealthKit entitlements against a real Apple Developer team — blocked on real signing (see CLAUDE.md Signing section): all code above builds and passes on iOS Simulator + macOS, but the iCloud/WeatherKit/HealthKit entitlements are only wired via `CODE_SIGN_ENTITLEMENTS` in the Release config, which needs a real `DEVELOPMENT_TEAM` to take effect.
 
 ### Phase 7 — Polish & platform
-- [ ] Mac: keyboard navigation, menu bar, window sizing, sidebar polish, `backgroundExtensionEffect`
-- [ ] Accessibility pass: Dynamic Type sweep, VoiceOver labels/chart descriptors, Reduce Motion/Transparency fallbacks, contrast verification over ambiance extremes
-- [ ] Performance: snapshot caching, glass container audit, cold-launch time
-- [ ] App icon + launch screen (launch ≈ first real screen, per HIG)
+- [x] Mac: keyboard navigation, menu bar, window sizing, sidebar polish, `backgroundExtensionEffect`
+- [x] Accessibility pass: Dynamic Type sweep, VoiceOver labels/chart descriptors, Reduce Motion/Transparency fallbacks, contrast verification over ambiance extremes
+- [x] Performance: snapshot caching, glass container audit, cold-launch time
+- [x] App icon + launch screen (launch ≈ first real screen, per HIG)
 
 ### Phase 8 — Release
 - [ ] Privacy policy + App Privacy nutrition labels (location, health, fitness data)

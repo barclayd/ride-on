@@ -56,6 +56,22 @@ public enum AmbianceStyle {
     }
 }
 
+public extension SkyCondition {
+    /// DESIGN-SYSTEM.md §8: "scrim strength is computed, verified in previews
+    /// for lightest and darkest ambiance" — `.sunny`/`.overcast` are light
+    /// enough that white onboarding/dial text (§6 `DialScreen`) falls well
+    /// under the 4.5:1/3:1 contrast bar without one; `.rain`/`.night` are
+    /// already dark enough on their own (verified against WCAG contrast
+    /// ratios for both gradient stops).
+    var legibilityScrimOpacity: Double {
+        switch self {
+        case .sunny: 0.5
+        case .overcast: 0.45
+        case .rain, .night: 0
+        }
+    }
+}
+
 /// Crossfades between ambiance states instead of hard-cutting — each gradient
 /// is a separate layer whose opacity animates, since SwiftUI can't
 /// interpolate between two unrelated `LinearGradient`s directly.

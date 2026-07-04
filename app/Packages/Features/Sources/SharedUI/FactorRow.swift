@@ -9,6 +9,7 @@ import DesignSystem
 public struct FactorRow: View {
     public var score: FactorScore
     @State private var isExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(score: FactorScore) {
         self.score = score
@@ -35,7 +36,7 @@ public struct FactorRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation(Motion.glassTapLayout) { isExpanded.toggle() }
+            withAnimation(reduceMotion ? nil : Motion.glassTapLayout) { isExpanded.toggle() }
         }
         .accessibilityElement(children: .combine)
         .accessibilityHint("Double tap for details")

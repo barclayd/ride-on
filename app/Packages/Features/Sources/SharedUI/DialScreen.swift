@@ -36,9 +36,19 @@ public struct DialScreen<Control: View>: View {
         self.onContinue = onContinue
     }
 
+    private var resolvedSky: SkyCondition {
+        AmbianceStyle.resolvedCondition(sky: sky, date: .now)
+    }
+
     public var body: some View {
         ZStack {
             AmbianceBackground(sky: sky)
+                .ignoresSafeArea()
+
+            // Legibility scrim for the white title/body/control text below —
+            // see `SkyCondition.legibilityScrimOpacity`.
+            Color.black
+                .opacity(resolvedSky.legibilityScrimOpacity)
                 .ignoresSafeArea()
 
             VStack(spacing: 24) {
@@ -74,6 +84,7 @@ public struct DialScreen<Control: View>: View {
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.capsule)
                     .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
             }
             .padding(.bottom, 32)
         }

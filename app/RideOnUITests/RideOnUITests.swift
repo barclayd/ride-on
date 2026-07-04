@@ -171,4 +171,17 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Today"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["today-card"].firstMatch.waitForExistence(timeout: 5))
     }
+
+    // MARK: - Performance (Phase 7)
+
+    /// Cold-launch time, fixture-world (no live network to skew the number).
+    /// Not a pass/fail gate — `measure` just records the metric to the test
+    /// log/Xcode Report Navigator so regressions are visible over time.
+    func testColdLaunchPerformance() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world"]
+        measure(metrics: [XCTApplicationLaunchMetric()]) {
+            app.launch()
+        }
+    }
 }

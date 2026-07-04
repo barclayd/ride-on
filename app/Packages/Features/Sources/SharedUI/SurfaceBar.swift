@@ -1,5 +1,6 @@
 import SwiftUI
 import Models
+import Accessibility
 
 /// DESIGN-SYSTEM.md §6 component 5: the cycle.travel-style stacked
 /// horizontal bar of busy-road/paved/unpaved/path percentages, with a
@@ -68,10 +69,78 @@ public struct SurfaceBar: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
+        .modifier(SurfaceChartDescriptorModifier(presentTypes: presentTypes, shares: shares))
     }
 
     private var accessibilityDescription: String {
         guard !presentTypes.isEmpty else { return "Surface breakdown not available" }
         return "Surface: " + presentTypes.map { "\(Int(((shares[$0] ?? 0) * 100).rounded()))% \(Self.label(for: $0))" }.joined(separator: ", ")
+    }
+}
+
+/// A `ViewModifier` (not inline in `body`) since `.accessibilityChartDescriptor`
+/// needs a concrete, non-empty series — skipped entirely when there's
+/// nothing to plot yet.
+private struct SurfaceChartDescriptorModifier: ViewModifier {
+    var presentTypes: [SurfaceType]
+    var shares: [SurfaceType: Double]
+
+    func body(content: Content) -> some View {
+        if presentTypes.isEmpty {
+            content
+        } else {
+            content.accessibilityChartDescriptor(SurfaceChartDescriptor(presentTypes: presentTypes, shares: shares))
+        }
+    }
+}
+
+/// DESIGN-SYSTEM.md §8's audio-graph descriptor for the surface bar: an
+/// audio graph over the busy-road/paved/unpaved/path percentage split.
+private struct SurfaceChartDescriptor: AXChartDescriptorRepresentable {
+    var presentTypes: [SurfaceType]
+    var shares: [SurfaceType: Double]
+
+    private static func label(for type: SurfaceType) -> String {
+        switch type {
+        case .paved: "Paved"
+        case .busyRoad: "Busy Road"
+        case .unpaved: "Unpaved"
+        case .path: "Path"
+        case .unknown: "Unknown"
+        }
+    }
+
+    func makeChartDescriptor() -> AXChartDescriptor {
+        let xAxis = AXCategoricalDataAxisDescriptor(
+            title: "Surface",
+            categoryOrder: presentTypes.map(Self.label(for:))
+        )
+        let yAxis = AXNumericDataAxisDescriptor(
+            title: "Share",
+            range: 0...100,
+            gridlinePositions: []
+        ) { "\(Int($0))%" }
+        return AXChartDescriptor(
+            title: "Surface Breakdown",
+            summary: nil,
+            xAxis: xAxis,
+            yAxis: yAxis,
+            additionalAxes: [],
+            series: [dataSeries]
+        )
+    }
+
+    func updateChartDescriptor(_ descriptor: AXChartDescriptor) {
+        descriptor.series = [dataSeries]
+    }
+
+    private var dataSeries: AXDataSeriesDescriptor {
+        AXDataSeriesDescriptor(
+            name: "Surface breakdown",
+            isContinuous: false,
+            dataPoints: presentTypes.map { type in
+                AXDataPoint(x: Self.label(for: type), y: ((shares[type] ?? 0) * 100).rounded())
+            }
+        )
     }
 }

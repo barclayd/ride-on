@@ -119,6 +119,12 @@ public struct RoutesView: View {
         } message: { message in
             Text(message)
         }
+        // Mac File menu > "Import GPX…" (RideOnApp's `.commands`) — a
+        // scene-level command has no direct view reference, so it signals
+        // over `NotificationCenter` instead.
+        .onReceive(NotificationCenter.default.publisher(for: .rideOnImportGPXRequested)) { _ in
+            isImporterPresented = true
+        }
     }
 
     private func chipButton(_ chip: RouteChip) -> some View {
@@ -298,6 +304,7 @@ private struct ImportConfirmationSheet: View {
                         route.userOverriddenType = selection
                         dismiss()
                     }
+                    .keyboardShortcut(.defaultAction)
                 }
             }
         }

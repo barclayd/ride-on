@@ -69,6 +69,7 @@ private struct AddSavedPlaceSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .disabled(name.isEmpty || Double(latitude) == nil || Double(longitude) == nil)
+                        .keyboardShortcut(.defaultAction)
                 }
             }
         }
