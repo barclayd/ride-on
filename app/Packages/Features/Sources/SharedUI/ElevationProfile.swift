@@ -63,7 +63,7 @@ public struct ElevationProfile: View {
                         RuleMark(x: .value("Selected", nearestSelectedPoint.distanceKm))
                             .foregroundStyle(.secondary.opacity(0.6))
                             .annotation(position: .top) {
-                                Text("\(Int(nearestSelectedPoint.elevationM.rounded()))m")
+                                Text(UnitFormat.elevation(m: nearestSelectedPoint.elevationM))
                                     .font(.caption.monospacedDigit())
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
@@ -72,8 +72,8 @@ public struct ElevationProfile: View {
                     }
                 }
                 .chartXSelection(value: $selectedDistanceKm)
-                .chartXAxisLabel("km")
-                .chartYAxisLabel("m")
+                .chartXAxisLabel(UnitFormat.distanceUnitSymbol())
+                .chartYAxisLabel(UnitFormat.elevationUnitSymbol())
                 .chartLegend(.hidden)
             } else {
                 ContentUnavailableView("No Elevation Data", systemImage: "chart.xyaxis.line")
@@ -89,7 +89,7 @@ public struct ElevationProfile: View {
               let maxPoint = points.max(by: { $0.elevationM < $1.elevationM }) else {
             return "No elevation data"
         }
-        return "Elevation profile from \(Int(minPoint.elevationM))m to \(Int(maxPoint.elevationM))m"
+        return "Elevation profile from \(UnitFormat.elevation(m: minPoint.elevationM)) to \(UnitFormat.elevation(m: maxPoint.elevationM))"
     }
 }
 
@@ -106,12 +106,12 @@ private struct ElevationChartDescriptor: AXChartDescriptorRepresentable {
             title: "Distance",
             range: (distances.min() ?? 0)...(distances.max() ?? 0),
             gridlinePositions: []
-        ) { "\($0.formatted(.number.precision(.fractionLength(1)))) km" }
+        ) { UnitFormat.distance(km: $0) }
         let yAxis = AXNumericDataAxisDescriptor(
             title: "Elevation",
             range: (elevations.min() ?? 0)...(elevations.max() ?? 0),
             gridlinePositions: []
-        ) { "\(Int($0)) meters" }
+        ) { UnitFormat.elevation(m: $0) }
         return AXChartDescriptor(
             title: "Elevation Profile",
             summary: nil,

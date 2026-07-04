@@ -31,7 +31,7 @@ struct SpeedPrefillStep: View {
                     HStack {
                         Text(label(for: surface))
                         Spacer()
-                        Text("\(Int(speedKphBySurface[surface] ?? 20)) km/h")
+                        Text(UnitFormat.speed(kph: speedKphBySurface[surface] ?? 20))
                             .monospacedDigit()
                     }
                     .foregroundStyle(.white)

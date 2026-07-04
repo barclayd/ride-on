@@ -37,7 +37,7 @@ struct TemperatureDialStep: View {
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading) {
-                    Text("Low: \(Int(range.lowerBound))°C").foregroundStyle(.white)
+                    Text("Low: \(UnitFormat.temperature(c: range.lowerBound))").foregroundStyle(.white)
                     Slider(
                         value: Binding(
                             get: { range.lowerBound },
@@ -47,7 +47,7 @@ struct TemperatureDialStep: View {
                     )
                 }
                 VStack(alignment: .leading) {
-                    Text("High: \(Int(range.upperBound))°C").foregroundStyle(.white)
+                    Text("High: \(UnitFormat.temperature(c: range.upperBound))").foregroundStyle(.white)
                     Slider(
                         value: Binding(
                             get: { range.upperBound },
@@ -144,7 +144,7 @@ struct WindDialStep: View {
         ) {
             VStack {
                 Slider(value: $maxWindKph, in: 5...60, step: 1)
-                Text("\(Int(maxWindKph)) km/h").font(.title3.monospacedDigit()).foregroundStyle(.white)
+                Text(UnitFormat.speed(kph: maxWindKph)).font(.title3.monospacedDigit()).foregroundStyle(.white)
             }
         } onContinue: { onContinue() }
     }

@@ -176,7 +176,7 @@ public struct TodayView: View {
         // `reason` (shown in full in the breakdown sheet's FactorRow) is too
         // long here, so this always builds the short "N km/h" form instead.
         return ConditionChipData.todayChips(
-            windLabel: "\(Int(weather.windKph.rounded())) km/h wind",
+            windLabel: "\(UnitFormat.speed(kph: weather.windKph)) wind",
             temperatureC: weather.temperatureC,
             sky: weather.sky,
             travelMinutes: travelMinutesByRouteID[rankedRide.route.id],

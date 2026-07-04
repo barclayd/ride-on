@@ -133,7 +133,7 @@ public extension ConditionChipData {
         }
         chips.append(ConditionChipData(
             symbol: skySymbol,
-            text: "\(Int(temperatureC.rounded()))°C",
+            text: UnitFormat.temperature(c: temperatureC),
             tint: ConditionPalette.color(forTemperatureC: temperatureC)
         ))
 

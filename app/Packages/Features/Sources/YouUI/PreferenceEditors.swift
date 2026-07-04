@@ -99,7 +99,7 @@ struct MaxWindEditor: View {
         ) {
             VStack {
                 Slider(value: $draft, in: 5...60, step: 1)
-                Text("\(Int(draft)) km/h").font(.title3.monospacedDigit()).foregroundStyle(.white)
+                Text(UnitFormat.speed(kph: draft)).font(.title3.monospacedDigit()).foregroundStyle(.white)
             }
         } onContinue: {
             maxWindKph = draft
@@ -129,11 +129,11 @@ struct TemperatureRangeEditor: View {
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading) {
-                    Text("Low: \(Int(draftLow))°C").foregroundStyle(.white)
+                    Text("Low: \(UnitFormat.temperature(c: draftLow))").foregroundStyle(.white)
                     Slider(value: $draftLow, in: -5...30, step: 1)
                 }
                 VStack(alignment: .leading) {
-                    Text("High: \(Int(draftHigh))°C").foregroundStyle(.white)
+                    Text("High: \(UnitFormat.temperature(c: draftHigh))").foregroundStyle(.white)
                     Slider(value: $draftHigh, in: -5...30, step: 1)
                 }
             }
