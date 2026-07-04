@@ -385,20 +385,13 @@ private struct ImportConfirmationSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
-                VStack(spacing: 8) {
-                    Picker("Type", selection: $selection) {
-                        ForEach(SuggestedRouteType.allCases, id: \.self) { type in
-                            Text(type.rawValue.capitalized).tag(type)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    if route.needsClassification {
-                        Label("Couldn't detect the route type — your pick will be used instead.", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.secondary)
-                            .font(.footnote)
+                Picker("Type", selection: $selection) {
+                    ForEach(SuggestedRouteType.allCases, id: \.self) { type in
+                        Text(type.rawValue.capitalized).tag(type)
                     }
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
                 .frame(maxWidth: Self.snapshotSize.width)
             }
             .padding(24)
