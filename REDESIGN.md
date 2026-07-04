@@ -13,7 +13,7 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
   the existing `NavigationSplitView`, not a push inside one pane. (`RideOnApp.swift`, `RoutesView.swift`)
 - [ ] **Route Detail inspector** — factor breakdown / stats belong in `.inspector` on Mac/iPad
   (Landmarks uses one for landmark editing). (`RouteDetailView.swift`)
-- [ ] **macOS Settings scene (⌘,)** — natural home for the units toggle (task #18) and
+- [x] **macOS Settings scene (⌘,)** — natural home for the units toggle (task #18) and
   preferences. (`RideOnApp.swift`)
 - [ ] **Filter chips → `.searchSuggestions`** — DESIGN-SYSTEM §9 already asks for this;
   Landmarks hoists one `.searchable` to the split-view root. (`RoutesView.swift`)

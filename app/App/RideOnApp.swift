@@ -1,7 +1,9 @@
 import SwiftUI
 import SwiftData
+import Models
 import Router
 import Services
+import SharedUI
 import TodayUI
 import RoutesUI
 import YouUI
@@ -29,6 +31,7 @@ struct RideOnApp: App {
             AppRootSwitch()
                 .environment(\.services, services)
                 .environment(preferencesStore)
+                .environment(\.unitSystem, preferencesStore.preferences.effectiveUnitSystem)
                 .tint(Color.accentColor)
                 .onOpenURL { url in
                     #if os(iOS)
@@ -49,6 +52,19 @@ struct RideOnApp: App {
                 .keyboardShortcut("i", modifiers: [.command, .shift])
             }
         }
+
+        #if os(macOS)
+        // ⌘, — the Mac-native home for display preferences (HIG: every Mac
+        // app with preferences has a Settings scene).
+        Settings {
+            Form {
+                UnitsPicker()
+            }
+            .formStyle(.grouped)
+            .frame(width: 380)
+            .environment(preferencesStore)
+        }
+        #endif
     }
 
     /// Share-sheet / "Open in Ride On" GPX handoff — declared in

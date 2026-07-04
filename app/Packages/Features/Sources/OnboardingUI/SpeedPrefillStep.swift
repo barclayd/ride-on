@@ -8,6 +8,7 @@ import SharedUI
 /// You → Speed & Climbing (`SpeedModelView`) — this is a preview, not a
 /// second editor.
 struct SpeedPrefillStep: View {
+    @Environment(\.unitSystem) private var unitSystem
     var speedKphBySurface: [SurfaceType: Double]
     var isStravaConnected: Bool
     var pageIndex: Int
@@ -31,7 +32,7 @@ struct SpeedPrefillStep: View {
                     HStack {
                         Text(label(for: surface))
                         Spacer()
-                        Text(UnitFormat.speed(kph: speedKphBySurface[surface] ?? 20))
+                        Text(UnitFormat.speed(kph: speedKphBySurface[surface] ?? 20, system: unitSystem))
                             .monospacedDigit()
                     }
                     .foregroundStyle(.white)

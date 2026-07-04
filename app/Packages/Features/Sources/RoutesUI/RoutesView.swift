@@ -244,6 +244,7 @@ public struct RoutesView: View {
 private struct RouteRow: View {
     var route: RouteModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.unitSystem) private var unitSystem
     @State private var thumbnail: PlatformImage?
 
     var body: some View {
@@ -255,7 +256,7 @@ private struct RouteRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(route.name)
                     .font(.headline)
-                Text("\(UnitFormat.distance(km: route.distanceKm)) · \(UnitFormat.elevation(m: route.elevationGainM)) gain")
+                Text("\(UnitFormat.distance(km: route.distanceKm, system: unitSystem)) · \(UnitFormat.elevation(m: route.elevationGainM, system: unitSystem)) gain")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -310,6 +311,7 @@ private struct RouteRow: View {
 private struct ImportConfirmationSheet: View {
     var route: RouteModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.unitSystem) private var unitSystem
     @State private var selection: SuggestedRouteType
 
     init(route: RouteModel) {
@@ -322,8 +324,8 @@ private struct ImportConfirmationSheet: View {
             Form {
                 Section("Route") {
                     LabeledContent("Name", value: route.name)
-                    LabeledContent("Distance", value: UnitFormat.distance(km: route.distanceKm))
-                    LabeledContent("Elevation Gain", value: UnitFormat.elevation(m: route.elevationGainM))
+                    LabeledContent("Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
+                    LabeledContent("Elevation Gain", value: UnitFormat.elevation(m: route.elevationGainM, system: unitSystem))
                 }
                 Section("Type") {
                     if route.needsClassification {
