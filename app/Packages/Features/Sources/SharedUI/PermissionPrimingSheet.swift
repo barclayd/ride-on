@@ -15,6 +15,9 @@ public struct PermissionPrimingSheet: View {
     public var allowTitle: String
     public var onAllow: () -> Void
     public var onNotNow: () -> Void
+    // Dismiss here so every present-er gets it for free — call sites only
+    // flip their "primed" flag, which never resets the sheet binding.
+    @Environment(\.dismiss) private var dismiss
 
     public init(
         symbol: String,
@@ -46,15 +49,21 @@ public struct PermissionPrimingSheet: View {
 
             Spacer(minLength: 8)
 
-            Button(allowTitle, action: onAllow)
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
-                .frame(maxWidth: .infinity)
-                .keyboardShortcut(.defaultAction)
-            Button("Not Now", action: onNotNow)
-                .buttonStyle(.glass)
-                .frame(maxWidth: .infinity)
+            Button(allowTitle) {
+                onAllow()
+                dismiss()
+            }
+            .buttonStyle(.glassProminent)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity)
+            .keyboardShortcut(.defaultAction)
+            Button("Not Now") {
+                onNotNow()
+                dismiss()
+            }
+            .buttonStyle(.glass)
+            .frame(maxWidth: .infinity)
         }
         .multilineTextAlignment(.center)
         .padding(32)
