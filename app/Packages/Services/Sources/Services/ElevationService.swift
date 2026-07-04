@@ -20,6 +20,11 @@ public struct LiveOpenMeteoElevationClient: ElevationClient {
         var result: [Double?] = []
         result.reserveCapacity(coordinates.count)
         for start in stride(from: 0, to: coordinates.count, by: Self.chunkSize) {
+            // Open-Meteo rate-limits back-to-back bursts (observed: chunks 7-8
+            // of a 710-point track 429 with no pacing) — space the requests out.
+            if start > 0 {
+                try await Task.sleep(for: .milliseconds(500))
+            }
             let chunk = Array(coordinates[start..<min(start + Self.chunkSize, coordinates.count)])
             result.append(contentsOf: try await fetch(chunk))
         }
@@ -38,10 +43,10 @@ public struct LiveOpenMeteoElevationClient: ElevationClient {
 
     private func fetch(_ chunk: [Coordinate]) async throws -> [Double?] {
         var (data, response) = try await urlSession.data(from: Self.url(for: chunk))
-        // Open-Meteo rate-limits rapid bursts (observed 429 on a ~700-point
-        // track's back-to-back chunks) — pause once and retry before giving up.
-        if (response as? HTTPURLResponse)?.statusCode == 429 {
-            try await Task.sleep(for: .seconds(2))
+        // The rate-limit window outlasts a single 2s pause, so back off
+        // progressively before giving up on the whole fill.
+        for backoffSeconds in [2.0, 5.0, 10.0] where (response as? HTTPURLResponse)?.statusCode == 429 {
+            try await Task.sleep(for: .seconds(backoffSeconds))
             (data, response) = try await urlSession.data(from: Self.url(for: chunk))
         }
         guard let http = response as? HTTPURLResponse else {
