@@ -69,8 +69,8 @@ public struct RideCard: View {
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .clipShape(.rect(cornerRadius: 24))
-        .contentShape(.rect(cornerRadius: 24))
+        .clipShape(.rect(cornerRadius: CornerRadius.card))
+        .contentShape(.rect(cornerRadius: CornerRadius.card))
         .simultaneousGesture(
             DragGesture(minimumDistance: 24)
                 .onEnded { value in
