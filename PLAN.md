@@ -95,11 +95,11 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [x] Unit tests: golden scenarios (windy day flips route direction preference, short window drops far routes, novelty decay, intent reweighting)
 
 ### Phase 4 — UI shell & screens
-- [ ] Tab structure + `NavigationSplitView` adaptation (Mac/iPad); Liquid Glass audit per DESIGN-SYSTEM.md §2
-- [ ] Today: card stack (RideCard, ConditionChipRow, ambiance), context pill (bike/hours/intent/back-by), breakdown sheet (FactorRow, detents), empty states (no routes / no good day — "rest day" card)
-- [ ] Route Detail: map hero (`MapPolyline`, `.excludingAll` POIs), ElevationProfile w/ scrub-sync to map, SurfaceBar, stats, BestDayBadge, ride history, GPX re-export share link, zoom transition
-- [ ] Routes library: searchable list + suggestion chips, Saved/Ridden toggle, import entry points, swipe actions
-- [ ] You tab: preference rows → DialScreens, priorities (weights) panel, speed model editor, saved places, Strava connection state, ride log, About + attributions
+- [x] Tab structure + `NavigationSplitView` adaptation (Mac/iPad); Liquid Glass audit per DESIGN-SYSTEM.md §2
+- [x] Today: card stack (RideCard, ConditionChipRow, ambiance), context pill (bike/hours/intent/back-by), breakdown sheet (FactorRow, detents), empty states (no routes / no good day — "rest day" card)
+- [x] Route Detail: map hero (`MapPolyline`, `.excludingAll` POIs), ElevationProfile w/ scrub-sync to map, SurfaceBar, stats, BestDayBadge, ride history, GPX re-export share link, zoom transition
+- [x] Routes library: searchable list + suggestion chips, Saved/Ridden toggle, import entry points, swipe actions
+- [x] You tab: preference rows → DialScreens, priorities (weights) panel, speed model editor, saved places, Strava connection state, ride log, About + attributions
 
 ### Phase 5 — Onboarding
 - [ ] 9-step flow per decision record; feature-splash welcome; dots; skippable except welcome

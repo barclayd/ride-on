@@ -32,3 +32,35 @@ public struct FactorScore: Sendable, Hashable {
 public protocol FactorScoring: Sendable {
     func score(route: Route, context: DailyContext) -> FactorScore
 }
+
+public extension RideFactor {
+    /// Presentation metadata for the breakdown sheet (`FactorRow`) and the
+    /// weights panel. Plain strings, not `SwiftUI.Image`/`Color` — this stays
+    /// platform-free like the rest of `Engine`; the UI layer turns
+    /// `symbolName` into an `Image(systemName:)`.
+    var displayName: String {
+        switch self {
+        case .timeBudget: "Time"
+        case .wind: "Wind"
+        case .temperature: "Temperature"
+        case .sky: "Sky"
+        case .rain: "Rain"
+        case .surfaceMatch: "Surface"
+        case .intent: "Intent"
+        case .novelty: "Novelty"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .timeBudget: "clock"
+        case .wind: "wind"
+        case .temperature: "thermometer.medium"
+        case .sky: "cloud.sun"
+        case .rain: "cloud.rain"
+        case .surfaceMatch: "road.lanes"
+        case .intent: "flag.checkered"
+        case .novelty: "sparkles"
+        }
+    }
+}

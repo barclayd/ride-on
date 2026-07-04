@@ -24,6 +24,27 @@ public protocol WeatherProviding: Sendable {
     func forecast(for location: Coordinate, on date: Date) async throws -> WeatherSnapshot
 }
 
+public extension WeatherSnapshot {
+    /// Expands a single day-level snapshot into an hourly run for
+    /// `DailyContext.hourlyForecast`. `WeatherProviding` only returns one
+    /// snapshot per day today (fixture-backed until Phase 6's real WeatherKit
+    /// client returns actual hourly data), so every hour of the window gets
+    /// the same reading — good enough for the engine's time-window scoring
+    /// to have something real to slice.
+    func hourlyForecast(from date: Date, hours: Int) -> [HourlyWeather] {
+        (0..<max(hours, 1)).map { offset in
+            HourlyWeather(
+                time: date.addingTimeInterval(Double(offset) * 3600),
+                temperatureC: temperatureC,
+                windSpeedKph: windKph,
+                windDirectionDegrees: 225,
+                precipitationChance: rainChance,
+                cloudCover: sky == .sunny ? 0.15 : sky == .rain ? 0.9 : 0.6
+            )
+        }
+    }
+}
+
 public protocol ETAProviding: Sendable {
     func travelTime(from: Coordinate, to: Coordinate) async throws -> TimeInterval
 }

@@ -3,6 +3,7 @@ import SwiftData
 import UniformTypeIdentifiers
 import Models
 import Services
+import Router
 
 extension UTType {
     /// Declared in `project.yml`'s `UTImportedTypeDeclarations`.
@@ -11,17 +12,35 @@ extension UTType {
     }
 }
 
-/// Routes library (Phase 4 will add search/chips/swipe actions per
-/// DESIGN-SYSTEM.md §9); Phase 2 wires the real data path: import, list,
-/// classify-confirmation sheet.
+private enum RouteChip: String, CaseIterable, Identifiable {
+    case road = "Road"
+    case gravel = "Gravel"
+    case under2h = "Under 2h"
+    case notRiddenLately = "Not ridden lately"
+
+    var id: String { rawValue }
+}
+
+private enum LibraryFilter: String, CaseIterable {
+    case saved = "Saved"
+    case ridden = "Ridden"
+}
+
+/// Routes library per DESIGN-SYSTEM.md §9: searchable list, suggestion
+/// chips, Saved/Ridden toggle, swipe actions, GPX import entry point.
 public struct RoutesView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.services) private var services
+    @Environment(PreferencesStore.self) private var preferencesStore
     @Query(sort: \RouteModel.createdAt, order: .reverse) private var routes: [RouteModel]
+    @Query private var rideLogModels: [RideLogModel]
 
     @State private var isImporterPresented = false
     @State private var pendingConfirmation: RouteModel?
     @State private var importErrorMessage: String?
+    @State private var searchText = ""
+    @State private var activeChips: Set<RouteChip> = []
+    @State private var libraryFilter: LibraryFilter = .saved
 
     public init() {}
 
@@ -34,12 +53,50 @@ public struct RoutesView: View {
                     description: Text("Import a GPX file to get started.")
                 )
             } else {
-                List(routes) { route in
-                    RouteRow(route: route)
+                VStack(spacing: 0) {
+                    Picker("Library", selection: $libraryFilter) {
+                        ForEach(LibraryFilter.allCases, id: \.self) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(RouteChip.allCases) { chip in
+                                chipButton(chip)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                    }
+
+                    if filteredRoutes.isEmpty {
+                        ContentUnavailableView.search(text: searchText)
+                    } else {
+                        List {
+                            ForEach(filteredRoutes) { route in
+                                NavigationLink(value: RouterDestination.routeDetail(routeID: route.id)) {
+                                    RouteRow(route: route)
+                                }
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) {
+                                        modelContext.delete(route)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                        .listStyle(.plain)
+                    }
                 }
             }
         }
         .navigationTitle("Routes")
+        .searchable(text: $searchText, prompt: "Search routes")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Import", systemImage: "square.and.arrow.down") {
@@ -62,6 +119,58 @@ public struct RoutesView: View {
         } message: { message in
             Text(message)
         }
+    }
+
+    private func chipButton(_ chip: RouteChip) -> some View {
+        let isActive = activeChips.contains(chip)
+        return Button {
+            if isActive { activeChips.remove(chip) } else { activeChips.insert(chip) }
+        } label: {
+            Text(chip.rawValue)
+                .font(.footnote.weight(.medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isActive ? Color.accentColor : Color.secondary.opacity(0.15), in: .capsule)
+                .foregroundStyle(isActive ? Color.white : Color.primary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var riddenRouteIDs: Set<UUID> {
+        Set(rideLogModels.compactMap(\.routeID))
+    }
+
+    private var filteredRoutes: [RouteModel] {
+        routes.filter { route in
+            matchesSearch(route) && matchesFilter(route) && matchesChips(route)
+        }
+    }
+
+    private func matchesSearch(_ route: RouteModel) -> Bool {
+        searchText.isEmpty || route.name.localizedCaseInsensitiveContains(searchText)
+    }
+
+    private func matchesFilter(_ route: RouteModel) -> Bool {
+        switch libraryFilter {
+        case .saved: true
+        case .ridden: riddenRouteIDs.contains(route.id)
+        }
+    }
+
+    private func matchesChips(_ route: RouteModel) -> Bool {
+        activeChips.allSatisfy { chip in
+            switch chip {
+            case .road: route.effectiveType == .road
+            case .gravel: route.effectiveType == .gravel
+            case .under2h: RouteStats.estimatedRideTime(for: route, preferences: preferencesStore.preferences) < 2 * 3600
+            case .notRiddenLately: !recentlyRidden(route)
+            }
+        }
+    }
+
+    private func recentlyRidden(_ route: RouteModel) -> Bool {
+        let cutoff = Date.now.addingTimeInterval(-14 * 86400)
+        return rideLogModels.contains { $0.routeID == route.id && $0.date > cutoff }
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
@@ -125,13 +234,21 @@ private struct RouteRow: View {
         }
     }
 
+    // ponytail: `.scaledToFill()`'s aspect-corrected ideal size can exceed
+    // what's proposed — pinning the frame + `.clipped()` here (not just at
+    // the call site) stops that oversized size from leaking into the HStack
+    // layout (see RideCard's `mapLayer` for the same fix, full explanation).
     @ViewBuilder
     private var thumbnailView: some View {
         if let thumbnail {
             #if os(macOS)
             Image(nsImage: thumbnail).resizable().scaledToFill()
+                .frame(width: 56, height: 56)
+                .clipped()
             #else
             Image(uiImage: thumbnail).resizable().scaledToFill()
+                .frame(width: 56, height: 56)
+                .clipped()
             #endif
         } else {
             Rectangle().fill(.secondary.opacity(0.15))

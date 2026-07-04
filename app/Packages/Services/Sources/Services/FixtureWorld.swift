@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Models
+import Engine
 
 /// Deterministic "fixture world" for E2E tests and previews: launch with
 /// `--fixture-world` and every service below returns canned, seeded data —
@@ -10,23 +11,91 @@ public enum FixtureWorld {
         ProcessInfo.processInfo.arguments.contains("--fixture-world")
     }
 
+    // ponytail: real lat/lon loops (via `Engine.GPXGeometry`, reached through
+    // the public `GPXTrack.bearingSegments()`) generated procedurally instead
+    // of hand-typed coordinate lists — gives the map hero, elevation chart,
+    // and wind factor real geometry to work with without a fixtures/*.gpx
+    // file. `distanceKm`/`elevationGainM` on the `Route` below are set
+    // explicitly rather than read off the generated track, so existing
+    // fixture-world assertions ("42.0 km") keep holding regardless of the
+    // loop's actual generated length.
+    private static let chilternsTrack = loopTrack(centerLat: 51.7520, centerLon: -0.8010, radiusKm: 3.2, points: 28, baseElevationM: 110, climbM: 90)
+    private static let ridgewayTrack = loopTrack(centerLat: 51.6800, centerLon: -1.2000, radiusKm: 5.4, points: 32, baseElevationM: 140, climbM: 160)
+    private static let townTrack = loopTrack(centerLat: 51.7520, centerLon: -0.8010, radiusKm: 1.1, points: 16, baseElevationM: 70, climbM: 20)
+
     public static let sampleRoute = Route(
         name: "Chilterns Loop",
         distanceKm: 42,
         elevationGainM: 380,
         surfaces: SurfaceBreakdown(distanceKmBySurface: [.paved: 30, .unpaved: 12]),
-        suggestedBikeType: .gravel
+        suggestedBikeType: .gravel,
+        start: chilternsTrack.coordinates.first,
+        end: chilternsTrack.coordinates.last,
+        coordinates: chilternsTrack.coordinates,
+        bearingSegments: chilternsTrack.bearingSegments()
     )
+
+    public static let ridgewayRoute = Route(
+        name: "Ridgeway Gravel",
+        distanceKm: 61,
+        elevationGainM: 640,
+        surfaces: SurfaceBreakdown(distanceKmBySurface: [.unpaved: 45, .path: 16]),
+        suggestedBikeType: .gravel,
+        start: ridgewayTrack.coordinates.first,
+        end: ridgewayTrack.coordinates.last,
+        coordinates: ridgewayTrack.coordinates,
+        bearingSegments: ridgewayTrack.bearingSegments()
+    )
+
+    public static let townRoute = Route(
+        name: "Town Loop",
+        distanceKm: 14,
+        elevationGainM: 60,
+        surfaces: SurfaceBreakdown(distanceKmBySurface: [.paved: 14]),
+        suggestedBikeType: .road,
+        start: townTrack.coordinates.first,
+        end: townTrack.coordinates.last,
+        coordinates: townTrack.coordinates,
+        bearingSegments: townTrack.bearingSegments()
+    )
+
+    public static let sampleRoutes: [Route] = [sampleRoute, ridgewayRoute, townRoute]
 
     public static let sampleLocation = Coordinate(latitude: 51.7520, longitude: -0.8010)
 
-    /// Seeds the (in-memory, fixture-world) SwiftData store with one
-    /// imported-looking route, so the Routes tab has something deterministic
-    /// to show in E2E tests without driving the file-picker UI (flaky —
-    /// see RideOnUITests).
+    /// Seeds the (in-memory, fixture-world) SwiftData store with three
+    /// imported-looking routes, a ride log, and a saved place, so Today/
+    /// Routes/You all have something deterministic to show in E2E tests
+    /// without driving the file-picker UI (flaky — see RideOnUITests).
     @MainActor
     public static func seed(into context: ModelContext) {
-        context.insert(sampleRoute.asModel(source: .gpxImport))
+        context.insert(sampleRoute.asModel(source: .gpxImport, elevations: chilternsTrack.points.map(\.elevationM)))
+        context.insert(ridgewayRoute.asModel(source: .gpxImport, elevations: ridgewayTrack.points.map(\.elevationM)))
+        context.insert(townRoute.asModel(source: .strava, elevations: townTrack.points.map(\.elevationM)))
+
+        // A recent-ish ride on the Town Loop so the novelty factor and route
+        // detail's ride history both have something real to show.
+        context.insert(RideLogModel(date: Date.now.addingTimeInterval(-3 * 86400), routeID: townRoute.id, source: .manual))
+
+        context.insert(SavedPlaceModel(name: "Home", coordinate: sampleLocation))
+    }
+
+    private static func loopTrack(centerLat: Double, centerLon: Double, radiusKm: Double, points: Int, baseElevationM: Double, climbM: Double) -> GPXTrack {
+        let earthRadiusKm = 6371.0
+        var trackPoints: [GPXTrackPoint] = []
+        for index in 0..<points {
+            let angle = 2 * Double.pi * Double(index) / Double(points)
+            let dLat = (radiusKm / earthRadiusKm) * cos(angle) * 180 / .pi
+            let dLon = (radiusKm / earthRadiusKm) * sin(angle) / cos(centerLat * .pi / 180) * 180 / .pi
+            let progress = Double(index) / Double(points)
+            // One climb and one descent per loop, so the elevation chart has
+            // a real shape rather than a flat line.
+            let elevation = baseElevationM + climbM * sin(progress * .pi * 2)
+            trackPoints.append(
+                GPXTrackPoint(coordinate: Coordinate(latitude: centerLat + dLat, longitude: centerLon + dLon), elevationM: elevation)
+            )
+        }
+        return GPXTrack(points: trackPoints)
     }
 }
 
