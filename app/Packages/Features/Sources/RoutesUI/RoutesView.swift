@@ -394,7 +394,7 @@ private struct ImportConfirmationSheet: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     if route.needsClassification {
-                        Label("Classification unavailable — you can retry later.", systemImage: "exclamationmark.triangle")
+                        Label("Couldn't detect the route type — your pick will be used instead.", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.secondary)
                             .font(.footnote)
                     }
@@ -408,6 +408,13 @@ private struct ImportConfirmationSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         route.userOverriddenType = selection
+                        // Classify failed (e.g. Valhalla outage): the user's
+                        // pick IS the classification — resolve the pending
+                        // state instead of promising a retry that never runs.
+                        if route.needsClassification {
+                            route.surfaces = assumedSurfaces(for: selection, distanceKm: route.distanceKm)
+                            route.needsClassification = false
+                        }
                         dismiss()
                     }
                     .keyboardShortcut(.defaultAction)
@@ -432,5 +439,15 @@ private struct ImportConfirmationSheet: View {
         let distance = UnitFormat.distance(km: route.distanceKm, system: unitSystem)
         guard route.hasElevationData else { return "\(distance) · no elevation data" }
         return "\(distance) · \(UnitFormat.elevation(m: route.elevationGainM, system: unitSystem)) gain"
+    }
+
+    // ponytail: coarse single-bucket breakdown from the user's type pick —
+    // real per-edge surfaces come from /classify when Valhalla is reachable.
+    private func assumedSurfaces(for type: SuggestedRouteType, distanceKm: Double) -> SurfaceBreakdown {
+        switch type {
+        case .road: SurfaceBreakdown(distanceKmBySurface: [.paved: distanceKm])
+        case .gravel: SurfaceBreakdown(distanceKmBySurface: [.unpaved: distanceKm])
+        case .mixed: SurfaceBreakdown(distanceKmBySurface: [.paved: distanceKm / 2, .unpaved: distanceKm / 2])
+        }
     }
 }
