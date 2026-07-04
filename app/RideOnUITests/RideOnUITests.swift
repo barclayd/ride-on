@@ -89,4 +89,86 @@ final class RideOnUITests: XCTestCase {
 
         XCTAssertFalse(app.staticTexts["Chilterns Loop"].exists)
     }
+
+    // MARK: - Onboarding (Phase 5)
+    //
+    // `--fixture-world` alone defaults to "onboarding already completed"
+    // (`PreferencesStore`), so every test above keeps landing straight on
+    // Today with zero changes. `--reset-onboarding` is the one launch
+    // argument that forces onboarding back on, deterministically, for these
+    // two tests.
+
+    func testOnboardingHappyPathThroughAllStepsLandsOnToday() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world", "--reset-onboarding"]
+        app.launch()
+
+        // Step 0: welcome — not skippable, no Skip button.
+        XCTAssertTrue(app.staticTexts["Ride On"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Skip"].exists)
+        app.buttons["Continue"].tap()
+
+        // Step 1: temperature dial.
+        XCTAssertTrue(app.staticTexts["Temperature"].waitForExistence(timeout: 5))
+        app.buttons["Continue"].tap()
+
+        // Step 2: sun dial — change the selection to exercise the reactive
+        // ambiance crossfade, then continue.
+        XCTAssertTrue(app.staticTexts["Sun"].waitForExistence(timeout: 5))
+        app.buttons["Seek"].tap()
+        app.buttons["Continue"].tap()
+
+        // Step 3: rain dial.
+        XCTAssertTrue(app.staticTexts["Rain Tolerance"].waitForExistence(timeout: 5))
+        app.buttons["Continue"].tap()
+
+        // Step 4: wind dial.
+        XCTAssertTrue(app.staticTexts["Max Wind"].waitForExistence(timeout: 5))
+        app.buttons["Continue"].tap()
+
+        // Step 5: novelty dial.
+        XCTAssertTrue(app.staticTexts["Novelty"].waitForExistence(timeout: 5))
+        app.buttons["Continue"].tap()
+
+        // Step 6: Strava connect (fixture client).
+        XCTAssertTrue(app.staticTexts["Connect Strava"].waitForExistence(timeout: 5))
+        app.buttons["Connect Strava"].tap()
+        XCTAssertTrue(app.buttons["Connected"].waitForExistence(timeout: 5))
+        app.buttons["Continue"].tap()
+
+        // Step 7: speed prefill review.
+        XCTAssertTrue(app.staticTexts["Your Speeds"].waitForExistence(timeout: 5))
+        app.buttons["Continue"].tap()
+
+        // Step 8: finish.
+        XCTAssertTrue(app.staticTexts["You're All Set"].waitForExistence(timeout: 5))
+        app.buttons["Continue"].tap()
+
+        // Lands on a working Today.
+        XCTAssertTrue(app.buttons["Today"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["today-card"].firstMatch.waitForExistence(timeout: 5))
+    }
+
+    func testOnboardingSkipPathLandsOnToday() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world", "--reset-onboarding"]
+        app.launch()
+
+        // Welcome has no skip; every step after it does.
+        XCTAssertTrue(app.staticTexts["Ride On"].waitForExistence(timeout: 5))
+        app.buttons["Continue"].tap()
+
+        for _ in 0..<7 {
+            XCTAssertTrue(app.buttons["Skip"].waitForExistence(timeout: 5))
+            app.buttons["Skip"].tap()
+        }
+
+        // Last step (finish) is also skippable, and behaves the same as
+        // Continue there.
+        XCTAssertTrue(app.staticTexts["You're All Set"].waitForExistence(timeout: 5))
+        app.buttons["Skip"].tap()
+
+        XCTAssertTrue(app.buttons["Today"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["today-card"].firstMatch.waitForExistence(timeout: 5))
+    }
 }

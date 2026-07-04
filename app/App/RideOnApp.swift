@@ -5,6 +5,7 @@ import Services
 import TodayUI
 import RoutesUI
 import YouUI
+import OnboardingUI
 
 @main
 struct RideOnApp: App {
@@ -24,7 +25,7 @@ struct RideOnApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            AppRootSwitch()
                 .environment(\.services, services)
                 .environment(preferencesStore)
                 .tint(Color.accentColor)
@@ -97,6 +98,22 @@ private struct TabPage: View {
                 .navigationDestination(for: RouterDestination.self) { destination in
                     routeDetailDestination(destination, namespace: cardNamespace)
                 }
+        }
+    }
+}
+
+/// Phase 5: onboarding shows on first launch only
+/// (`PreferencesStore.hasCompletedOnboarding`), then the app reactively
+/// swaps to the tab/split root — no relaunch needed since both branches
+/// read the same `@Observable` store.
+private struct AppRootSwitch: View {
+    @Environment(PreferencesStore.self) private var preferencesStore
+
+    var body: some View {
+        if preferencesStore.hasCompletedOnboarding {
+            RootView()
+        } else {
+            OnboardingView()
         }
     }
 }

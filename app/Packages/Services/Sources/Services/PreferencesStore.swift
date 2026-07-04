@@ -17,6 +17,10 @@ import Engine
 public final class PreferencesStore {
     private static let preferencesKey = "riderPreferences.v1"
     private static let weightsKey = "riderFactorWeights.v1"
+    private static let onboardingKey = "hasCompletedOnboarding.v1"
+    private static let locationPrimedKey = "hasPrimedLocationPermission.v1"
+    private static let healthPrimedKey = "hasPrimedHealthPermission.v1"
+    private static let rideMatchingKey = "isRideMatchingEnabled.v1"
 
     private let defaults: UserDefaults
     public var preferences: RiderPreferences {
@@ -29,6 +33,31 @@ public final class PreferencesStore {
     /// (dependency runs the other way).
     public var weights: [RideFactor: Double] {
         didSet { persistWeights() }
+    }
+
+    /// Onboarding shows once, on first launch (Phase 5). `--reset-onboarding`
+    /// forces it back on (E2E happy-path test); fixture-world otherwise
+    /// defaults to "already completed" so the rest of the fixture-world UI
+    /// suite keeps landing straight on Today, as it did before onboarding
+    /// existed.
+    public var hasCompletedOnboarding: Bool {
+        didSet { defaults.set(hasCompletedOnboarding, forKey: Self.onboardingKey) }
+    }
+
+    /// DESIGN-SYSTEM.md §9: permissions are primed contextually, not upfront
+    /// in onboarding — location primes on first Today entry, Health primes
+    /// before ride matching is enabled. These just record "the explainer has
+    /// been shown once", not the actual system authorization state.
+    public var hasPrimedLocationPermission: Bool {
+        didSet { defaults.set(hasPrimedLocationPermission, forKey: Self.locationPrimedKey) }
+    }
+
+    public var hasPrimedHealthPermission: Bool {
+        didSet { defaults.set(hasPrimedHealthPermission, forKey: Self.healthPrimedKey) }
+    }
+
+    public var isRideMatchingEnabled: Bool {
+        didSet { defaults.set(isRideMatchingEnabled, forKey: Self.rideMatchingKey) }
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -50,6 +79,23 @@ public final class PreferencesStore {
         } else {
             weights = Dictionary(uniqueKeysWithValues: RideFactor.allCases.map { ($0, 1.0) })
         }
+
+        if ProcessInfo.processInfo.arguments.contains("--reset-onboarding") {
+            hasCompletedOnboarding = false
+        } else if FixtureWorld.isEnabled {
+            hasCompletedOnboarding = true
+        } else {
+            hasCompletedOnboarding = defaults.bool(forKey: Self.onboardingKey)
+        }
+
+        // Fixture-world defaults every "primed" flag to true, same as
+        // onboarding above — a deterministic E2E world shouldn't pop a
+        // priming sheet mid-test unless a test explicitly resets it, and no
+        // test does today (Phase 5 scope is the priming UI existing, not a
+        // dedicated E2E for it).
+        hasPrimedLocationPermission = FixtureWorld.isEnabled || defaults.bool(forKey: Self.locationPrimedKey)
+        hasPrimedHealthPermission = FixtureWorld.isEnabled || defaults.bool(forKey: Self.healthPrimedKey)
+        isRideMatchingEnabled = defaults.bool(forKey: Self.rideMatchingKey)
     }
 
     private func persistPreferences() {

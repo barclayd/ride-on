@@ -26,6 +26,7 @@ public struct TodayView: View {
     @State private var weather: WeatherSnapshot?
     @State private var isContextEditorPresented = false
     @State private var breakdownItem: BreakdownItem?
+    @State private var isLocationPrimingPresented = false
 
     // ponytail: below this, a route isn't worth surfacing as a
     // recommendation — the "rest day" card takes over instead of a stack of
@@ -56,6 +57,14 @@ public struct TodayView: View {
         .task {
             weather = try? await services.weather.forecast(for: startLocation, on: .now)
         }
+        .task {
+            // DESIGN-SYSTEM.md §9: location is primed on first Today entry,
+            // not during onboarding. Priming UI only — the real
+            // `CLLocationManager` request is Phase 6.
+            if !preferencesStore.hasPrimedLocationPermission {
+                isLocationPrimingPresented = true
+            }
+        }
         .overlay(alignment: .bottom) {
             if weather != nil, !routeModels.isEmpty {
                 contextPill
@@ -67,6 +76,15 @@ public struct TodayView: View {
         }
         .sheet(item: $breakdownItem) { item in
             BreakdownSheet(rankedRide: item.rankedRide)
+        }
+        .sheet(isPresented: $isLocationPrimingPresented) {
+            PermissionPrimingSheet(
+                symbol: "location.fill",
+                title: "Find Rides Near You",
+                message: "Ride On uses your location to find nearby routes and estimate travel time to the start.",
+                onAllow: { preferencesStore.hasPrimedLocationPermission = true },
+                onNotNow: { preferencesStore.hasPrimedLocationPermission = true }
+            )
         }
     }
 
