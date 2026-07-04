@@ -92,18 +92,17 @@ struct GPXParserTests {
         }
     }
 
-    @Test("elevation gain integrates with ElevationSmoother (known-answer fixture)")
+    @Test("elevation gain is the raw positive-delta sum (Garmin-consistent)")
     func elevationGainIntegration() throws {
-        // Mirrors ElevationSmootherTests' "out-and-back over one hill":
-        // climbs to a peak then symmetric descent back to start.
+        // Out-and-back over one hill: climbs to a peak (0 -> 50) then
+        // symmetric descent back to start. Raw positive-delta sum = 50 —
+        // the same figure Garmin reports for a course with these <ele>
+        // values, with no smoothing applied (embedded elevations come from
+        // terrain models, not noisy GPS).
         let points = [0.0, 10.0, 25.0, 50.0, 25.0, 10.0, 0.0].enumerated().map { index, ele in
             GPXTrackPoint(coordinate: Coordinate(latitude: 51.75 + Double(index) * 0.001, longitude: -0.8), elevationM: ele)
         }
         let track = GPXTrack(name: "Hill", points: points)
-        // GPXTrack.elevationGainM must delegate to the same smoothing +
-        // gain pipeline `ElevationSmoother` already has known-answer tests
-        // for (ElevationSmootherTests) — this just proves the wiring.
-        #expect(track.elevationGainM == ElevationSmoother.smoothedGain(rawElevations: [0.0, 10.0, 25.0, 50.0, 25.0, 10.0, 0.0]))
-        #expect(track.elevationGainM > 0)
+        #expect(track.elevationGainM == 50)
     }
 }
