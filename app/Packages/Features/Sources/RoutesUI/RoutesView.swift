@@ -114,12 +114,11 @@ public struct RoutesView: View {
         }
         // Drag a GPX file anywhere onto the screen (Finder on Mac, Files on
         // iPad) — same pipeline as the file importer; RouteImporter handles
-        // security-scoped access.
-        .dropDestination(for: URL.self) { urls, _ in
-            let gpxURLs = urls.filter { ["gpx", "xml"].contains($0.pathExtension.lowercased()) }
-            guard !gpxURLs.isEmpty else { return false }
-            handleImport(.success(gpxURLs))
-            return true
+        // security-scoped access. `onDrop` + `.fileURL`, not
+        // `.dropDestination(for: URL.self)` — the latter never matches
+        // Finder's `public.file-url` drags on macOS.
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            handleDrop(providers)
         }
         .sheet(item: $pendingConfirmation) { route in
             ImportConfirmationSheet(route: route)
@@ -187,6 +186,20 @@ public struct RoutesView: View {
     private func recentlyRidden(_ route: RouteModel) -> Bool {
         let cutoff = Date.now.addingTimeInterval(-14 * 86400)
         return rideLogModels.contains { $0.routeID == route.id && $0.date > cutoff }
+    }
+
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        let urlProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
+        guard !urlProviders.isEmpty else { return false }
+        for provider in urlProviders {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url, ["gpx", "xml"].contains(url.pathExtension.lowercased()) else { return }
+                Task { @MainActor in
+                    handleImport(.success([url]))
+                }
+            }
+        }
+        return true
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
