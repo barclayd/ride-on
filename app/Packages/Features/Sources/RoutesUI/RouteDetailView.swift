@@ -193,7 +193,7 @@ public struct RouteDetailView: View {
         Form {
             Section("Stats") {
                 LabeledContent("Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
-                LabeledContent("Elevation Gain", value: UnitFormat.elevation(m: route.elevationGainM, system: unitSystem))
+                LabeledContent("Elevation Gain", value: elevationText(for: route))
                 LabeledContent("Est. Time", value: estimatedTimeText(for: route))
             }
             if let bestDay {
@@ -223,12 +223,12 @@ public struct RouteDetailView: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 24) {
                 statColumn(title: "Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
-                statColumn(title: "Elevation", value: UnitFormat.elevation(m: route.elevationGainM, system: unitSystem))
+                statColumn(title: "Elevation", value: elevationText(for: route))
                 statColumn(title: "Est. Time", value: estimatedTimeText(for: route))
             }
             VStack(alignment: .leading, spacing: 12) {
                 statColumn(title: "Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
-                statColumn(title: "Elevation", value: UnitFormat.elevation(m: route.elevationGainM, system: unitSystem))
+                statColumn(title: "Elevation", value: elevationText(for: route))
                 statColumn(title: "Est. Time", value: estimatedTimeText(for: route))
             }
         }
@@ -239,6 +239,10 @@ public struct RouteDetailView: View {
             Text(value).font(.title2.monospacedDigit().bold())
             Text(title).font(.caption).foregroundStyle(.secondary)
         }
+    }
+
+    private func elevationText(for route: RouteModel) -> String {
+        route.hasElevationData ? UnitFormat.elevation(m: route.elevationGainM, system: unitSystem) : "No data"
     }
 
     private func estimatedTimeText(for route: RouteModel) -> String {

@@ -299,7 +299,9 @@ private struct RouteRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(route.name)
                     .font(.headline)
-                Text("\(UnitFormat.distance(km: route.distanceKm, system: unitSystem)) · \(UnitFormat.elevation(m: route.elevationGainM, system: unitSystem)) gain")
+                Text(route.hasElevationData
+                    ? "\(UnitFormat.distance(km: route.distanceKm, system: unitSystem)) · \(UnitFormat.elevation(m: route.elevationGainM, system: unitSystem)) gain"
+                    : "\(UnitFormat.distance(km: route.distanceKm, system: unitSystem)) · no elevation data")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -362,7 +364,7 @@ private struct ImportConfirmationSheet: View {
                 Section("Route") {
                     LabeledContent("Name", value: route.name)
                     LabeledContent("Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
-                    LabeledContent("Elevation Gain", value: UnitFormat.elevation(m: route.elevationGainM, system: unitSystem))
+                    LabeledContent("Elevation Gain", value: route.hasElevationData ? UnitFormat.elevation(m: route.elevationGainM, system: unitSystem) : "No data")
                 }
                 Section("Type") {
                     if route.needsClassification {

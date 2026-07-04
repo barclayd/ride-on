@@ -83,6 +83,10 @@ public extension RouteModel {
     var coordinates: [Coordinate] { RouteModel.unpackCoordinates(coordinatesData) }
     var elevations: [Double?] { RouteModel.unpackElevations(elevationsData) }
 
+    /// False when the GPX carried no `<ele>` and the import-time elevation
+    /// fill failed too — the UI shows "no data" instead of a misleading 0 m.
+    var hasElevationData: Bool { elevations.contains { $0 != nil } }
+
     var surfaces: SurfaceBreakdown? {
         get { surfacesData.flatMap { try? JSONDecoder().decode(SurfaceBreakdown.self, from: $0) } }
         set { surfacesData = newValue.flatMap { try? JSONEncoder().encode($0) } }
