@@ -54,8 +54,9 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
   Dynamic Type.
 - [x] **Route Detail width cap on Mac** — content stretches edge-to-edge in wide windows; cap
   with `frame(maxWidth:)` and center.
-- [ ] **Route Detail map interactivity** — `.allowsHitTesting(false)` makes the hero inert;
-  consider tap-to-expand or pan-enabled map.
+- [x] **Route Detail map interactivity** — the inline hero stays inert (a pannable map inside a
+  ScrollView steals the scroll gesture); tapping it now opens a fully interactive map sheet
+  with the route polyline. (`RouteDetailView.swift`)
 
 ## E. Color unification
 
