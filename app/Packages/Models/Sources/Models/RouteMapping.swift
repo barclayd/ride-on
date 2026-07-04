@@ -35,13 +35,19 @@ public extension Route {
     /// Builds a bare `RouteModel` from a scoring-layer `Route`. Used for
     /// fixtures/tests — real GPX imports go through `RouteImporter`, which
     /// has the full track geometry a `Route` alone doesn't carry.
-    func asModel(source: RouteSource = .gpxImport) -> RouteModel {
+    ///
+    /// `elevations` is separate from `Route` (which only carries a total
+    /// `elevationGainM`, not a per-point profile) — pass the source track's
+    /// elevations when a caller has them (fixtures) so `ElevationProfile`
+    /// has real data to chart; omit it for plain scoring-only fixtures.
+    func asModel(source: RouteSource = .gpxImport, elevations: [Double?] = []) -> RouteModel {
         RouteModel(
             id: id,
             name: name,
             distanceKm: distanceKm,
             elevationGainM: elevationGainM,
             coordinates: coordinates.isEmpty ? [start, end].compactMap { $0 } : coordinates,
+            elevations: elevations,
             surfaces: surfaces,
             suggestedType: suggestedBikeType.asSuggestedRouteType,
             bearingSegments: bearingSegments,
@@ -57,5 +63,17 @@ private extension BikeType {
         case .gravel: .gravel
         case .mtb: .mixed
         }
+    }
+}
+
+// RideLogModel (SwiftData) <-> RideLog (platform-free scoring value type).
+
+public extension RideLogModel {
+    /// Projects into the scoring-layer `RideLog`. A log whose `routeID` was
+    /// never set (shouldn't happen outside a programmer error) is dropped by
+    /// the caller rather than modeled as an optional here.
+    func asRideLog() -> RideLog? {
+        guard let routeID else { return nil }
+        return RideLog(id: id, routeID: routeID, date: date)
     }
 }
