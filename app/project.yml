@@ -67,6 +67,12 @@ targets:
             LSItemContentTypes: [com.topografix.gpx]
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
+        # `rideon://strava-callback` — Strava app-to-app OAuth return
+        # (StravaAuthCallbackRouter) on iOS; the web-based
+        # ASWebAuthenticationSession flow (both platforms) also redirects here.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.danbarclay.rideon.strava
+            CFBundleURLSchemes: [rideon]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.danbarclay.rideon

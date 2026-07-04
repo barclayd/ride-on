@@ -110,7 +110,7 @@ public struct FixtureWeatherProvider: WeatherProviding {
 public struct FixtureETAProvider: ETAProviding {
     public init() {}
 
-    public func travelTime(from: Coordinate, to: Coordinate) async throws -> TimeInterval {
+    public func travelTime(from: Coordinate, to: Coordinate, mode: TravelMode) async throws -> TimeInterval {
         15 * 60
     }
 }
@@ -118,20 +118,55 @@ public struct FixtureETAProvider: ETAProviding {
 public struct FixtureHealthStore: HealthStoreProviding {
     public init() {}
 
-    public func recentCyclingRides(since: Date) async throws -> [RideLog] {
+    public func recentCyclingRides(since: Date, matchingAgainst routes: [Route]) async throws -> [RideLog] {
         []
     }
 }
 
-public struct FixtureStravaClient: StravaClientProtocol {
+/// Deterministic Strava fake: an actor (not a struct) since it has to track
+/// "connected" state across calls the same way the real token-backed live
+/// client does — a plain struct's state wouldn't survive between calls on
+/// the shared `AppServices.fixtures` instance.
+public actor FixtureStravaClient: StravaClientProtocol {
+    private var connectedFlag = false
+
     public init() {}
 
-    public func exchangeToken(code: String) async throws -> String {
-        "fixture-token"
+    public func isConnected() async -> Bool { connectedFlag }
+
+    public func exchangeToken(code: String) async throws {
+        connectedFlag = true
+    }
+
+    public func disconnect() async {
+        connectedFlag = false
     }
 
     public func importedRoutes() async throws -> [Route] {
         [FixtureWorld.sampleRoute]
+    }
+
+    public func listRoutes() async throws -> [StravaRoute] {
+        [StravaRoute(id: "fixture-route-1", name: FixtureWorld.sampleRoute.name, distanceKm: FixtureWorld.sampleRoute.distanceKm)]
+    }
+
+    public func exportRouteGPX(routeID: String) async throws -> Data {
+        GPXWriter.data(name: "Fixture Strava Route", coordinates: FixtureWorld.sampleRoute.coordinates)
+    }
+
+    public func recentActivities(monthsAgo: Int) async throws -> [StravaActivity] {
+        [StravaActivity(
+            id: "fixture-activity-1",
+            name: "Morning Ride",
+            startDate: Date.now.addingTimeInterval(-3 * 86400),
+            distanceKm: FixtureWorld.townRoute.distanceKm,
+            movingTimeSeconds: 3600,
+            coordinates: FixtureWorld.townRoute.coordinates
+        )]
+    }
+
+    public nonisolated func activityWebURL(activityID: String) -> URL {
+        URL(string: "https://www.strava.com/activities/\(activityID)")!
     }
 }
 

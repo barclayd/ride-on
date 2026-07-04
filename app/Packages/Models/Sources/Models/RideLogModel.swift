@@ -21,17 +21,23 @@ public final class RideLogModel {
     public var date: Date = Date.now
     public var routeID: UUID?
     public var sourceRaw: String = RideLogSource.manual.rawValue
+    /// Strava activity id this log was auto-created from — dedup key for
+    /// `StravaActivitySyncService` and the source for RideLogView's "View on
+    /// Strava" link. Nil for manual/HealthKit-sourced logs.
+    public var stravaActivityID: String?
 
     public init(
         id: UUID = UUID(),
         date: Date = .now,
         routeID: UUID? = nil,
-        source: RideLogSource = .manual
+        source: RideLogSource = .manual,
+        stravaActivityID: String? = nil
     ) {
         self.id = id
         self.date = date
         self.routeID = routeID
         self.sourceRaw = source.rawValue
+        self.stravaActivityID = stravaActivityID
     }
 }
 

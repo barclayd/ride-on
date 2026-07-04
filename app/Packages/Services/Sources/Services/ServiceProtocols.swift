@@ -45,17 +45,81 @@ public extension WeatherSnapshot {
     }
 }
 
+public enum TravelMode: String, Sendable, CaseIterable, Codable {
+    case automobile, cycling, transit
+}
+
 public protocol ETAProviding: Sendable {
-    func travelTime(from: Coordinate, to: Coordinate) async throws -> TimeInterval
+    func travelTime(from: Coordinate, to: Coordinate, mode: TravelMode) async throws -> TimeInterval
+}
+
+public extension ETAProviding {
+    /// Convenience default for call sites that don't care about transport
+    /// mode (the pre-Phase-6 fixture usage). New callers should pass `mode`.
+    func travelTime(from: Coordinate, to: Coordinate) async throws -> TimeInterval {
+        try await travelTime(from: from, to: to, mode: .automobile)
+    }
 }
 
 public protocol HealthStoreProviding: Sendable {
-    func recentCyclingRides(since: Date) async throws -> [RideLog]
+    func recentCyclingRides(since: Date, matchingAgainst routes: [Route]) async throws -> [RideLog]
+}
+
+public extension HealthStoreProviding {
+    func recentCyclingRides(since: Date) async throws -> [RideLog] {
+        try await recentCyclingRides(since: since, matchingAgainst: [])
+    }
+}
+
+public struct StravaRoute: Sendable, Codable, Hashable, Identifiable {
+    public var id: String
+    public var name: String
+    public var distanceKm: Double
+
+    public init(id: String, name: String, distanceKm: Double) {
+        self.id = id
+        self.name = name
+        self.distanceKm = distanceKm
+    }
+}
+
+public struct StravaActivity: Sendable, Codable, Hashable, Identifiable {
+    public var id: String
+    public var name: String
+    public var startDate: Date
+    public var distanceKm: Double
+    public var movingTimeSeconds: Double
+    /// Decoded from Strava's `map.summary_polyline` — coarse but enough for
+    /// `ActivityMatcher`'s overlap-based route matching (see
+    /// `LiveStravaClient`'s ponytail note on why this skips a per-activity
+    /// `/streams` call).
+    public var coordinates: [Coordinate]
+
+    public init(id: String, name: String, startDate: Date, distanceKm: Double, movingTimeSeconds: Double, coordinates: [Coordinate]) {
+        self.id = id
+        self.name = name
+        self.startDate = startDate
+        self.distanceKm = distanceKm
+        self.movingTimeSeconds = movingTimeSeconds
+        self.coordinates = coordinates
+    }
+}
+
+public enum StravaClientError: Error, Sendable {
+    case notConnected
+    case requestFailed(status: Int)
+    case invalidResponse
 }
 
 public protocol StravaClientProtocol: Sendable {
-    func exchangeToken(code: String) async throws -> String
+    func isConnected() async -> Bool
+    func exchangeToken(code: String) async throws
+    func disconnect() async
     func importedRoutes() async throws -> [Route]
+    func listRoutes() async throws -> [StravaRoute]
+    func exportRouteGPX(routeID: String) async throws -> Data
+    func recentActivities(monthsAgo: Int) async throws -> [StravaActivity]
+    func activityWebURL(activityID: String) -> URL
 }
 
 /// Result of a `/classify` call — the worker's response, translated into
