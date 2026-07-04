@@ -51,6 +51,7 @@ public struct PermissionPrimingSheet: View {
                 .buttonBorderShape(.capsule)
                 .controlSize(.large)
                 .frame(maxWidth: .infinity)
+                .keyboardShortcut(.defaultAction)
             Button("Not Now", action: onNotNow)
                 .buttonStyle(.glass)
                 .frame(maxWidth: .infinity)

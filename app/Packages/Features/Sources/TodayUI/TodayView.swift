@@ -311,6 +311,7 @@ private struct ContextEditorSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .keyboardShortcut(.defaultAction)
                 }
             }
             .onChange(of: hasBackBy) { _, newValue in

@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import Accessibility
 
 /// One sample along the route: distance travelled so far -> elevation.
 public struct ElevationPoint: Identifiable, Hashable, Sendable {
@@ -79,11 +80,8 @@ public struct ElevationProfile: View {
             }
         }
         .frame(height: 140)
-        // ponytail: a full `AXChartDescriptorRepresentable` (axChartDescriptor)
-        // is DESIGN-SYSTEM.md §8's accessibility bar, which is Phase 7's pass,
-        // not Phase 4's; the plain accessibility label below covers VoiceOver
-        // for now.
         .accessibilityLabel(accessibilitySummary)
+        .accessibilityChartDescriptor(ElevationChartDescriptor(points: points))
     }
 
     private var accessibilitySummary: String {
@@ -92,5 +90,47 @@ public struct ElevationProfile: View {
             return "No elevation data"
         }
         return "Elevation profile from \(Int(minPoint.elevationM))m to \(Int(maxPoint.elevationM))m"
+    }
+}
+
+/// DESIGN-SYSTEM.md §8's audio-graph descriptor: lets VoiceOver users hear
+/// the elevation profile as an audio graph (rising/falling tones), not just
+/// read the summary label.
+private struct ElevationChartDescriptor: AXChartDescriptorRepresentable {
+    var points: [ElevationPoint]
+
+    func makeChartDescriptor() -> AXChartDescriptor {
+        let distances = points.map(\.distanceKm)
+        let elevations = points.map(\.elevationM)
+        let xAxis = AXNumericDataAxisDescriptor(
+            title: "Distance",
+            range: (distances.min() ?? 0)...(distances.max() ?? 0),
+            gridlinePositions: []
+        ) { "\($0.formatted(.number.precision(.fractionLength(1)))) km" }
+        let yAxis = AXNumericDataAxisDescriptor(
+            title: "Elevation",
+            range: (elevations.min() ?? 0)...(elevations.max() ?? 0),
+            gridlinePositions: []
+        ) { "\(Int($0)) meters" }
+        return AXChartDescriptor(
+            title: "Elevation Profile",
+            summary: nil,
+            xAxis: xAxis,
+            yAxis: yAxis,
+            additionalAxes: [],
+            series: [dataSeries]
+        )
+    }
+
+    func updateChartDescriptor(_ descriptor: AXChartDescriptor) {
+        descriptor.series = [dataSeries]
+    }
+
+    private var dataSeries: AXDataSeriesDescriptor {
+        AXDataSeriesDescriptor(
+            name: "Elevation",
+            isContinuous: true,
+            dataPoints: points.map { AXDataPoint(x: $0.distanceKm, y: $0.elevationM) }
+        )
     }
 }

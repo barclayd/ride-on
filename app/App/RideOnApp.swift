@@ -38,6 +38,17 @@ struct RideOnApp: App {
                 }
         }
         .modelContainer(modelContainer)
+        .defaultSize(width: 1100, height: 700)
+        .commands {
+            SidebarCommands()
+            ToolbarCommands()
+            CommandGroup(after: .importExport) {
+                Button("Import GPX…") {
+                    NotificationCenter.default.post(name: .rideOnImportGPXRequested, object: nil)
+                }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+            }
+        }
     }
 
     /// Share-sheet / "Open in Ride On" GPX handoff — declared in
@@ -175,9 +186,35 @@ private struct SplitRoot: View {
             List(AppTab.allCases, selection: $selection) { tab in
                 Label(tab.title, systemImage: tab.systemImage).tag(tab)
             }
+            .listStyle(.sidebar)
             .navigationTitle("Ride On")
         } detail: {
             TabPage(tab: selection ?? .today)
+                .backgroundExtensionEffectIfAvailable()
         }
+        .macMinWindowSize()
+    }
+}
+
+private extension View {
+    // ponytail: `backgroundExtensionEffect()` is iOS 26/macOS 26-only —
+    // DESIGN-SYSTEM.md §2's Mac sidebar detail spec, gated the same way as
+    // the other iOS-26-only APIs in this file.
+    @ViewBuilder
+    func backgroundExtensionEffectIfAvailable() -> some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            self.backgroundExtensionEffect()
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func macMinWindowSize() -> some View {
+        #if os(macOS)
+        self.frame(minWidth: 800, minHeight: 500)
+        #else
+        self
+        #endif
     }
 }

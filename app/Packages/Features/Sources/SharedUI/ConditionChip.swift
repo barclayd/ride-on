@@ -47,7 +47,10 @@ public struct ConditionChip: View {
     }
 }
 
-/// Lays out up to 4 chips (DESIGN-SYSTEM.md §6 cap) in a row.
+/// Lays out up to 4 chips (DESIGN-SYSTEM.md §6 cap). A `Layout` flow wrap,
+/// not a fixed `HStack`, so oversized Dynamic Type chip text wraps to a
+/// second row instead of overflowing the card edge (DESIGN-SYSTEM.md §8:
+/// "chips wrap to two rows").
 public struct ConditionChipRow: View {
     public var chips: [ConditionChipData]
 
@@ -56,8 +59,51 @@ public struct ConditionChipRow: View {
     }
 
     public var body: some View {
-        HStack(spacing: 8) {
+        ChipFlowLayout(spacing: 8) {
             ForEach(chips.prefix(4)) { ConditionChip($0) }
+        }
+    }
+}
+
+/// Minimal left-to-right, top-to-bottom flow layout — just enough to wrap
+/// chips onto a new row when they don't fit, no third-party dependency.
+private struct ChipFlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if rowWidth + size.width > width, rowWidth > 0 {
+                totalHeight += rowHeight + spacing
+                rowWidth = 0
+                rowHeight = 0
+            }
+            rowWidth += size.width + (rowWidth > 0 ? spacing : 0)
+            rowHeight = max(rowHeight, size.height)
+        }
+        totalHeight += rowHeight
+        return CGSize(width: width.isFinite ? width : rowWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var origin = bounds.origin
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if origin.x + size.width > bounds.maxX, origin.x > bounds.minX {
+                origin.x = bounds.minX
+                origin.y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: origin, anchor: .topLeading, proposal: .unspecified)
+            origin.x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }
