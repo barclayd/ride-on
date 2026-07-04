@@ -18,8 +18,10 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
   three-column split there, a fourth column crowds it. (`RouteDetailView.swift`)
 - [x] **macOS Settings scene (⌘,)** — natural home for the units toggle (task #18) and
   preferences. (`RideOnApp.swift`)
-- [ ] **Filter chips → `.searchSuggestions`** — DESIGN-SYSTEM §9 already asks for this;
-  Landmarks hoists one `.searchable` to the split-view root. (`RoutesView.swift`)
+- [x] **Filter chips → `.searchSuggestions`** — DESIGN-SYSTEM §9 already asks for this;
+  Landmarks hoists one `.searchable` to the split-view root. Chips now appear as toggleable
+  suggestions under the focused search field (Maps' pre-typed pattern); the inline chip row
+  only shows while a filter is active, so it stays removable. (`RoutesView.swift`)
 
 ## B. Liquid Glass correctness
 
