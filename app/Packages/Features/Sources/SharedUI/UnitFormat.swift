@@ -21,13 +21,15 @@ public enum UnitFormat {
         unitSymbol(from: distance(km: 1, locale: locale))
     }
 
-    /// Elevation: feet in US/UK locales, meters elsewhere (`usage: .general`
-    /// — verified over `.asProvided`/`.personHeight` to give a plain whole
-    /// unit, not a compound "ft, in" string).
+    /// Elevation: feet in US/UK locales, meters elsewhere. The unit is
+    /// pinned explicitly (`usage: .asProvided`) — `.general` rescales by
+    /// magnitude, so small gains rendered as inches ("0 in gain").
     public static func elevation(m: Double, locale: Locale = .current) -> String {
-        Measurement(value: m, unit: UnitLength.meters)
+        let meters = Measurement(value: m, unit: UnitLength.meters)
+        let pinned = locale.measurementSystem == .metric ? meters : meters.converted(to: .feet)
+        return pinned
             .formatted(
-                .measurement(width: .abbreviated, usage: .general, numberFormatStyle: .number.precision(.fractionLength(0)))
+                .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0)))
                     .locale(locale)
             )
     }
