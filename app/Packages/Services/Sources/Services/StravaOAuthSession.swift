@@ -91,7 +91,7 @@ public enum StravaConnect {
 
 #if os(iOS)
 /// Routes the Strava app's app-to-app OAuth return (a normal `openURL` back
-/// into `rideon://strava-callback`) to whichever `StravaOAuthSession` call is
+/// into `StravaAuthConfig.redirectURI`) to whichever `StravaOAuthSession` call is
 /// waiting on it. Wired from `RideOnApp.onOpenURL`. iOS only — app-to-app
 /// OAuth only exists on iOS (no Strava app on Mac).
 @MainActor
