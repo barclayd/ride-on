@@ -13,8 +13,9 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
   the existing `NavigationSplitView`, not a push inside one pane. Routes tab now uses a
   three-column split (sidebar / routes list / detail); iPhone keeps push navigation.
   (`RideOnApp.swift`, `RoutesView.swift`)
-- [ ] **Route Detail inspector** — factor breakdown / stats belong in `.inspector` on Mac/iPad
-  (Landmarks uses one for landmark editing). (`RouteDetailView.swift`)
+- [x] **Route Detail inspector** — stats, best-day, and ride history now live in a toggleable
+  `.inspector` on Mac (Landmarks idiom). Skipped on iPad: the Routes tab is already a
+  three-column split there, a fourth column crowds it. (`RouteDetailView.swift`)
 - [x] **macOS Settings scene (⌘,)** — natural home for the units toggle (task #18) and
   preferences. (`RideOnApp.swift`)
 - [ ] **Filter chips → `.searchSuggestions`** — DESIGN-SYSTEM §9 already asks for this;
@@ -35,10 +36,9 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
 
 - [x] **Export GPX → toolbar `ShareLink`** — was an inline content button; Landmarks puts share
   actions in the toolbar's glass capsule. (`RouteDetailView.swift`)
-- [ ] **`ToolbarSpacer` grouping** — use `.fixed`/`.flexible` spacers to split toolbar items into
-  separate glass capsules where more than one action exists. N/A today: no toolbar has two
-  adjacent same-placement actions (Routes' scope picker is `.principal`, Import is alone in
-  `.primaryAction`) — apply when a second trailing action lands.
+- [x] **`ToolbarSpacer` grouping** — use `.fixed`/`.flexible` spacers to split toolbar items into
+  separate glass capsules where more than one action exists. Applied in Route Detail on Mac,
+  where the inspector toggle joined Export GPX as a second `.primaryAction`.
 
 ## D. Spacing, layout & type
 

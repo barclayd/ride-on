@@ -26,6 +26,7 @@ public struct RouteDetailView: View {
     @State private var selectedDistanceKm: Double?
     @State private var bestDay: (context: DailyContext, score: Double)?
     @State private var exportedGPXURL: URL?
+    @State private var isInspectorPresented = true
 
     public init(routeID: UUID) {
         self.routeID = routeID
@@ -58,11 +59,16 @@ public struct RouteDetailView: View {
                     .frame(height: 260)
                     .clipShape(.rect(cornerRadius: CornerRadius.hero))
 
+                // On Mac these live in the inspector column instead
+                // (Landmarks idiom, REDESIGN.md A); iPhone/iPad keep them
+                // inline.
+                #if !os(macOS)
                 if let bestDay {
                     BestDayBadge(dayName: bestDay.context.date.formatted(.dateTime.weekday(.wide)), summary: "Score \(Int((bestDay.score * 100).rounded()))")
                 }
 
                 statsRow(for: route)
+                #endif
 
                 if !elevationPoints.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
@@ -76,7 +82,9 @@ public struct RouteDetailView: View {
                     SurfaceBar(surfaces: route.surfaces ?? SurfaceBreakdown(distanceKmBySurface: [:]))
                 }
 
+                #if !os(macOS)
                 rideHistorySection(for: route)
+                #endif
             }
             .padding()
             // Landmarks caps reading width in wide windows instead of
@@ -84,6 +92,15 @@ public struct RouteDetailView: View {
             .frame(maxWidth: 700)
             .frame(maxWidth: .infinity)
         }
+        #if os(macOS)
+        // Stats/best day/history are reference info, not the visual content —
+        // Landmarks puts that in an `.inspector` on Mac. Skipped on iPad: the
+        // Routes tab is already a three-column split there, a fourth column
+        // crowds it.
+        .inspector(isPresented: $isInspectorPresented) {
+            inspectorContent(for: route)
+        }
+        #endif
         // Landmarks toolbar idiom: share actions live in the toolbar's glass
         // capsule, not as an inline content button.
         .toolbar {
@@ -94,6 +111,15 @@ public struct RouteDetailView: View {
                     }
                 }
             }
+            #if os(macOS)
+            // Two trailing actions -> separate glass capsules (REDESIGN.md C).
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+            ToolbarItem(placement: .primaryAction) {
+                Button("Route Info", systemImage: "info.circle") {
+                    isInspectorPresented.toggle()
+                }
+            }
+            #endif
         }
         .task(id: route.id) {
             exportedGPXURL = Self.exportGPX(route: route)
@@ -126,6 +152,33 @@ public struct RouteDetailView: View {
         let coordinate = coordinates[nearest.id]
         return CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
     }
+
+    #if os(macOS)
+    private func inspectorContent(for route: RouteModel) -> some View {
+        Form {
+            Section("Stats") {
+                LabeledContent("Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
+                LabeledContent("Elevation Gain", value: UnitFormat.elevation(m: route.elevationGainM, system: unitSystem))
+                LabeledContent("Est. Time", value: estimatedTimeText(for: route))
+            }
+            if let bestDay {
+                Section("Best Day to Ride") {
+                    BestDayBadge(dayName: bestDay.context.date.formatted(.dateTime.weekday(.wide)), summary: "Score \(Int((bestDay.score * 100).rounded()))")
+                }
+            }
+            let logs = rideLogModels.filter { $0.routeID == route.id }.sorted { $0.date > $1.date }
+            if !logs.isEmpty {
+                Section("Ride History") {
+                    ForEach(logs) { log in
+                        Label(log.date.formatted(date: .abbreviated, time: .omitted), systemImage: "checkmark.circle.fill")
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .inspectorColumnWidth(min: 220, ideal: 260, max: 320)
+    }
+    #endif
 
     private func statsRow(for route: RouteModel) -> some View {
         // ponytail: `ViewThatFits` (native, no custom layout math) falls back
