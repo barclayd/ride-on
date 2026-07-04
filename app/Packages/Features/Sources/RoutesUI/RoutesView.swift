@@ -112,6 +112,15 @@ public struct RoutesView: View {
         ) { result in
             handleImport(result)
         }
+        // Drag a GPX file anywhere onto the screen (Finder on Mac, Files on
+        // iPad) — same pipeline as the file importer; RouteImporter handles
+        // security-scoped access.
+        .dropDestination(for: URL.self) { urls, _ in
+            let gpxURLs = urls.filter { ["gpx", "xml"].contains($0.pathExtension.lowercased()) }
+            guard !gpxURLs.isEmpty else { return false }
+            handleImport(.success(gpxURLs))
+            return true
+        }
         .sheet(item: $pendingConfirmation) { route in
             ImportConfirmationSheet(route: route)
         }
