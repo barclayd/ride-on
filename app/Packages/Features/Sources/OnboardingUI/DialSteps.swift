@@ -98,6 +98,7 @@ struct RainDialStep: View {
     var pageIndex: Int
     var pageCount: Int
     var onContinue: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var sky: SkyCondition {
         switch tolerance {
@@ -115,8 +116,37 @@ struct RainDialStep: View {
             pageIndex: pageIndex,
             pageCount: pageCount
         ) {
-            Slider(value: $tolerance, in: 0...1)
+            Slider(value: $tolerance, in: 0...1) {
+                Text("Rain tolerance")
+            } minimumValueLabel: {
+                endSymbol(dry: true)
+            } maximumValueLabel: {
+                endSymbol(dry: false)
+            }
         } onContinue: { onContinue() }
+    }
+
+    // Dry/downpour ends of the slider: opacity crossfades with the value,
+    // and the dominant side plays a short symbol animation (Reduce Motion
+    // gated), matching the reactive sky background. One function for both so
+    // Slider's min/max labels share a `ValueLabel` type. Finite `.repeat(3)`,
+    // not `.repeating` — a forever animation stops the app ever idling, which
+    // makes XCUITest event delivery flaky (and burns battery on a screen
+    // someone may sit on).
+    @ViewBuilder
+    private func endSymbol(dry: Bool) -> some View {
+        let image = Image(systemName: dry ? "sun.max.fill" : "cloud.heavyrain.fill")
+            .font(.title3)
+        Group {
+            if dry {
+                image.symbolEffect(.pulse, options: .repeat(3), isActive: !reduceMotion && tolerance < 0.33)
+            } else {
+                image.symbolEffect(.variableColor.iterative, options: .repeat(3), isActive: !reduceMotion && tolerance >= 0.66)
+            }
+        }
+        .opacity(0.35 + 0.65 * (dry ? 1 - tolerance : tolerance))
+        .animation(Motion.ambianceCrossfade, value: tolerance)
+        .accessibilityHidden(true)
     }
 }
 

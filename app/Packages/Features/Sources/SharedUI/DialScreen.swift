@@ -66,6 +66,9 @@ public struct DialScreen<Control: View>: View {
                 .padding(.horizontal)
 
                 control
+                    // Cap the control width so sliders don't span the whole
+                    // window on macOS; no-op on iPhone widths.
+                    .frame(maxWidth: 480)
                     .padding(.horizontal)
 
                 Spacer()
@@ -74,7 +77,9 @@ public struct DialScreen<Control: View>: View {
                     HStack(spacing: 6) {
                         ForEach(0..<pageCount, id: \.self) { index in
                             Circle()
-                                .fill(index == pageIndex ? Color.primary : Color.secondary.opacity(0.3))
+                                // White like the rest of the screen — primary/
+                                // secondary go invisible on dark ambiances.
+                                .fill(.white.opacity(index == pageIndex ? 1 : 0.3))
                                 .frame(width: 6, height: 6)
                         }
                     }
