@@ -37,7 +37,10 @@ public final class StravaOAuthSession: NSObject {
             let session = ASWebAuthenticationSession(
                 url: StravaAuthConfig.webAuthorizeURL,
                 callbackURLScheme: StravaAuthConfig.redirectScheme
-            ) { callbackURL, error in
+            ) { @Sendable callbackURL, error in
+                // ASWebAuthenticationSession invokes this on a background XPC
+                // queue on macOS; @Sendable opts out of the class's @MainActor
+                // isolation (resuming a continuation is safe from any thread).
                 if let error {
                     if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
                         continuation.resume(throwing: StravaAuthError.cancelled)
