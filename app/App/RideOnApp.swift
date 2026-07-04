@@ -196,19 +196,44 @@ private extension View {
 
 private struct SplitRoot: View {
     @State private var selection: AppTab? = .today
+    @State private var selectedRouteID: UUID?
 
     var body: some View {
-        NavigationSplitView {
-            List(AppTab.allCases, selection: $selection) { tab in
-                Label(tab.title, systemImage: tab.systemImage).tag(tab)
+        // Landmarks idiom (REDESIGN.md A): on Mac/iPad the routes list is a
+        // content column driving Route Detail in the detail column, not a
+        // push over itself. Today/You keep the plain two-column layout, so
+        // the split view is swapped per tab.
+        Group {
+            if selection == .routes {
+                NavigationSplitView {
+                    sidebar
+                } content: {
+                    RoutesView(selection: $selectedRouteID)
+                } detail: {
+                    if let selectedRouteID {
+                        RouteDetailView(routeID: selectedRouteID)
+                    } else {
+                        ContentUnavailableView("Select a Route", systemImage: "map")
+                    }
+                }
+            } else {
+                NavigationSplitView {
+                    sidebar
+                } detail: {
+                    TabPage(tab: selection ?? .today)
+                        .backgroundExtensionEffect()
+                }
             }
-            .listStyle(.sidebar)
-            .navigationTitle("Ride On")
-        } detail: {
-            TabPage(tab: selection ?? .today)
-                .backgroundExtensionEffect()
         }
         .macMinWindowSize()
+    }
+
+    private var sidebar: some View {
+        List(AppTab.allCases, selection: $selection) { tab in
+            Label(tab.title, systemImage: tab.systemImage).tag(tab)
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("Ride On")
     }
 }
 
