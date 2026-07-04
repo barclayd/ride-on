@@ -264,10 +264,7 @@ private struct RouteRow: View {
 
             if let type = route.effectiveType {
                 Text(type.rawValue.capitalized)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.secondary.opacity(0.15), in: .capsule)
+                    .tagCapsule()
             } else if route.needsClassification {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
