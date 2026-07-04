@@ -74,14 +74,20 @@ public struct RoutesView: View {
                         .padding(.top, 8)
                     #endif
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(RouteChip.allCases) { chip in
-                                chipButton(chip)
+                    // Maps' pre-typed suggestion pattern (DESIGN-SYSTEM §9):
+                    // the chips live under the focused search field via
+                    // `.searchSuggestions`; this inline row only appears once
+                    // a filter is active, so it stays visible and removable.
+                    if !activeChips.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(RouteChip.allCases) { chip in
+                                    chipButton(chip)
+                                }
                             }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
                     }
 
                     if filteredRoutes.isEmpty {
@@ -113,6 +119,15 @@ public struct RoutesView: View {
         }
         .navigationTitle("Routes")
         .searchable(text: $searchText, prompt: "Search routes")
+        .searchSuggestions {
+            ForEach(RouteChip.allCases) { chip in
+                Button {
+                    toggle(chip)
+                } label: {
+                    Label(chip.rawValue, systemImage: activeChips.contains(chip) ? "checkmark.circle.fill" : "circle")
+                }
+            }
+        }
         .toolbar {
             #if os(macOS)
             ToolbarItem(placement: .principal) {
@@ -178,10 +193,14 @@ public struct RoutesView: View {
         }
     }
 
+    private func toggle(_ chip: RouteChip) {
+        if activeChips.contains(chip) { activeChips.remove(chip) } else { activeChips.insert(chip) }
+    }
+
     private func chipButton(_ chip: RouteChip) -> some View {
         let isActive = activeChips.contains(chip)
         return Button {
-            if isActive { activeChips.remove(chip) } else { activeChips.insert(chip) }
+            toggle(chip)
         } label: {
             Text(chip.rawValue)
                 .font(.footnote.weight(.medium))
