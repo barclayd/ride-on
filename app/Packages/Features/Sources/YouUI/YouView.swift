@@ -63,6 +63,10 @@ public struct YouView: View {
                 stravaRow
             }
 
+            Section("Display") {
+                UnitsPicker()
+            }
+
             Section {
                 NavigationLink("About") {
                     AboutView()
@@ -148,5 +152,28 @@ public struct YouView: View {
             _ = try? await sync.syncRoutes()
             isSyncingRoutes = false
         }
+    }
+}
+
+/// Distance/elevation/speed display units — shared between the You tab and
+/// the macOS Settings scene (⌘,). Defaults from the locale (UK = metric);
+/// picking a value pins it explicitly.
+public struct UnitsPicker: View {
+    @Environment(PreferencesStore.self) private var preferencesStore
+
+    public init() {}
+
+    public var body: some View {
+        Picker("Units", selection: selection) {
+            Text("Metric (km, m)").tag(UnitSystem.metric)
+            Text("Imperial (mi, ft)").tag(UnitSystem.imperial)
+        }
+    }
+
+    private var selection: Binding<UnitSystem> {
+        Binding(
+            get: { preferencesStore.preferences.effectiveUnitSystem },
+            set: { preferencesStore.preferences.unitSystem = $0 }
+        )
     }
 }

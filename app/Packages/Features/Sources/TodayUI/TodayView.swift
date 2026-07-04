@@ -15,6 +15,7 @@ public struct TodayView: View {
 
     @Environment(\.services) private var services
     @Environment(PreferencesStore.self) private var preferencesStore
+    @Environment(\.unitSystem) private var unitSystem
     @Query(sort: \RouteModel.createdAt) private var routeModels: [RouteModel]
     @Query private var savedPlaces: [SavedPlaceModel]
     @Query private var rideLogModels: [RideLogModel]
@@ -185,7 +186,7 @@ public struct TodayView: View {
         // `reason` (shown in full in the breakdown sheet's FactorRow) is too
         // long here, so this always builds the short "N km/h" form instead.
         return ConditionChipData.todayChips(
-            windLabel: "\(UnitFormat.speed(kph: weather.windKph)) wind",
+            windLabel: "\(UnitFormat.speed(kph: weather.windKph, system: unitSystem)) wind",
             temperatureC: weather.temperatureC,
             sky: weather.sky,
             travelMinutes: travelMinutesByRouteID[rankedRide.route.id],

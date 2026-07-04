@@ -6,6 +6,20 @@ public enum SunPreference: String, Codable, CaseIterable, Sendable {
     case seek
 }
 
+/// Display units for distance/elevation/speed. Canonical storage stays
+/// metric everywhere; this only affects formatting (SharedUI's UnitFormat).
+/// Temperature keeps following the locale — iOS has a per-app °C/°F setting.
+public enum UnitSystem: String, Codable, CaseIterable, Sendable {
+    case metric
+    case imperial
+
+    /// Only the US defaults to imperial — the UK is mixed on paper but
+    /// cycling there is km/metres (route planners, Strava default).
+    public static var localeDefault: UnitSystem {
+        Locale.current.measurementSystem == .us ? .imperial : .metric
+    }
+}
+
 public struct RiderPreferences: Codable, Sendable, Hashable {
     /// Comfortable riding temperature range, in Celsius.
     public var preferredTempRangeC: ClosedRange<Double>
@@ -19,6 +33,13 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
     public var speedKphBySurface: [SurfaceType: Double]
     /// Extra minutes added per 100m of elevation gain.
     public var climbingPenaltyMinutesPer100m: Double
+    /// `nil` = follow the locale (`UnitSystem.localeDefault`). Optional so
+    /// previously-persisted preferences JSON keeps decoding.
+    public var unitSystem: UnitSystem?
+
+    public var effectiveUnitSystem: UnitSystem {
+        unitSystem ?? .localeDefault
+    }
 
     public init(
         preferredTempRangeC: ClosedRange<Double> = 10...22,
@@ -29,7 +50,8 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
         speedKphBySurface: [SurfaceType: Double] = [
             .paved: 24, .busyRoad: 22, .unpaved: 16, .path: 14
         ],
-        climbingPenaltyMinutesPer100m: Double = 4
+        climbingPenaltyMinutesPer100m: Double = 4,
+        unitSystem: UnitSystem? = nil
     ) {
         self.preferredTempRangeC = preferredTempRangeC
         self.sunPreference = sunPreference
@@ -38,5 +60,6 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
         self.noveltyDial = noveltyDial
         self.speedKphBySurface = speedKphBySurface
         self.climbingPenaltyMinutesPer100m = climbingPenaltyMinutesPer100m
+        self.unitSystem = unitSystem
     }
 }

@@ -7,6 +7,7 @@ import SharedUI
 /// Per-surface cruising speed + climbing penalty, feeding `SpeedModel`'s ride
 /// time estimates (`RouteStats.estimatedRideTime`).
 struct SpeedModelView: View {
+    @Environment(\.unitSystem) private var unitSystem
     @Environment(PreferencesStore.self) private var preferencesStore
     @Environment(\.services) private var services
     @Environment(\.modelContext) private var modelContext
@@ -24,7 +25,7 @@ struct SpeedModelView: View {
                         HStack {
                             Text(label(for: surface))
                             Spacer()
-                            Text(UnitFormat.speed(kph: speedBinding(for: surface).wrappedValue))
+                            Text(UnitFormat.speed(kph: speedBinding(for: surface).wrappedValue, system: unitSystem))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                         }

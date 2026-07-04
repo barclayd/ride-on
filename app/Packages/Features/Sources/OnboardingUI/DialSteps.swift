@@ -151,6 +151,7 @@ struct RainDialStep: View {
 }
 
 struct WindDialStep: View {
+    @Environment(\.unitSystem) private var unitSystem
     @Binding var maxWindKph: Double
     var pageIndex: Int
     var pageCount: Int
@@ -174,7 +175,7 @@ struct WindDialStep: View {
         ) {
             VStack {
                 Slider(value: $maxWindKph, in: 5...60, step: 1)
-                Text(UnitFormat.speed(kph: maxWindKph)).font(.title3.monospacedDigit()).foregroundStyle(.white)
+                Text(UnitFormat.speed(kph: maxWindKph, system: unitSystem)).font(.title3.monospacedDigit()).foregroundStyle(.white)
             }
         } onContinue: { onContinue() }
     }

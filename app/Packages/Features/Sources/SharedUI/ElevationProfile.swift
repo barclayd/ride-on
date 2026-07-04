@@ -1,6 +1,7 @@
 import SwiftUI
 import Charts
 import Accessibility
+import Models
 
 /// One sample along the route: distance travelled so far -> elevation.
 public struct ElevationPoint: Identifiable, Hashable, Sendable {
@@ -23,6 +24,7 @@ public struct ElevationPoint: Identifiable, Hashable, Sendable {
 public struct ElevationProfile: View {
     public var points: [ElevationPoint]
     @Binding public var selectedDistanceKm: Double?
+    @Environment(\.unitSystem) private var unitSystem
 
     public init(points: [ElevationPoint], selectedDistanceKm: Binding<Double?>) {
         self.points = points
@@ -63,7 +65,7 @@ public struct ElevationProfile: View {
                         RuleMark(x: .value("Selected", nearestSelectedPoint.distanceKm))
                             .foregroundStyle(.secondary.opacity(0.6))
                             .annotation(position: .top) {
-                                Text(UnitFormat.elevation(m: nearestSelectedPoint.elevationM))
+                                Text(UnitFormat.elevation(m: nearestSelectedPoint.elevationM, system: unitSystem))
                                     .font(.caption.monospacedDigit())
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
@@ -72,8 +74,8 @@ public struct ElevationProfile: View {
                     }
                 }
                 .chartXSelection(value: $selectedDistanceKm)
-                .chartXAxisLabel(UnitFormat.distanceUnitSymbol())
-                .chartYAxisLabel(UnitFormat.elevationUnitSymbol())
+                .chartXAxisLabel(UnitFormat.distanceUnitSymbol(system: unitSystem))
+                .chartYAxisLabel(UnitFormat.elevationUnitSymbol(system: unitSystem))
                 .chartLegend(.hidden)
             } else {
                 ContentUnavailableView("No Elevation Data", systemImage: "chart.xyaxis.line")
@@ -81,7 +83,7 @@ public struct ElevationProfile: View {
         }
         .frame(height: 140)
         .accessibilityLabel(accessibilitySummary)
-        .accessibilityChartDescriptor(ElevationChartDescriptor(points: points))
+        .accessibilityChartDescriptor(ElevationChartDescriptor(points: points, system: unitSystem))
     }
 
     private var accessibilitySummary: String {
@@ -89,7 +91,7 @@ public struct ElevationProfile: View {
               let maxPoint = points.max(by: { $0.elevationM < $1.elevationM }) else {
             return "No elevation data"
         }
-        return "Elevation profile from \(UnitFormat.elevation(m: minPoint.elevationM)) to \(UnitFormat.elevation(m: maxPoint.elevationM))"
+        return "Elevation profile from \(UnitFormat.elevation(m: minPoint.elevationM, system: unitSystem)) to \(UnitFormat.elevation(m: maxPoint.elevationM, system: unitSystem))"
     }
 }
 
@@ -98,6 +100,7 @@ public struct ElevationProfile: View {
 /// read the summary label.
 private struct ElevationChartDescriptor: AXChartDescriptorRepresentable {
     var points: [ElevationPoint]
+    var system: UnitSystem
 
     func makeChartDescriptor() -> AXChartDescriptor {
         let distances = points.map(\.distanceKm)
@@ -106,12 +109,12 @@ private struct ElevationChartDescriptor: AXChartDescriptorRepresentable {
             title: "Distance",
             range: (distances.min() ?? 0)...(distances.max() ?? 0),
             gridlinePositions: []
-        ) { UnitFormat.distance(km: $0) }
+        ) { UnitFormat.distance(km: $0, system: system) }
         let yAxis = AXNumericDataAxisDescriptor(
             title: "Elevation",
             range: (elevations.min() ?? 0)...(elevations.max() ?? 0),
             gridlinePositions: []
-        ) { UnitFormat.elevation(m: $0) }
+        ) { UnitFormat.elevation(m: $0, system: system) }
         return AXChartDescriptor(
             title: "Elevation Profile",
             summary: nil,

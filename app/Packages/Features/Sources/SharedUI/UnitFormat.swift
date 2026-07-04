@@ -1,43 +1,43 @@
-import Foundation
+import SwiftUI
+import Models
 
 /// Display-only unit formatting. Canonical storage/engine values stay metric
 /// everywhere else (distanceKm, elevationGainM, windKph, temperatureC,
-/// speed km/h) — this just picks the right unit for the locale via
-/// `Measurement.formatted`. No in-app toggle: users override via system
-/// Settings > Language & Region.
+/// speed km/h) — this converts for display per the rider's `UnitSystem`
+/// (You tab / macOS Settings; defaults from the locale, UK = metric).
+/// Temperature is the exception: it keeps following the locale, which iOS
+/// exposes as a per-app °C/°F override.
 public enum UnitFormat {
-    /// Road distance: miles in US/UK locales, km elsewhere (`usage: .road`).
-    public static func distance(km: Double, locale: Locale = .current) -> String {
-        Measurement(value: km, unit: UnitLength.kilometers)
+    /// Ride distance: km (metric) or miles (imperial).
+    public static func distance(km: Double, system: UnitSystem, locale: Locale = .current) -> String {
+        let measurement = Measurement(value: km, unit: UnitLength.kilometers)
+        return (system == .metric ? measurement : measurement.converted(to: .miles))
             .formatted(
-                .measurement(width: .abbreviated, usage: .road, numberFormatStyle: .number.precision(.fractionLength(1)))
+                .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(1)))
                     .locale(locale)
             )
     }
 
-    /// Just the distance unit symbol ("mi"/"km") for the given locale —
-    /// for chart axis labels, not a value.
-    public static func distanceUnitSymbol(locale: Locale = .current) -> String {
-        unitSymbol(from: distance(km: 1, locale: locale))
+    /// Just the distance unit symbol ("km"/"mi") — for chart axis labels.
+    public static func distanceUnitSymbol(system: UnitSystem, locale: Locale = .current) -> String {
+        unitSymbol(from: distance(km: 1, system: system, locale: locale))
     }
 
-    /// Elevation: feet in US/UK locales, meters elsewhere. The unit is
-    /// pinned explicitly (`usage: .asProvided`) — `.general` rescales by
-    /// magnitude, so small gains rendered as inches ("0 in gain").
-    public static func elevation(m: Double, locale: Locale = .current) -> String {
-        let meters = Measurement(value: m, unit: UnitLength.meters)
-        let pinned = locale.measurementSystem == .metric ? meters : meters.converted(to: .feet)
-        return pinned
+    /// Elevation: metres (metric) or feet (imperial). The unit is pinned
+    /// (`usage: .asProvided`) — `.general` rescales by magnitude, so small
+    /// gains rendered as inches ("0 in gain").
+    public static func elevation(m: Double, system: UnitSystem, locale: Locale = .current) -> String {
+        let measurement = Measurement(value: m, unit: UnitLength.meters)
+        return (system == .metric ? measurement : measurement.converted(to: .feet))
             .formatted(
                 .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0)))
                     .locale(locale)
             )
     }
 
-    /// Just the elevation unit symbol ("ft"/"m") for the given locale — for
-    /// chart axis labels, not a value.
-    public static func elevationUnitSymbol(locale: Locale = .current) -> String {
-        unitSymbol(from: elevation(m: 1, locale: locale))
+    /// Just the elevation unit symbol ("m"/"ft") — for chart axis labels.
+    public static func elevationUnitSymbol(system: UnitSystem, locale: Locale = .current) -> String {
+        unitSymbol(from: elevation(m: 1, system: system, locale: locale))
     }
 
     /// Temperature: respects the iOS per-app temperature unit override
@@ -50,11 +50,12 @@ public enum UnitFormat {
             )
     }
 
-    /// Wind/cruising speed: km/h vs mph.
-    public static func speed(kph: Double, locale: Locale = .current) -> String {
-        Measurement(value: kph, unit: UnitSpeed.kilometersPerHour)
+    /// Wind/cruising speed: km/h (metric) or mph (imperial).
+    public static func speed(kph: Double, system: UnitSystem, locale: Locale = .current) -> String {
+        let measurement = Measurement(value: kph, unit: UnitSpeed.kilometersPerHour)
+        return (system == .metric ? measurement : measurement.converted(to: .milesPerHour))
             .formatted(
-                .measurement(width: .abbreviated, usage: .general, numberFormatStyle: .number.precision(.fractionLength(0)))
+                .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0)))
                     .locale(locale)
             )
     }
@@ -69,4 +70,10 @@ public enum UnitFormat {
         strip.formUnion(CharacterSet(charactersIn: ".,"))
         return formatted.trimmingCharacters(in: strip)
     }
+}
+
+public extension EnvironmentValues {
+    /// The rider's display units, injected at the app root from
+    /// `PreferencesStore` — views read this and pass it to `UnitFormat`.
+    @Entry var unitSystem: UnitSystem = .localeDefault
 }

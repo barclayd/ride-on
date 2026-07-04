@@ -21,6 +21,7 @@ public struct RouteDetailView: View {
     @Environment(\.services) private var services
     @Environment(PreferencesStore.self) private var preferencesStore
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.unitSystem) private var unitSystem
 
     @State private var selectedDistanceKm: Double?
     @State private var bestDay: (context: DailyContext, score: Double)?
@@ -129,13 +130,13 @@ public struct RouteDetailView: View {
         // or overlapping.
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 24) {
-                statColumn(title: "Distance", value: UnitFormat.distance(km: route.distanceKm))
-                statColumn(title: "Elevation", value: UnitFormat.elevation(m: route.elevationGainM))
+                statColumn(title: "Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
+                statColumn(title: "Elevation", value: UnitFormat.elevation(m: route.elevationGainM, system: unitSystem))
                 statColumn(title: "Est. Time", value: estimatedTimeText(for: route))
             }
             VStack(alignment: .leading, spacing: 12) {
-                statColumn(title: "Distance", value: UnitFormat.distance(km: route.distanceKm))
-                statColumn(title: "Elevation", value: UnitFormat.elevation(m: route.elevationGainM))
+                statColumn(title: "Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
+                statColumn(title: "Elevation", value: UnitFormat.elevation(m: route.elevationGainM, system: unitSystem))
                 statColumn(title: "Est. Time", value: estimatedTimeText(for: route))
             }
         }

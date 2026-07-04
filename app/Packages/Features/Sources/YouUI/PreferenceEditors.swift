@@ -81,6 +81,7 @@ struct RainToleranceEditor: View {
 }
 
 struct MaxWindEditor: View {
+    @Environment(\.unitSystem) private var unitSystem
     @Binding var maxWindKph: Double
     @Environment(\.dismiss) private var dismiss
     @State private var draft: Double
@@ -99,7 +100,7 @@ struct MaxWindEditor: View {
         ) {
             VStack {
                 Slider(value: $draft, in: 5...60, step: 1)
-                Text(UnitFormat.speed(kph: draft)).font(.title3.monospacedDigit()).foregroundStyle(.white)
+                Text(UnitFormat.speed(kph: draft, system: unitSystem)).font(.title3.monospacedDigit()).foregroundStyle(.white)
             }
         } onContinue: {
             maxWindKph = draft
