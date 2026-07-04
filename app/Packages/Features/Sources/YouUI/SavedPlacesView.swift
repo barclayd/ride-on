@@ -61,6 +61,7 @@ private struct AddSavedPlaceSheet: View {
                     .keyboardType(.decimalPad)
                     #endif
             }
+            .formStyle(.grouped)
             .navigationTitle("New Place")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

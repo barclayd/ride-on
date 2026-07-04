@@ -59,6 +59,7 @@ struct SpeedModelView: View {
                 }
             }
         }
+        .formStyle(.grouped)
         .navigationTitle("Speed & Climbing")
         .task {
             isStravaConnected = await services.strava.isConnected()

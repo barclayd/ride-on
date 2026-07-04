@@ -21,6 +21,7 @@ struct WeightsView: View {
                 Text("Higher values make that factor count more toward a route's daily score. 1.0 is neutral.")
             }
         }
+        .formStyle(.grouped)
         .navigationTitle("Priorities")
     }
 

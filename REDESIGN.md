@@ -77,8 +77,10 @@ plus a full audit of this app against it. Work lands as small PRs; tick items as
   `#available(iOS 26, macOS 26)` gate around `backgroundExtensionEffect()`.
 - [x] **Onboarding accessibility** — the manual `Group`-switch page flow posts no VoiceOver
   screen-change announcements; add `AccessibilityNotification.ScreenChanged` on step change.
-- [ ] **You tab visual-language cleanup** — mixes dial takeovers, Forms, and plain Lists; settle
-  on Form-based editing per Landmarks' editing surfaces (Material, never glass, for content).
+- [x] **You tab visual-language cleanup** — every editing surface (You root, Priorities,
+  Speed & Climbing, About, New Place sheet) is now a grouped Form; Lists remain only for data
+  collections (Ride Log, Saved Places). Dial takeovers stay — DESIGN-SYSTEM §6 mandates
+  DialScreen as the settings editor for each preference ("onboarding is the settings").
 - [ ] **`.xcstrings` localization catalog** — Landmarks comments every string; we have raw
   string literals throughout. Defer until copy stabilizes.
 

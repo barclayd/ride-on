@@ -6,7 +6,7 @@ import SharedUI
 /// the breakdown sheet footer).
 struct AboutView: View {
     var body: some View {
-        List {
+        Form {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Ride On").font(.headline)
@@ -19,6 +19,7 @@ struct AboutView: View {
                 WeatherAttributionFooter()
             }
         }
+        .formStyle(.grouped)
         .navigationTitle("About")
     }
 }
