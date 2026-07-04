@@ -57,19 +57,11 @@ private struct RangeBar: View {
                     .fill(.secondary.opacity(0.25))
                     .frame(height: 6)
                 Circle()
-                    .fill(color)
+                    .fill(ConditionPalette.color(forScore: value))
                     .frame(width: dotDiameter, height: dotDiameter)
                     .offset(x: max(0, min(geometry.size.width - dotDiameter, geometry.size.width * value - dotDiameter / 2)))
             }
         }
         .frame(height: 12)
-    }
-
-    private var color: Color {
-        switch value {
-        case 0.7...: .green
-        case 0.4..<0.7: .yellow
-        default: .red
-        }
     }
 }

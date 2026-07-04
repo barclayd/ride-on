@@ -1,4 +1,5 @@
 import SwiftUI
+import Accessibility
 import Models
 import Services
 import DesignSystem
@@ -74,6 +75,11 @@ public struct OnboardingView: View {
             removal: .move(edge: .leading).combined(with: .opacity)
         ))
         .animation(reduceMotion ? nil : Motion.onboardingPageTransition, value: step)
+        // The Group-switch page flow isn't a real navigation push, so
+        // VoiceOver gets no screen-change cue without this (REDESIGN.md F).
+        .onChange(of: step) {
+            AccessibilityNotification.ScreenChanged().post()
+        }
     }
 
     private func advance() {

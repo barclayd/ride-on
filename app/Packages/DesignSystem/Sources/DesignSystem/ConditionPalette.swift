@@ -5,6 +5,17 @@ import SwiftUI
 /// custom color palette in the app — chips must still differ by SF Symbol,
 /// never color alone.
 public enum ConditionPalette {
+    /// The one score→color band mapping (0...1) shared by ScoreRing and
+    /// FactorRow's RangeBar — previously two per-view variants that disagreed
+    /// on the middle band.
+    public static func color(forScore score: Double) -> Color {
+        switch score {
+        case 0.7...: .green
+        case 0.4..<0.7: .yellow
+        default: .red
+        }
+    }
+
     /// Deep blue < 0C -> light blue -> green -> yellow -> orange -> red > 30C.
     public static func color(forTemperatureC celsius: Double) -> Color {
         switch celsius {
