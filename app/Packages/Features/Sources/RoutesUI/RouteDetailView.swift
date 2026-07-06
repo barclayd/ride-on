@@ -23,10 +23,14 @@ public struct RouteDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.unitSystem) private var unitSystem
 
-    @State private var selectedDistanceKm: Double?
-    // Cached per-route so scrubbing (which flips `selectedDistanceKm` on every
-    // hover tick) doesn't re-run the O(n) cumulative-haversine walk each frame
-    // — recomputed only when the route itself changes, in `.task(id:)`.
+    // Scrub position lives in an @Observable so a hover only invalidates the
+    // two views that read it (the chart and the map marker) — NOT this whole
+    // view, which would otherwise re-run RouteStats/ride-log sorting/inspector
+    // on every tick. Body never reads `.selectedDistanceKm`, so it isn't
+    // subscribed; the chart and `RouteMapHero` read it and re-render alone.
+    @State private var scrub = ElevationScrubState()
+    // Cached per-route so scrubbing doesn't re-run the O(n) cumulative-haversine
+    // walk each frame — recomputed only when the route changes, in `.task(id:)`.
     @State private var elevationPoints: [ElevationPoint] = []
     // Likewise the map geometry: `route.coordinates` decodes ~5k points out of
     // packed `Data` on every access, and a fresh array each tick makes SwiftUI
@@ -76,7 +80,7 @@ public struct RouteDetailView: View {
                 // The inline hero stays inert (an interactive map inside a
                 // ScrollView steals the scroll gesture) — tapping expands to
                 // a fully pannable map sheet instead (REDESIGN.md D).
-                mapHero
+                RouteMapHero(coordinates: mapCoordinates, region: mapRegion, elevationPoints: elevationPoints, scrub: scrub)
                     .frame(height: 260)
                     .clipShape(.rect(cornerRadius: CornerRadius.hero))
                     .contentShape(.rect)
@@ -99,7 +103,10 @@ public struct RouteDetailView: View {
                 if !elevationPoints.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Elevation").font(.headline)
-                        ElevationProfile(points: elevationPoints, selectedDistanceKm: $selectedDistanceKm)
+                        ElevationProfile(points: elevationPoints, selectedDistanceKm: Binding(
+                            get: { scrub.selectedDistanceKm },
+                            set: { scrub.selectedDistanceKm = $0 }
+                        ))
                     }
                 }
 
@@ -166,23 +173,6 @@ public struct RouteDetailView: View {
         }
     }
 
-    // Reads the cached `mapCoordinates`/`mapRegion` so a scrub only re-diffs
-    // the marker — the polyline array is the same reference each tick, so
-    // MapKit doesn't reload the overlay.
-    @ViewBuilder
-    private var mapHero: some View {
-        Map(initialPosition: mapRegion.map { .region($0) } ?? .automatic) {
-            MapPolyline(coordinates: mapCoordinates)
-                .stroke(Color.accentColor, lineWidth: 3)
-            if let selectedMapCoordinate {
-                Marker("Selected", coordinate: selectedMapCoordinate)
-                    .tint(Color.accentColor)
-            }
-        }
-        .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .allowsHitTesting(false)
-    }
-
     private func expandedMap(for route: RouteModel) -> some View {
         NavigationStack {
             Map(initialPosition: mapRegion.map { .region($0) } ?? .automatic) {
@@ -206,12 +196,6 @@ public struct RouteDetailView: View {
         #endif
     }
 
-    private var selectedMapCoordinate: CLLocationCoordinate2D? {
-        guard let selectedDistanceKm else { return nil }
-        guard let nearest = elevationPoints.min(by: { abs($0.distanceKm - selectedDistanceKm) < abs($1.distanceKm - selectedDistanceKm) }) else { return nil }
-        guard nearest.id < mapCoordinates.count else { return nil }
-        return mapCoordinates[nearest.id]
-    }
 
     #if os(macOS)
     private func inspectorContent(for route: RouteModel) -> some View {
@@ -390,5 +374,42 @@ public struct RouteDetailView: View {
         } catch {
             return nil
         }
+    }
+}
+
+/// Holds the elevation scrub position in an `@Observable` so only the views
+/// that read it re-render on hover, keeping the rest of Route Detail still.
+@Observable
+final class ElevationScrubState {
+    var selectedDistanceKm: Double?
+}
+
+/// The inline map hero, split into its own view so a scrub only re-renders
+/// this (to move the marker) and the chart — not the whole Route Detail. The
+/// polyline is a stable cached array so MapKit doesn't reload the overlay.
+private struct RouteMapHero: View {
+    let coordinates: [CLLocationCoordinate2D]
+    let region: MKCoordinateRegion?
+    let elevationPoints: [ElevationPoint]
+    let scrub: ElevationScrubState
+
+    var body: some View {
+        Map(initialPosition: region.map { .region($0) } ?? .automatic) {
+            MapPolyline(coordinates: coordinates)
+                .stroke(Color.accentColor, lineWidth: 3)
+            if let selectedMapCoordinate {
+                Marker("Selected", coordinate: selectedMapCoordinate)
+                    .tint(Color.accentColor)
+            }
+        }
+        .mapStyle(.standard(pointsOfInterest: .excludingAll))
+        .allowsHitTesting(false)
+    }
+
+    private var selectedMapCoordinate: CLLocationCoordinate2D? {
+        guard let selectedDistanceKm = scrub.selectedDistanceKm else { return nil }
+        guard let nearest = elevationPoints.min(by: { abs($0.distanceKm - selectedDistanceKm) < abs($1.distanceKm - selectedDistanceKm) }) else { return nil }
+        guard nearest.id < coordinates.count else { return nil }
+        return coordinates[nearest.id]
     }
 }

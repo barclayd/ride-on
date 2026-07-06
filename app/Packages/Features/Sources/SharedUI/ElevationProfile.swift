@@ -99,6 +99,10 @@ public struct ElevationProfile: View {
                     }
                 }
                 .chartYScale(domain: elevationDomain(displayPoints))
+                // Pin the x-domain to the route's length so the plot fills the
+                // width — Swift Charts otherwise auto-pads past the last point,
+                // leaving a gap between the trace and the axis edge.
+                .chartXScale(domain: 0...(displayPoints.last?.distanceKm ?? 1), range: .plotDimension(padding: 0))
                 .chartXSelection(value: $selectedDistanceKm)
                 .chartXAxisLabel(UnitFormat.distanceUnitSymbol(system: unitSystem))
                 .chartYAxisLabel(UnitFormat.elevationUnitSymbol(system: unitSystem))
