@@ -42,6 +42,7 @@ public struct RouteDetailView: View {
     @State private var exportedGPXURL: URL?
     @State private var isInspectorPresented = true
     @State private var isMapExpanded = false
+    @State private var isEditing = false
 
     public init(routeID: UUID) {
         self.routeID = routeID
@@ -71,6 +72,9 @@ public struct RouteDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // Expose the edit action to the Mac menu bar ("Edit Route Details…");
+        // nil when no route is showing so the command disables itself.
+        .focusedSceneValue(\.routeEditAction, route == nil ? nil : { isEditing = true })
     }
 
     @ViewBuilder
@@ -98,6 +102,10 @@ public struct RouteDetailView: View {
                 }
 
                 statsRow(for: route)
+
+                // On Mac the description lives in the inspector's Details
+                // section instead (Landmarks idiom); iPhone/iPad show it inline.
+                descriptionSection(for: route)
                 #endif
 
                 if !elevationPoints.isEmpty {
@@ -145,6 +153,9 @@ public struct RouteDetailView: View {
         // capsule, not as an inline content button.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
+                Button("Edit Route", systemImage: "pencil") { isEditing = true }
+            }
+            ToolbarItem(placement: .primaryAction) {
                 if let exportedGPXURL {
                     ShareLink(item: exportedGPXURL) {
                         Label("Export GPX", systemImage: "square.and.arrow.up")
@@ -163,6 +174,9 @@ public struct RouteDetailView: View {
         }
         .sheet(isPresented: $isMapExpanded) {
             expandedMap(for: route)
+        }
+        .sheet(isPresented: $isEditing) {
+            RouteEditSheet(route: route)
         }
         .task(id: route.id) {
             elevationPoints = Self.elevationPoints(for: route)
@@ -204,6 +218,13 @@ public struct RouteDetailView: View {
                 LabeledContent("Distance", value: UnitFormat.distance(km: route.distanceKm, system: unitSystem))
                 LabeledContent("Elevation Gain", value: elevationText(for: route))
                 LabeledContent("Est. Time", value: estimatedTimeText(for: route))
+            }
+            if !route.notes.isEmpty {
+                Section("Description") {
+                    Text(AttributedString.linkified(route.notes))
+                        .tint(Color.accentColor)
+                        .textSelection(.enabled)
+                }
             }
             Section("Details") {
                 LabeledContent("Source", value: sourceText(for: route))
@@ -270,6 +291,20 @@ public struct RouteDetailView: View {
         let hours = Int(seconds / 3600)
         let minutes = Int((seconds.truncatingRemainder(dividingBy: 3600)) / 60)
         return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+    }
+
+    @ViewBuilder
+    private func descriptionSection(for route: RouteModel) -> some View {
+        if !route.notes.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Description").font(.headline)
+                Text(AttributedString.linkified(route.notes))
+                    .font(.body)
+                    .tint(Color.accentColor)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
     }
 
     @ViewBuilder
@@ -374,6 +409,63 @@ public struct RouteDetailView: View {
         } catch {
             return nil
         }
+    }
+}
+
+/// Landmarks-style edit sheet: name + a free-text description that may hold
+/// external links. Edits a local draft and commits to the `RouteModel` only on
+/// Done, so Cancel discards. Presented from the toolbar's Edit button and the
+/// Mac "Edit Route Details…" menu command.
+private struct RouteEditSheet: View {
+    let route: RouteModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var notes: String
+
+    init(route: RouteModel) {
+        self.route = route
+        _name = State(initialValue: route.name)
+        _notes = State(initialValue: route.notes)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Name") {
+                    TextField("Route name", text: $name)
+                }
+                Section {
+                    TextField("Add notes, or paste a link", text: $notes, axis: .vertical)
+                        .lineLimit(4...12)
+                } header: {
+                    Text("Description")
+                } footer: {
+                    Text("Links you paste become tappable.")
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Edit Route")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty { route.name = trimmed }
+                        route.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                        dismiss()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 440, minHeight: 360)
+        #endif
     }
 }
 
