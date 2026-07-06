@@ -40,6 +40,8 @@ public struct RoutesView: View {
     @State private var isImporterPresented = false
     @State private var pendingConfirmation: RouteModel?
     @State private var importErrorMessage: String?
+    @State private var isPreparingImport = false
+    @State private var isClassifying = false
     @State private var searchText = ""
     @State private var activeChips: Set<RouteChip> = []
     @State private var libraryFilter: LibraryFilter = .saved
@@ -157,8 +159,21 @@ public struct RoutesView: View {
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers)
         }
+        // Immediate acknowledgement between drop and the confirmation sheet —
+        // covers the parse/elevation-fetch window (near-instant for files that
+        // carry <ele>, a network hop for planner exports that don't).
+        .overlay {
+            if isPreparingImport {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Importing route…").font(.callout).foregroundStyle(.secondary)
+                }
+                .padding(24)
+                .background(.regularMaterial, in: .rect(cornerRadius: CornerRadius.hero))
+            }
+        }
         .sheet(item: $pendingConfirmation) { route in
-            ImportConfirmationSheet(route: route)
+            ImportConfirmationSheet(route: route, isClassifying: $isClassifying)
         }
         .alert("Import Failed", isPresented: .constant(importErrorMessage != nil), presenting: importErrorMessage) { _ in
             Button("OK") { importErrorMessage = nil }
@@ -268,10 +283,23 @@ public struct RoutesView: View {
         let importer = RouteImporter(classifyClient: services.classify, elevationClient: services.elevation, modelContext: modelContext)
         Task {
             for url in urls {
+                isPreparingImport = true
                 do {
-                    let model = try await importer.importGPX(fileURL: url)
+                    // Phase 1 (fast): parse + elevation, then surface the sheet
+                    // right away. Phase 2 (slow): classify runs in the
+                    // background while the sheet is already up — its picker
+                    // shows a "detecting" spinner and adopts the suggestion
+                    // when it lands.
+                    let model = try await importer.makeRoute(fileURL: url)
+                    isPreparingImport = false
+                    isClassifying = true
                     pendingConfirmation = model
+                    Task {
+                        await importer.classify(model)
+                        isClassifying = false
+                    }
                 } catch {
+                    isPreparingImport = false
                     importErrorMessage = "Couldn't read that GPX file."
                 }
             }
@@ -350,16 +378,21 @@ private struct RouteRow: View {
 /// `.presentationBackground`.
 private struct ImportConfirmationSheet: View {
     var route: RouteModel
+    @Binding var isClassifying: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.colorScheme) private var colorScheme
     @State private var selection: SuggestedRouteType
     @State private var snapshot: PlatformImage?
+    /// True once the user taps the picker themselves — stops the arriving
+    /// classification from overriding their choice.
+    @State private var userPickedType = false
 
     private static let snapshotSize = CGSize(width: 360, height: 160)
 
-    init(route: RouteModel) {
+    init(route: RouteModel, isClassifying: Binding<Bool>) {
         self.route = route
+        _isClassifying = isClassifying
         _selection = State(initialValue: route.effectiveType ?? .gravel)
     }
 
@@ -385,14 +418,36 @@ private struct ImportConfirmationSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Picker("Type", selection: $selection) {
-                    ForEach(SuggestedRouteType.allCases, id: \.self) { type in
-                        Text(type.rawValue.capitalized).tag(type)
+                VStack(spacing: 8) {
+                    // Custom setter (not `$selection`) so this fires only on a
+                    // real tap — the programmatic adopt-suggestion assignment
+                    // below writes `selection` directly, leaving the flag off.
+                    Picker("Type", selection: Binding(get: { selection }, set: { selection = $0; userPickedType = true })) {
+                        ForEach(SuggestedRouteType.allCases, id: \.self) { type in
+                            Text(type.rawValue.capitalized).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    if isClassifying && !userPickedType {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("Detecting route type…")
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
                     }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
                 .frame(maxWidth: Self.snapshotSize.width)
+            }
+            .animation(Motion.glassTapLayout, value: isClassifying)
+            .onChange(of: isClassifying) { _, nowClassifying in
+                // Classification finished: adopt its suggestion unless the
+                // user already made a pick.
+                if !nowClassifying, !userPickedType, let suggested = route.suggestedType {
+                    selection = suggested
+                }
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
