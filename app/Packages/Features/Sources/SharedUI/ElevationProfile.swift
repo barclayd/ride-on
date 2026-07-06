@@ -35,12 +35,23 @@ public struct ElevationProfile: View {
     /// would emit ~10k marks and beachball on first layout. The plot is only
     /// a few hundred points wide, so downsample to a fixed cap (endpoints
     /// preserved) — visually identical, cheap to render and re-scrub.
-    private static let maxRenderedPoints = 250
+    private static let maxRenderedPoints = 500
 
     private var displayPoints: [ElevationPoint] {
         guard points.count > Self.maxRenderedPoints else { return points }
         let stride = Double(points.count - 1) / Double(Self.maxRenderedPoints - 1)
         return (0..<Self.maxRenderedPoints).map { points[Int((Double($0) * stride).rounded())] }
+    }
+
+    /// Pinned y-domain (with a little headroom). Without it, the scrub
+    /// `RuleMark`'s annotation capsule renders above the peak and Swift Charts
+    /// auto-expands the axis to fit it — the elevation scale visibly doubles
+    /// (e.g. 300→600 m) on hover and the plot re-lays-out every tick.
+    private var elevationDomain: ClosedRange<Double> {
+        let elevations = points.map(\.elevationM)
+        guard let lo = elevations.min(), let hi = elevations.max(), hi > lo else { return 0...100 }
+        let pad = (hi - lo) * 0.15
+        return (lo - pad)...(hi + pad)
     }
 
     private func nearestSelectedPoint(in samples: [ElevationPoint]) -> ElevationPoint? {
@@ -87,6 +98,7 @@ public struct ElevationProfile: View {
                             }
                     }
                 }
+                .chartYScale(domain: elevationDomain)
                 .chartXSelection(value: $selectedDistanceKm)
                 .chartXAxisLabel(UnitFormat.distanceUnitSymbol(system: unitSystem))
                 .chartYAxisLabel(UnitFormat.elevationUnitSymbol(system: unitSystem))
