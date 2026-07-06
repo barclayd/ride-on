@@ -24,6 +24,10 @@ public struct RouteDetailView: View {
     @Environment(\.unitSystem) private var unitSystem
 
     @State private var selectedDistanceKm: Double?
+    // Cached per-route so scrubbing (which flips `selectedDistanceKm` on every
+    // hover tick) doesn't re-run the O(n) cumulative-haversine walk each frame
+    // — recomputed only when the route itself changes, in `.task(id:)`.
+    @State private var elevationPoints: [ElevationPoint] = []
     @State private var bestDay: (context: DailyContext, score: Double)?
     @State private var exportedGPXURL: URL?
     @State private var isInspectorPresented = true
@@ -61,8 +65,6 @@ public struct RouteDetailView: View {
 
     @ViewBuilder
     private func content(for route: RouteModel) -> some View {
-        let elevationPoints = elevationPoints(for: route)
-
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 // The inline hero stays inert (an interactive map inside a
@@ -150,6 +152,7 @@ public struct RouteDetailView: View {
             expandedMap(for: route)
         }
         .task(id: route.id) {
+            elevationPoints = Self.elevationPoints(for: route)
             exportedGPXURL = Self.exportGPX(route: route)
             await loadBestDay(for: route)
         }
@@ -329,7 +332,7 @@ public struct RouteDetailView: View {
     // reusing Engine's `GPXGeometry` (internal to the Engine module, not
     // exposed publicly) — a dozen lines, not worth widening Engine's public
     // API for.
-    private func elevationPoints(for route: RouteModel) -> [ElevationPoint] {
+    private static func elevationPoints(for route: RouteModel) -> [ElevationPoint] {
         let coordinates = route.coordinates
         let elevations = route.elevations
         let count = min(coordinates.count, elevations.count)
