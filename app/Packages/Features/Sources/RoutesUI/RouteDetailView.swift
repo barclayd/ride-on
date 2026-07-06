@@ -28,6 +28,12 @@ public struct RouteDetailView: View {
     // hover tick) doesn't re-run the O(n) cumulative-haversine walk each frame
     // — recomputed only when the route itself changes, in `.task(id:)`.
     @State private var elevationPoints: [ElevationPoint] = []
+    // Likewise the map geometry: `route.coordinates` decodes ~5k points out of
+    // packed `Data` on every access, and a fresh array each tick makes SwiftUI
+    // reload the whole `MapPolyline` overlay just to move the marker. Decode
+    // once so the polyline is stable and only the marker diffs while scrubbing.
+    @State private var mapCoordinates: [CLLocationCoordinate2D] = []
+    @State private var mapRegion: MKCoordinateRegion?
     @State private var bestDay: (context: DailyContext, score: Double)?
     @State private var exportedGPXURL: URL?
     @State private var isInspectorPresented = true
@@ -70,7 +76,7 @@ public struct RouteDetailView: View {
                 // The inline hero stays inert (an interactive map inside a
                 // ScrollView steals the scroll gesture) — tapping expands to
                 // a fully pannable map sheet instead (REDESIGN.md D).
-                mapHero(for: route, elevationPoints: elevationPoints)
+                mapHero
                     .frame(height: 260)
                     .clipShape(.rect(cornerRadius: CornerRadius.hero))
                     .contentShape(.rect)
@@ -153,21 +159,23 @@ public struct RouteDetailView: View {
         }
         .task(id: route.id) {
             elevationPoints = Self.elevationPoints(for: route)
+            mapCoordinates = route.coordinates.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+            mapRegion = RouteSnapshotService.region(fitting: route.coordinates)
             exportedGPXURL = Self.exportGPX(route: route)
             await loadBestDay(for: route)
         }
     }
 
+    // Reads the cached `mapCoordinates`/`mapRegion` so a scrub only re-diffs
+    // the marker — the polyline array is the same reference each tick, so
+    // MapKit doesn't reload the overlay.
     @ViewBuilder
-    private func mapHero(for route: RouteModel, elevationPoints: [ElevationPoint]) -> some View {
-        let coordinates = route.coordinates.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
-        let selectedCoordinate = selectedMapCoordinate(route: route, elevationPoints: elevationPoints)
-
-        Map(initialPosition: .region(RouteSnapshotService.region(fitting: route.coordinates))) {
-            MapPolyline(coordinates: coordinates)
+    private var mapHero: some View {
+        Map(initialPosition: mapRegion.map { .region($0) } ?? .automatic) {
+            MapPolyline(coordinates: mapCoordinates)
                 .stroke(Color.accentColor, lineWidth: 3)
-            if let selectedCoordinate {
-                Marker("Selected", coordinate: selectedCoordinate)
+            if let selectedMapCoordinate {
+                Marker("Selected", coordinate: selectedMapCoordinate)
                     .tint(Color.accentColor)
             }
         }
@@ -177,8 +185,8 @@ public struct RouteDetailView: View {
 
     private func expandedMap(for route: RouteModel) -> some View {
         NavigationStack {
-            Map(initialPosition: .region(RouteSnapshotService.region(fitting: route.coordinates))) {
-                MapPolyline(coordinates: route.coordinates.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
+            Map(initialPosition: mapRegion.map { .region($0) } ?? .automatic) {
+                MapPolyline(coordinates: mapCoordinates)
                     .stroke(Color.accentColor, lineWidth: 3)
             }
             .mapStyle(.standard(pointsOfInterest: .excludingAll))
@@ -198,13 +206,11 @@ public struct RouteDetailView: View {
         #endif
     }
 
-    private func selectedMapCoordinate(route: RouteModel, elevationPoints: [ElevationPoint]) -> CLLocationCoordinate2D? {
+    private var selectedMapCoordinate: CLLocationCoordinate2D? {
         guard let selectedDistanceKm else { return nil }
         guard let nearest = elevationPoints.min(by: { abs($0.distanceKm - selectedDistanceKm) < abs($1.distanceKm - selectedDistanceKm) }) else { return nil }
-        let coordinates = route.coordinates
-        guard elevationPoints.firstIndex(where: { $0.id == nearest.id }) != nil, nearest.id < coordinates.count else { return nil }
-        let coordinate = coordinates[nearest.id]
-        return CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        guard nearest.id < mapCoordinates.count else { return nil }
+        return mapCoordinates[nearest.id]
     }
 
     #if os(macOS)
