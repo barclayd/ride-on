@@ -31,15 +31,29 @@ public struct ElevationProfile: View {
         self._selectedDistanceKm = selectedDistanceKm
     }
 
-    private var nearestSelectedPoint: ElevationPoint? {
+    /// Swift Charts builds one mark per data point; a ~5000-point GPX track
+    /// would emit ~10k marks and beachball on first layout. The plot is only
+    /// a few hundred points wide, so downsample to a fixed cap (endpoints
+    /// preserved) — visually identical, cheap to render and re-scrub.
+    private static let maxRenderedPoints = 250
+
+    private var displayPoints: [ElevationPoint] {
+        guard points.count > Self.maxRenderedPoints else { return points }
+        let stride = Double(points.count - 1) / Double(Self.maxRenderedPoints - 1)
+        return (0..<Self.maxRenderedPoints).map { points[Int((Double($0) * stride).rounded())] }
+    }
+
+    private func nearestSelectedPoint(in samples: [ElevationPoint]) -> ElevationPoint? {
         guard let selectedDistanceKm else { return nil }
-        return points.min { abs($0.distanceKm - selectedDistanceKm) < abs($1.distanceKm - selectedDistanceKm) }
+        return samples.min { abs($0.distanceKm - selectedDistanceKm) < abs($1.distanceKm - selectedDistanceKm) }
     }
 
     public var body: some View {
-        Group {
-            if points.count > 1 {
-                Chart(points) { point in
+        let displayPoints = displayPoints
+        let nearestSelectedPoint = nearestSelectedPoint(in: displayPoints)
+        return Group {
+            if displayPoints.count > 1 {
+                Chart(displayPoints) { point in
                     AreaMark(
                         x: .value("Distance", point.distanceKm),
                         y: .value("Elevation", point.elevationM)
@@ -83,7 +97,7 @@ public struct ElevationProfile: View {
         }
         .frame(height: 140)
         .accessibilityLabel(accessibilitySummary)
-        .accessibilityChartDescriptor(ElevationChartDescriptor(points: points, system: unitSystem))
+        .accessibilityChartDescriptor(ElevationChartDescriptor(points: displayPoints, system: unitSystem))
     }
 
     private var accessibilitySummary: String {
