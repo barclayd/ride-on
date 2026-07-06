@@ -51,6 +51,11 @@ struct RideOnApp: App {
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
             }
+            // Menu-bar twin of Route Detail's Edit toolbar button — enabled
+            // only while a route is showing (see `\.routeEditAction`).
+            CommandGroup(after: .textEditing) {
+                RouteEditMenuItem()
+            }
         }
 
         #if os(macOS)
@@ -73,6 +78,19 @@ struct RideOnApp: App {
     private func importOpenedGPX(at url: URL) async {
         let importer = RouteImporter(classifyClient: services.classify, elevationClient: services.elevation, modelContext: modelContainer.mainContext)
         try? await importer.importGPX(fileURL: url)
+    }
+}
+
+/// The "Edit Route Details…" menu-bar command. Reads the focused Route
+/// Detail's edit action so it drives the same sheet the toolbar button opens,
+/// and disables itself when no route is focused.
+private struct RouteEditMenuItem: View {
+    @FocusedValue(\.routeEditAction) private var editAction
+
+    var body: some View {
+        Button("Edit Route Details…") { editAction?() }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(editAction == nil)
     }
 }
 

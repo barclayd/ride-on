@@ -20,6 +20,9 @@ public enum RouteSource: String, Codable, Sendable {
 public final class RouteModel {
     public var id: UUID = UUID()
     public var name: String = "Untitled Route"
+    /// User-authored description shown in Route Detail — free text that may
+    /// contain external links (auto-linked at display time). Empty = none.
+    public var notes: String = ""
     public var distanceKm: Double = 0
     public var elevationGainM: Double = 0
 
@@ -52,6 +55,7 @@ public final class RouteModel {
     public init(
         id: UUID = UUID(),
         name: String = "Untitled Route",
+        notes: String = "",
         distanceKm: Double = 0,
         elevationGainM: Double = 0,
         coordinates: [Coordinate] = [],
@@ -68,6 +72,7 @@ public final class RouteModel {
     ) {
         self.id = id
         self.name = name
+        self.notes = notes
         self.distanceKm = distanceKm
         self.elevationGainM = elevationGainM
         self.coordinatesData = RouteModel.pack(coordinates: coordinates)
