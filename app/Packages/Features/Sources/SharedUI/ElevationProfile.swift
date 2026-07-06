@@ -47,8 +47,8 @@ public struct ElevationProfile: View {
     /// `RuleMark`'s annotation capsule renders above the peak and Swift Charts
     /// auto-expands the axis to fit it — the elevation scale visibly doubles
     /// (e.g. 300→600 m) on hover and the plot re-lays-out every tick.
-    private var elevationDomain: ClosedRange<Double> {
-        let elevations = points.map(\.elevationM)
+    private func elevationDomain(_ samples: [ElevationPoint]) -> ClosedRange<Double> {
+        let elevations = samples.map(\.elevationM)
         guard let lo = elevations.min(), let hi = elevations.max(), hi > lo else { return 0...100 }
         let pad = (hi - lo) * 0.15
         return (lo - pad)...(hi + pad)
@@ -98,7 +98,7 @@ public struct ElevationProfile: View {
                             }
                     }
                 }
-                .chartYScale(domain: elevationDomain)
+                .chartYScale(domain: elevationDomain(displayPoints))
                 .chartXSelection(value: $selectedDistanceKm)
                 .chartXAxisLabel(UnitFormat.distanceUnitSymbol(system: unitSystem))
                 .chartYAxisLabel(UnitFormat.elevationUnitSymbol(system: unitSystem))
@@ -108,13 +108,13 @@ public struct ElevationProfile: View {
             }
         }
         .frame(height: 140)
-        .accessibilityLabel(accessibilitySummary)
+        .accessibilityLabel(accessibilitySummary(displayPoints))
         .accessibilityChartDescriptor(ElevationChartDescriptor(points: displayPoints, system: unitSystem))
     }
 
-    private var accessibilitySummary: String {
-        guard let minPoint = points.min(by: { $0.elevationM < $1.elevationM }),
-              let maxPoint = points.max(by: { $0.elevationM < $1.elevationM }) else {
+    private func accessibilitySummary(_ samples: [ElevationPoint]) -> String {
+        guard let minPoint = samples.min(by: { $0.elevationM < $1.elevationM }),
+              let maxPoint = samples.max(by: { $0.elevationM < $1.elevationM }) else {
             return "No elevation data"
         }
         return "Elevation profile from \(UnitFormat.elevation(m: minPoint.elevationM, system: unitSystem)) to \(UnitFormat.elevation(m: maxPoint.elevationM, system: unitSystem))"
