@@ -26,15 +26,38 @@ public struct RouteImporter {
 
     @discardableResult
     public func importGPX(fileURL: URL) async throws -> RouteModel {
-        let didAccess = fileURL.startAccessingSecurityScopedResource()
-        defer { if didAccess { fileURL.stopAccessingSecurityScopedResource() } }
-        let data = try Data(contentsOf: fileURL)
-        let fallbackName = fileURL.deletingPathExtension().lastPathComponent
-        return try await importGPX(data: data, fallbackName: fallbackName)
+        let model = try await makeRoute(fileURL: fileURL)
+        await classify(model)
+        return model
     }
 
     @discardableResult
     public func importGPX(
+        data: Data,
+        fallbackName: String = "Imported Route",
+        source: RouteSource = .gpxImport,
+        stravaRouteID: String? = nil
+    ) async throws -> RouteModel {
+        let model = try await makeRoute(data: data, fallbackName: fallbackName, source: source, stravaRouteID: stravaRouteID)
+        await classify(model)
+        return model
+    }
+
+    /// Phase 1 — geometry + elevation, inserted immediately with
+    /// classification pending. Split out from `classify` so the interactive
+    /// importer can show the confirmation sheet the instant a file is parsed,
+    /// rather than blocking on the (network) surface classification.
+    @discardableResult
+    public func makeRoute(fileURL: URL) async throws -> RouteModel {
+        let didAccess = fileURL.startAccessingSecurityScopedResource()
+        defer { if didAccess { fileURL.stopAccessingSecurityScopedResource() } }
+        let data = try Data(contentsOf: fileURL)
+        let fallbackName = fileURL.deletingPathExtension().lastPathComponent
+        return try await makeRoute(data: data, fallbackName: fallbackName)
+    }
+
+    @discardableResult
+    public func makeRoute(
         data: Data,
         fallbackName: String = "Imported Route",
         source: RouteSource = .gpxImport,
@@ -60,23 +83,28 @@ public struct RouteImporter {
             elevationGainM: elevationGainM,
             coordinates: track.coordinates,
             elevations: elevations,
+            needsClassification: true,
             bearingSegments: track.bearingSegments(),
             source: source,
             stravaRouteID: stravaRouteID,
             importedFrom: track.creator
         )
+        modelContext.insert(model)
+        return model
+    }
 
+    /// Phase 2 — the `/classify` network call, applied to an already-inserted
+    /// model. Non-fatal: on failure the route keeps `needsClassification`,
+    /// resolved later by the user's type pick in the confirmation sheet.
+    public func classify(_ model: RouteModel) async {
         do {
-            let result = try await classifyClient.classify(coordinates: track.coordinates)
+            let result = try await classifyClient.classify(coordinates: model.coordinates)
             model.surfaces = result.surfaces
             model.suggestedType = result.suggestedType
             model.needsClassification = false
         } catch {
             model.needsClassification = true
         }
-
-        modelContext.insert(model)
-        return model
     }
 
     /// Caps upstream lookups: beyond `maxElevationSamples` points, elevations
