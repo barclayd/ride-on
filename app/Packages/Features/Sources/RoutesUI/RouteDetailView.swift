@@ -24,10 +24,10 @@ public struct RouteDetailView: View {
     @Environment(\.unitSystem) private var unitSystem
 
     // Scrub position lives in an @Observable so a hover only invalidates the
-    // two views that read it (the chart and the map marker) — NOT this whole
-    // view, which would otherwise re-run RouteStats/ride-log sorting/inspector
-    // on every tick. Body never reads `.selectedDistanceKm`, so it isn't
-    // subscribed; the chart and `RouteMapHero` read it and re-render alone.
+    // one view that reads it (the elevation chart) — NOT this whole view,
+    // which would otherwise re-run RouteStats/ride-log sorting/inspector on
+    // every tick. Body never reads `.selectedDistanceKm`, so it isn't
+    // subscribed; only the chart does, and re-renders alone.
     @State private var scrub = ElevationScrubState()
     // Cached per-route so scrubbing doesn't re-run the O(n) cumulative-haversine
     // walk each frame — recomputed only when the route changes, in `.task(id:)`.
@@ -84,7 +84,7 @@ public struct RouteDetailView: View {
                 // The inline hero stays inert (an interactive map inside a
                 // ScrollView steals the scroll gesture) — tapping expands to
                 // a fully pannable map sheet instead (REDESIGN.md D).
-                RouteMapHero(coordinates: mapCoordinates, region: mapRegion, elevationPoints: elevationPoints, scrub: scrub)
+                RouteMapHero(routeID: route.id, coordinates: route.coordinates)
                     .frame(height: 260)
                     .clipShape(.rect(cornerRadius: CornerRadius.hero))
                     .contentShape(.rect)
@@ -476,32 +476,40 @@ final class ElevationScrubState {
     var selectedDistanceKm: Double?
 }
 
-/// The inline map hero, split into its own view so a scrub only re-renders
-/// this (to move the marker) and the chart — not the whole Route Detail. The
-/// polyline is a stable cached array so MapKit doesn't reload the overlay.
+/// The inline map hero: a *static* snapshot, not a live `Map`.
+///
+/// It used to be a live `Map` whose content closure placed a scrub-synced
+/// marker. Because the closure read the scrub position, every scrub tick
+/// re-ran it and made MapKit re-tessellate the whole multi-thousand-point
+/// `MapPolyline` from scratch — dragging across the elevation chart on a long
+/// route spiked memory to >1 GB and could take the Mac app down. The hero was
+/// always inert anyway (tap-to-expand, `.allowsHitTesting(false)`), so it's
+/// now the same cached `RouteSnapshotService` bitmap the Routes list and
+/// import sheet use: bounded cost, no re-render on scrub, no live map left
+/// mounted on a screen the user parks on. The live, pannable map lives only in
+/// the tap-to-expand sheet now. (Trade: the scrub-synced *map* marker is gone;
+/// the elevation chart still shows the scrub position.)
 private struct RouteMapHero: View {
-    let coordinates: [CLLocationCoordinate2D]
-    let region: MKCoordinateRegion?
-    let elevationPoints: [ElevationPoint]
-    let scrub: ElevationScrubState
+    let routeID: UUID
+    let coordinates: [Coordinate]
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var snapshot: PlatformImage?
 
     var body: some View {
-        Map(initialPosition: region.map { .region($0) } ?? .automatic) {
-            MapPolyline(coordinates: coordinates)
-                .stroke(Color.accentColor, lineWidth: 3)
-            if let selectedMapCoordinate {
-                Marker("Selected", coordinate: selectedMapCoordinate)
-                    .tint(Color.accentColor)
+        Group {
+            if let snapshot {
+                Image(platformImage: snapshot).resizable().scaledToFill()
+            } else {
+                Rectangle().fill(.secondary.opacity(0.15))
             }
         }
-        .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .allowsHitTesting(false)
-    }
-
-    private var selectedMapCoordinate: CLLocationCoordinate2D? {
-        guard let selectedDistanceKm = scrub.selectedDistanceKm else { return nil }
-        guard let nearest = elevationPoints.min(by: { abs($0.distanceKm - selectedDistanceKm) < abs($1.distanceKm - selectedDistanceKm) }) else { return nil }
-        guard nearest.id < coordinates.count else { return nil }
-        return coordinates[nearest.id]
+        .task(id: routeID) {
+            snapshot = await RouteSnapshotService.snapshot(
+                routeID: routeID,
+                coordinates: coordinates,
+                size: CGSize(width: 1400, height: 520),
+                colorScheme: colorScheme
+            )
+        }
     }
 }
