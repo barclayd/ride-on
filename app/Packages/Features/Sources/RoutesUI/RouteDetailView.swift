@@ -152,6 +152,31 @@ public struct RouteDetailView: View {
         // Landmarks toolbar idiom: share actions live in the toolbar's glass
         // capsule, not as an inline content button.
         .toolbar {
+            #if os(macOS)
+            // On Mac the routes split merges THIS detail toolbar with the
+            // content column's (search field + Saved/Ridden picker + import).
+            // Four separate trailing buttons overflowed the unified window
+            // toolbar into a `>>` chevron and collapsed the search field, so
+            // the detail contributes just two trailing items: an overflow menu
+            // for the secondary actions + the inspector toggle. (REDESIGN.md C's
+            // separate glass capsules assume the actions fit — merged across
+            // columns they don't.)
+            ToolbarItem(placement: .primaryAction) {
+                Menu("Route Actions", systemImage: "ellipsis.circle") {
+                    Button("Edit Route", systemImage: "pencil") { isEditing = true }
+                    if let exportedGPXURL {
+                        ShareLink(item: exportedGPXURL) {
+                            Label("Export GPX", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Route Info", systemImage: "info.circle") {
+                    isInspectorPresented.toggle()
+                }
+            }
+            #else
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit Route", systemImage: "pencil") { isEditing = true }
             }
@@ -160,14 +185,6 @@ public struct RouteDetailView: View {
                     ShareLink(item: exportedGPXURL) {
                         Label("Export GPX", systemImage: "square.and.arrow.up")
                     }
-                }
-            }
-            #if os(macOS)
-            // Two trailing actions -> separate glass capsules (REDESIGN.md C).
-            ToolbarSpacer(.fixed, placement: .primaryAction)
-            ToolbarItem(placement: .primaryAction) {
-                Button("Route Info", systemImage: "info.circle") {
-                    isInspectorPresented.toggle()
                 }
             }
             #endif
