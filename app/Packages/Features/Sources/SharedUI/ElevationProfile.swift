@@ -54,14 +54,8 @@ public struct ElevationProfile: View {
         return (lo - pad)...(hi + pad)
     }
 
-    private func nearestSelectedPoint(in samples: [ElevationPoint]) -> ElevationPoint? {
-        guard let selectedDistanceKm else { return nil }
-        return samples.min { abs($0.distanceKm - selectedDistanceKm) < abs($1.distanceKm - selectedDistanceKm) }
-    }
-
     public var body: some View {
         let displayPoints = displayPoints
-        let nearestSelectedPoint = nearestSelectedPoint(in: displayPoints)
         return Group {
             if displayPoints.count > 1 {
                 Chart(displayPoints) { point in
@@ -85,18 +79,6 @@ public struct ElevationProfile: View {
                     .interpolationMethod(.monotone)
                     .foregroundStyle(Color.accentColor)
                     .lineStyle(StrokeStyle(lineWidth: 2))
-
-                    if let nearestSelectedPoint {
-                        RuleMark(x: .value("Selected", nearestSelectedPoint.distanceKm))
-                            .foregroundStyle(.secondary.opacity(0.6))
-                            .annotation(position: .top) {
-                                Text(UnitFormat.elevation(m: nearestSelectedPoint.elevationM, system: unitSystem))
-                                    .font(.caption.monospacedDigit())
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(.regularMaterial, in: .capsule)
-                            }
-                    }
                 }
                 .chartYScale(domain: elevationDomain(displayPoints))
                 // Pin the x-domain to the route's length so the plot fills the
@@ -107,6 +89,20 @@ public struct ElevationProfile: View {
                 .chartXAxisLabel(UnitFormat.distanceUnitSymbol(system: unitSystem))
                 .chartYAxisLabel(UnitFormat.elevationUnitSymbol(system: unitSystem))
                 .chartLegend(.hidden)
+                // The scrub indicator lives in an overlay child, NOT as a
+                // RuleMark inside the Chart. A RuleMark reading the selection
+                // re-ran the whole `body` on every scrub tick — rebuilding all
+                // ~1000 monotone marks each time, pinning CPU to 100% on a long
+                // route. As an overlay that reads the binding itself, only the
+                // thin indicator re-renders; the trace is tessellated once.
+                .chartOverlay { proxy in
+                    ScrubIndicator(
+                        selection: $selectedDistanceKm,
+                        points: displayPoints,
+                        proxy: proxy,
+                        unitSystem: unitSystem
+                    )
+                }
             } else {
                 ContentUnavailableView("No Elevation Data", systemImage: "chart.xyaxis.line")
             }
@@ -122,6 +118,43 @@ public struct ElevationProfile: View {
             return "No elevation data"
         }
         return "Elevation profile from \(UnitFormat.elevation(m: minPoint.elevationM, system: unitSystem)) to \(UnitFormat.elevation(m: maxPoint.elevationM, system: unitSystem))"
+    }
+}
+
+/// The scrub rule + elevation capsule, drawn as a `.chartOverlay` child so it
+/// re-renders in isolation on hover — the `Chart`'s marks don't depend on the
+/// selection, so they aren't re-tessellated. Reads the binding's value itself
+/// (not the parent), which is what keeps the re-render local.
+private struct ScrubIndicator: View {
+    @Binding var selection: Double?
+    let points: [ElevationPoint]
+    let proxy: ChartProxy
+    let unitSystem: UnitSystem
+
+    var body: some View {
+        GeometryReader { geo in
+            if let selection,
+               let nearest = points.min(by: { abs($0.distanceKm - selection) < abs($1.distanceKm - selection) }),
+               let plotFrame = proxy.plotFrame,
+               let xInPlot = proxy.position(forX: nearest.distanceKm) {
+                let rect = geo[plotFrame]
+                let x = rect.minX + xInPlot
+
+                Path { path in
+                    path.move(to: CGPoint(x: x, y: rect.minY))
+                    path.addLine(to: CGPoint(x: x, y: rect.maxY))
+                }
+                .stroke(Color.secondary.opacity(0.6), lineWidth: 1)
+
+                Text(UnitFormat.elevation(m: nearest.elevationM, system: unitSystem))
+                    .font(.caption.monospacedDigit())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.regularMaterial, in: .capsule)
+                    .fixedSize()
+                    .position(x: x, y: rect.minY)
+            }
+        }
     }
 }
 
