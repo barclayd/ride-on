@@ -503,6 +503,14 @@ private struct RouteMapHero: View {
                 Rectangle().fill(.secondary.opacity(0.15))
             }
         }
+        // `.scaledToFill()` reports an aspect-corrected ideal size that
+        // exceeds what's proposed — without pinning the width and `.clipped()`,
+        // that oversized width leaks up and inflates the detail column, which
+        // squeezes the Mac inspector below its min and overflows the toolbar
+        // (the call site's `.clipShape` clips rendering, not layout). Same
+        // guard RideCard/RoutesView already use for their snapshots.
+        .frame(maxWidth: .infinity)
+        .clipped()
         .task(id: routeID) {
             snapshot = await RouteSnapshotService.snapshot(
                 routeID: routeID,
