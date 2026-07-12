@@ -92,13 +92,7 @@ targets:
         DEVELOPMENT_TEAM: R2GGK3VN2C
         CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: App/RideOn-iOS.entitlements
         CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: App/RideOn-iOS.entitlements
-      configs:
-        Release:
-          # macOS entitlements need a provisioning profile, and profile
-          # creation is blocked until the latest Program License Agreement is
-          # agreed at developer.apple.com — move this to `base` once done so
-          # Mac Debug builds get live WeatherKit/iCloud too.
-          CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: App/RideOn-macOS.entitlements
+        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: App/RideOn-macOS.entitlements
 
   RideOnTests:
     type: bundle.unit-test
