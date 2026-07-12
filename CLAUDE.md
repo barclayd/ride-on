@@ -82,19 +82,18 @@ for a skipped-by-default live-network check against it).
 ## Signing (real team: R2GGK3VN2C)
 
 `CODE_SIGN_STYLE` is `Automatic` with `DEVELOPMENT_TEAM: R2GGK3VN2C` (Dan's paid Apple
-Developer membership) at the base level for every target, and the iOS entitlements
-(`App/RideOn-iOS.entitlements` — iCloud/WeatherKit/HealthKit) attach in **both** Debug and
-Release via `CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*/iphonesimulator*]`, so live WeatherKit
-works in day-to-day iOS dev builds.
+Developer membership) at the base level for every target. Entitlements attach in **both**
+Debug and Release on both platforms — `CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*/iphonesimulator*]`
+→ `App/RideOn-iOS.entitlements`, `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]` →
+`App/RideOn-macOS.entitlements` (iCloud/WeatherKit/HealthKit) — so live WeatherKit works in
+day-to-day dev builds everywhere.
 
-The macOS entitlements (`App/RideOn-macOS.entitlements`) are still **Release-only**: macOS
-entitlements need a provisioning profile, and profile creation is currently blocked by an
-unagreed Program License Agreement — Xcode fails with "PLA Update available" /
-"No profiles for 'com.danbarclay.rideon' were found". Once Dan agrees to the latest PLA at
-developer.apple.com, move the `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]` line in `app/project.yml`
-from the Release config to `base` (and re-run `xcodegen generate`) so Mac Debug builds get
-live WeatherKit/iCloud too. Until then, Mac Debug's WeatherKit calls throw and Today shows
-its Weather Unavailable + Retry state.
+The Mac Team Provisioning Profile for `com.danbarclay.rideon` exists locally, so plain
+`xcodebuild` works. On a fresh machine (or after clearing
+`~/Library/Developer/Xcode/UserData/Provisioning Profiles`), the first macOS build fails
+with "No profiles for 'com.danbarclay.rideon' were found" — run it once with
+`-allowProvisioningUpdates -allowProvisioningDeviceRegistration` to register the Mac and
+mint the profile, then plain builds work again.
 
 WeatherKit also needs the App ID's WeatherKit capability registered with Apple (automatic
 signing handles it, but registration can take ~30 min to propagate after the first
