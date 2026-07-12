@@ -13,10 +13,26 @@ import Engine
 /// above which mirrors automatically). When cross-device prefs sync
 /// matters, swap the storage for either `NSUbiquitousKeyValueStore` (same
 /// shape, adds sync) or a singleton `@Model` row — don't need both.
+/// The Today context-pill inputs that survive relaunch — bike, hours,
+/// intent. `backBy` deliberately isn't here: a return time is day-specific,
+/// so it resets each launch.
+public struct TodayRideSettings: Codable, Sendable, Hashable {
+    public var bike: Bike
+    public var hoursAvailable: Double
+    public var intent: RideIntent
+
+    public init(bike: Bike = Bike.samples[0], hoursAvailable: Double = 3, intent: RideIntent = .exploring) {
+        self.bike = bike
+        self.hoursAvailable = hoursAvailable
+        self.intent = intent
+    }
+}
+
 @Observable
 public final class PreferencesStore {
     private static let preferencesKey = "riderPreferences.v1"
     private static let weightsKey = "riderFactorWeights.v1"
+    private static let todaySettingsKey = "todayRideSettings.v1"
     private static let onboardingKey = "hasCompletedOnboarding.v1"
     private static let locationPrimedKey = "hasPrimedLocationPermission.v1"
     private static let healthPrimedKey = "hasPrimedHealthPermission.v1"
@@ -60,6 +76,10 @@ public final class PreferencesStore {
         didSet { defaults.set(isRideMatchingEnabled, forKey: Self.rideMatchingKey) }
     }
 
+    public var todaySettings: TodayRideSettings {
+        didSet { persistTodaySettings() }
+    }
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         if
@@ -78,6 +98,15 @@ public final class PreferencesStore {
             weights = decoded
         } else {
             weights = Dictionary(uniqueKeysWithValues: RideFactor.allCases.map { ($0, 1.0) })
+        }
+
+        if
+            let data = defaults.data(forKey: Self.todaySettingsKey),
+            let decoded = try? JSONDecoder().decode(TodayRideSettings.self, from: data)
+        {
+            todaySettings = decoded
+        } else {
+            todaySettings = TodayRideSettings()
         }
 
         if ProcessInfo.processInfo.arguments.contains("--reset-onboarding") {
@@ -106,5 +135,10 @@ public final class PreferencesStore {
     private func persistWeights() {
         guard let data = try? JSONEncoder().encode(weights) else { return }
         defaults.set(data, forKey: Self.weightsKey)
+    }
+
+    private func persistTodaySettings() {
+        guard let data = try? JSONEncoder().encode(todaySettings) else { return }
+        defaults.set(data, forKey: Self.todaySettingsKey)
     }
 }

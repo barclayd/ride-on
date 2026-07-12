@@ -115,7 +115,7 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [x] HealthKit: cycling workouts + `HKWorkoutRoute` matching (iOS only), contextual auth wired into the existing Ride Matching priming sheet
 - [x] WeatherKit service with day-level caching + attribution UI (existing `WeatherAttributionFooter`)
 - [x] MapKit ETAs (auto/cycling/transit) with graceful regional-failure handling (`ETAProvidingError.unavailable(mode:)`)
-- [ ] Live on-device verification of WeatherKit/HealthKit entitlements against a real Apple Developer team — blocked on real signing (see CLAUDE.md Signing section): all code above builds and passes on iOS Simulator + macOS, but the iCloud/WeatherKit/HealthKit entitlements are only wired via `CODE_SIGN_ENTITLEMENTS` in the Release config, which needs a real `DEVELOPMENT_TEAM` to take effect.
+- [ ] Live on-device verification of WeatherKit/HealthKit entitlements — real team `R2GGK3VN2C` now signs everything and the iOS entitlements attach in Debug too (see CLAUDE.md Signing section); remaining blockers are user-side: agree to the latest Program License Agreement at developer.apple.com (unblocks macOS Debug entitlements + provisioning), then verify WeatherKit returns data on device/simulator once the App ID's WeatherKit capability propagates.
 
 ### Phase 7 — Polish & platform
 - [x] Mac: keyboard navigation, menu bar, window sizing, sidebar polish, `backgroundExtensionEffect`

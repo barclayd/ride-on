@@ -7,33 +7,42 @@ import DesignSystem
 import Router
 import SharedUI
 
-/// DESIGN-SYSTEM.md §9 "Today card stack": a `TabView(.page)` of `RideCard`s
-/// ranked by `Recommendations.scorer`, a context pill for the day's
-/// bike/hours/intent/back-by inputs, and a swipe-up breakdown sheet.
+/// DESIGN-SYSTEM.md §9 "Today": a hero `RideCard` for the top-ranked route
+/// with every other route in a ranked list below, a context pill for the
+/// day's bike/hours/intent/back-by inputs, and a tap-to-open breakdown
+/// sheet. Weather is fetched per route start (the day cache dedupes nearby
+/// starts), so each route is scored against its own forecast.
 public struct TodayView: View {
     public var namespace: Namespace.ID
 
     @Environment(\.services) private var services
     @Environment(PreferencesStore.self) private var preferencesStore
     @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.navigate) private var navigate
     @Query(sort: \RouteModel.createdAt) private var routeModels: [RouteModel]
     @Query private var savedPlaces: [SavedPlaceModel]
     @Query private var rideLogModels: [RideLogModel]
 
-    @State private var hoursAvailable: Double = 3
-    @State private var intent: RideIntent = .exploring
-    @State private var bike: Bike = Bike.samples[0]
+    private enum WeatherLoad {
+        case loading
+        case failed
+        case loaded([UUID: WeatherSnapshot])
+    }
+
+    @State private var weatherLoad: WeatherLoad = .loading
+    @State private var loadedDay: Date?
     @State private var backBy: Date?
-    @State private var weather: WeatherSnapshot?
+    @State private var deviceLocation: Coordinate?
     @State private var isContextEditorPresented = false
     @State private var breakdownItem: BreakdownItem?
     @State private var isLocationPrimingPresented = false
     @State private var travelMinutesByRouteID: [UUID: Int] = [:]
     @ScaledMetric(relativeTo: .largeTitle) private var restDaySymbolSize: CGFloat = 40
 
-    // ponytail: below this, a route isn't worth surfacing as a
-    // recommendation — the "rest day" card takes over instead of a stack of
-    // routes nobody wants. Tune once real-world scores are observed.
+    // ponytail: below this, a route isn't worth surfacing as the hero — the
+    // "rest day" card takes the hero slot instead, with the ranked list
+    // still below. Tune once real-world scores are observed.
     private static let restDayThreshold = 0.35
 
     public init(namespace: Namespace.ID) {
@@ -48,83 +57,129 @@ public struct TodayView: View {
                     systemImage: "bicycle",
                     description: Text("Import a GPX route from the Routes tab to get personalized recommendations.")
                 )
-            } else if weather == nil {
-                ProgressView()
-            } else if rankedRides.isEmpty || (rankedRides.first?.score ?? 0) < Self.restDayThreshold {
-                restDayCard
             } else {
-                cardStack
+                switch weatherLoad {
+                case .loading:
+                    ProgressView()
+                case .failed:
+                    weatherUnavailable
+                case .loaded(let weatherByRouteID):
+                    rankedContent(weatherByRouteID: weatherByRouteID)
+                }
             }
         }
         .navigationTitle("Today")
-        .task {
-            weather = try? await services.weather.forecast(for: startLocation, on: .now)
+        .task(id: routeModels.map(\.id)) {
+            await loadWeather()
         }
-        .task(id: startLocation) {
-            await loadTravelTimes()
-        }
-        .task {
-            // DESIGN-SYSTEM.md §9: location is primed on first Today entry,
-            // not during onboarding. Priming UI only — the real
-            // `CLLocationManager` request is Phase 6.
-            if !preferencesStore.hasPrimedLocationPermission {
+        .task(id: preferencesStore.hasPrimedLocationPermission) {
+            // DESIGN-SYSTEM.md §9: location is primed on first Today entry.
+            // Until primed, don't touch CoreLocation — the system prompt may
+            // only ever follow the priming sheet's Allow.
+            guard preferencesStore.hasPrimedLocationPermission else {
                 isLocationPrimingPresented = true
+                return
+            }
+            await loadTravelTimes(requestingPermission: false)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Day rollover while backgrounded: yesterday's ranking is stale.
+            if phase == .active, let loadedDay, !Calendar.current.isDate(loadedDay, inSameDayAs: .now) {
+                Task { await loadWeather() }
             }
         }
         // Landmarks idiom: floating chrome goes in the safe-area bar, not an
-        // overlay — content (the card stack) automatically lays out above it.
+        // overlay — content automatically lays out above it.
         .safeAreaBar(edge: .bottom) {
-            if weather != nil, !routeModels.isEmpty {
+            if case .loaded = weatherLoad, !routeModels.isEmpty {
                 contextPill
             }
         }
         .sheet(isPresented: $isContextEditorPresented) {
-            ContextEditorSheet(hoursAvailable: $hoursAvailable, intent: $intent, bike: $bike, backBy: $backBy)
+            @Bindable var store = preferencesStore
+            ContextEditorSheet(
+                hoursAvailable: $store.todaySettings.hoursAvailable,
+                intent: $store.todaySettings.intent,
+                bike: $store.todaySettings.bike,
+                backBy: $backBy
+            )
         }
         .sheet(item: $breakdownItem) { item in
-            BreakdownSheet(rankedRide: item.rankedRide)
+            BreakdownSheet(
+                rankedRide: item.rankedRide,
+                chips: item.chips,
+                onViewRoute: { routeID in
+                    breakdownItem = nil
+                    navigate(.routeDetail(routeID: routeID))
+                }
+            )
         }
         .sheet(isPresented: $isLocationPrimingPresented) {
             PermissionPrimingSheet(
                 symbol: "location.fill",
                 title: "Find Rides Near You",
                 message: "Ride On uses your location to find nearby routes and estimate travel time to the start.",
-                onAllow: { preferencesStore.hasPrimedLocationPermission = true },
+                onAllow: {
+                    preferencesStore.hasPrimedLocationPermission = true
+                    Task { await loadTravelTimes(requestingPermission: true) }
+                },
                 onNotNow: { preferencesStore.hasPrimedLocationPermission = true }
             )
         }
     }
 
-    // Paging ScrollView instead of `TabView(.page)`: identical swipe feel on
-    // iOS, and on macOS it's a real card carousel rather than the tab strip
-    // a style-less `TabView` degrades to.
-    private var cardStack: some View {
-        ScrollView(.horizontal) {
-            LazyHStack(spacing: 16) {
-                ForEach(rankedRides, id: \.route.id) { rankedRide in
+    // MARK: - Ranked content
+
+    private func rankedContent(weatherByRouteID: [UUID: WeatherSnapshot]) -> some View {
+        let ranked = rankedRides(weatherByRouteID: weatherByRouteID)
+        let heroRide = (ranked.first?.score ?? 0) >= Self.restDayThreshold ? ranked.first : nil
+
+        return ScrollView {
+            VStack(spacing: 16) {
+                if let heroRide {
+                    hero(for: heroRide, weatherByRouteID: weatherByRouteID)
+                } else {
+                    restDayCard
+                }
+
+                let listRides = heroRide == nil ? ranked : Array(ranked.dropFirst())
+                ForEach(listRides, id: \.route.id) { rankedRide in
                     if let model = routeModels.first(where: { $0.id == rankedRide.route.id }) {
-                        NavigationLink(value: RouterDestination.routeDetail(routeID: model.id)) {
-                            RideCard(
-                                routeID: model.id,
-                                routeName: model.name,
-                                coordinates: model.coordinates,
-                                chips: chips(for: rankedRide),
-                                sky: weather.map(\.sky) ?? .sunny,
-                                onSwipeUpForDetails: { breakdownItem = BreakdownItem(rankedRide: rankedRide) }
-                            )
+                        RankedRouteRow(
+                            model: model,
+                            score: rankedRide.score,
+                            stats: statsLine(for: model),
+                            weather: weatherByRouteID[model.id]
+                        ) {
+                            breakdownItem = breakdownItem(for: rankedRide, weatherByRouteID: weatherByRouteID)
                         }
-                        .buttonStyle(.plain)
-                        .matchedTransitionSource(id: model.id, in: namespace)
-                        .containerRelativeFrame(.horizontal)
                     }
                 }
             }
-            .scrollTargetLayout()
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
         }
-        .scrollTargetBehavior(.viewAligned)
-        .scrollIndicators(.hidden)
-        .contentMargins(.horizontal, 16, for: .scrollContent)
-        .padding(.bottom, 16)
+        .refreshable { await loadWeather() }
+    }
+
+    @ViewBuilder
+    private func hero(for rankedRide: RankedRide, weatherByRouteID: [UUID: WeatherSnapshot]) -> some View {
+        if let model = routeModels.first(where: { $0.id == rankedRide.route.id }) {
+            RideCard(
+                routeID: model.id,
+                routeName: model.name,
+                coordinates: model.coordinates,
+                chips: chips(for: rankedRide, weather: weatherByRouteID[model.id]),
+                sky: weatherByRouteID[model.id]?.sky ?? .sunny,
+                score: rankedRide.score,
+                stats: statsLine(for: model)
+            )
+            .frame(height: 420)
+            .onTapGesture {
+                breakdownItem = breakdownItem(for: rankedRide, weatherByRouteID: weatherByRouteID)
+            }
+            .matchedTransitionSource(id: model.id, in: namespace)
+        }
     }
 
     private var restDayCard: some View {
@@ -141,51 +196,100 @@ public struct TodayView: View {
                 .padding(.horizontal, 32)
         }
         .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 260)
         .background(.regularMaterial, in: .rect(cornerRadius: CornerRadius.card))
-        .padding()
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("rest-day-card")
+    }
+
+    private var weatherUnavailable: some View {
+        ContentUnavailableView {
+            Label("Weather Unavailable", systemImage: "cloud.slash")
+        } description: {
+            Text("Recommendations need today's forecast. Check your connection and try again.")
+        } actions: {
+            Button("Retry") {
+                Task { await loadWeather() }
+            }
+            .buttonStyle(.borderedProminent)
+        }
     }
 
     private var contextPill: some View {
         // Landmarks wraps all custom glass in a `GlassEffectContainer` so
         // multiple glass elements on one screen merge/morph correctly.
         GlassEffectContainer {
-            ContextPillButton(bike: bike, hoursAvailable: hoursAvailable, intent: intent, backBy: backBy) {
+            ContextPillButton(
+                bike: preferencesStore.todaySettings.bike,
+                hoursAvailable: preferencesStore.todaySettings.hoursAvailable,
+                intent: preferencesStore.todaySettings.intent,
+                backBy: backBy
+            ) {
                 isContextEditorPresented = true
             }
         }
     }
 
-    private var startLocation: Coordinate {
-        savedPlaces.first?.coordinate ?? Coordinate(latitude: 51.7520, longitude: -0.8010)
+    // MARK: - Data
+
+    /// The rider's location for travel purposes: device fix, else the first
+    /// saved place. `nil` means no travel chips and zero travel distance in
+    /// the time-budget factor — a missing chip is fine, an error isn't.
+    private var travelOrigin: Coordinate? {
+        deviceLocation ?? savedPlaces.first?.coordinate
     }
 
     private var rideLogs: [RideLog] {
         rideLogModels.compactMap { $0.asRideLog() }
     }
 
-    private var rankedRides: [RankedRide] {
-        guard let weather else { return [] }
+    /// Each route is ranked in its own context: same rider inputs and start
+    /// location (travel distance must stay rider -> route start), but that
+    /// route's own forecast. Routes whose forecast fetch failed are skipped
+    /// rather than ranked against someone else's weather.
+    private func rankedRides(weatherByRouteID: [UUID: WeatherSnapshot]) -> [RankedRide] {
         let routes = routeModels.map { $0.asRoute() }
+        let settings = preferencesStore.todaySettings
         let scorer = Recommendations.scorer(
             preferences: preferencesStore.preferences,
             rideLogs: rideLogs,
             allRoutes: routes,
             weights: preferencesStore.weights
         )
-        let context = Recommendations.context(
-            date: .now,
-            startLocation: startLocation,
-            hoursAvailable: hoursAvailable,
-            backBy: backBy,
-            intent: intent,
-            bike: bike,
-            weather: weather
-        )
-        return scorer.rank(routes: routes, context: context)
+
+        let ranked = routes.compactMap { route -> RankedRide? in
+            guard let weather = weatherByRouteID[route.id] else { return nil }
+            let context = Recommendations.context(
+                date: .now,
+                // No known rider location -> the route's own start, which
+                // zeroes the travel term instead of inventing one. (The
+                // literal is unreachable in practice: a route with no start
+                // never got a forecast, so it was skipped above.)
+                startLocation: travelOrigin ?? route.start ?? Coordinate(latitude: 51.7520, longitude: -0.8010),
+                hoursAvailable: settings.hoursAvailable,
+                backBy: backBy,
+                intent: settings.intent,
+                bike: settings.bike,
+                weather: weather
+            )
+            return scorer.rank(routes: [route], context: context).first
+        }
+
+        return ranked.sorted { lhs, rhs in
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            return lhs.route.id.uuidString < rhs.route.id.uuidString
+        }
     }
 
-    private func chips(for rankedRide: RankedRide) -> [ConditionChipData] {
+    private func breakdownItem(for rankedRide: RankedRide, weatherByRouteID: [UUID: WeatherSnapshot]) -> BreakdownItem {
+        BreakdownItem(
+            rankedRide: rankedRide,
+            chips: chips(for: rankedRide, weather: weatherByRouteID[rankedRide.route.id])
+        )
+    }
+
+    private func chips(for rankedRide: RankedRide, weather: WeatherSnapshot?) -> [ConditionChipData] {
         guard let weather else { return [] }
         // ponytail: a chip is a terse capsule, not a sentence — the factor's
         // `reason` (shown in full in the breakdown sheet's FactorRow) is too
@@ -195,18 +299,73 @@ public struct TodayView: View {
             temperatureC: weather.temperatureC,
             sky: weather.sky,
             travelMinutes: travelMinutesByRouteID[rankedRide.route.id],
-            rideHours: hoursAvailable
+            rideHours: preferencesStore.todaySettings.hoursAvailable
         )
     }
 
-    /// Cycling ETA from `startLocation` to each route's start — regional
-    /// MapKit failures (`ETAProvidingError.unavailable`) just drop that
-    /// route's chip rather than surfacing an error (DESIGN-SYSTEM.md §9: a
-    /// missing travel chip is fine, an error banner isn't).
-    private func loadTravelTimes() async {
+    private func statsLine(for model: RouteModel) -> String {
+        let time = RouteStats.estimatedRideTime(for: model, preferences: preferencesStore.preferences)
+        return [
+            UnitFormat.distance(km: model.distanceKm, system: unitSystem),
+            UnitFormat.elevation(m: model.elevationGainM, system: unitSystem),
+            "~" + Duration.seconds(time).formatted(.units(allowed: [.hours, .minutes], width: .narrow)),
+        ].joined(separator: " · ")
+    }
+
+    // MARK: - Loading
+
+    private func loadWeather() async {
+        if case .loaded = weatherLoad {
+            // keep showing stale content during a refresh; the spinner is
+            // only for the first load of the day
+        } else {
+            weatherLoad = .loading
+        }
+
+        // Snapshot the starts before fanning out — SwiftData models aren't
+        // Sendable, coordinates are.
+        let starts: [(id: UUID, start: Coordinate)] = routeModels.compactMap { model in
+            (model.coordinates.first ?? savedPlaces.first?.coordinate).map { (model.id, $0) }
+        }
+        guard !starts.isEmpty else {
+            weatherLoad = .failed
+            return
+        }
+
+        let weatherService = services.weather
+        var byRouteID: [UUID: WeatherSnapshot] = [:]
+        await withTaskGroup(of: (UUID, WeatherSnapshot?).self) { group in
+            for (id, start) in starts {
+                group.addTask {
+                    (id, try? await weatherService.forecast(for: start, on: .now))
+                }
+            }
+            for await (id, snapshot) in group {
+                if let snapshot { byRouteID[id] = snapshot }
+            }
+        }
+
+        if byRouteID.isEmpty {
+            // A failed *refresh* keeps yesterday's data on screen — the
+            // Retry state is only for having nothing at all to show.
+            if case .loaded = weatherLoad { return }
+            weatherLoad = .failed
+        } else {
+            weatherLoad = .loaded(byRouteID)
+            loadedDay = .now
+        }
+    }
+
+    /// Cycling ETA from the rider's location to each route's start — no
+    /// origin (permission denied, no saved place) or regional MapKit failures
+    /// just drop that chip rather than surfacing an error (DESIGN-SYSTEM.md
+    /// §9: a missing travel chip is fine, an error banner isn't).
+    private func loadTravelTimes(requestingPermission: Bool) async {
+        deviceLocation = await services.location.currentLocation(requestingPermissionIfNeeded: requestingPermission)
+        guard let origin = travelOrigin else { return }
         for route in routeModels {
             guard let destination = route.coordinates.first else { continue }
-            if let seconds = try? await services.eta.travelTime(from: startLocation, to: destination, mode: .cycling) {
+            if let seconds = try? await services.eta.travelTime(from: origin, to: destination, mode: .cycling) {
                 travelMinutesByRouteID[route.id] = Int((seconds / 60).rounded())
             }
         }
@@ -215,7 +374,93 @@ public struct TodayView: View {
 
 private struct BreakdownItem: Identifiable {
     var rankedRide: RankedRide
+    var chips: [ConditionChipData]
     var id: UUID { rankedRide.route.id }
+}
+
+/// One ranked runner-up: map thumbnail, name, stats, this route's own sky +
+/// temperature, compact `ScoreRing`. Not a §6 component — screen-specific,
+/// like `ContextPillButton`.
+private struct RankedRouteRow: View {
+    var model: RouteModel
+    var score: Double
+    var stats: String
+    var weather: WeatherSnapshot?
+    var onTap: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var thumbnail: PlatformImage?
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                thumbnailView
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(stats)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                if let weather {
+                    HStack(spacing: 4) {
+                        Image(systemName: weather.sky.systemImageName)
+                            .foregroundStyle(ConditionPalette.color(forTemperatureC: weather.temperatureC))
+                        Text(UnitFormat.temperature(c: weather.temperatureC))
+                            .monospacedDigit()
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
+
+                ScoreRing(score: score, size: 36)
+            }
+            .padding(12)
+            .background(.regularMaterial, in: .rect(cornerRadius: CornerRadius.card))
+            .contentShape(.rect(cornerRadius: CornerRadius.card))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySentence)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("today-route-row")
+        .task(id: model.id) {
+            thumbnail = await RouteSnapshotService.snapshot(
+                routeID: model.id,
+                coordinates: model.coordinates,
+                size: CGSize(width: 200, height: 200),
+                colorScheme: colorScheme
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var thumbnailView: some View {
+        Group {
+            if let thumbnail {
+                Image(platformImage: thumbnail).resizable().scaledToFill()
+            } else {
+                Rectangle().fill(.secondary.opacity(0.15))
+            }
+        }
+        .frame(width: 56, height: 56)
+        .clipShape(.rect(cornerRadius: 12))
+    }
+
+    private var accessibilitySentence: String {
+        var sentence = "\(model.name), \(stats). Score \(Int((score * 100).rounded())) out of 100."
+        if let weather {
+            sentence += " \(UnitFormat.temperature(c: weather.temperatureC))."
+        }
+        return sentence
+    }
 }
 
 /// Not a §6 component — a screen-specific summary button, not a reusable
@@ -337,10 +582,16 @@ private struct ContextEditorSheet: View {
     }
 }
 
-/// The breakdown sheet: `ScoreRing` header, `FactorRow` per factor,
-/// weather attribution footer. System glass at partial detents (free).
+/// The breakdown sheet: `ScoreRing` header, this route's condition chips,
+/// `FactorRow` per factor, a View Route push, weather attribution footer.
+/// System glass at partial detents (free) on iOS; a standard modal with a
+/// Done button on macOS.
 private struct BreakdownSheet: View {
     var rankedRide: RankedRide
+    var chips: [ConditionChipData]
+    var onViewRoute: (UUID) -> Void
+
+    @Environment(\.dismiss) private var dismiss
     @ScaledMetric(relativeTo: .title) private var ringSize: CGFloat = 64
 
     var body: some View {
@@ -348,19 +599,37 @@ private struct BreakdownSheet: View {
             ScrollView {
                 VStack(spacing: 16) {
                     ScoreRing(score: rankedRide.score, size: ringSize)
+                    Text(rankedRide.route.name)
+                        .font(.headline)
+                    ConditionChipRow(chips: chips)
                     VStack(spacing: 12) {
                         ForEach(rankedRide.factorScores, id: \.factor) { score in
                             FactorRow(score: score)
                         }
                     }
+                    Button {
+                        onViewRoute(rankedRide.route.id)
+                    } label: {
+                        Label("View Route", systemImage: "map")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
                     WeatherAttributionFooter()
                 }
                 .padding()
             }
             .navigationTitle("Why This Ride")
             .navigationBarTitleDisplayModeIfAvailable()
+            #if os(macOS)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            #endif
         }
-        .presentationDetents([.fraction(0.35), .medium, .large])
+        .presentationDetents([.medium, .large])
     }
 }
 

@@ -107,6 +107,14 @@ public struct FixtureWeatherProvider: WeatherProviding {
     }
 }
 
+public struct FixtureLocationProvider: LocationProviding {
+    public init() {}
+
+    public func currentLocation(requestingPermissionIfNeeded: Bool) async -> Coordinate? {
+        FixtureWorld.sampleLocation
+    }
+}
+
 public struct FixtureETAProvider: ETAProviding {
     public init() {}
 

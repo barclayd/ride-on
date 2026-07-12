@@ -60,14 +60,14 @@ Spacing that scales with type uses `@ScaledMetric(relativeTo:)`. Titles: Title C
 
 - **Edge-to-edge content**: scrollable content runs under the tab bar/toolbars; system scroll-edge effect handles legibility (`.scrollEdgeEffectStyle(.soft, for: .bottom)` is the default — don't fight it). Custom bottom bars use `.safeAreaBar(edge: .bottom)`, not `.safeAreaInset`.
 - **Corner radii are never hard-coded.** Nested shapes use `ConcentricRectangle` / `.rect(corners: .concentric)` with `.containerShape(_:)` on the ancestor. Touch targets are capsules on iOS; macOS resolves its own control shapes.
-- **Today card**: full-bleed, ignores horizontal safe areas via `.backgroundExtensionEffect()` where chrome overlaps; text sits on a bottom scrim gradient (black 0% → 45%), Invites-style — data layered *on* the image, never below it.
-- Breakpoints: iPhone = card stack + tab bar; iPad/Mac = `NavigationSplitView` (sidebar: Today/Routes/You) with the Today stack centered at a max card width (~560pt) and detail panes side-by-side where space allows.
+- **Today hero card**: full-bleed, ignores horizontal safe areas via `.backgroundExtensionEffect()` where chrome overlaps; text sits on a bottom scrim gradient (black 0% → 45%), Invites-style — data layered *on* the image, never below it.
+- Breakpoints: iPhone = hero + list + tab bar; iPad/Mac = `NavigationSplitView` (sidebar: Today/Routes/You) with the same hero + list in the detail column and detail panes side-by-side where space allows.
 
 ## 6. Components (the complete custom inventory)
 
 Anything not listed here is a stock SwiftUI component.
 
-1. **`RideCard`** — full-bleed card: `MKMapSnapshotter` image (route polyline drawn on, POI-free `.standard(pointsOfInterest: .excludingAll)`) under `AmbianceStyle` gradient wash + scrim; route name; `ConditionChipRow`. Swipe left/right pages the stack; swipe up opens the breakdown sheet; `matchedTransitionSource` for zoom into Route Detail.
+1. **`RideCard`** — full-bleed hero card for the top-ranked route: `MKMapSnapshotter` image (route polyline drawn on, POI-free `.standard(pointsOfInterest: .excludingAll)`) under `AmbianceStyle` gradient wash + scrim; route name; distance · gain · est-time stats line; `ConditionChipRow`; `ScoreRing` top-trailing on a thin-material circle. Tap opens the breakdown sheet — no swipe-up shortcut: the card sits in a vertical ScrollView where an upward drag is a scroll; `matchedTransitionSource` for zoom into Route Detail.
 2. **`ConditionChip`** — SF Symbol + value in `.footnote`, condition-palette tint, on thin material capsule. Max 4 per card: wind (e.g. "↘ tailwind home"), temp+sky, travel ("45m away"), duration ("~3h ride").
 3. **`FactorRow`** — one scored factor in the breakdown sheet: symbol, name, dual-layer range bar (grey bar = your preference range, colored segment/dot = today's value — Apple Weather's 10-day bar pattern), 0–1 score as text. Tap expands explanation.
 4. **`ElevationProfile`** — Swift Charts `AreaMark` (distance → elevation), `.interpolationMethod(.monotone)`, gradient fill, `chartXSelection` scrubbing with `RuleMark` + annotation, selection synced to a dot on the route `Map`.
@@ -80,7 +80,7 @@ Anything not listed here is a stock SwiftUI component.
 
 | Moment | Token |
 |---|---|
-| Card stack paging | System `TabView(.page)`-style spring; no parallax |
+| Today ranked list scrolling | Plain vertical `ScrollView`; no parallax |
 | Sheet presentation, panel materialize | `.smooth` (0.5s, no bounce) |
 | Tap feedback on glass pills | `Glass.interactive()` (system) + `.snappy` for any accompanying layout change |
 | Card → Route Detail | `.navigationTransition(.zoom(sourceID:in:))` with `matchedTransitionSource` |
@@ -101,7 +101,7 @@ Reduce Motion: zoom transitions fall back to `.automatic`, glass transitions to 
 
 | Screen | Pattern source |
 |---|---|
-| Today card stack | Invites full-bleed cards + Sports swipe-through, swipe-down-to-dismiss |
+| Today hero + ranked list | Invites full-bleed hero card; every route ranked below in rows (thumbnail, stats, per-route sky + temp, compact `ScoreRing`); rest-day card takes the hero slot when the top score is poor, list stays. Weather is fetched per route start; failure → `ContentUnavailableView` + Retry, never a stuck loader |
 | Factor breakdown sheet | Maps peek→medium→large detents; Weather metric-grid cards |
 | Route Detail | Maps place card: map hero, stats, progressive disclosure; zoom transition in |
 | Routes library | Searchable list; Maps' pre-typed search suggestions (chips: Road, Gravel, Under 2h, Not ridden lately); segmented Saved/Ridden toggle |

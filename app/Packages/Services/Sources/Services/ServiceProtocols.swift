@@ -45,6 +45,14 @@ public extension WeatherSnapshot {
     }
 }
 
+public protocol LocationProviding: Sendable {
+    /// One-shot current device location; `nil` when permission is denied,
+    /// undetermined (with `requestingPermissionIfNeeded` false), or no fix is
+    /// available. Pass `requestingPermissionIfNeeded: true` only from the
+    /// priming flow — that's the one place the system prompt may appear.
+    func currentLocation(requestingPermissionIfNeeded: Bool) async -> Coordinate?
+}
+
 public enum TravelMode: String, Sendable, CaseIterable, Codable {
     case automobile, cycling, transit
 }

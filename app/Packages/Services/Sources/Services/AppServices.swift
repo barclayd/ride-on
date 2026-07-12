@@ -6,6 +6,7 @@ import SwiftUI
 public struct AppServices: Sendable {
     public var weather: any WeatherProviding
     public var eta: any ETAProviding
+    public var location: any LocationProviding
     public var health: any HealthStoreProviding
     public var strava: any StravaClientProtocol
     public var classify: any ClassifyClient
@@ -14,6 +15,7 @@ public struct AppServices: Sendable {
     public init(
         weather: any WeatherProviding,
         eta: any ETAProviding,
+        location: any LocationProviding,
         health: any HealthStoreProviding,
         strava: any StravaClientProtocol,
         classify: any ClassifyClient,
@@ -21,6 +23,7 @@ public struct AppServices: Sendable {
     ) {
         self.weather = weather
         self.eta = eta
+        self.location = location
         self.health = health
         self.strava = strava
         self.classify = classify
@@ -30,6 +33,7 @@ public struct AppServices: Sendable {
     public static let fixtures = AppServices(
         weather: FixtureWeatherProvider(),
         eta: FixtureETAProvider(),
+        location: FixtureLocationProvider(),
         health: FixtureHealthStore(),
         strava: FixtureStravaClient(),
         classify: FixtureClassifyClient(),
@@ -42,6 +46,7 @@ public struct AppServices: Sendable {
     public static let live = AppServices(
         weather: LiveWeatherProvider(),
         eta: LiveETAProvider(),
+        location: LiveLocationProvider(),
         health: Self.liveHealthStore,
         strava: LiveStravaClient(),
         classify: LiveClassifyClient(),

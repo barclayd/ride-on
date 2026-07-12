@@ -10,9 +10,11 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Routes"].exists)
         XCTAssertTrue(app.buttons["You"].exists)
 
-        // Today defaults to the card stack (fixture weather + seeded routes
-        // always clear the rest-day threshold), so a scored card is present.
+        // Today defaults to the hero card + ranked list (fixture weather +
+        // seeded routes always clear the rest-day threshold), so a scored
+        // hero card and at least one runner-up row are present.
         XCTAssertTrue(app.buttons["today-card"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["today-route-row"].firstMatch.waitForExistence(timeout: 5))
     }
 
     func testTabNavigationShowsEachScreen() {
@@ -31,7 +33,7 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.buttons["today-card"].firstMatch.waitForExistence(timeout: 5))
     }
 
-    func testTodayCardOpensRouteDetail() {
+    func testTodayCardTapOpensBreakdownThenViewRouteOpensRouteDetail() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
         app.launch()
@@ -40,17 +42,20 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         card.tap()
 
+        // Tap opens the breakdown sheet; View Route pushes Route Detail.
+        XCTAssertTrue(app.navigationBars["Why This Ride"].waitForExistence(timeout: 5))
+        app.buttons["View Route"].tap()
         XCTAssertTrue(app.buttons["Export GPX"].waitForExistence(timeout: 5))
     }
 
-    func testTodayCardSwipeUpOpensBreakdownSheet() {
+    func testTodayRunnerUpRowOpensBreakdownSheet() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
         app.launch()
 
-        let card = app.buttons["today-card"].firstMatch
-        XCTAssertTrue(card.waitForExistence(timeout: 5))
-        card.swipeUp()
+        let row = app.buttons["today-route-row"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
 
         XCTAssertTrue(app.navigationBars["Why This Ride"].waitForExistence(timeout: 5))
     }

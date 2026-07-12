@@ -16,8 +16,8 @@ struct RideOnApp: App {
 
     // Fixture-world gets fully-fixture services (deterministic E2E); every
     // other launch gets `.live` (Phase 6: real WeatherKit/MapKit/HealthKit/
-    // Strava, though WeatherKit/HealthKit only actually authorize once
-    // Release signing has a real team — see CLAUDE.md "Signing").
+    // Strava — signed with the real team on iOS; Mac Debug WeatherKit stays
+    // blocked on the PLA, see CLAUDE.md "Signing").
     private var services: AppServices { FixtureWorld.isEnabled ? .fixtures : .live }
 
     init() {
@@ -136,17 +136,23 @@ private extension View {
 }
 
 /// One tab's `NavigationStack` + the `Namespace` its zoom transition shares
-/// between the Today card and the pushed Route Detail.
+/// between the Today card and the pushed Route Detail. Owns the stack's path
+/// so feature views can push programmatically via `\.navigate` (e.g. the
+/// breakdown sheet's View Route button).
 private struct TabPage: View {
     var tab: AppTab
     @Namespace private var cardNamespace
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             destination(for: tab, namespace: cardNamespace)
                 .navigationDestination(for: RouterDestination.self) { destination in
                     routeDetailDestination(destination, namespace: cardNamespace)
                 }
+                .environment(\.navigate, NavigateAction { destination in
+                    path.append(destination)
+                })
         }
     }
 }

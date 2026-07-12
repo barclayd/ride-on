@@ -3,11 +3,11 @@ import Models
 import DesignSystem
 import Services
 
-/// DESIGN-SYSTEM.md §6 component 1: the full-bleed Today card — map
+/// DESIGN-SYSTEM.md §6 component 1: the full-bleed Today hero card — map
 /// thumbnail (route polyline, POI-free) under an `AmbianceStyle` wash +
-/// bottom scrim, route name, `ConditionChipRow`. Paging between cards is the
-/// caller's job (a `TabView(.page)`); this view only owns the swipe-up ->
-/// breakdown-sheet gesture and the zoom-transition source.
+/// bottom scrim, route name, optional stats line, `ConditionChipRow`, and an
+/// optional `ScoreRing` top-trailing. This view owns the zoom-transition
+/// source; tap handling is the caller's job.
 public struct RideCard: View {
     public var routeID: UUID
     public var routeName: String
@@ -15,7 +15,10 @@ public struct RideCard: View {
     public var chips: [ConditionChipData]
     public var sky: SkyCondition
     public var date: Date
-    public var onSwipeUpForDetails: () -> Void
+    /// 0...1 (`RankedRide.score`); nil hides the ring.
+    public var score: Double?
+    /// e.g. "42 km · 380 m · ~2h 10m"; nil hides the line.
+    public var stats: String?
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var thumbnail: PlatformImage?
@@ -27,7 +30,8 @@ public struct RideCard: View {
         chips: [ConditionChipData],
         sky: SkyCondition,
         date: Date = .now,
-        onSwipeUpForDetails: @escaping () -> Void
+        score: Double? = nil,
+        stats: String? = nil
     ) {
         self.routeID = routeID
         self.routeName = routeName
@@ -35,7 +39,8 @@ public struct RideCard: View {
         self.chips = chips
         self.sky = sky
         self.date = date
-        self.onSwipeUpForDetails = onSwipeUpForDetails
+        self.score = score
+        self.stats = stats
     }
 
     public var body: some View {
@@ -53,36 +58,41 @@ public struct RideCard: View {
                 )
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Image(systemName: "chevron.up")
-                        .font(.footnote.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .accessibilityHidden(true)
-
                     Text(routeName)
                         .font(.largeTitle.bold())
                         .foregroundStyle(.white)
                         .lineLimit(2)
                         .minimumScaleFactor(0.6)
 
+                    if let stats {
+                        Text(stats)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+
                     ConditionChipRow(chips: chips)
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .overlay(alignment: .topTrailing) {
+            if let score {
+                ScoreRing(score: score, size: 52)
+                    .padding(6)
+                    .background(.thinMaterial, in: .circle)
+                    .padding(12)
+            }
+        }
         .clipShape(.rect(cornerRadius: CornerRadius.card))
         .contentShape(.rect(cornerRadius: CornerRadius.card))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
-                    if value.translation.height < -40 {
-                        onSwipeUpForDetails()
-                    }
-                }
-        )
+        // ponytail: no swipe-up shortcut — the card lives in a vertical
+        // ScrollView, where an upward drag IS a scroll (the scroll pan owns
+        // the gesture on iOS 26; even simultaneous drags get nothing). Tap
+        // opens the breakdown, matching Maps/App Store scroll-embedded cards.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySentence)
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Swipe up for the full breakdown")
+        .accessibilityHint("Shows the full ride breakdown")
         .accessibilityIdentifier("today-card")
         .task(id: routeID) {
             thumbnail = await RouteSnapshotService.snapshot(
@@ -120,7 +130,8 @@ public struct RideCard: View {
     // "read as a sentence" per DESIGN-SYSTEM.md §8's VoiceOver example.
     private var accessibilitySentence: String {
         let chipText = chips.map(\.text).joined(separator: ", ")
-        return "\(routeName), recommended. \(chipText)"
+        let scoreText = score.map { "Score \(Int(($0 * 100).rounded())) out of 100. " } ?? ""
+        return "\(routeName), recommended. \(scoreText)\(chipText)"
     }
 }
 
@@ -134,8 +145,7 @@ public struct RideCard: View {
             Coordinate(latitude: 51.77, longitude: -0.81),
         ],
         chips: [ConditionChipData(symbol: "wind", text: "12 km/h wind", tint: .teal)],
-        sky: .sunny,
-        onSwipeUpForDetails: {}
+        sky: .sunny
     )
     .frame(height: 480)
     .padding()

@@ -82,20 +82,22 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: RideOn
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        # No real Apple Developer team configured yet — automatic signing with
-        # no team + no entitlements attached in Debug lets simulator builds
-        # succeed. Entitlements (iCloud/WeatherKit/HealthKit) only attach in
-        # Release, once a real team + App ID with those capabilities exists.
+        # Real team (Dan's paid Apple Developer membership): automatic signing
+        # with full iCloud/WeatherKit/HealthKit entitlements in Debug AND
+        # Release, so live WeatherKit works in day-to-day dev builds.
         # See CLAUDE.md "Signing" section.
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Automatic
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: NO
-        DEVELOPMENT_TEAM: ""
+        DEVELOPMENT_TEAM: R2GGK3VN2C
+        CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: App/RideOn-iOS.entitlements
+        CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: App/RideOn-iOS.entitlements
       configs:
         Release:
-          CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: App/RideOn-iOS.entitlements
-          CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: App/RideOn-iOS.entitlements
+          # macOS entitlements need a provisioning profile, and profile
+          # creation is blocked until the latest Program License Agreement is
+          # agreed at developer.apple.com — move this to `base` once done so
+          # Mac Debug builds get live WeatherKit/iCloud too.
           CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: App/RideOn-macOS.entitlements
 
   RideOnTests:
@@ -119,7 +121,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: NO
-        DEVELOPMENT_TEAM: ""
+        DEVELOPMENT_TEAM: R2GGK3VN2C
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/RideOn.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RideOn"
         BUNDLE_LOADER: "$(TEST_HOST)"
 
@@ -137,7 +139,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: NO
-        DEVELOPMENT_TEAM: ""
+        DEVELOPMENT_TEAM: R2GGK3VN2C
 
 schemes:
   RideOn:

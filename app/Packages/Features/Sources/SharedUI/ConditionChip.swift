@@ -108,6 +108,19 @@ private struct ChipFlowLayout: Layout {
     }
 }
 
+public extension SkyCondition {
+    /// The one sky -> SF Symbol mapping, shared by chips and the ranked-row
+    /// weather glyph so they can never disagree.
+    var systemImageName: String {
+        switch self {
+        case .sunny: "sun.max.fill"
+        case .overcast: "cloud.fill"
+        case .rain: "cloud.rain.fill"
+        case .night: "moon.stars.fill"
+        }
+    }
+}
+
 public extension ConditionChipData {
     /// Builds the Today card's 4 chips from a route's factor scores + the
     /// day's weather/travel numbers — the "computed state drives the
@@ -124,15 +137,8 @@ public extension ConditionChipData {
 
         chips.append(ConditionChipData(symbol: "wind", text: windLabel, tint: .secondary))
 
-        let skySymbol: String
-        switch sky {
-        case .sunny: skySymbol = "sun.max.fill"
-        case .overcast: skySymbol = "cloud.fill"
-        case .rain: skySymbol = "cloud.rain.fill"
-        case .night: skySymbol = "moon.stars.fill"
-        }
         chips.append(ConditionChipData(
-            symbol: skySymbol,
+            symbol: sky.systemImageName,
             text: UnitFormat.temperature(c: temperatureC),
             tint: ConditionPalette.color(forTemperatureC: temperatureC)
         ))
