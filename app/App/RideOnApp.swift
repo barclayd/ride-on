@@ -245,6 +245,14 @@ private struct SplitRoot: View {
             }
         }
         .macMinWindowSize()
+        // ponytail: fixture-only debug hook — land on Route Detail with zero
+        // clicks so its layout can be reproduced/screenshotted headlessly.
+        .onAppear {
+            if FixtureWorld.isEnabled, ProcessInfo.processInfo.arguments.contains("--select-first-route") {
+                selection = .routes
+                selectedRouteID = FixtureWorld.sampleRoute.id
+            }
+        }
     }
 
     private var sidebar: some View {
