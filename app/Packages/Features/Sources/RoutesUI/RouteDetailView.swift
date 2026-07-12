@@ -513,28 +513,30 @@ private struct RouteMapHero: View {
     @State private var snapshot: PlatformImage?
 
     var body: some View {
-        Group {
-            if let snapshot {
-                Image(platformImage: snapshot).resizable().scaledToFill()
-            } else {
-                Rectangle().fill(.secondary.opacity(0.15))
+        // The image lives in an `.overlay` of a clear spacer so it plays NO
+        // part in layout sizing: `.scaledToFill()` reports an aspect-corrected
+        // ideal width (~700pt for the 1400x520 snapshot) that a bare
+        // `.frame(maxWidth:)` still passes through — the ScrollView adopts it,
+        // the Mac detail column sizes to ideal + inspector and stops
+        // compressing, and the whole window overflows (sidebar collapses,
+        // inspector clips offscreen, toolbar spills into `>>`). An overlay
+        // child is sized to the spacer and can't push back.
+        Color.clear
+            .overlay {
+                if let snapshot {
+                    Image(platformImage: snapshot).resizable().scaledToFill()
+                } else {
+                    Rectangle().fill(.secondary.opacity(0.15))
+                }
             }
-        }
-        // `.scaledToFill()` reports an aspect-corrected ideal size that
-        // exceeds what's proposed — without pinning the width and `.clipped()`,
-        // that oversized width leaks up and inflates the detail column, which
-        // squeezes the Mac inspector below its min and overflows the toolbar
-        // (the call site's `.clipShape` clips rendering, not layout). Same
-        // guard RideCard/RoutesView already use for their snapshots.
-        .frame(maxWidth: .infinity)
-        .clipped()
-        .task(id: routeID) {
-            snapshot = await RouteSnapshotService.snapshot(
-                routeID: routeID,
-                coordinates: coordinates,
-                size: CGSize(width: 1400, height: 520),
-                colorScheme: colorScheme
-            )
-        }
+            .clipped()
+            .task(id: routeID) {
+                snapshot = await RouteSnapshotService.snapshot(
+                    routeID: routeID,
+                    coordinates: coordinates,
+                    size: CGSize(width: 1400, height: 520),
+                    colorScheme: colorScheme
+                )
+            }
     }
 }
