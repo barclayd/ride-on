@@ -79,22 +79,26 @@ Worker commands: see `worker/CLAUDE.md`. The classification worker is deployed a
 `LiveClassifyClient` hits it directly (see `RideOnTests/LiveClassifyIntegrationTests.swift`
 for a skipped-by-default live-network check against it).
 
-## Signing (no paid Apple Developer team yet)
+## Signing (real team: R2GGK3VN2C)
 
-`DEVELOPMENT_TEAM` is blank and `CODE_SIGN_STYLE` is `Manual` with `CODE_SIGN_IDENTITY: "-"`
-("sign to run locally" / ad hoc) at the base level for every target. This is what makes
-`xcodebuild build`/`test` work with zero team on both iOS Simulator and macOS destinations —
-`Automatic` signing with a blank team fails macOS builds with "Signing requires a development
-team" even without any entitlements attached.
+`CODE_SIGN_STYLE` is `Automatic` with `DEVELOPMENT_TEAM: R2GGK3VN2C` (Dan's paid Apple
+Developer membership) at the base level for every target, and the iOS entitlements
+(`App/RideOn-iOS.entitlements` — iCloud/WeatherKit/HealthKit) attach in **both** Debug and
+Release via `CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*/iphonesimulator*]`, so live WeatherKit
+works in day-to-day iOS dev builds.
 
-The iCloud/WeatherKit/HealthKit entitlements (`RideOn/RideOn-iOS.entitlements`,
-`RideOn/RideOn-macOS.entitlements`) are only wired up via `CODE_SIGN_ENTITLEMENTS` in the
-**Release** config (see `app/project.yml`). Debug builds (what you get from the simulator
-commands above) never attach them, so they build fine without a real App ID. Once Dan's
-Apple Developer Program membership + App ID with those capabilities exist (PLAN.md
-Prerequisites), Release archive/TestFlight builds will need a real `DEVELOPMENT_TEAM` and
-`CODE_SIGN_STYLE: Automatic` (or a provisioning profile) for those entitlements to actually
-take effect — update `app/project.yml` then.
+The macOS entitlements (`App/RideOn-macOS.entitlements`) are still **Release-only**: macOS
+entitlements need a provisioning profile, and profile creation is currently blocked by an
+unagreed Program License Agreement — Xcode fails with "PLA Update available" /
+"No profiles for 'com.danbarclay.rideon' were found". Once Dan agrees to the latest PLA at
+developer.apple.com, move the `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]` line in `app/project.yml`
+from the Release config to `base` (and re-run `xcodegen generate`) so Mac Debug builds get
+live WeatherKit/iCloud too. Until then, Mac Debug's WeatherKit calls throw and Today shows
+its Weather Unavailable + Retry state.
+
+WeatherKit also needs the App ID's WeatherKit capability registered with Apple (automatic
+signing handles it, but registration can take ~30 min to propagate after the first
+provisioned build).
 
 ## Fixture world (deterministic E2E)
 
