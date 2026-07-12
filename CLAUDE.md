@@ -95,9 +95,12 @@ with "No profiles for 'com.danbarclay.rideon' were found" — run it once with
 `-allowProvisioningUpdates -allowProvisioningDeviceRegistration` to register the Mac and
 mint the profile, then plain builds work again.
 
-WeatherKit also needs the App ID's WeatherKit capability registered with Apple (automatic
-signing handles it, but registration can take ~30 min to propagate after the first
-provisioned build).
+WeatherKit also needs the App ID's WeatherKit service enabled in **both** tabs at
+developer.apple.com → Identifiers → `com.danbarclay.rideon`: automatic signing only sets
+the Capabilities tab; the separate **App Services** tab must be ticked manually or every
+weather fetch fails with `WDSJWTAuthenticatorServiceListener.Errors Code=2` (JWT refused
+server-side, even with a correctly entitled build). Both are enabled now — live WeatherKit
+verified working on macOS 2026-07-12.
 
 ## Fixture world (deterministic E2E)
 
@@ -136,6 +139,6 @@ Phase 6 (Integrations) is done: Strava OAuth (`ASWebAuthenticationSession` + app
 route sync, activity-derived speed defaults, activity↔route matching with auto ride logs,
 HealthKit cycling-workout matching (iOS only), live WeatherKit, and MapKit ETAs are all
 wired behind the existing Services protocols, with FixtureWorld fakes so `RideOnUITests`
-stays deterministic. Live on-device WeatherKit/HealthKit entitlement verification is
-blocked on a real Apple Developer team (see Signing section above) — see PLAN.md Phase 6
-for the one unticked item. See the checklist for what's next (Phase 7 — polish & platform).
+stays deterministic. Live WeatherKit is verified end-to-end (real forecast returned on
+macOS with the entitled Debug build — see Signing section for the App Services gotcha).
+See the checklist for what's next (Phase 7 — polish & platform).

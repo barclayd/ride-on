@@ -28,7 +28,7 @@ Routes are built elsewhere (Strava, cycle.travel, Garmin) and imported; Ride On 
 
 ## Prerequisites (Dan)
 
-- [ ] Apple Developer Program membership active; App ID `com.danbarclay.rideon` with WeatherKit, HealthKit, iCloud/CloudKit capabilities
+- [x] Apple Developer Program membership active; App ID `com.danbarclay.rideon` with WeatherKit, HealthKit, iCloud/CloudKit capabilities (WeatherKit needs BOTH the Capabilities and App Services tabs ticked on the identifier — see CLAUDE.md Signing)
 - [ ] Strava API application created (gives client ID/secret; callback domain registered — the Worker's domain)
 - [ ] Cloudflare account for the Worker (paid plan if classification CPU needs it)
 - [ ] Xcode 26 installed; `brew install xcodegen`
@@ -115,7 +115,7 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [x] HealthKit: cycling workouts + `HKWorkoutRoute` matching (iOS only), contextual auth wired into the existing Ride Matching priming sheet
 - [x] WeatherKit service with day-level caching + attribution UI (existing `WeatherAttributionFooter`)
 - [x] MapKit ETAs (auto/cycling/transit) with graceful regional-failure handling (`ETAProvidingError.unavailable(mode:)`)
-- [ ] Live on-device verification of WeatherKit/HealthKit entitlements — real team `R2GGK3VN2C` signs everything, entitlements attach in Debug on both platforms, and the Mac provisioning profile exists (PLA agreed, device registered — see CLAUDE.md Signing section); remaining: verify WeatherKit actually returns data on device/Mac once the App ID's WeatherKit capability propagates (~30 min after first provisioned build).
+- [x] Live on-device verification of WeatherKit entitlements — real team `R2GGK3VN2C` signs everything, entitlements attach in Debug on both platforms, Mac provisioning profile minted (PLA agreed, device registered), and live WeatherKit returns real forecasts on macOS (verified 2026-07-12 after enabling WeatherKit under the App ID's App Services tab — see CLAUDE.md Signing section). HealthKit live verification folds into the Phase 7 real-device run below.
 
 ### Phase 7 — Polish & platform
 - [x] Mac: keyboard navigation, menu bar, window sizing, sidebar polish, `backgroundExtensionEffect`
