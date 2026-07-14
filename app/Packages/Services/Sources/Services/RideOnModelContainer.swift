@@ -3,10 +3,9 @@ import SwiftData
 import Models
 
 /// Central `ModelContainer` factory. CloudKit-mirrored in Release; in-memory
-/// (no entitlements, no on-disk store) for Debug builds and `--fixture-world`
-/// runs, per CLAUDE.md's signing note — Debug never carries the
-/// iCloud/CloudKit entitlement, so a real CloudKit-backed store would just
-/// fail to initialize there.
+/// (no on-disk store, no CloudKit) for Debug builds and `--fixture-world`
+/// runs. Every build carries the iCloud entitlement (CLAUDE.md "Signing"),
+/// so in-memory configs opt out of mirroring explicitly below.
 public enum RideOnModelContainer {
     public static let schema = Schema([RouteModel.self, RideLogModel.self, SavedPlaceModel.self])
 
