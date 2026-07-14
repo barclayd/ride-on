@@ -28,6 +28,16 @@ public struct TodayView: View {
         case loading
         case failed
         case loaded([UUID: WeatherSnapshot])
+
+        // Keys the phase-swap animation: the spinner -> content switch on
+        // every launch should materialize, not hard-cut.
+        var phase: Int {
+            switch self {
+            case .loading: 0
+            case .failed: 1
+            case .loaded: 2
+            }
+        }
     }
 
     @State private var weatherLoad: WeatherLoad = .loading
@@ -67,6 +77,7 @@ public struct TodayView: View {
                 }
             }
         }
+        .animation(Motion.panelMaterialize, value: weatherLoad.phase)
         .navigationTitle("Today")
         .task(id: routeModels.map(\.id)) {
             await loadWeather()

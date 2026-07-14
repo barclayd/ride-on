@@ -83,12 +83,14 @@ Anything not listed here is a stock SwiftUI component.
 | Today ranked list scrolling | Plain vertical `ScrollView`; no parallax |
 | Sheet presentation, panel materialize | `.smooth` (0.5s, no bounce) |
 | Tap feedback on glass pills | `Glass.interactive()` (system) + `.snappy` for any accompanying layout change |
-| Card → Route Detail | `.navigationTransition(.zoom(sourceID:in:))` with `matchedTransitionSource` |
+| Card / Routes row → Route Detail | `.navigationTransition(.zoom(sourceID:in:))` with `matchedTransitionSource` (push path only — the Mac/iPad split's detail column swaps in place) |
 | Glass morphs (pill expand/collapse) | `glassEffectID` + `@Namespace` in shared container; `.glassEffectTransition(.matchedGeometry)` |
 | Onboarding page transitions | Spring slide+fade; content staggers in with scale/fade |
 | Ambiance crossfade (dial screens, card weather) | `.smooth(duration: 0.8)` opacity crossfade between gradient states |
+| Async content arrival (Today's spinner → ranked list, best-day badge) | `.smooth` (`Motion.panelMaterialize`) — never a hard cut |
+| Score-ring fill on appear | `.smooth(duration: 0.8)` (`Motion.ringFill`), tint fixed at the final score |
 
-Reduce Motion: zoom transitions fall back to `.automatic`, glass transitions to `.materialize`, ambiance crossfades to instant, particles disabled.
+Reduce Motion: zoom transitions fall back to `.automatic`, glass transitions to `.materialize`, ambiance crossfades to instant, ring fills to instant, particles disabled.
 
 ## 8. Accessibility bar
 

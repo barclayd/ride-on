@@ -17,10 +17,16 @@ public struct ScoreRing: View {
         self.size = size
     }
 
+    // Fill animates 0 -> score on appear (Motion.ringFill); tint and letter
+    // stay keyed to the final score so the color doesn't ramp through the
+    // palette while filling.
+    @State private var fill: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var tier: RideTier { RideTier(score: score) }
 
     public var body: some View {
-        Gauge(value: score, in: 0...1) {
+        Gauge(value: fill, in: 0...1) {
             EmptyView()
         } currentValueLabel: {
             Text(tier.letter)
@@ -30,6 +36,12 @@ public struct ScoreRing: View {
         .tint(ConditionPalette.color(forScore: score))
         .frame(width: size, height: size)
         .accessibilityLabel("Rated \(tier.letter). \(tier.summary).")
+        .onAppear {
+            withAnimation(reduceMotion ? nil : Motion.ringFill) { fill = score }
+        }
+        .onChange(of: score) { _, newScore in
+            withAnimation(reduceMotion ? nil : Motion.ringFill) { fill = newScore }
+        }
     }
 }
 
