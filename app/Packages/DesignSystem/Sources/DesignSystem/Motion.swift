@@ -9,4 +9,7 @@ public enum Motion {
     public static let ambianceCrossfade: Animation = .smooth(duration: 0.8)
     /// Onboarding page transitions.
     public static let onboardingPageTransition: Animation = .spring(response: 0.45, dampingFraction: 0.85)
+    /// Panel/content materialize — async-loaded content (e.g. the best-day
+    /// badge) arriving in an already-visible layout.
+    public static let panelMaterialize: Animation = .smooth
 }

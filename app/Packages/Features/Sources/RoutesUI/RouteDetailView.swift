@@ -363,7 +363,8 @@ public struct RouteDetailView: View {
             allRoutes: routes.map { $0.asRoute() },
             weights: preferencesStore.weights
         )
-        bestDay = Recommendations.bestDay(for: route.asRoute(), contexts: contexts, scorer: scorer)
+        let recommendation = Recommendations.bestDay(for: route.asRoute(), contexts: contexts, scorer: scorer)
+        withAnimation(Motion.panelMaterialize) { bestDay = recommendation }
     }
 
     // ponytail: cumulative distance via a local haversine rather than

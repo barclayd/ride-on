@@ -653,7 +653,10 @@ private struct BreakdownSheet: View {
             }
             .navigationTitle("Why This Ride")
             .navigationBarTitleDisplayModeIfAvailable()
-            .task { recommendation = await loadRecommendation() }
+            .task {
+                let loaded = await loadRecommendation()
+                withAnimation(Motion.panelMaterialize) { recommendation = loaded }
+            }
             #if os(macOS)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

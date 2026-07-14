@@ -46,7 +46,7 @@ public struct BestDayBadge: View {
                 case .skip(let days):
                     Text("Give it a miss")
                         .font(.subheadline.weight(.semibold))
-                    Text("No day worth riding in the next \(days)")
+                    Text("No day worth riding in the next \(days) days")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
