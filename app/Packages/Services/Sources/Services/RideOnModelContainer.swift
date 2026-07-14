@@ -12,11 +12,16 @@ public enum RideOnModelContainer {
 
     public static func make() -> ModelContainer {
         let configuration: ModelConfiguration
+        // In-memory configs must pass `cloudKitDatabase: .none` explicitly —
+        // the default is `.automatic`, which engages CloudKit mirroring
+        // whenever the build carries the iCloud entitlement (all builds do
+        // since the PLA unblock), and CoreData's mirroring delegate on an
+        // in-memory store hangs/crashes at first insert.
         #if DEBUG
-        configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         #else
         if FixtureWorld.isEnabled {
-            configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         } else {
             configuration = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
         }
@@ -30,7 +35,7 @@ public enum RideOnModelContainer {
 
     /// A fresh in-memory container, for tests and previews.
     public static func inMemory() -> ModelContainer {
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try! ModelContainer(for: schema, configurations: [configuration])
     }
 }
