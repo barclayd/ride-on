@@ -51,8 +51,15 @@ public struct RoutesView: View {
     /// pushing Route Detail over itself. nil = iPhone push navigation.
     private var selection: Binding<UUID?>?
 
-    public init(selection: Binding<UUID?>? = nil) {
+    /// Backs the row -> Route Detail zoom (DESIGN-SYSTEM.md §7) on the push
+    /// path, matching the Today card's arrival — same destination, same
+    /// transition. nil on the split path, where selection drives the detail
+    /// column and nothing pushes.
+    private var namespace: Namespace.ID?
+
+    public init(selection: Binding<UUID?>? = nil, namespace: Namespace.ID? = nil) {
         self.selection = selection
+        self.namespace = namespace
     }
 
     public var body: some View {
@@ -197,6 +204,7 @@ public struct RoutesView: View {
             NavigationLink(value: RouterDestination.routeDetail(routeID: route.id)) {
                 RouteRow(route: route)
             }
+            .zoomSourceIfAvailable(id: route.id, in: namespace)
         }
     }
 
@@ -496,6 +504,19 @@ private struct ImportConfirmationSheet: View {
         case .road: SurfaceBreakdown(distanceKmBySurface: [.paved: distanceKm])
         case .gravel: SurfaceBreakdown(distanceKmBySurface: [.unpaved: distanceKm])
         case .mixed: SurfaceBreakdown(distanceKmBySurface: [.paved: distanceKm / 2, .unpaved: distanceKm / 2])
+        }
+    }
+}
+
+private extension View {
+    /// `matchedTransitionSource` wants a concrete namespace; the split path
+    /// passes nil (no push, no zoom), so this is the conditional wrapper.
+    @ViewBuilder
+    func zoomSourceIfAvailable(id: some Hashable, in namespace: Namespace.ID?) -> some View {
+        if let namespace {
+            self.matchedTransitionSource(id: id, in: namespace)
+        } else {
+            self
         }
     }
 }

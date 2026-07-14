@@ -96,15 +96,15 @@ private struct RouteEditMenuItem: View {
 
 /// View construction for a tab lives here (not in Router's `AppTab`) since
 /// this is the one target allowed to import every Features package.
-/// `namespace` backs the Today card -> Route Detail zoom transition
+/// `namespace` backs the card/row -> Route Detail zoom transition
 /// (DESIGN-SYSTEM.md §7); every tab gets one since only the App shell can
-/// see both `TodayView`'s `matchedTransitionSource` and the
-/// `RouterDestination.routeDetail` push it zooms into.
+/// see both the `matchedTransitionSource` (Today's card, Routes' rows) and
+/// the `RouterDestination.routeDetail` push it zooms into.
 @MainActor @ViewBuilder
 private func destination(for tab: AppTab, namespace: Namespace.ID) -> some View {
     switch tab {
     case .today: TodayView(namespace: namespace)
-    case .routes: RoutesView()
+    case .routes: RoutesView(namespace: namespace)
     case .you: YouView()
     }
 }
