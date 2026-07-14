@@ -38,7 +38,7 @@ public struct RouteDetailView: View {
     // once so the polyline is stable and only the marker diffs while scrubbing.
     @State private var mapCoordinates: [CLLocationCoordinate2D] = []
     @State private var mapRegion: MKCoordinateRegion?
-    @State private var bestDay: (context: DailyContext, score: Double)?
+    @State private var bestDay: DayRecommendation?
     @State private var exportedGPXURL: URL?
     @State private var isInspectorPresented = true
     @State private var isMapExpanded = false
@@ -98,7 +98,7 @@ public struct RouteDetailView: View {
                 // inline.
                 #if !os(macOS)
                 if let bestDay {
-                    BestDayBadge(dayName: bestDay.context.date.formatted(.dateTime.weekday(.wide)), summary: "Score \(Int((bestDay.score * 100).rounded()))")
+                    BestDayBadge(recommendation: bestDay)
                 }
 
                 statsRow(for: route)
@@ -249,7 +249,7 @@ public struct RouteDetailView: View {
             }
             if let bestDay {
                 Section("Best Day to Ride") {
-                    BestDayBadge(dayName: bestDay.context.date.formatted(.dateTime.weekday(.wide)), summary: "Score \(Int((bestDay.score * 100).rounded()))")
+                    BestDayBadge(recommendation: bestDay)
                 }
             }
             let logs = rideLogModels.filter { $0.routeID == route.id }.sorted { $0.date > $1.date }
@@ -347,27 +347,23 @@ public struct RouteDetailView: View {
     }
 
     private func loadBestDay(for route: RouteModel) async {
-        guard let weather = try? await services.weather.forecast(for: startLocation, on: .now) else { return }
-        let calendar = Calendar.current
-        let weekContexts = (0..<7).compactMap { offset -> DailyContext? in
-            guard let date = calendar.date(byAdding: .day, value: offset, to: .now) else { return nil }
-            return Recommendations.context(
-                date: date,
-                startLocation: startLocation,
-                hoursAvailable: 3,
-                backBy: nil,
-                intent: .exploring,
-                bike: Bike.samples[0],
-                weather: weather
-            )
-        }
+        // Each day gets its own forecast at the route's start — the scan is
+        // comparing days, so the weather must actually differ between them.
+        let contexts = await Recommendations.upcomingContexts(
+            weather: services.weather,
+            weatherLocation: route.coordinates.first ?? startLocation,
+            startLocation: startLocation,
+            hoursAvailable: 3,
+            intent: .exploring,
+            bike: Bike.samples[0]
+        )
         let scorer = Recommendations.scorer(
             preferences: preferencesStore.preferences,
             rideLogs: rideLogModels.compactMap { $0.asRideLog() },
             allRoutes: routes.map { $0.asRoute() },
             weights: preferencesStore.weights
         )
-        bestDay = Recommendations.bestDay(for: route.asRoute(), weekContexts: weekContexts, scorer: scorer)
+        bestDay = Recommendations.bestDay(for: route.asRoute(), contexts: contexts, scorer: scorer)
     }
 
     // ponytail: cumulative distance via a local haversine rather than

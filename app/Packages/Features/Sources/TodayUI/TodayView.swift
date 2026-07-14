@@ -40,10 +40,9 @@ public struct TodayView: View {
     @State private var travelMinutesByRouteID: [UUID: Int] = [:]
     @ScaledMetric(relativeTo: .largeTitle) private var restDaySymbolSize: CGFloat = 40
 
-    // ponytail: below this, a route isn't worth surfacing as the hero — the
-    // "rest day" card takes the hero slot instead, with the ranked list
-    // still below. Tune once real-world scores are observed.
-    private static let restDayThreshold = 0.35
+    // A route only takes the hero slot when today's conditions grade as
+    // worth riding (tier C or better) — otherwise the "rest day" card takes
+    // it, with the ranked list still below.
 
     public init(namespace: Namespace.ID) {
         self.namespace = namespace
@@ -108,6 +107,7 @@ public struct TodayView: View {
             BreakdownSheet(
                 rankedRide: item.rankedRide,
                 chips: item.chips,
+                loadRecommendation: { await loadRecommendation(for: item.rankedRide) },
                 onViewRoute: { routeID in
                     breakdownItem = nil
                     navigate(.routeDetail(routeID: routeID))
@@ -132,7 +132,7 @@ public struct TodayView: View {
 
     private func rankedContent(weatherByRouteID: [UUID: WeatherSnapshot]) -> some View {
         let ranked = rankedRides(weatherByRouteID: weatherByRouteID)
-        let heroRide = (ranked.first?.score ?? 0) >= Self.restDayThreshold ? ranked.first : nil
+        let heroRide = ranked.first.flatMap { $0.tier.isWorthRiding ? $0 : nil }
 
         return ScrollView {
             VStack(spacing: 16) {
@@ -280,6 +280,32 @@ public struct TodayView: View {
             if lhs.score != rhs.score { return lhs.score > rhs.score }
             return lhs.route.id.uuidString < rhs.route.id.uuidString
         }
+    }
+
+    /// The 10-day best-day scan for one route: per-day forecasts at the
+    /// route's start, travel measured from the rider, same scorer as the
+    /// today ranking. Days without forecast confidence are skipped.
+    private func loadRecommendation(for rankedRide: RankedRide) async -> DayRecommendation? {
+        let routes = routeModels.map { $0.asRoute() }
+        guard let route = routes.first(where: { $0.id == rankedRide.route.id }),
+              let routeStart = route.start else { return nil }
+        let settings = preferencesStore.todaySettings
+        let contexts = await Recommendations.upcomingContexts(
+            weather: services.weather,
+            weatherLocation: routeStart,
+            startLocation: travelOrigin ?? routeStart,
+            hoursAvailable: settings.hoursAvailable,
+            backBy: backBy,
+            intent: settings.intent,
+            bike: settings.bike
+        )
+        let scorer = Recommendations.scorer(
+            preferences: preferencesStore.preferences,
+            rideLogs: rideLogs,
+            allRoutes: routes,
+            weights: preferencesStore.weights
+        )
+        return Recommendations.bestDay(for: route, contexts: contexts, scorer: scorer)
     }
 
     private func breakdownItem(for rankedRide: RankedRide, weatherByRouteID: [UUID: WeatherSnapshot]) -> BreakdownItem {
@@ -582,17 +608,21 @@ private struct ContextEditorSheet: View {
     }
 }
 
-/// The breakdown sheet: `ScoreRing` header, this route's condition chips,
-/// `FactorRow` per factor, a View Route push, weather attribution footer.
-/// System glass at partial detents (free) on iOS; a standard modal with a
-/// Done button on macOS.
+/// The breakdown sheet: `ScoreRing` tier header, this route's condition
+/// chips, the 10-day `BestDayBadge` verdict (loaded async — ride day + tier,
+/// or an explicit "give it a miss"), one clean `FactorRow` explainer per
+/// factor, a View Route push, weather attribution footer. System glass at
+/// partial detents (free) on iOS; a standard modal with a Done button on
+/// macOS.
 private struct BreakdownSheet: View {
     var rankedRide: RankedRide
     var chips: [ConditionChipData]
+    var loadRecommendation: () async -> DayRecommendation?
     var onViewRoute: (UUID) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @ScaledMetric(relativeTo: .title) private var ringSize: CGFloat = 64
+    @State private var recommendation: DayRecommendation?
 
     var body: some View {
         NavigationStack {
@@ -602,6 +632,9 @@ private struct BreakdownSheet: View {
                     Text(rankedRide.route.name)
                         .font(.headline)
                     ConditionChipRow(chips: chips)
+                    if let recommendation {
+                        BestDayBadge(recommendation: recommendation)
+                    }
                     VStack(spacing: 12) {
                         ForEach(rankedRide.factorScores, id: \.factor) { score in
                             FactorRow(score: score)
@@ -620,6 +653,7 @@ private struct BreakdownSheet: View {
             }
             .navigationTitle("Why This Ride")
             .navigationBarTitleDisplayModeIfAvailable()
+            .task { recommendation = await loadRecommendation() }
             #if os(macOS)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

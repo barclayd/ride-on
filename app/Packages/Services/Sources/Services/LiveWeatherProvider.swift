@@ -13,37 +13,54 @@ public actor LiveWeatherProvider: WeatherProviding {
     private struct CacheKey: Hashable {
         var latQuantized: Int
         var lonQuantized: Int
-        var day: Date
     }
 
-    private var cache: [CacheKey: WeatherSnapshot] = [:]
+    /// One 10-day hourly fetch per location per calendar day; every
+    /// `forecast(for:on:)` call for any day inside the range is answered
+    /// from it. Dates beyond the fetched hours throw `noForecast` — that's
+    /// the "how far out do we trust the forecast" bound the best-day scan
+    /// relies on.
+    private var cache: [CacheKey: (fetchDay: Date, hours: [HourWeather])] = [:]
     private let weatherService = WeatherService.shared
+
+    /// WeatherKit's hourly forecast extends ~10 days; past that there is no
+    /// hour-level confidence to score against.
+    public static let forecastDays = 10
 
     public init() {}
 
     public func forecast(for location: Coordinate, on date: Date) async throws -> WeatherSnapshot {
-        let day = Calendar.current.startOfDay(for: date)
         let key = CacheKey(
             latQuantized: Int((location.latitude * 100).rounded()),
-            lonQuantized: Int((location.longitude * 100).rounded()),
-            day: day
+            lonQuantized: Int((location.longitude * 100).rounded())
         )
-        if let cached = cache[key] { return cached }
 
-        let clLocation = CLLocation(latitude: location.latitude, longitude: location.longitude)
-        let hourly = try await weatherService.weather(for: clLocation, including: .hourly)
-        guard let closest = hourly.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) }) else {
+        let today = Calendar.current.startOfDay(for: .now)
+        let hours: [HourWeather]
+        if let cached = cache[key], cached.fetchDay == today {
+            hours = cached.hours
+        } else {
+            let clLocation = CLLocation(latitude: location.latitude, longitude: location.longitude)
+            let end = Calendar.current.date(byAdding: .day, value: Self.forecastDays, to: today) ?? today
+            let hourly = try await weatherService.weather(for: clLocation, including: .hourly(startDate: .now, endDate: end))
+            hours = Array(hourly)
+            cache[key] = (today, hours)
+        }
+
+        // No hour near the requested time means the date is outside the
+        // forecast range — surface that rather than clamping to the last
+        // known hour and pretending day 14 has a forecast.
+        guard let closest = hours.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) }),
+              abs(closest.date.timeIntervalSince(date)) <= 90 * 60 else {
             throw WeatherProvidingError.noForecast
         }
 
-        let snapshot = WeatherSnapshot(
+        return WeatherSnapshot(
             temperatureC: closest.temperature.converted(to: .celsius).value,
             sky: Self.sky(for: closest),
             windKph: closest.wind.speed.converted(to: .kilometersPerHour).value,
             rainChance: closest.precipitationChance
         )
-        cache[key] = snapshot
-        return snapshot
     }
 
     // ponytail: coarse condition -> SkyCondition mapping (rain-family vs.

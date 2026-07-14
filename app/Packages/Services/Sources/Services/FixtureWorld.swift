@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 import Models
 import Engine
+import DesignSystem
 
 /// Deterministic "fixture world" for E2E tests and previews: launch with
 /// `--fixture-world` and every service below returns canned, seeded data —
@@ -102,8 +103,30 @@ public enum FixtureWorld {
 public struct FixtureWeatherProvider: WeatherProviding {
     public init() {}
 
+    /// Deterministic 10-day table keyed by day offset from today, mimicking
+    /// the live provider's confidence bound (out-of-range dates throw).
+    /// Day 0 keeps the original fixture values so existing ranking
+    /// assertions hold; day 2 is deliberately the standout so the best-day
+    /// scan lands on a stable non-today answer in E2E.
+    private static let days: [(temperatureC: Double, sky: SkyCondition, windKph: Double, rainChance: Double)] = [
+        (18, .sunny, 12, 0.1),
+        (16, .overcast, 20, 0.3),
+        (19, .sunny, 5, 0.0),
+        (14, .rain, 25, 0.8),
+        (13, .rain, 30, 0.9),
+        (15, .overcast, 18, 0.4),
+        (17, .sunny, 14, 0.2),
+        (12, .overcast, 22, 0.5),
+        (11, .rain, 28, 0.7),
+        (16, .overcast, 16, 0.3),
+    ]
+
     public func forecast(for location: Coordinate, on date: Date) async throws -> WeatherSnapshot {
-        WeatherSnapshot(temperatureC: 18, sky: .sunny, windKph: 12, rainChance: 0.1)
+        let calendar = Calendar.current
+        let offset = calendar.dateComponents([.day], from: calendar.startOfDay(for: .now), to: calendar.startOfDay(for: date)).day ?? 0
+        guard Self.days.indices.contains(offset) else { throw WeatherProvidingError.noForecast }
+        let day = Self.days[offset]
+        return WeatherSnapshot(temperatureC: day.temperatureC, sky: day.sky, windKph: day.windKph, rainChance: day.rainChance)
     }
 }
 

@@ -69,12 +69,12 @@ Anything not listed here is a stock SwiftUI component.
 
 1. **`RideCard`** — full-bleed hero card for the top-ranked route: `MKMapSnapshotter` image (route polyline drawn on, POI-free `.standard(pointsOfInterest: .excludingAll)`) under `AmbianceStyle` gradient wash + scrim; route name; distance · gain · est-time stats line; `ConditionChipRow`; `ScoreRing` top-trailing on a thin-material circle. Tap opens the breakdown sheet — no swipe-up shortcut: the card sits in a vertical ScrollView where an upward drag is a scroll; `matchedTransitionSource` for zoom into Route Detail.
 2. **`ConditionChip`** — SF Symbol + value in `.footnote`, condition-palette tint, on thin material capsule. Max 4 per card: wind (e.g. "↘ tailwind home"), temp+sky, travel ("45m away"), duration ("~3h ride").
-3. **`FactorRow`** — one scored factor in the breakdown sheet: symbol, name, dual-layer range bar (grey bar = your preference range, colored segment/dot = today's value — Apple Weather's 10-day bar pattern), 0–1 score as text. Tap expands explanation.
+3. **`FactorRow`** — one scored factor in the breakdown sheet: symbol, name, the factor's one-line plain-English explanation ("0% chance of rain during the ride."), and a condition-palette status dot. No raw numbers or bars — the sentence is the indicator, the dot is the at-a-glance verdict.
 4. **`ElevationProfile`** — Swift Charts `AreaMark` (distance → elevation), `.interpolationMethod(.monotone)`, gradient fill, `chartXSelection` scrubbing with `RuleMark` + annotation, selection synced to a dot on the route `Map`.
 5. **`SurfaceBar`** — the cycle.travel-style stacked horizontal bar: busy road / paved / unpaved / path percentages, condition-palette-adjacent fixed colors, legend as `.caption` rows.
 6. **`DialScreen`** — onboarding preference screen scaffold: large title, one-sentence body, ONE control (slider for temp range; segmented for sun/rain/wind), `Continue`, page dots. Background is a live `AmbianceStyle` that crossfades (`.animation(.smooth)`) as the selection changes — rain → sun reacts to the tap. Reused verbatim as the Settings editor for each preference (Sports' "onboarding is the settings" model).
-7. **`BestDayBadge`** — route detail: "Best day: Thursday" chip with mini condition summary; rendered only when the 7-day scan clears the user's quality threshold, otherwise absent (never an empty state).
-8. **`ScoreRing`** *(small)* — compact 0–100 ride-score indicator used on list rows and the breakdown header.
+7. **`BestDayBadge`** — the 10-day best-day verdict, in Route Detail and the breakdown sheet: "Best day: Thursday" with the tier letter in a condition-palette circle and a one-phrase tier summary — or, when even the best day grades D, an explicit "Give it a miss" state. Rendered whenever the scan has run; the scan itself is bounded by how many days the weather provider has forecast confidence for (~10).
+8. **`ScoreRing`** *(small)* — compact tier ring used on list rows and the breakdown header: gauge fill is the raw 0–1 score, center shows the `RideTier` letter (S/A/B/C/D — D means "don't ride"), tint from the condition palette.
 
 ## 7. Motion
 
