@@ -49,17 +49,43 @@ public enum Recommendations {
         )
     }
 
-    /// The best-scoring day across `weekContexts`, if any clears
-    /// `BestDayScan.threshold` — the raw material for `BestDayBadge`, which
-    /// per DESIGN-SYSTEM.md §6 is simply absent otherwise (never an empty
-    /// state).
-    public static func bestDay(for route: Route, weekContexts: [DailyContext], scorer: WeightedScorer) -> (context: DailyContext, score: Double)? {
-        let scored = weekContexts.map { context in
-            (context: context, score: scorer.rank(routes: [route], context: context).first?.score ?? 0)
+    /// One `DailyContext` per upcoming day that still has a forecast —
+    /// each day fetched individually so the scan compares real per-day
+    /// conditions. Days the provider can't forecast (beyond WeatherKit's
+    /// ~10-day hourly range) are skipped: that's the confidence bound on
+    /// "best day in the next 10".
+    public static func upcomingContexts(
+        days: Int = 10,
+        weather: WeatherProviding,
+        weatherLocation: Coordinate? = nil,
+        startLocation: Coordinate,
+        hoursAvailable: Double,
+        backBy: Date? = nil,
+        intent: RideIntent,
+        bike: Bike
+    ) async -> [DailyContext] {
+        var contexts: [DailyContext] = []
+        for offset in 0..<days {
+            guard let date = Calendar.current.date(byAdding: .day, value: offset, to: .now),
+                  let snapshot = try? await weather.forecast(for: weatherLocation ?? startLocation, on: date) else { continue }
+            contexts.append(context(
+                date: date,
+                startLocation: startLocation,
+                hoursAvailable: hoursAvailable,
+                // A back-by deadline is a today constraint, not a standing one.
+                backBy: offset == 0 ? backBy : nil,
+                intent: intent,
+                bike: bike,
+                weather: snapshot
+            ))
         }
-        guard let best = scored.max(by: { $0.score < $1.score }), best.score >= BestDayScan.threshold else {
-            return nil
-        }
-        return best
+        return contexts
+    }
+
+    /// The best day to ride `route` across `contexts`, graded as a
+    /// `RideTier`. A `.d` tier means "don't ride" — the UI says so instead
+    /// of hiding the recommendation.
+    public static func bestDay(for route: Route, contexts: [DailyContext], scorer: WeightedScorer) -> DayRecommendation? {
+        BestDayScan.recommend(for: route, contexts: contexts, scorer: scorer)
     }
 }

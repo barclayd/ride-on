@@ -207,25 +207,64 @@ struct GoldenScenarioTests {
         #expect(trainingRanking.first?.route.name == "Long Hilly")
     }
 
-    // MARK: - Best day this week
+    // MARK: - Best day recommendation
 
-    @Test("best day badge appears only on the day that clears the threshold and beats the rest of the week")
-    func bestDayThresholdScan() {
+    private func dayContext(day: Int, temperatureC: Double) -> DailyContext {
+        let date = fixedDate.addingTimeInterval(Double(day) * 86400)
+        return DailyContext(
+            date: date, startLocation: start, hoursAvailable: 3, intent: .easy, bike: Bike(name: "Bike", type: .road),
+            hourlyForecast: [HourlyWeather(time: date, temperatureC: temperatureC, windSpeedKph: 5, windDirectionDegrees: 0, precipitationChance: 0, cloudCover: 0.3)]
+        )
+    }
+
+    @Test("the scan recommends the standout day of the next ten")
+    func bestDayScanPicksStandout() {
         let loop = route("Loop", distanceKm: 20)
         let scorer = WeightedScorer(factors: [TemperatureFactor(preferences: preferences())], weights: [.temperature: 1])
 
-        func context(day: Int, temperatureC: Double) -> DailyContext {
-            let date = fixedDate.addingTimeInterval(Double(day) * 86400)
-            return DailyContext(
-                date: date, startLocation: start, hoursAvailable: 3, intent: .easy, bike: Bike(name: "Bike", type: .road),
-                hourlyForecast: [HourlyWeather(time: date, temperatureC: temperatureC, windSpeedKph: 5, windDirectionDegrees: 0, precipitationChance: 0, cloudCover: 0.3)]
-            )
-        }
-
         // Preferred range defaults to 10...22C; day 2 is a perfect 16C, the rest are poor.
-        let week = (0..<7).map { context(day: $0, temperatureC: $0 == 2 ? 16 : 30) }
+        let days = (0..<10).map { dayContext(day: $0, temperatureC: $0 == 2 ? 16 : 30) }
 
-        #expect(BestDayScan.isBestDay(for: loop, date: week[2].date, weekContexts: week, scorer: scorer))
-        #expect(!BestDayScan.isBestDay(for: loop, date: week[0].date, weekContexts: week, scorer: scorer))
+        let recommendation = BestDayScan.recommend(for: loop, contexts: days, scorer: scorer)
+        #expect(recommendation?.context.date == days[2].date)
+        #expect(recommendation?.tier.isWorthRiding == true)
+        #expect(recommendation?.factorScores.isEmpty == false)
+    }
+
+    @Test("ties go to the earliest day — no reason to wait for the same conditions")
+    func bestDayScanTieBreaksEarly() {
+        let loop = route("Loop", distanceKm: 20)
+        let scorer = WeightedScorer(factors: [TemperatureFactor(preferences: preferences())], weights: [.temperature: 1])
+
+        let days = (0..<10).map { dayContext(day: $0, temperatureC: 16) }
+        let recommendation = BestDayScan.recommend(for: loop, contexts: days, scorer: scorer)
+        #expect(recommendation?.context.date == days[0].date)
+    }
+
+    @Test("when every day is bad the recommendation is a D tier — don't ride")
+    func bestDayScanRecommendsRestWhenAllBad() {
+        let loop = route("Loop", distanceKm: 20)
+        let scorer = WeightedScorer(factors: [TemperatureFactor(preferences: preferences())], weights: [.temperature: 1])
+
+        // 40C every day: far outside the 10...22C preference.
+        let days = (0..<10).map { dayContext(day: $0, temperatureC: 40) }
+        let recommendation = BestDayScan.recommend(for: loop, contexts: days, scorer: scorer)
+        #expect(recommendation?.tier == RideTier.d)
+        #expect(recommendation?.tier.isWorthRiding == false)
+    }
+
+    @Test("tier boundaries map scores to S/A/B/C/D")
+    func tierBoundaries() {
+        #expect(RideTier(score: 1.0) == .s)
+        #expect(RideTier(score: 0.85) == .s)
+        #expect(RideTier(score: 0.84) == .a)
+        #expect(RideTier(score: 0.70) == .a)
+        #expect(RideTier(score: 0.69) == .b)
+        #expect(RideTier(score: 0.55) == .b)
+        #expect(RideTier(score: 0.54) == .c)
+        #expect(RideTier(score: 0.40) == .c)
+        #expect(RideTier(score: 0.39) == .d)
+        #expect(RideTier(score: 0) == .d)
+        #expect(RideTier(score: 0.9).isWorthRiding && !RideTier(score: 0.1).isWorthRiding)
     }
 }

@@ -3,66 +3,47 @@ import Engine
 import DesignSystem
 
 /// DESIGN-SYSTEM.md §6 component 3: one scored factor in the breakdown
-/// sheet — symbol, name, dual-layer range bar (Apple Weather's 10-day bar
-/// pattern: a grey track plus a colored dot for today's value), 0–1 score as
-/// text. Tap expands the explanation.
+/// sheet — symbol, name, the factor's one-line plain-English explanation
+/// ("0% chance of rain during the ride."), and a colored status dot. No
+/// raw numbers: the sentence is the indicator, the dot is the read-at-a-
+/// glance verdict.
 public struct FactorRow: View {
     public var score: FactorScore
-    @State private var isExpanded = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(score: FactorScore) {
         self.score = score
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label(score.factor.displayName, systemImage: score.factor.symbolName)
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: score.factor.symbolName)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(score.factor.displayName)
                     .font(.subheadline.weight(.medium))
-                Spacer()
-                Text(score.value, format: .number.precision(.fractionLength(2)))
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("score \(Int((score.value * 100).rounded())) out of 100")
-            }
-            RangeBar(value: score.value)
-            if isExpanded {
                 Text(score.reason)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .transition(.opacity)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 8)
+            Circle()
+                .fill(ConditionPalette.color(forScore: score.value))
+                .frame(width: 10, height: 10)
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(reduceMotion ? nil : Motion.glassTapLayout) { isExpanded.toggle() }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Double tap for details")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(score.factor.displayName), \(verdict). \(score.reason)")
     }
-}
 
-/// Not a §6 component on its own — the range-bar visual inside `FactorRow`.
-/// The grey track is "your preference range" (0...1, the full scorable
-/// span); the colored dot is "today's value" at `value`'s position.
-private struct RangeBar: View {
-    var value: Double
-
-    var body: some View {
-        GeometryReader { geometry in
-            let dotDiameter: CGFloat = 12
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.secondary.opacity(0.25))
-                    .frame(height: 6)
-                Circle()
-                    .fill(ConditionPalette.color(forScore: value))
-                    .frame(width: dotDiameter, height: dotDiameter)
-                    .offset(x: max(0, min(geometry.size.width - dotDiameter, geometry.size.width * value - dotDiameter / 2)))
-            }
+    private var verdict: String {
+        switch score.value {
+        case 0.7...: "good"
+        case 0.4..<0.7: "fair"
+        default: "poor"
         }
-        .frame(height: 12)
     }
 }
 

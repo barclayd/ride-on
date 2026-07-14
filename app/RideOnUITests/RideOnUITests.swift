@@ -58,6 +58,10 @@ final class RideOnUITests: XCTestCase {
         row.tap()
 
         XCTAssertTrue(app.navigationBars["Why This Ride"].waitForExistence(timeout: 5))
+
+        // The 10-day scan is deterministic in fixture-world (day 2 is the
+        // seeded standout), so the sheet always shows a best-day verdict.
+        XCTAssertTrue(app.descendants(matching: .any)["best-day-badge"].firstMatch.waitForExistence(timeout: 5))
     }
 
     // ponytail: file-picker UI automation is flaky (system sheet, no stable
