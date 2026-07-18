@@ -578,13 +578,18 @@ private struct ContextEditorSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
                 Section("Time") {
+                    LabeledContent("Hours available") {
+                        Text("\(hoursAvailable.formatted(.number.precision(.fractionLength(0...1)))) hr")
+                            .monospacedDigit()
+                            .contentTransition(.numericText(value: hoursAvailable))
+                    }
                     Slider(value: $hoursAvailable, in: 0.5...8, step: 0.5) {
                         Text("Hours available")
                     }
-                    Text("\(hoursAvailable.formatted(.number.precision(.fractionLength(0...1)))) hours")
-                        .foregroundStyle(.secondary)
+                    .labelsHidden()
                 }
                 Section("Intent") {
                     Picker("Intent", selection: $intent) {
@@ -593,6 +598,7 @@ private struct ContextEditorSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
                 Section("Back By") {
                     Toggle("Set a return time", isOn: $hasBackBy)
@@ -604,6 +610,7 @@ private struct ContextEditorSheet: View {
                     }
                 }
             }
+            .formStyle(.grouped)
             .navigationTitle("Today's Ride")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
