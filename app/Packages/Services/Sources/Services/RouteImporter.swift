@@ -3,8 +3,10 @@ import SwiftData
 import Models
 import Engine
 
-/// GPX file/Data -> parse -> classify -> persist. Parse failure (bad GPX)
-/// is fatal and thrown — there's no route to build without geometry.
+/// GPX/FIT file/Data -> parse -> classify -> persist. The format is sniffed
+/// from the bytes (FIT's ".FIT" header magic), not the file extension. Parse
+/// failure (bad file) is fatal and thrown — there's no route to build
+/// without geometry.
 /// Classify failure (network/worker) is **non-fatal**: the route is still
 /// persisted with `surfaces == nil` / `suggestedType == nil` and
 /// `needsClassification = true` for a later retry.
@@ -63,7 +65,9 @@ public struct RouteImporter {
         source: RouteSource = .gpxImport,
         stravaRouteID: String? = nil
     ) async throws -> RouteModel {
-        let track = try GPXParser.parse(data: data)
+        let track = FITParser.isFIT(data: data)
+            ? try FITParser.parse(data: data)
+            : try GPXParser.parse(data: data)
 
         // Route-planner exports (cycle.travel, some komoot) carry no <ele>
         // at all, which would silently show "0 m gain" for a genuinely hilly

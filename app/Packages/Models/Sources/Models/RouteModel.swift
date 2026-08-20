@@ -4,7 +4,7 @@ import SwiftData
 /// Where a persisted route came from — GPX file import today, Strava route
 /// sync in Phase 6.
 public enum RouteSource: String, Codable, Sendable {
-    case gpxImport
+    case gpxImport // any local file import (GPX or FIT) — raw value kept for persisted data
     case strava
 }
 

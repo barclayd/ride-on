@@ -12,6 +12,10 @@ extension UTType {
     static var gpx: UTType {
         UTType(importedAs: "com.topografix.gpx")
     }
+
+    static var fit: UTType {
+        UTType(importedAs: "com.garmin.fit")
+    }
 }
 
 private enum RouteChip: String, CaseIterable, Identifiable {
@@ -153,7 +157,7 @@ public struct RoutesView: View {
         }
         .fileImporter(
             isPresented: $isImporterPresented,
-            allowedContentTypes: [.gpx, .xml],
+            allowedContentTypes: [.gpx, .fit, .xml],
             allowsMultipleSelection: true
         ) { result in
             handleImport(result)
@@ -277,7 +281,7 @@ public struct RoutesView: View {
         guard !urlProviders.isEmpty else { return false }
         for provider in urlProviders {
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                guard let url, ["gpx", "xml"].contains(url.pathExtension.lowercased()) else { return }
+                guard let url, ["gpx", "xml", "fit"].contains(url.pathExtension.lowercased()) else { return }
                 Task { @MainActor in
                     handleImport(.success([url]))
                 }
