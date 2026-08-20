@@ -89,6 +89,9 @@ Anything not listed here is a stock SwiftUI component.
 | Ambiance crossfade (dial screens, card weather) | `.smooth(duration: 0.8)` opacity crossfade between gradient states |
 | Async content arrival (Today's spinner → ranked list, best-day badge) | `.smooth` (`Motion.panelMaterialize`) — never a hard cut |
 | Score-ring fill on appear | `.smooth(duration: 0.8)` (`Motion.ringFill`), tint fixed at the final score |
+| Haptics — stepped sliders (weights, speeds, temp, wind) | `.sensoryFeedback(.selection)` per step |
+| Haptics — dial-screen sky band flip, settings pickers | `.sensoryFeedback(.selection)` (lives in `DialScreen`, covers all dial controls) |
+| Haptics — dial-screen Continue/Save | `.sensoryFeedback(.impact)` |
 
 Reduce Motion: zoom transitions fall back to `.automatic`, glass transitions to `.materialize`, ambiance crossfades to instant, ring fills to instant, particles disabled.
 

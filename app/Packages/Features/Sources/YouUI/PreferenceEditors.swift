@@ -102,6 +102,8 @@ struct MaxWindEditor: View {
                 Slider(value: $draft, in: 5...60, step: 1)
                 Text(UnitFormat.speed(kph: draft, system: unitSystem)).font(.title3.monospacedDigit()).foregroundStyle(.white)
             }
+            // Per-step tick on the 1 km/h slider; band flips are handled in DialScreen.
+            .sensoryFeedback(.selection, trigger: draft)
         } onContinue: {
             maxWindKph = draft
             dismiss()
@@ -138,6 +140,8 @@ struct TemperatureRangeEditor: View {
                     Slider(value: $draftHigh, in: -5...30, step: 1)
                 }
             }
+            .sensoryFeedback(.selection, trigger: draftLow)
+            .sensoryFeedback(.selection, trigger: draftHigh)
         } onContinue: {
             range = min(draftLow, draftHigh)...max(draftLow, draftHigh)
             dismiss()

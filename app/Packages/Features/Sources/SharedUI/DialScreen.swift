@@ -15,6 +15,7 @@ public struct DialScreen<Control: View>: View {
     public var pageCount: Int?
     @ViewBuilder public var control: Control
     public var onContinue: () -> Void
+    @State private var continueTapCount = 0
 
     public init(
         title: String,
@@ -85,7 +86,10 @@ public struct DialScreen<Control: View>: View {
                     }
                 }
 
-                Button(ctaTitle, action: onContinue)
+                Button(ctaTitle) {
+                    continueTapCount += 1
+                    onContinue()
+                }
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.capsule)
                     .controlSize(.large)
@@ -94,6 +98,10 @@ public struct DialScreen<Control: View>: View {
             .padding(.bottom, 32)
         }
         .foregroundStyle(.white)
+        // Tick when the reactive sky band flips — one haptic for every dial
+        // control (sliders, segmented pickers) since they all drive `sky`.
+        .sensoryFeedback(.selection, trigger: sky)
+        .sensoryFeedback(.impact, trigger: continueTapCount)
     }
 }
 
