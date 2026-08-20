@@ -464,6 +464,10 @@ private struct ImportConfirmationSheet: View {
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("New Route")
+            // Inline, not large: a half-sheet confirmation gets a compact bar
+            // title (Landmarks add-sheet idiom) — large renders a huge
+            // left-aligned headline that unbalances the centred content.
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
