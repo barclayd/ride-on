@@ -173,6 +173,7 @@ public struct UnitsPicker: View {
             Text("Metric (km, m)").tag(UnitSystem.metric)
             Text("Imperial (mi, ft)").tag(UnitSystem.imperial)
         }
+        .sensoryFeedback(.selection, trigger: selection.wrappedValue)
     }
 
     private var selection: Binding<UnitSystem> {

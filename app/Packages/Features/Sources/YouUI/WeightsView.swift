@@ -16,6 +16,7 @@ struct WeightsView: View {
                         Label(factor.displayName, systemImage: factor.symbolName)
                         Slider(value: weightBinding(for: factor), in: 0...2, step: 0.1)
                     }
+                    .sensoryFeedback(.selection, trigger: preferencesStore.weights[factor] ?? 1.0)
                 }
             } footer: {
                 Text("Higher values make that factor count more toward a route's daily score. 1.0 is neutral.")

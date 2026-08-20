@@ -57,6 +57,8 @@ struct TemperatureDialStep: View {
                     )
                 }
             }
+            // Per-step tick on the 1° sliders; band flips are handled in DialScreen.
+            .sensoryFeedback(.selection, trigger: range)
         } onContinue: { onContinue() }
     }
 }
@@ -177,6 +179,7 @@ struct WindDialStep: View {
                 Slider(value: $maxWindKph, in: 5...60, step: 1)
                 Text(UnitFormat.speed(kph: maxWindKph, system: unitSystem)).font(.title3.monospacedDigit()).foregroundStyle(.white)
             }
+            .sensoryFeedback(.selection, trigger: maxWindKph)
         } onContinue: { onContinue() }
     }
 }

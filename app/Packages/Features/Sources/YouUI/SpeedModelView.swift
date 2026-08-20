@@ -31,6 +31,7 @@ struct SpeedModelView: View {
                         }
                         Slider(value: speedBinding(for: surface), in: 5...40, step: 1)
                     }
+                    .sensoryFeedback(.selection, trigger: speedBinding(for: surface).wrappedValue)
                 }
             }
             Section("Climbing") {
@@ -49,6 +50,7 @@ struct SpeedModelView: View {
                     }
                     Slider(value: climbingPenaltyBinding, in: 0...15, step: 0.5)
                 }
+                .sensoryFeedback(.selection, trigger: climbingPenaltyBinding.wrappedValue)
             }
             if isStravaConnected {
                 Section("Strava") {
