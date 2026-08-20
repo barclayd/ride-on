@@ -62,9 +62,18 @@ targets:
             UTTypeConformsTo: [public.xml]
             UTTypeTagSpecification:
               public.filename-extension: [gpx]
+          - UTTypeIdentifier: com.garmin.fit
+            UTTypeDescription: "FIT Route"
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [fit]
         CFBundleDocumentTypes:
           - CFBundleTypeName: "GPX Route"
             LSItemContentTypes: [com.topografix.gpx]
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+          - CFBundleTypeName: "FIT Route"
+            LSItemContentTypes: [com.garmin.fit]
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
         # `rideon://strava-callback` — Strava app-to-app OAuth return
