@@ -7,12 +7,15 @@ import DesignSystem
 import Router
 import SharedUI
 
-/// DESIGN-SYSTEM.md §9 "Today": a hero `RideCard` for the top-ranked route
-/// with every other route in a ranked list below, a compact top-bar capsule
-/// for the day's bike/hours/intent/back-by inputs, and a tap-to-open
-/// breakdown sheet. Weather is fetched per route start (the day cache
-/// dedupes nearby starts), so each route is scored against its own forecast.
-public struct TodayView: View {
+/// DESIGN-SYSTEM.md §9 "Ride": a day selector in the nav bar's leading slot
+/// (any of the next 10 forecastable days), a hero `RideCard` for the
+/// top-ranked route with every other route in a ranked list below, a compact
+/// top-bar capsule for the day's bike/hours/intent/back-by inputs, and a
+/// tap-to-open breakdown sheet. Hourly weather is fetched per route start
+/// (the day cache dedupes nearby starts); the shared best window on the
+/// selected day is picked by `BestWindowScan` and every route is scored
+/// inside it.
+public struct RideView: View {
     public var namespace: Namespace.ID
 
     @Environment(\.services) private var services
@@ -27,7 +30,7 @@ public struct TodayView: View {
     private enum WeatherLoad {
         case loading
         case failed
-        case loaded([UUID: WeatherSnapshot])
+        case loaded([UUID: [HourlyWeather]])
 
         // Keys the phase-swap animation: the spinner -> content switch on
         // every launch should materialize, not hard-cut.
@@ -42,6 +45,10 @@ public struct TodayView: View {
 
     @State private var weatherLoad: WeatherLoad = .loading
     @State private var loadedDay: Date?
+    /// Which of the next 10 forecastable days is on screen. Ephemeral by
+    /// design: every launch starts on Today, and a day rollover while
+    /// backgrounded snaps back to Today.
+    @State private var selectedDayOffset = 0
     @State private var backBy: Date?
     @State private var deviceLocation: Coordinate?
     @State private var isContextEditorPresented = false
@@ -50,9 +57,9 @@ public struct TodayView: View {
     @State private var travelMinutesByRouteID: [UUID: Int] = [:]
     @ScaledMetric(relativeTo: .largeTitle) private var restDaySymbolSize: CGFloat = 40
 
-    // A route only takes the hero slot when today's conditions grade as
-    // worth riding (tier C or better) — otherwise the "rest day" card takes
-    // it, with the ranked list still below.
+    // A route only takes the hero slot when the selected day's conditions
+    // grade as worth riding (tier C or better) — otherwise the "rest day"
+    // card takes it, with the ranked list still below.
 
     public init(namespace: Namespace.ID) {
         self.namespace = namespace
@@ -72,18 +79,18 @@ public struct TodayView: View {
                     ProgressView()
                 case .failed:
                     weatherUnavailable
-                case .loaded(let weatherByRouteID):
-                    rankedContent(weatherByRouteID: weatherByRouteID)
+                case .loaded(let hoursByRouteID):
+                    rankedContent(hoursByRouteID: hoursByRouteID)
                 }
             }
         }
         .animation(Motion.panelMaterialize, value: weatherLoad.phase)
-        .navigationTitle("Today")
-        .task(id: routeModels.map(\.id)) {
+        .navigationTitle(dayLabel(offset: selectedDayOffset))
+        .task(id: "\(selectedDayOffset)|" + routeModels.map(\.id.uuidString).joined()) {
             await loadWeather()
         }
         .task(id: preferencesStore.hasPrimedLocationPermission) {
-            // DESIGN-SYSTEM.md §9: location is primed on first Today entry.
+            // DESIGN-SYSTEM.md §9: location is primed on first Ride entry.
             // Until primed, don't touch CoreLocation — the system prompt may
             // only ever follow the priming sheet's Allow.
             guard preferencesStore.hasPrimedLocationPermission else {
@@ -93,15 +100,20 @@ public struct TodayView: View {
             await loadTravelTimes(requestingPermission: false)
         }
         .onChange(of: scenePhase) { _, phase in
-            // Day rollover while backgrounded: yesterday's ranking is stale.
+            // Day rollover while backgrounded: yesterday's ranking is stale
+            // and yesterday's "Tomorrow" is today — snap back to Today.
             if phase == .active, let loadedDay, !Calendar.current.isDate(loadedDay, inSameDayAs: .now) {
+                selectedDayOffset = 0
                 Task { await loadWeather() }
             }
         }
-        // Ride context lives in the top bar as a compact capsule (hours ·
-        // bike) — toolbar items get system glass for free (DESIGN-SYSTEM.md
-        // §2: glass is chrome), and the full summary is in the a11y label.
+        // Day selector leads, ride context trails — both plain toolbar
+        // items riding the system's toolbar glass (DESIGN-SYSTEM.md §2:
+        // glass is chrome).
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                daySelector
+            }
             ToolbarItem(placement: .primaryAction) {
                 ContextToolbarButton(
                     bike: preferencesStore.todaySettings.bike,
@@ -130,6 +142,10 @@ public struct TodayView: View {
                 onViewRoute: { routeID in
                     breakdownItem = nil
                     navigate(.routeDetail(routeID: routeID))
+                },
+                onSelectDay: { date in
+                    breakdownItem = nil
+                    jumpSelector(to: date)
                 }
             )
         }
@@ -147,16 +163,62 @@ public struct TodayView: View {
         }
     }
 
+    // MARK: - Day selection
+
+    /// Stock `Menu` + `Picker` so selection gets the system checkmark for
+    /// free. Only the next 10 days appear — the bound is WeatherKit's
+    /// hour-level forecast range, not a UI choice.
+    private var daySelector: some View {
+        Menu {
+            Picker("Day", selection: $selectedDayOffset) {
+                ForEach(0..<LiveWeatherProvider.forecastDays, id: \.self) { offset in
+                    Text(dayLabel(offset: offset)).tag(offset)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                Text(dayLabel(offset: selectedDayOffset))
+                    .font(.subheadline.weight(.medium))
+            }
+        }
+        .accessibilityLabel("Ride day: \(dayLabel(offset: selectedDayOffset)). Double tap to pick another day.")
+        .accessibilityIdentifier("ride-day-selector")
+    }
+
+    /// "Today", "Tomorrow", then locale-aware weekday + day number
+    /// ("Thursday 28") — weekday alone is ambiguous once the 10-day span
+    /// wraps past a week.
+    private func dayLabel(offset: Int) -> String {
+        switch offset {
+        case 0: String(localized: "Today")
+        case 1: String(localized: "Tomorrow")
+        default: day(at: offset).formatted(.dateTime.weekday(.wide).day())
+        }
+    }
+
+    private func day(at offset: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: offset, to: .now) ?? .now
+    }
+
+    private func jumpSelector(to date: Date) {
+        let calendar = Calendar.current
+        let offset = calendar.dateComponents([.day], from: calendar.startOfDay(for: .now), to: calendar.startOfDay(for: date)).day ?? 0
+        selectedDayOffset = max(0, min(offset, LiveWeatherProvider.forecastDays - 1))
+    }
+
     // MARK: - Ranked content
 
-    private func rankedContent(weatherByRouteID: [UUID: WeatherSnapshot]) -> some View {
-        let ranked = rankedRides(weatherByRouteID: weatherByRouteID)
-        let heroRide = ranked.first.flatMap { $0.tier.isWorthRiding ? $0 : nil }
+    private func rankedContent(hoursByRouteID: [UUID: [HourlyWeather]]) -> some View {
+        let ranking = windowRanking(hoursByRouteID: hoursByRouteID)
+        let ranked = ranking?.ranked ?? []
+        let heroRide = ranked.first.flatMap { RideTier(score: $0.score).isWorthRiding ? $0 : nil }
+        let windowStart = ranking?.start
 
         return ScrollView {
             VStack(spacing: 16) {
                 if let heroRide {
-                    hero(for: heroRide, weatherByRouteID: weatherByRouteID)
+                    hero(for: heroRide, hoursByRouteID: hoursByRouteID, windowStart: windowStart)
                 } else {
                     restDayCard
                 }
@@ -168,9 +230,9 @@ public struct TodayView: View {
                             model: model,
                             score: rankedRide.score,
                             stats: statsLine(for: model),
-                            weather: weatherByRouteID[model.id]
+                            weather: windowStart.flatMap { hoursByRouteID[model.id]?.snapshot(at: $0) }
                         ) {
-                            breakdownItem = breakdownItem(for: rankedRide, weatherByRouteID: weatherByRouteID)
+                            breakdownItem = breakdownItem(for: rankedRide, hoursByRouteID: hoursByRouteID, windowStart: windowStart)
                         }
                     }
                 }
@@ -182,20 +244,21 @@ public struct TodayView: View {
     }
 
     @ViewBuilder
-    private func hero(for rankedRide: RankedRide, weatherByRouteID: [UUID: WeatherSnapshot]) -> some View {
+    private func hero(for rankedRide: RankedRide, hoursByRouteID: [UUID: [HourlyWeather]], windowStart: Date?) -> some View {
         if let model = routeModels.first(where: { $0.id == rankedRide.route.id }) {
+            let weather = windowStart.flatMap { hoursByRouteID[model.id]?.snapshot(at: $0) }
             RideCard(
                 routeID: model.id,
                 routeName: model.name,
                 coordinates: model.coordinates,
-                chips: chips(for: rankedRide, weather: weatherByRouteID[model.id]),
-                sky: weatherByRouteID[model.id]?.sky ?? .sunny,
+                chips: chips(for: rankedRide, weather: weather, windowStart: windowStart),
+                sky: weather?.sky ?? .sunny,
                 score: rankedRide.score,
                 stats: statsLine(for: model)
             )
             .frame(height: 420)
             .onTapGesture {
-                breakdownItem = breakdownItem(for: rankedRide, weatherByRouteID: weatherByRouteID)
+                breakdownItem = breakdownItem(for: rankedRide, hoursByRouteID: hoursByRouteID, windowStart: windowStart)
             }
             .matchedTransitionSource(id: model.id, in: namespace)
         }
@@ -208,7 +271,9 @@ public struct TodayView: View {
                 .foregroundStyle(.secondary)
             Text("Take a Rest Day")
                 .font(.title2.bold())
-            Text("Nothing in your routes fits today's conditions and time budget well. Adjust your plans or check back tomorrow.")
+            Text(selectedDayOffset == 0
+                ? "Nothing in your routes fits today's conditions and time budget well. Adjust your plans or check back tomorrow."
+                : "Nothing in your routes fits the conditions and time budget well that day. Try picking a different day.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -226,7 +291,7 @@ public struct TodayView: View {
         ContentUnavailableView {
             Label("Weather Unavailable", systemImage: "cloud.slash")
         } description: {
-            Text("Recommendations need today's forecast. Check your connection and try again.")
+            Text("Recommendations need a forecast for the selected day. Check your connection and try again.")
         } actions: {
             Button("Retry") {
                 Task { await loadWeather() }
@@ -248,89 +313,96 @@ public struct TodayView: View {
         rideLogModels.compactMap { $0.asRideLog() }
     }
 
-    /// Each route is ranked in its own context: same rider inputs and start
-    /// location (travel distance must stay rider -> route start), but that
-    /// route's own forecast. Routes whose forecast fetch failed are skipped
-    /// rather than ranked against someone else's weather.
-    private func rankedRides(weatherByRouteID: [UUID: WeatherSnapshot]) -> [RankedRide] {
-        let routes = routeModels.map { $0.asRoute() }
-        let settings = preferencesStore.todaySettings
-        let scorer = Recommendations.scorer(
+    private func scorer(routes: [Route]) -> WeightedScorer {
+        Recommendations.scorer(
             preferences: preferencesStore.preferences,
             rideLogs: rideLogs,
             allRoutes: routes,
             weights: preferencesStore.weights
         )
+    }
 
-        let ranked = routes.compactMap { route -> RankedRide? in
-            guard let weather = weatherByRouteID[route.id] else { return nil }
-            let context = Recommendations.context(
-                date: .now,
-                // No known rider location -> the route's own start, which
-                // zeroes the travel term instead of inventing one. (The
-                // literal is unreachable in practice: a route with no start
-                // never got a forecast, so it was skipped above.)
-                startLocation: travelOrigin ?? route.start ?? Coordinate(latitude: 51.7520, longitude: -0.8010),
-                hoursAvailable: settings.hoursAvailable,
-                backBy: backBy,
-                intent: settings.intent,
-                bike: settings.bike,
-                weather: weather
-            )
-            return scorer.rank(routes: [route], context: context).first
-        }
-
-        return ranked.sorted { lhs, rhs in
-            if lhs.score != rhs.score { return lhs.score > rhs.score }
-            return lhs.route.id.uuidString < rhs.route.id.uuidString
-        }
+    /// One shared best window on the selected day, every route ranked
+    /// inside it — same rider inputs and start location per route (travel
+    /// distance must stay rider -> route start), each route against its own
+    /// forecast. Routes whose forecast fetch failed are skipped rather than
+    /// ranked against someone else's weather.
+    private func windowRanking(hoursByRouteID: [UUID: [HourlyWeather]]) -> BestWindowScan.WindowRanking? {
+        let routes = routeModels.map { $0.asRoute() }
+        let settings = preferencesStore.todaySettings
+        return Recommendations.windowRanking(
+            day: day(at: selectedDayOffset),
+            routes: routes,
+            hoursByRouteID: hoursByRouteID,
+            ridingWindowMinutes: preferencesStore.preferences.effectiveRidingWindowMinutes,
+            hoursAvailable: settings.hoursAvailable,
+            backBy: backBy,
+            intent: settings.intent,
+            bike: settings.bike,
+            // No known rider location -> the route's own start, which
+            // zeroes the travel term instead of inventing one. (The
+            // literal is unreachable in practice: a route with no start
+            // never got a forecast, so it was skipped.)
+            startLocationFor: { route in travelOrigin ?? route.start ?? Coordinate(latitude: 51.7520, longitude: -0.8010) },
+            scorer: scorer(routes: routes)
+        )
     }
 
     /// The 10-day best-day scan for one route: per-day forecasts at the
-    /// route's start, travel measured from the rider, same scorer as the
-    /// today ranking. Days without forecast confidence are skipped.
+    /// route's start, each day anchored at its own best window, travel
+    /// measured from the rider, same scorer as the day ranking. Days
+    /// without forecast confidence are skipped.
     private func loadRecommendation(for rankedRide: RankedRide) async -> DayRecommendation? {
         let routes = routeModels.map { $0.asRoute() }
         guard let route = routes.first(where: { $0.id == rankedRide.route.id }),
               let routeStart = route.start else { return nil }
         let settings = preferencesStore.todaySettings
-        let contexts = await Recommendations.upcomingContexts(
+        let scorer = scorer(routes: routes)
+        let contexts = await Recommendations.upcomingWindowContexts(
+            route: route,
             weather: services.weather,
             weatherLocation: routeStart,
             startLocation: travelOrigin ?? routeStart,
+            ridingWindowMinutes: preferencesStore.preferences.effectiveRidingWindowMinutes,
             hoursAvailable: settings.hoursAvailable,
             backBy: backBy,
             intent: settings.intent,
-            bike: settings.bike
-        )
-        let scorer = Recommendations.scorer(
-            preferences: preferencesStore.preferences,
-            rideLogs: rideLogs,
-            allRoutes: routes,
-            weights: preferencesStore.weights
+            bike: settings.bike,
+            scorer: scorer
         )
         return Recommendations.bestDay(for: route, contexts: contexts, scorer: scorer)
     }
 
-    private func breakdownItem(for rankedRide: RankedRide, weatherByRouteID: [UUID: WeatherSnapshot]) -> BreakdownItem {
-        BreakdownItem(
+    private func breakdownItem(for rankedRide: RankedRide, hoursByRouteID: [UUID: [HourlyWeather]], windowStart: Date?) -> BreakdownItem {
+        let weather = windowStart.flatMap { hoursByRouteID[rankedRide.route.id]?.snapshot(at: $0) }
+        return BreakdownItem(
             rankedRide: rankedRide,
-            chips: chips(for: rankedRide, weather: weatherByRouteID[rankedRide.route.id])
+            chips: chips(for: rankedRide, weather: weather, windowStart: windowStart)
         )
     }
 
-    private func chips(for rankedRide: RankedRide, weather: WeatherSnapshot?) -> [ConditionChipData] {
+    private func chips(for rankedRide: RankedRide, weather: WeatherSnapshot?, windowStart: Date?) -> [ConditionChipData] {
         guard let weather else { return [] }
         // ponytail: a chip is a terse capsule, not a sentence — the factor's
         // `reason` (shown in full in the breakdown sheet's FactorRow) is too
         // long here, so this always builds the short "N km/h" form instead.
-        return ConditionChipData.todayChips(
+        return ConditionChipData.rideChips(
             windLabel: "\(UnitFormat.speed(kph: weather.windKph, system: unitSystem)) wind",
             temperatureC: weather.temperatureC,
             sky: weather.sky,
             travelMinutes: travelMinutesByRouteID[rankedRide.route.id],
-            rideHours: preferencesStore.todaySettings.hoursAvailable
+            rideHours: preferencesStore.todaySettings.hoursAvailable,
+            windowText: windowStart.flatMap(windowText)
         )
+    }
+
+    /// "10:00–13:00" for the shared best window — suppressed on Today when
+    /// the window is effectively "ride now", where the plain duration chip
+    /// says more.
+    private func windowText(start: Date) -> String? {
+        if selectedDayOffset == 0, start.timeIntervalSince(.now) < 45 * 60 { return nil }
+        let end = start.addingTimeInterval(preferencesStore.todaySettings.hoursAvailable * 3600)
+        return start.formatted(date: .omitted, time: .shortened) + "–" + end.formatted(date: .omitted, time: .shortened)
     }
 
     private func statsLine(for model: RouteModel) -> String {
@@ -346,8 +418,8 @@ public struct TodayView: View {
 
     private func loadWeather() async {
         if case .loaded = weatherLoad {
-            // keep showing stale content during a refresh; the spinner is
-            // only for the first load of the day
+            // keep showing stale content during a refresh or day switch; the
+            // spinner is only for the first load of the day
         } else {
             weatherLoad = .loading
         }
@@ -363,21 +435,22 @@ public struct TodayView: View {
         }
 
         let weatherService = services.weather
-        var byRouteID: [UUID: WeatherSnapshot] = [:]
-        await withTaskGroup(of: (UUID, WeatherSnapshot?).self) { group in
+        let selectedDay = day(at: selectedDayOffset)
+        var byRouteID: [UUID: [HourlyWeather]] = [:]
+        await withTaskGroup(of: (UUID, [HourlyWeather]?).self) { group in
             for (id, start) in starts {
                 group.addTask {
-                    (id, try? await weatherService.forecast(for: start, on: .now))
+                    (id, try? await weatherService.hourlyForecast(for: start, on: selectedDay))
                 }
             }
-            for await (id, snapshot) in group {
-                if let snapshot { byRouteID[id] = snapshot }
+            for await (id, hours) in group {
+                if let hours { byRouteID[id] = hours }
             }
         }
 
         if byRouteID.isEmpty {
-            // A failed *refresh* keeps yesterday's data on screen — the
-            // Retry state is only for having nothing at all to show.
+            // A failed *refresh* keeps the last data on screen — the Retry
+            // state is only for having nothing at all to show.
             if case .loaded = weatherLoad { return }
             weatherLoad = .failed
         } else {
@@ -409,8 +482,8 @@ private struct BreakdownItem: Identifiable {
 }
 
 /// One ranked runner-up: map thumbnail, name, stats, this route's own sky +
-/// temperature, compact `ScoreRing`. Not a §6 component — screen-specific,
-/// like `ContextPillButton`.
+/// temperature at the shared window, compact `ScoreRing`. Not a §6
+/// component — screen-specific, like `ContextToolbarButton`.
 private struct RankedRouteRow: View {
     var model: RouteModel
     var score: Double
@@ -460,7 +533,7 @@ private struct RankedRouteRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySentence)
         .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("today-route-row")
+        .accessibilityIdentifier("ride-route-row")
         .task(id: model.id) {
             thumbnail = await RouteSnapshotService.snapshot(
                 routeID: model.id,
@@ -517,7 +590,7 @@ private struct ContextToolbarButton: View {
             }
         }
         .accessibilityLabel("Ride context: \(fullSummary). Double tap to edit.")
-        .accessibilityIdentifier("today-context-button")
+        .accessibilityIdentifier("ride-context-button")
     }
 
     private var fullSummary: String {
@@ -592,7 +665,7 @@ private struct ContextEditorSheet: View {
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle("Today's Ride")
+            .navigationTitle("Ride Plan")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -609,15 +682,16 @@ private struct ContextEditorSheet: View {
 
 /// The breakdown sheet: `ScoreRing` tier header, this route's condition
 /// chips, the 10-day `BestDayBadge` verdict (loaded async — ride day + tier,
-/// or an explicit "give it a miss"), one clean `FactorRow` explainer per
-/// factor, a View Route push, weather attribution footer. System glass at
-/// partial detents (free) on iOS; a standard modal with a Done button on
-/// macOS.
+/// or an explicit "give it a miss"; tapping a ride day jumps the day
+/// selector there), one clean `FactorRow` explainer per factor, a View
+/// Route push, weather attribution footer. System glass at partial detents
+/// (free) on iOS; a standard modal with a Done button on macOS.
 private struct BreakdownSheet: View {
     var rankedRide: RankedRide
     var chips: [ConditionChipData]
     var loadRecommendation: () async -> DayRecommendation?
     var onViewRoute: (UUID) -> Void
+    var onSelectDay: (Date) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @ScaledMetric(relativeTo: .title) private var ringSize: CGFloat = 64
@@ -632,7 +706,9 @@ private struct BreakdownSheet: View {
                         .font(.headline)
                     ConditionChipRow(chips: chips)
                     if let recommendation {
-                        BestDayBadge(recommendation: recommendation)
+                        BestDayBadge(recommendation: recommendation) {
+                            onSelectDay(recommendation.context.date)
+                        }
                     }
                     VStack(spacing: 12) {
                         ForEach(rankedRide.factorScores, id: \.factor) { score in

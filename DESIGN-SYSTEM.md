@@ -25,7 +25,7 @@ Sources: Apple HIG (Materials, Layout, Color, Typography, Sheets, Tab Bars, Tool
 | Toolbars / nav bar | System glass, free; group with spacers | `.toolbar`, `ToolbarSpacer(.fixed/.flexible, placement:)` |
 | Factor-breakdown sheet | System glass at partial detents, free | `.presentationDetents([.fraction(0.35), .medium, .large])` — remove any manual `.presentationBackground` |
 | Mac sidebar | Floating glass panel, free | `NavigationSplitView`; detail uses `.backgroundExtensionEffect()` |
-| Today ride-context control (bike/hours/intent) | Compact capsule in the nav bar's trailing slot — system toolbar glass, free. Visible label is the two highest-value facts (hours · bike); the full context lives in the editor sheet + a11y label | `.toolbar { ToolbarItem(placement: .primaryAction) { … } }` |
+| Ride tab chrome (day selector, ride-context control) | Day selector: leading `Menu` over the next 10 forecastable days (the weather provider's confidence bound); large title shows the selected day (Today/Tomorrow/weekday + date). Ride context (bike/hours/intent): compact capsule in the nav bar's trailing slot — system toolbar glass, free. Visible label is the two highest-value facts (hours · bike); the full context lives in the editor sheet + a11y label | `.toolbar { ToolbarItem(placement: .primaryAction) { … } }` |
 | Buttons on glass | `.buttonStyle(.glass)`; primary action `.buttonStyle(.glassProminent)` + `.buttonBorderShape(.capsule)` |
 | Content cards (stats, factor rows) | **Not glass.** `.background(.regularMaterial, in: .rect(corners: .concentric))` or opaque secondary background |
 
@@ -39,7 +39,7 @@ Rules:
 - **Semantic system colors only** for UI: `.primary`, `.secondary`, `Color(.systemBackground)` family. Vibrant foreground styles on any material — never hardcoded hex on glass.
 - **Accent**: burnt orange `#BE5103`, defined once in the asset catalog (`AccentColor`) with a lightened dark-mode variant (raw `#BE5103` will sit too dark on dark backgrounds — tune on device, ~`#E06A1B` starting point) and verified for 3:1 contrast as a control tint in both modes. Applied via `.tint()`. On any screen, at most one glass element carries `Glass.tint(accent)` — the primary action.
 - **Condition scale** (the only custom palette): a fixed temperature/severity ramp borrowed from Apple Weather's convention — deep blue < 0°C → light blue → green → yellow → orange → red > 30°C. Used by: condition chips, the 10-day "best day" markers, factor range bars. Defined as `ShapeStyle` tokens in `ConditionPalette.swift`; chips must also differ by SF Symbol, not color alone (Differentiate Without Color).
-- **Ambiance gradients** (Today cards, onboarding dials): generated at runtime from forecast condition + time of day (sun position → warm top-light; overcast → flat cool grey; rain → darkened blue-grey with particle layer). Implemented as one `AmbianceStyle(condition:date:location:)` factory returning gradient + optional particle effect. Dark-mode aware. This is the app's visual signature — and it's computed, not drawn.
+- **Ambiance gradients** (Ride cards, onboarding dials): generated at runtime from forecast condition + time of day (sun position → warm top-light; overcast → flat cool grey; rain → darkened blue-grey with particle layer). Implemented as one `AmbianceStyle(condition:date:location:)` factory returning gradient + optional particle effect. Dark-mode aware. This is the app's visual signature — and it's computed, not drawn.
 
 ## 4. Typography
 
@@ -60,8 +60,8 @@ Spacing that scales with type uses `@ScaledMetric(relativeTo:)`. Titles: Title C
 
 - **Edge-to-edge content**: scrollable content runs under the tab bar/toolbars; system scroll-edge effect handles legibility (`.scrollEdgeEffectStyle(.soft, for: .bottom)` is the default — don't fight it). Custom bottom bars use `.safeAreaBar(edge: .bottom)`, not `.safeAreaInset`.
 - **Corner radii are never hard-coded.** Nested shapes use `ConcentricRectangle` / `.rect(corners: .concentric)` with `.containerShape(_:)` on the ancestor. Touch targets are capsules on iOS; macOS resolves its own control shapes.
-- **Today hero card**: full-bleed, ignores horizontal safe areas via `.backgroundExtensionEffect()` where chrome overlaps; text sits on a bottom scrim gradient (black 0% → 45%), Invites-style — data layered *on* the image, never below it.
-- Breakpoints: iPhone = hero + list + tab bar; iPad/Mac = `NavigationSplitView` (sidebar: Today/Routes/You) with the same hero + list in the detail column and detail panes side-by-side where space allows.
+- **Ride hero card**: full-bleed, ignores horizontal safe areas via `.backgroundExtensionEffect()` where chrome overlaps; text sits on a bottom scrim gradient (black 0% → 45%), Invites-style — data layered *on* the image, never below it.
+- Breakpoints: iPhone = hero + list + tab bar; iPad/Mac = `NavigationSplitView` (sidebar: Ride/Routes/You) with the same hero + list in the detail column and detail panes side-by-side where space allows.
 
 ## 6. Components (the complete custom inventory)
 
@@ -73,21 +73,21 @@ Anything not listed here is a stock SwiftUI component.
 4. **`ElevationProfile`** — Swift Charts `AreaMark` (distance → elevation), `.interpolationMethod(.monotone)`, gradient fill, `chartXSelection` scrubbing with `RuleMark` + annotation, selection synced to a dot on the route `Map`.
 5. **`SurfaceBar`** — the cycle.travel-style stacked horizontal bar: busy road / paved / unpaved / path percentages, condition-palette-adjacent fixed colors, legend as `.caption` rows.
 6. **`DialScreen`** — onboarding preference screen scaffold: large title, one-sentence body, ONE control (slider for temp range; segmented for sun/rain/wind), `Continue`, page dots. Background is a live `AmbianceStyle` that crossfades (`.animation(.smooth)`) as the selection changes — rain → sun reacts to the tap. Reused verbatim as the Settings editor for each preference (Sports' "onboarding is the settings" model).
-7. **`BestDayBadge`** — the 10-day best-day verdict, in Route Detail and the breakdown sheet: "Best day: Thursday" with the tier letter in a condition-palette circle and a one-phrase tier summary — or, when even the best day grades D, an explicit "Give it a miss" state. Rendered whenever the scan has run; the scan itself is bounded by how many days the weather provider has forecast confidence for (~10).
+7. **`BestDayBadge`** — the 10-day best-day verdict, in Route Detail and the breakdown sheet: "Best day: Thursday" with the tier letter in a condition-palette circle and a one-phrase tier summary — or, when even the best day grades D, an explicit "Give it a miss" state. In the Ride tab's breakdown sheet a ride-day badge is tappable and jumps the day selector to that day; in Route Detail it stays informational. Rendered whenever the scan has run; the scan itself is bounded by how many days the weather provider has forecast confidence for (~10).
 8. **`ScoreRing`** *(small)* — compact tier ring used on list rows and the breakdown header: gauge fill is the raw 0–1 score, center shows the `RideTier` letter (S/A/B/C/D — D means "don't ride"), tint from the condition palette.
 
 ## 7. Motion
 
 | Moment | Token |
 |---|---|
-| Today ranked list scrolling | Plain vertical `ScrollView`; no parallax |
+| Ride ranked list scrolling | Plain vertical `ScrollView`; no parallax |
 | Sheet presentation, panel materialize | `.smooth` (0.5s, no bounce) |
 | Tap feedback on glass pills | `Glass.interactive()` (system) + `.snappy` for any accompanying layout change |
 | Card / Routes row → Route Detail | `.navigationTransition(.zoom(sourceID:in:))` with `matchedTransitionSource` (push path only — the Mac/iPad split's detail column swaps in place) |
 | Glass morphs (pill expand/collapse) | `glassEffectID` + `@Namespace` in shared container; `.glassEffectTransition(.matchedGeometry)` |
 | Onboarding page transitions | Spring slide+fade; content staggers in with scale/fade |
 | Ambiance crossfade (dial screens, card weather) | `.smooth(duration: 0.8)` opacity crossfade between gradient states |
-| Async content arrival (Today's spinner → ranked list, best-day badge) | `.smooth` (`Motion.panelMaterialize`) — never a hard cut |
+| Async content arrival (Ride's spinner → ranked list, best-day badge) | `.smooth` (`Motion.panelMaterialize`) — never a hard cut |
 | Score-ring fill on appear | `.smooth(duration: 0.8)` (`Motion.ringFill`), tint fixed at the final score |
 | Haptics — stepped sliders (weights, speeds, temp, wind) | `.sensoryFeedback(.selection)` per step |
 | Haptics — dial-screen sky band flip, settings pickers | `.sensoryFeedback(.selection)` (lives in `DialScreen`, covers all dial controls) |
@@ -106,10 +106,10 @@ Reduce Motion: zoom transitions fall back to `.automatic`, glass transitions to 
 
 | Screen | Pattern source |
 |---|---|
-| Today hero + ranked list | Invites full-bleed hero card; every route ranked below in rows (thumbnail, stats, per-route sky + temp, compact `ScoreRing`); rest-day card takes the hero slot when the top score is poor, list stays. Weather is fetched per route start; failure → `ContentUnavailableView` + Retry, never a stuck loader |
+| Ride hero + ranked list | Invites full-bleed hero card; every route ranked below in rows (thumbnail, stats, per-route sky + temp at the day's best window, compact `ScoreRing`); rest-day card takes the hero slot when the top score is poor, list stays. The selected day's ranking is anchored at one shared best start window (searched inside the rider's preferred riding hours, You tab); the hero's clock chip shows the window ("10:00–13:00") except on Today when the window is effectively now. Hourly weather is fetched per route start; failure → `ContentUnavailableView` + Retry, never a stuck loader |
 | Factor breakdown sheet | Maps peek→medium→large detents; Weather metric-grid cards |
 | Route Detail | Maps place card: map hero, stats, progressive disclosure; zoom transition in |
 | Routes library | Searchable list; Maps' pre-typed search suggestions (chips: Road, Gravel, Under 2h, Not ridden lately); segmented Saved/Ridden toggle |
-| Onboarding | Fitness one-control-per-screen; splash screen = UIOnboarding feature-splash pattern; permissions primed contextually with one-sentence explainer immediately before each system sheet — location asked on first Today entry, Health before enabling ride matching, never all upfront |
+| Onboarding | Fitness one-control-per-screen; splash screen = UIOnboarding feature-splash pattern; permissions primed contextually with one-sentence explainer immediately before each system sheet — location asked on first Ride entry, Health before enabling ride matching, never all upfront |
 | You tab | Sports no-settings philosophy: preference rows reopen their DialScreen; priorities panel for engine weights; connections (Strava), about, attribution |
 | Weather attribution | ` Weather` mark + legal link in factor sheet footer and You → About (mandatory, `WeatherService.attribution`) |

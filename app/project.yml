@@ -34,7 +34,7 @@ targets:
       - package: Router
       - package: Services
       - package: Features
-        product: TodayUI
+        product: RideUI
       - package: Features
         product: RoutesUI
       - package: Features

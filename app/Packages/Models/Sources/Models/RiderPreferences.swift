@@ -36,9 +36,19 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
     /// `nil` = follow the locale (`UnitSystem.localeDefault`). Optional so
     /// previously-persisted preferences JSON keeps decoding.
     public var unitSystem: UnitSystem?
+    /// Preferred riding window as minutes from midnight (earliest start ...
+    /// latest finish) — the bounds the best-window search scans within.
+    /// Optional so previously-persisted preferences JSON keeps decoding.
+    public var ridingWindowMinutes: ClosedRange<Int>?
 
     public var effectiveUnitSystem: UnitSystem {
         unitSystem ?? .localeDefault
+    }
+
+    public static let defaultRidingWindowMinutes = (6 * 60)...(21 * 60)
+
+    public var effectiveRidingWindowMinutes: ClosedRange<Int> {
+        ridingWindowMinutes ?? Self.defaultRidingWindowMinutes
     }
 
     public init(
@@ -51,7 +61,8 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
             .paved: 24, .busyRoad: 22, .unpaved: 16, .path: 14
         ],
         climbingPenaltyMinutesPer100m: Double = 4,
-        unitSystem: UnitSystem? = nil
+        unitSystem: UnitSystem? = nil,
+        ridingWindowMinutes: ClosedRange<Int>? = nil
     ) {
         self.preferredTempRangeC = preferredTempRangeC
         self.sunPreference = sunPreference
@@ -61,5 +72,6 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
         self.speedKphBySurface = speedKphBySurface
         self.climbingPenaltyMinutesPer100m = climbingPenaltyMinutesPer100m
         self.unitSystem = unitSystem
+        self.ridingWindowMinutes = ridingWindowMinutes
     }
 }

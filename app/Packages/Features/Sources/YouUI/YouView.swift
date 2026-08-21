@@ -39,6 +39,7 @@ public struct YouView: View {
                 NavigationLink("Max Wind") {
                     MaxWindEditor(maxWindKph: $preferencesStore.preferences.maxWindKph)
                 }
+                RidingWindowEditor(windowMinutes: $preferencesStore.preferences.ridingWindowMinutes)
             }
 
             Section("Priorities") {
@@ -180,6 +181,44 @@ public struct UnitsPicker: View {
         Binding(
             get: { preferencesStore.preferences.effectiveUnitSystem },
             set: { preferencesStore.preferences.unitSystem = $0 }
+        )
+    }
+}
+
+/// The rider's preferred riding hours — the bounds the Ride tab's
+/// best-window scan searches inside. Two inline wheel-free time pickers;
+/// minutes-from-midnight in the model, `Date`s only at the UI edge.
+struct RidingWindowEditor: View {
+    @Binding var windowMinutes: ClosedRange<Int>?
+
+    var body: some View {
+        // ponytail: stock DatePicker(.hourAndMinute) rows, not a custom range
+        // control — DESIGN-SYSTEM.md §6's inventory is closed and this is
+        // plain settings furniture.
+        DatePicker("Earliest start", selection: binding(\.lowerBound), displayedComponents: .hourAndMinute)
+        DatePicker("Latest finish", selection: binding(\.upperBound), displayedComponents: .hourAndMinute)
+    }
+
+    private var window: ClosedRange<Int> {
+        windowMinutes ?? RiderPreferences.defaultRidingWindowMinutes
+    }
+
+    private func binding(_ bound: KeyPath<ClosedRange<Int>, Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.startOfDay(for: .now).addingTimeInterval(Double(window[keyPath: bound]) * 60)
+            },
+            set: { date in
+                let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                let minutes = (components.hour ?? 0) * 60 + (components.minute ?? 0)
+                // An inverted pick collapses to a zero-length window at the
+                // other bound rather than crashing ClosedRange.
+                if bound == \.lowerBound {
+                    windowMinutes = min(minutes, window.upperBound)...window.upperBound
+                } else {
+                    windowMinutes = window.lowerBound...max(minutes, window.lowerBound)
+                }
+            }
         )
     }
 }

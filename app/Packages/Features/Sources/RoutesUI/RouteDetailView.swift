@@ -347,21 +347,26 @@ public struct RouteDetailView: View {
     }
 
     private func loadBestDay(for route: RouteModel) async {
-        // Each day gets its own forecast at the route's start — the scan is
-        // comparing days, so the weather must actually differ between them.
-        let contexts = await Recommendations.upcomingContexts(
-            weather: services.weather,
-            weatherLocation: route.coordinates.first ?? startLocation,
-            startLocation: startLocation,
-            hoursAvailable: 3,
-            intent: .exploring,
-            bike: Bike.samples[0]
-        )
         let scorer = Recommendations.scorer(
             preferences: preferencesStore.preferences,
             rideLogs: rideLogModels.compactMap { $0.asRideLog() },
             allRoutes: routes.map { $0.asRoute() },
             weights: preferencesStore.weights
+        )
+        // Each day gets its own forecast at the route's start — the scan is
+        // comparing days, so the weather must actually differ between them —
+        // and each day is anchored at its own best window inside the rider's
+        // preferred riding hours.
+        let contexts = await Recommendations.upcomingWindowContexts(
+            route: route.asRoute(),
+            weather: services.weather,
+            weatherLocation: route.coordinates.first ?? startLocation,
+            startLocation: startLocation,
+            ridingWindowMinutes: preferencesStore.preferences.effectiveRidingWindowMinutes,
+            hoursAvailable: 3,
+            intent: .exploring,
+            bike: Bike.samples[0],
+            scorer: scorer
         )
         let recommendation = Recommendations.bestDay(for: route.asRoute(), contexts: contexts, scorer: scorer)
         withAnimation(Motion.panelMaterialize) { bestDay = recommendation }

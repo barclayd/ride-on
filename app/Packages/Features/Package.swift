@@ -13,7 +13,7 @@ let package = Package(
     name: "Features",
     platforms: [.iOS("26.0"), .macOS("26.0")],
     products: [
-        .library(name: "TodayUI", type: .static, targets: ["TodayUI"]),
+        .library(name: "RideUI", type: .static, targets: ["RideUI"]),
         .library(name: "RoutesUI", type: .static, targets: ["RoutesUI"]),
         .library(name: "YouUI", type: .static, targets: ["YouUI"]),
         .library(name: "OnboardingUI", type: .static, targets: ["OnboardingUI"]),
@@ -31,7 +31,7 @@ let package = Package(
             name: "SharedUI",
             dependencies: baseDeps),
         .target(
-            name: "TodayUI",
+            name: "RideUI",
             dependencies: baseDeps + ["SharedUI"]),
         .target(
             name: "RoutesUI",

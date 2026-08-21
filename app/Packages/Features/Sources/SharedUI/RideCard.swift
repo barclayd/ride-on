@@ -93,7 +93,7 @@ public struct RideCard: View {
         .accessibilityLabel(accessibilitySentence)
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Shows the full ride breakdown")
-        .accessibilityIdentifier("today-card")
+        .accessibilityIdentifier("ride-card")
         .task(id: routeID) {
             thumbnail = await RouteSnapshotService.snapshot(
                 routeID: routeID,

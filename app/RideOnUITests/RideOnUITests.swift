@@ -1,20 +1,20 @@
 import XCTest
 
 final class RideOnUITests: XCTestCase {
-    func testTabsExistAndTodayShowsARecommendation() {
+    func testTabsExistAndRideShowsARecommendation() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
         app.launch()
 
-        XCTAssertTrue(app.buttons["Today"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Ride"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Routes"].exists)
         XCTAssertTrue(app.buttons["You"].exists)
 
-        // Today defaults to the hero card + ranked list (fixture weather +
+        // Ride defaults to Today's hero card + ranked list (fixture weather +
         // seeded routes always clear the rest-day threshold), so a scored
         // hero card and at least one runner-up row are present.
-        XCTAssertTrue(app.buttons["today-card"].firstMatch.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["today-route-row"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ride-card"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ride-route-row"].firstMatch.waitForExistence(timeout: 5))
     }
 
     func testTabNavigationShowsEachScreen() {
@@ -29,16 +29,40 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["You"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Weights"].exists)
 
-        app.buttons["Today"].tap()
-        XCTAssertTrue(app.buttons["today-card"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Ride"].tap()
+        XCTAssertTrue(app.buttons["ride-card"].firstMatch.waitForExistence(timeout: 5))
     }
 
-    func testTodayCardTapOpensBreakdownThenViewRouteOpensRouteDetail() {
+    func testRideDaySelectorReRanksForAFutureDay() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
         app.launch()
 
-        let card = app.buttons["today-card"].firstMatch
+        // Launches on Today; the selector lists the next 10 forecastable days.
+        XCTAssertTrue(app.buttons["ride-card"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars.staticTexts["Today"].exists)
+
+        let selector = app.buttons["ride-day-selector"].firstMatch
+        XCTAssertTrue(selector.waitForExistence(timeout: 5))
+        selector.tap()
+
+        // "Tomorrow" is the one future day with a stable label.
+        let tomorrow = app.buttons["Tomorrow"].firstMatch
+        XCTAssertTrue(tomorrow.waitForExistence(timeout: 5))
+        tomorrow.tap()
+
+        // Title follows the selected day and the ranking re-renders (fixture
+        // day 1 still clears the rest-day threshold).
+        XCTAssertTrue(app.navigationBars.staticTexts["Tomorrow"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ride-card"].firstMatch.waitForExistence(timeout: 5))
+    }
+
+    func testRideCardTapOpensBreakdownThenViewRouteOpensRouteDetail() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world"]
+        app.launch()
+
+        let card = app.buttons["ride-card"].firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         card.tap()
 
@@ -48,12 +72,12 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Export GPX"].waitForExistence(timeout: 5))
     }
 
-    func testTodayRunnerUpRowOpensBreakdownSheet() {
+    func testRideRunnerUpRowOpensBreakdownSheet() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
         app.launch()
 
-        let row = app.buttons["today-route-row"].firstMatch
+        let row = app.buttons["ride-route-row"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
 
@@ -109,11 +133,11 @@ final class RideOnUITests: XCTestCase {
     //
     // `--fixture-world` alone defaults to "onboarding already completed"
     // (`PreferencesStore`), so every test above keeps landing straight on
-    // Today with zero changes. `--reset-onboarding` is the one launch
+    // the Ride tab with zero changes. `--reset-onboarding` is the one launch
     // argument that forces onboarding back on, deterministically, for these
     // two tests.
 
-    func testOnboardingHappyPathThroughAllStepsLandsOnToday() {
+    func testOnboardingHappyPathThroughAllStepsLandsOnRide() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world", "--reset-onboarding"]
         app.launch()
@@ -159,12 +183,12 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["You're All Set"].waitForExistence(timeout: 5))
         app.buttons["Continue"].tap()
 
-        // Lands on a working Today.
-        XCTAssertTrue(app.buttons["Today"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["today-card"].firstMatch.waitForExistence(timeout: 5))
+        // Lands on a working Ride tab.
+        XCTAssertTrue(app.buttons["Ride"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ride-card"].firstMatch.waitForExistence(timeout: 5))
     }
 
-    func testOnboardingSkipPathLandsOnToday() {
+    func testOnboardingSkipPathLandsOnRide() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world", "--reset-onboarding"]
         app.launch()
@@ -183,8 +207,8 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["You're All Set"].waitForExistence(timeout: 5))
         app.buttons["Skip"].tap()
 
-        XCTAssertTrue(app.buttons["Today"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["today-card"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Ride"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ride-card"].firstMatch.waitForExistence(timeout: 5))
     }
 
     // MARK: - Performance (Phase 7)

@@ -30,22 +30,7 @@ public actor LiveWeatherProvider: WeatherProviding {
     public init() {}
 
     public func forecast(for location: Coordinate, on date: Date) async throws -> WeatherSnapshot {
-        let key = CacheKey(
-            latQuantized: Int((location.latitude * 100).rounded()),
-            lonQuantized: Int((location.longitude * 100).rounded())
-        )
-
-        let today = Calendar.current.startOfDay(for: .now)
-        let hours: [HourWeather]
-        if let cached = cache[key], cached.fetchDay == today {
-            hours = cached.hours
-        } else {
-            let clLocation = CLLocation(latitude: location.latitude, longitude: location.longitude)
-            let end = Calendar.current.date(byAdding: .day, value: Self.forecastDays, to: today) ?? today
-            let hourly = try await weatherService.weather(for: clLocation, including: .hourly(startDate: .now, endDate: end))
-            hours = Array(hourly)
-            cache[key] = (today, hours)
-        }
+        let hours = try await cachedHours(for: location)
 
         // No hour near the requested time means the date is outside the
         // forecast range — surface that rather than clamping to the last
@@ -61,6 +46,42 @@ public actor LiveWeatherProvider: WeatherProviding {
             windKph: closest.wind.speed.converted(to: .kilometersPerHour).value,
             rainChance: closest.precipitationChance
         )
+    }
+
+    /// Real hour-level data for one calendar day, answered from the same
+    /// 10-day cache. An empty day means it's past the forecast range.
+    public func hourlyForecast(for location: Coordinate, on day: Date) async throws -> [HourlyWeather] {
+        let hours = try await cachedHours(for: location)
+        let dayHours = hours.filter { Calendar.current.isDate($0.date, inSameDayAs: day) }
+        guard !dayHours.isEmpty else { throw WeatherProvidingError.noForecast }
+        return dayHours.map { hour in
+            HourlyWeather(
+                time: hour.date,
+                temperatureC: hour.temperature.converted(to: .celsius).value,
+                windSpeedKph: hour.wind.speed.converted(to: .kilometersPerHour).value,
+                windDirectionDegrees: hour.wind.direction.converted(to: .degrees).value,
+                precipitationChance: hour.precipitationChance,
+                cloudCover: hour.cloudCover
+            )
+        }
+    }
+
+    private func cachedHours(for location: Coordinate) async throws -> [HourWeather] {
+        let key = CacheKey(
+            latQuantized: Int((location.latitude * 100).rounded()),
+            lonQuantized: Int((location.longitude * 100).rounded())
+        )
+
+        let today = Calendar.current.startOfDay(for: .now)
+        if let cached = cache[key], cached.fetchDay == today {
+            return cached.hours
+        }
+        let clLocation = CLLocation(latitude: location.latitude, longitude: location.longitude)
+        let end = Calendar.current.date(byAdding: .day, value: Self.forecastDays, to: today) ?? today
+        let hourly = try await weatherService.weather(for: clLocation, including: .hourly(startDate: .now, endDate: end))
+        let hours = Array(hourly)
+        cache[key] = (today, hours)
+        return hours
     }
 
     // ponytail: coarse condition -> SkyCondition mapping (rain-family vs.
