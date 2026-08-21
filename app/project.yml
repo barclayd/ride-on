@@ -53,6 +53,9 @@ targets:
         # resolution — without this key the app runs letterboxed in
         # compatibility mode.
         UILaunchScreen: {}
+        # Lets CloudKit's silent pushes wake the app so SwiftData pulls
+        # remote changes in the background (iOS-only key, ignored on macOS).
+        UIBackgroundModes: [remote-notification]
         NSLocationWhenInUseUsageDescription: "Ride On uses your location to find rides near you and estimate travel time."
         NSHealthShareUsageDescription: "Ride On reads your cycling workouts to match them to your saved routes and log rides automatically."
         NSHealthUpdateUsageDescription: "Ride On may save ride data it records back to Health."

@@ -2,29 +2,26 @@ import Foundation
 import SwiftData
 import Models
 
-/// Central `ModelContainer` factory. CloudKit-mirrored in Release; in-memory
-/// (no on-disk store, no CloudKit) for Debug builds and `--fixture-world`
-/// runs. Every build carries the iCloud entitlement (CLAUDE.md "Signing"),
-/// so in-memory configs opt out of mirroring explicitly below.
+/// Central `ModelContainer` factory. On-disk + CloudKit-mirrored
+/// (`iCloud.com.danbarclay.rideon` private database) for every real run —
+/// Debug included, since every build carries the iCloud entitlement
+/// (CLAUDE.md "Signing"). Only `--fixture-world` runs (E2E) get in-memory,
+/// keeping tests deterministic and off the network per PLAN.md.
 public enum RideOnModelContainer {
     public static let schema = Schema([RouteModel.self, RideLogModel.self, SavedPlaceModel.self])
 
     public static func make() -> ModelContainer {
         let configuration: ModelConfiguration
-        // In-memory configs must pass `cloudKitDatabase: .none` explicitly —
-        // the default is `.automatic`, which engages CloudKit mirroring
-        // whenever the build carries the iCloud entitlement (all builds do
-        // since the PLA unblock), and CoreData's mirroring delegate on an
-        // in-memory store hangs/crashes at first insert.
-        #if DEBUG
-        configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
-        #else
         if FixtureWorld.isEnabled {
+            // In-memory configs must pass `cloudKitDatabase: .none` explicitly —
+            // the default is `.automatic`, which engages CloudKit mirroring
+            // whenever the build carries the iCloud entitlement (all builds do),
+            // and CoreData's mirroring delegate on an in-memory store
+            // hangs/crashes at first insert.
             configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         } else {
             configuration = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
         }
-        #endif
         // A schema/configuration mismatch here is a programmer error (bad
         // migration, conflicting config), not a runtime condition to
         // recover from — crashing loudly beats silently running with no
