@@ -10,6 +10,11 @@
 	<array>
 		<string>CloudKit</string>
 	</array>
+	<!-- CloudKit silent pushes so remote SwiftData changes arrive while the
+	     app runs, not just on next launch. Distribution signing rewrites
+	     this to `production`. -->
+	<key>com.apple.developer.aps-environment</key>
+	<string>development</string>
 	<key>com.apple.developer.weatherkit</key>
 	<true/>
 	<!-- HealthKit is iOS-only; Mac gets ride history via CloudKit sync (PLAN.md). -->
