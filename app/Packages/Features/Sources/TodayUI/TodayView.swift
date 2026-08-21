@@ -8,10 +8,10 @@ import Router
 import SharedUI
 
 /// DESIGN-SYSTEM.md §9 "Today": a hero `RideCard` for the top-ranked route
-/// with every other route in a ranked list below, a context pill for the
-/// day's bike/hours/intent/back-by inputs, and a tap-to-open breakdown
-/// sheet. Weather is fetched per route start (the day cache dedupes nearby
-/// starts), so each route is scored against its own forecast.
+/// with every other route in a ranked list below, a compact top-bar capsule
+/// for the day's bike/hours/intent/back-by inputs, and a tap-to-open
+/// breakdown sheet. Weather is fetched per route start (the day cache
+/// dedupes nearby starts), so each route is scored against its own forecast.
 public struct TodayView: View {
     public var namespace: Namespace.ID
 
@@ -98,11 +98,19 @@ public struct TodayView: View {
                 Task { await loadWeather() }
             }
         }
-        // Landmarks idiom: floating chrome goes in the safe-area bar, not an
-        // overlay — content automatically lays out above it.
-        .safeAreaBar(edge: .bottom) {
-            if case .loaded = weatherLoad, !routeModels.isEmpty {
-                contextPill
+        // Ride context lives in the top bar as a compact capsule (hours ·
+        // bike) — toolbar items get system glass for free (DESIGN-SYSTEM.md
+        // §2: glass is chrome), and the full summary is in the a11y label.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                ContextToolbarButton(
+                    bike: preferencesStore.todaySettings.bike,
+                    hoursAvailable: preferencesStore.todaySettings.hoursAvailable,
+                    intent: preferencesStore.todaySettings.intent,
+                    backBy: backBy
+                ) {
+                    isContextEditorPresented = true
+                }
             }
         }
         .sheet(isPresented: $isContextEditorPresented) {
@@ -224,21 +232,6 @@ public struct TodayView: View {
                 Task { await loadWeather() }
             }
             .buttonStyle(.borderedProminent)
-        }
-    }
-
-    private var contextPill: some View {
-        // Landmarks wraps all custom glass in a `GlassEffectContainer` so
-        // multiple glass elements on one screen merge/morph correctly.
-        GlassEffectContainer {
-            ContextPillButton(
-                bike: preferencesStore.todaySettings.bike,
-                hoursAvailable: preferencesStore.todaySettings.hoursAvailable,
-                intent: preferencesStore.todaySettings.intent,
-                backBy: backBy
-            ) {
-                isContextEditorPresented = true
-            }
         }
     }
 
@@ -502,44 +495,32 @@ private struct RankedRouteRow: View {
 
 /// Not a §6 component — a screen-specific summary button, not a reusable
 /// named component; the closed 8-component inventory covers reusable UI,
-/// not every custom view. The one sanctioned custom-glass use per
-/// DESIGN-SYSTEM.md §2, with the required Reduce Transparency fallback.
-private struct ContextPillButton: View {
+/// not every custom view. Lives in the navigation bar, so it rides the
+/// system's toolbar glass — no custom `glassEffect` needed (DESIGN-SYSTEM.md
+/// §2: glass is chrome). The visible label is deliberately just the two
+/// highest-value facts (hours · bike); intent and back-by stay in the
+/// editor sheet and the accessibility label.
+private struct ContextToolbarButton: View {
     var bike: Bike
     var hoursAvailable: Double
     var intent: RideIntent
     var backBy: Date?
     var action: () -> Void
 
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
     var body: some View {
-        Group {
-            if reduceTransparency {
-                // DESIGN-SYSTEM.md §2: custom glass must fall back to an
-                // opaque `Material` when Reduce Transparency is on.
-                label.background(.regularMaterial, in: .capsule)
-            } else {
-                label.glassEffect(.regular.interactive(), in: .capsule)
-            }
-        }
-        .accessibilityLabel("Ride context: \(summary). Double tap to edit.")
-    }
-
-    private var label: some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: "bicycle")
-                Text(summary)
+                Text("\(hoursText) · \(bike.name)")
                     .font(.subheadline.weight(.medium))
+                    .monospacedDigit()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
         }
-        .buttonStyle(.plain)
+        .accessibilityLabel("Ride context: \(fullSummary). Double tap to edit.")
+        .accessibilityIdentifier("today-context-button")
     }
 
-    private var summary: String {
+    private var fullSummary: String {
         var parts = ["\(bike.name)", hoursText, intent.rawValue.capitalized]
         if let backBy {
             parts.append("back by \(backBy.formatted(date: .omitted, time: .shortened))")
