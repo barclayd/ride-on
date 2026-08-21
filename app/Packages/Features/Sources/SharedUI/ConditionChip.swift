@@ -122,16 +122,20 @@ public extension SkyCondition {
 }
 
 public extension ConditionChipData {
-    /// Builds the Today card's 4 chips from a route's factor scores + the
+    /// Builds the Ride card's 4 chips from a route's factor scores + the
     /// day's weather/travel numbers — the "computed state drives the
     /// visuals" principle (DESIGN-SYSTEM.md §1.3): every chip reads off a
     /// real number for this route and this day, never a canned icon set.
-    static func todayChips(
+    /// When the best-window scan picked a start (`windowText`), the clock
+    /// chip shows the window instead of the bare duration — same slot, so
+    /// the §6 four-chip cap holds.
+    static func rideChips(
         windLabel: String,
         temperatureC: Double,
         sky: SkyCondition,
         travelMinutes: Int?,
-        rideHours: Double
+        rideHours: Double,
+        windowText: String? = nil
     ) -> [ConditionChipData] {
         var chips: [ConditionChipData] = []
 
@@ -150,7 +154,7 @@ public extension ConditionChipData {
         let hoursText = rideHours < 1
             ? "~\(Int((rideHours * 60).rounded()))m ride"
             : "~\(String(format: "%.1f", rideHours))h ride"
-        chips.append(ConditionChipData(symbol: "clock.fill", text: hoursText, tint: .secondary))
+        chips.append(ConditionChipData(symbol: "clock.fill", text: windowText ?? hoursText, tint: .secondary))
 
         return chips
     }

@@ -122,11 +122,34 @@ public struct FixtureWeatherProvider: WeatherProviding {
     ]
 
     public func forecast(for location: Coordinate, on date: Date) async throws -> WeatherSnapshot {
+        let day = try Self.dayValues(for: date)
+        return WeatherSnapshot(temperatureC: day.temperatureC, sky: day.sky, windKph: day.windKph, rainChance: day.rainChance)
+    }
+
+    /// Deterministic hourly curve over the day table: windier mornings, calm
+    /// afternoons — so the best-window scan lands on a stable afternoon
+    /// answer in E2E instead of a flat all-day tie.
+    public func hourlyForecast(for location: Coordinate, on day: Date) async throws -> [HourlyWeather] {
+        let values = try Self.dayValues(for: day)
+        let startOfDay = Calendar.current.startOfDay(for: day)
+        return (0..<24).map { hour in
+            let windMultiplier: Double = hour < 6 ? 1.0 : hour < 12 ? 1.2 : hour < 18 ? 0.8 : 1.0
+            return HourlyWeather(
+                time: startOfDay.addingTimeInterval(Double(hour) * 3600),
+                temperatureC: values.temperatureC,
+                windSpeedKph: values.windKph * windMultiplier,
+                windDirectionDegrees: 225,
+                precipitationChance: values.rainChance,
+                cloudCover: values.sky == .sunny ? 0.15 : values.sky == .rain ? 0.9 : 0.6
+            )
+        }
+    }
+
+    private static func dayValues(for date: Date) throws -> (temperatureC: Double, sky: SkyCondition, windKph: Double, rainChance: Double) {
         let calendar = Calendar.current
         let offset = calendar.dateComponents([.day], from: calendar.startOfDay(for: .now), to: calendar.startOfDay(for: date)).day ?? 0
-        guard Self.days.indices.contains(offset) else { throw WeatherProvidingError.noForecast }
-        let day = Self.days[offset]
-        return WeatherSnapshot(temperatureC: day.temperatureC, sky: day.sky, windKph: day.windKph, rainChance: day.rainChance)
+        guard days.indices.contains(offset) else { throw WeatherProvidingError.noForecast }
+        return days[offset]
     }
 }
 

@@ -22,6 +22,40 @@ public struct WeatherSnapshot: Sendable {
 
 public protocol WeatherProviding: Sendable {
     func forecast(for location: Coordinate, on date: Date) async throws -> WeatherSnapshot
+    /// The full hourly forecast for the calendar day containing `day` — what
+    /// the best-window search scans. Throws when the day is outside the
+    /// provider's confidence range (same bound as `forecast(for:on:)`).
+    func hourlyForecast(for location: Coordinate, on day: Date) async throws -> [HourlyWeather]
+}
+
+public extension WeatherProviding {
+    /// Default: a flat 24-hour expansion of the day snapshot, so conformers
+    /// without real hour-level data (previews, stubs) keep working. Live and
+    /// fixture providers override with real/synthesised hours.
+    func hourlyForecast(for location: Coordinate, on day: Date) async throws -> [HourlyWeather] {
+        let snapshot = try await forecast(for: location, on: day)
+        return snapshot.hourlyForecast(from: Calendar.current.startOfDay(for: day), hours: 24)
+    }
+}
+
+public extension [HourlyWeather] {
+    /// The display snapshot at an instant — nearest hour, sky derived with
+    /// the same thresholds `LiveWeatherProvider` uses (rain-chance, then
+    /// cloud cover), so chips built from hours can't disagree with ones
+    /// built from snapshots.
+    func snapshot(at date: Date) -> WeatherSnapshot? {
+        guard let closest = self.min(by: { abs($0.time.timeIntervalSince(date)) < abs($1.time.timeIntervalSince(date)) }) else {
+            return nil
+        }
+        let sky: SkyCondition = closest.precipitationChance > 0.5 ? .rain
+            : closest.cloudCover > 0.5 ? .overcast : .sunny
+        return WeatherSnapshot(
+            temperatureC: closest.temperatureC,
+            sky: sky,
+            windKph: closest.windSpeedKph,
+            rainChance: closest.precipitationChance
+        )
+    }
 }
 
 public extension WeatherSnapshot {

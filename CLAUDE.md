@@ -23,7 +23,7 @@ app/
 │   ├─ Services/               SPM package: ServiceProtocols, AppServices (DI), FixtureWorld, ClassifyService, PreferencesStore, RideOnModelContainer, RouteStats (needs Engine's SpeedModel, so lives here not in Models), Import/ pipeline (RouteImporter, RouteSnapshotService). Depends on Models + Engine + DesignSystem. Strava integration (Phase 6): KeychainStore (minimal Security.framework wrapper), StravaModels (StravaToken, PolylineDecoder), StravaAuthConfig (client ID/scope/redirect — `// set real client id` marker until a real Strava API app exists), StravaTokenManager (refresh state machine actor over an injected `StravaTokenTransport`, has ServicesTests), StravaOAuthSession (ASWebAuthenticationSession + app-to-app), LiveStravaClient (routes/activities/export via Strava API v3), StravaSyncServices (StravaRouteSyncService, StravaActivitySyncService). Live platform services: LiveETAProvider (MapKit), LiveWeatherProvider (WeatherKit, day-level cache actor), LiveHealthKitStore (`#if os(iOS)`, cycling workouts + HKWorkoutRoute). Has ServicesTests (StravaTokenManager refresh state machine, stubbed transport — `swift test`, no simulator/network needed)
 │   ├─ Router/                 SPM package: AppTab (tab identity/title/icon only — view construction stays in App/, the one target allowed to import every Features package)
 │   ├─ DesignSystem/           SPM package: ConditionPalette, AmbianceStyle, Motion tokens
-│   └─ Features/               SPM package, one manifest, multiple static-library products: TodayUI (card stack, context pill, breakdown sheet), RoutesUI (library list, import, Route Detail), YouUI (preference rows, weights, saved places, ride log), OnboardingUI (9-step first-run flow — welcome, four reactive dial steps, Strava connect, speed prefill, finish), SharedUI (the closed 8-component DESIGN-SYSTEM.md §6 inventory: RideCard, ConditionChip, FactorRow, ElevationProfile, SurfaceBar, DialScreen, BestDayBadge, ScoreRing — plus the non-inventory `PermissionPrimingSheet` helper). Each depends on Models/Services/DesignSystem as needed
+│   └─ Features/               SPM package, one manifest, multiple static-library products: RideUI (day selector, card stack, context capsule, breakdown sheet), RoutesUI (library list, import, Route Detail), YouUI (preference rows, weights, saved places, ride log), OnboardingUI (9-step first-run flow — welcome, four reactive dial steps, Strava connect, speed prefill, finish), SharedUI (the closed 8-component DESIGN-SYSTEM.md §6 inventory: RideCard, ConditionChip, FactorRow, ElevationProfile, SurfaceBar, DialScreen, BestDayBadge, ScoreRing — plus the non-inventory `PermissionPrimingSheet` helper). Each depends on Models/Services/DesignSystem as needed
 ├─ RideOnTests/                app-layer XCTest integration tests (import pipeline, live-classify smoke check, AppServices wiring)
 └─ RideOnUITests/              XCUITest E2E tests (launch with --fixture-world)
 worker/                       Cloudflare Worker (Hono): /classify (Valhalla surface classification), /strava/* OAuth — see worker/CLAUDE.md
@@ -132,11 +132,11 @@ Testing strategy).
 (UI shell & screens), and Phase 5 (Onboarding) are done — all eight `RideFactor` providers
 (time budget, wind, temperature, sky, rain, surface match, intent, novelty) are real,
 weighted by `WeightedScorer`, with golden-scenario tests in
-`app/Packages/Engine/Tests/EngineTests/GoldenScenarioTests.swift`; Today, Route Detail,
+`app/Packages/Engine/Tests/EngineTests/GoldenScenarioTests.swift`; Ride (né Today), Route Detail,
 Routes, You, and the first-run onboarding flow are all built per DESIGN-SYSTEM.md.
 Onboarding shows once on first launch (`PreferencesStore.hasCompletedOnboarding`);
 `--reset-onboarding` forces it back on for E2E (`RideOnUITests`'s
-`testOnboardingHappyPathThroughAllStepsLandsOnToday`/`testOnboardingSkipPathLandsOnToday`).
+`testOnboardingHappyPathThroughAllStepsLandsOnRide`/`testOnboardingSkipPathLandsOnRide`).
 Phase 6 (Integrations) is done: Strava OAuth (`ASWebAuthenticationSession` + app-to-app),
 route sync, activity-derived speed defaults, activity↔route matching with auto ride logs,
 HealthKit cycling-workout matching (iOS only), live WeatherKit, and MapKit ETAs are all

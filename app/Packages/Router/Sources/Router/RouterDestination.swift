@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// Cross-feature navigation payloads. Feature packages (TodayUI, RoutesUI,
+/// Cross-feature navigation payloads. Feature packages (RideUI, RoutesUI,
 /// YouUI) can't import each other, so a screen that needs to push into
 /// another feature's UI (e.g. a Today card opening Route Detail, which lives
 /// in RoutesUI) pushes one of these values instead. The App shell — the only

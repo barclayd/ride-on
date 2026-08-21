@@ -4,7 +4,7 @@ import Models
 import Router
 import Services
 import SharedUI
-import TodayUI
+import RideUI
 import RoutesUI
 import YouUI
 import OnboardingUI
@@ -98,12 +98,12 @@ private struct RouteEditMenuItem: View {
 /// this is the one target allowed to import every Features package.
 /// `namespace` backs the card/row -> Route Detail zoom transition
 /// (DESIGN-SYSTEM.md §7); every tab gets one since only the App shell can
-/// see both the `matchedTransitionSource` (Today's card, Routes' rows) and
+/// see both the `matchedTransitionSource` (Ride's card, Routes' rows) and
 /// the `RouterDestination.routeDetail` push it zooms into.
 @MainActor @ViewBuilder
 private func destination(for tab: AppTab, namespace: Namespace.ID) -> some View {
     switch tab {
-    case .today: TodayView(namespace: namespace)
+    case .ride: RideView(namespace: namespace)
     case .routes: RoutesView(namespace: namespace)
     case .you: YouView()
     }
@@ -111,7 +111,7 @@ private func destination(for tab: AppTab, namespace: Namespace.ID) -> some View 
 
 /// Turns a cross-feature `RouterDestination` value into a concrete view —
 /// the one place that can, since only the App shell imports every Features
-/// product (TodayUI/RoutesUI/YouUI can't import each other).
+/// product (RideUI/RoutesUI/YouUI can't import each other).
 @MainActor @ViewBuilder
 private func routeDetailDestination(_ destination: RouterDestination, namespace: Namespace.ID) -> some View {
     switch destination {
@@ -219,7 +219,7 @@ private extension View {
 }
 
 private struct SplitRoot: View {
-    @State private var selection: AppTab? = .today
+    @State private var selection: AppTab? = .ride
     @State private var selectedRouteID: UUID?
 
     var body: some View {
@@ -245,7 +245,7 @@ private struct SplitRoot: View {
                 NavigationSplitView {
                     sidebar
                 } detail: {
-                    TabPage(tab: selection ?? .today)
+                    TabPage(tab: selection ?? .ride)
                         .backgroundExtensionEffect()
                 }
             }

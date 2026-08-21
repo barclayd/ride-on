@@ -4,7 +4,7 @@ import SharedUI
 
 /// Step 8 — the last step. `onContinue` flips
 /// `PreferencesStore.hasCompletedOnboarding`, which reactively swaps the app
-/// root over to `RootView` (Today), no relaunch needed.
+/// root over to `RootView` (the Ride tab), no relaunch needed.
 struct FinishStep: View {
     var pageIndex: Int
     var pageCount: Int

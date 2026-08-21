@@ -14,13 +14,18 @@ public struct BestDayBadge: View {
     }
 
     public var verdict: Verdict
+    /// When set (and the verdict is a ride day), the badge becomes a button
+    /// — the Ride tab passes a "jump the day selector to that day" action;
+    /// Route Detail leaves it informational.
+    public var onSelectDay: (() -> Void)?
 
-    public init(verdict: Verdict) {
+    public init(verdict: Verdict, onSelectDay: (() -> Void)? = nil) {
         self.verdict = verdict
+        self.onSelectDay = onSelectDay
     }
 
     /// Builds the verdict straight from a scan result.
-    public init(recommendation: DayRecommendation, days: Int = 10) {
+    public init(recommendation: DayRecommendation, days: Int = 10, onSelectDay: (() -> Void)? = nil) {
         let calendar = Calendar.current
         if recommendation.tier.isWorthRiding {
             let date = recommendation.context.date
@@ -31,9 +36,21 @@ public struct BestDayBadge: View {
         } else {
             self.verdict = .skip(days: days)
         }
+        self.onSelectDay = onSelectDay
     }
 
     public var body: some View {
+        if let onSelectDay, case .ride = verdict {
+            Button(action: onSelectDay) { label }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Shows that day's ranking")
+        } else {
+            label
+        }
+    }
+
+    private var label: some View {
         Label {
             VStack(alignment: .leading, spacing: 2) {
                 switch verdict {
