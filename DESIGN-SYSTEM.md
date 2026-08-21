@@ -25,7 +25,7 @@ Sources: Apple HIG (Materials, Layout, Color, Typography, Sheets, Tab Bars, Tool
 | Toolbars / nav bar | System glass, free; group with spacers | `.toolbar`, `ToolbarSpacer(.fixed/.flexible, placement:)` |
 | Factor-breakdown sheet | System glass at partial detents, free | `.presentationDetents([.fraction(0.35), .medium, .large])` — remove any manual `.presentationBackground` |
 | Mac sidebar | Floating glass panel, free | `NavigationSplitView`; detail uses `.backgroundExtensionEffect()` |
-| Floating controls over the Today card (bike/hours/intent pill) | Custom glass — the one sanctioned use | `.glassEffect(.regular.interactive())` inside a single `GlassEffectContainer` |
+| Today ride-context control (bike/hours/intent) | Compact capsule in the nav bar's trailing slot — system toolbar glass, free. Visible label is the two highest-value facts (hours · bike); the full context lives in the editor sheet + a11y label | `.toolbar { ToolbarItem(placement: .primaryAction) { … } }` |
 | Buttons on glass | `.buttonStyle(.glass)`; primary action `.buttonStyle(.glassProminent)` + `.buttonBorderShape(.capsule)` |
 | Content cards (stats, factor rows) | **Not glass.** `.background(.regularMaterial, in: .rect(corners: .concentric))` or opaque secondary background |
 
