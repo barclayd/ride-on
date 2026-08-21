@@ -3,6 +3,8 @@
 Cycling route recommender. SwiftUI multiplatform (iOS 26 + macOS 26) app + a Cloudflare Worker.
 Full spec: `PLAN.md`. All UI decisions: `DESIGN-SYSTEM.md` — **every screen must follow it**, no exceptions.
 
+In this repo, after raising a PR merge it yourself (`gh pr merge --merge`) once it's ready — don't leave PRs open waiting for review.
+
 ## Module map
 
 Modular local SPM package architecture (keepfresh-ios style, adopted Phase 2.5): a thin `App/`
