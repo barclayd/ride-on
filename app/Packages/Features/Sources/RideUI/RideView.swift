@@ -238,7 +238,7 @@ public struct RideView: View {
                         RankedRouteRow(
                             model: model,
                             score: rankedRide.score,
-                            stats: statsLine(for: model),
+                            stats: statsLine(for: model, includeTime: false),
                             weather: windowStart.flatMap { hoursByRouteID[model.id]?.snapshot(at: $0) }
                         ) {
                             breakdownItem = breakdownItem(for: rankedRide, hoursByRouteID: hoursByRouteID, windowStart: windowStart)
@@ -414,13 +414,18 @@ public struct RideView: View {
         return start.formatted(date: .omitted, time: .shortened) + "–" + end.formatted(date: .omitted, time: .shortened)
     }
 
-    private func statsLine(for model: RouteModel) -> String {
-        let time = RouteStats.estimatedRideTime(for: model, preferences: preferencesStore.preferences)
-        return [
+    // Rows drop the est-time (it always truncated next to the weather +
+    // ring); the hero has the width for the full line.
+    private func statsLine(for model: RouteModel, includeTime: Bool = true) -> String {
+        var parts = [
             UnitFormat.distance(km: model.distanceKm, system: unitSystem),
             UnitFormat.elevation(m: model.elevationGainM, system: unitSystem),
-            "~" + Duration.seconds(time).formatted(.units(allowed: [.hours, .minutes], width: .narrow)),
-        ].joined(separator: " · ")
+        ]
+        if includeTime {
+            let time = RouteStats.estimatedRideTime(for: model, preferences: preferencesStore.preferences)
+            parts.append("~" + Duration.seconds(time).formatted(.units(allowed: [.hours, .minutes], width: .narrow)))
+        }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - Loading
