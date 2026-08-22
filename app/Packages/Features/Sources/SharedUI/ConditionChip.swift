@@ -22,8 +22,10 @@ public struct ConditionChipData: Identifiable, Hashable {
     public var id: String { symbol + text }
 }
 
-/// DESIGN-SYSTEM.md §6 component 2: SF Symbol + value in `.footnote`,
-/// condition-palette tint, on a thin-material capsule.
+/// DESIGN-SYSTEM.md §6 component 2: SF Symbol + value in `.footnote` on a
+/// condition-tinted glass capsule. The tint lives on the icon and the glass
+/// wash; the text stays `.primary` — palette-colored text (yellow at 18°C)
+/// was unreadable over bright map imagery.
 public struct ConditionChip: View {
     public var data: ConditionChipData
 
@@ -31,19 +33,29 @@ public struct ConditionChip: View {
         self.data = data
     }
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     public var body: some View {
-        Label {
+        let label = Label {
             Text(data.text)
                 .lineLimit(1)
+                .foregroundStyle(.primary)
         } icon: {
             Image(systemName: data.symbol)
+                .foregroundStyle(data.tint)
         }
         .labelStyle(.titleAndIcon)
-        .font(.footnote)
-        .foregroundStyle(data.tint)
+        .font(.footnote.weight(.medium))
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(.thinMaterial, in: .capsule)
+
+        // Custom glass must fall back to an opaque-ish material when
+        // transparency is reduced (DESIGN-SYSTEM.md §2).
+        if reduceTransparency {
+            label.background(.thickMaterial, in: .capsule)
+        } else {
+            label.glassEffect(.regular.tint(data.tint.opacity(0.35)), in: .capsule)
+        }
     }
 }
 
