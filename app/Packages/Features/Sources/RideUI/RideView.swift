@@ -722,7 +722,7 @@ private struct BreakdownSheet: View {
                             bestDayLine(recommendation)
                         }
                     }
-                    ConditionChipRow(chips: chips)
+                    ConditionChipRow(chips: chips, centered: true)
                     VStack(spacing: 12) {
                         ForEach(rankedRide.factorScores, id: \.factor) { score in
                             FactorRow(score: score)
