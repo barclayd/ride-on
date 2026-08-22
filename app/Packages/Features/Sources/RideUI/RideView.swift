@@ -49,6 +49,12 @@ public struct RideView: View {
     /// design: every launch starts on Today, and a day rollover while
     /// backgrounded snaps back to Today.
     @State private var selectedDayOffset = 0
+    /// A user-pinned ride start from the hero card's window pill; nil means
+    /// "use the scan's recommended window". Ephemeral like the day selection,
+    /// and self-healing: a value that's no longer a valid candidate (day
+    /// changed, hours edited, start now in the past) is ignored rather than
+    /// ranked.
+    @State private var startOverride: Date?
     @State private var backBy: Date?
     @State private var deviceLocation: Coordinate?
     @State private var isContextEditorPresented = false
@@ -219,7 +225,14 @@ public struct RideView: View {
     // MARK: - Ranked content
 
     private func rankedContent(hoursByRouteID: [UUID: [HourlyWeather]]) -> some View {
-        let ranking = windowRanking(hoursByRouteID: hoursByRouteID)
+        let candidates = candidateStarts()
+        let recommended = windowRanking(hoursByRouteID: hoursByRouteID)
+        // Validate the override against today's candidates instead of
+        // clearing state in handlers — staleness has many sources (day
+        // change, rollover, edited hours/back-by, time passing) and this
+        // catches them all.
+        let override = startOverride.flatMap { candidates.contains($0) && $0 != recommended?.start ? $0 : nil }
+        let ranking = override.map { windowRanking(hoursByRouteID: hoursByRouteID, pinnedStart: $0) } ?? recommended
         let ranked = ranking?.ranked ?? []
         let heroRide = ranked.first.flatMap { RideTier(score: $0.score).isWorthRiding ? $0 : nil }
         let windowStart = ranking?.start
@@ -227,7 +240,14 @@ public struct RideView: View {
         return ScrollView {
             VStack(spacing: 16) {
                 if let heroRide {
-                    hero(for: heroRide, hoursByRouteID: hoursByRouteID, windowStart: windowStart)
+                    hero(
+                        for: heroRide,
+                        hoursByRouteID: hoursByRouteID,
+                        windowStart: windowStart,
+                        candidates: candidates,
+                        recommendedStart: recommended?.start,
+                        isOverridden: override != nil
+                    )
                 } else {
                     restDayCard
                 }
@@ -253,14 +273,23 @@ public struct RideView: View {
     }
 
     @ViewBuilder
-    private func hero(for rankedRide: RankedRide, hoursByRouteID: [UUID: [HourlyWeather]], windowStart: Date?) -> some View {
+    private func hero(
+        for rankedRide: RankedRide,
+        hoursByRouteID: [UUID: [HourlyWeather]],
+        windowStart: Date?,
+        candidates: [Date],
+        recommendedStart: Date?,
+        isOverridden: Bool
+    ) -> some View {
         if let model = routeModels.first(where: { $0.id == rankedRide.route.id }) {
             let weather = windowStart.flatMap { hoursByRouteID[model.id]?.snapshot(at: $0) }
             RideCard(
                 routeID: model.id,
                 routeName: model.name,
                 coordinates: model.coordinates,
-                chips: chips(for: rankedRide, weather: weather, windowStart: windowStart),
+                // The window moved to the top-leading start pill — a clock
+                // chip would say it twice.
+                chips: chips(for: rankedRide, weather: weather, windowStart: windowStart, includeWindow: false),
                 sky: weather?.sky ?? .sunny,
                 score: rankedRide.score,
                 stats: statsLine(for: model)
@@ -270,7 +299,85 @@ public struct RideView: View {
                 breakdownItem = breakdownItem(for: rankedRide, hoursByRouteID: hoursByRouteID, windowStart: windowStart)
             }
             .matchedTransitionSource(id: model.id, in: namespace)
+            // After matchedTransitionSource so the pill stays put during the
+            // sheet zoom; its Menu wins hit-testing over the card's tap.
+            .overlay(alignment: .topLeading) {
+                if let windowStart, !candidates.isEmpty {
+                    startWindowPill(
+                        currentStart: windowStart,
+                        candidates: candidates,
+                        recommendedStart: recommendedStart,
+                        isOverridden: isOverridden
+                    )
+                    // Same 64pt block as the ScoreRing opposite (52 ring +
+                    // 6 padding each side) so the two center-align.
+                    .frame(height: 64)
+                    .padding(12)
+                }
+            }
         }
+    }
+
+    /// Not a §6 component — screen-specific, like `ContextToolbarButton`.
+    /// The hero card's start-window pill: shows the ride window top-leading
+    /// (mirroring the ScoreRing) and drops down the day's viable start
+    /// times. `sparkles` marks the scan's recommendation (the system
+    /// "Auto/Recommended" pattern); picking any other start pins the whole
+    /// ranking there and the pill swaps to an accent-tinted clock (symbol
+    /// AND color change — Differentiate Without Color) with a one-tap
+    /// "Use Recommended" reset row at the top of the menu. Picking the
+    /// recommended time again also clears the override.
+    private func startWindowPill(
+        currentStart: Date,
+        candidates: [Date],
+        recommendedStart: Date?,
+        isOverridden: Bool
+    ) -> some View {
+        Menu {
+            if isOverridden, let recommendedStart {
+                Button {
+                    withAnimation(Motion.panelMaterialize) { startOverride = nil }
+                } label: {
+                    Label("Use Recommended (\(timeLabel(recommendedStart)))", systemImage: "sparkles")
+                }
+                Divider()
+            }
+            Picker("Start time", selection: Binding(
+                get: { currentStart },
+                set: { picked in
+                    withAnimation(Motion.panelMaterialize) {
+                        startOverride = picked == recommendedStart ? nil : picked
+                    }
+                }
+            )) {
+                ForEach(candidates, id: \.self) { start in
+                    if start == recommendedStart {
+                        Label("\(timeLabel(start)) · Recommended", systemImage: "sparkles").tag(start)
+                    } else {
+                        Text(timeLabel(start)).tag(start)
+                    }
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: isOverridden ? "clock.fill" : "sparkles")
+                    .foregroundStyle(isOverridden ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                Text(rangeText(from: currentStart))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.footnote.weight(.semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.thinMaterial, in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ride window \(rangeText(from: currentStart)), \(isOverridden ? "custom start" : "recommended start"). Double tap to change the start time.")
+        .accessibilityIdentifier("ride-window-pill")
     }
 
     private var restDayCard: some View {
@@ -336,7 +443,20 @@ public struct RideView: View {
     /// distance must stay rider -> route start), each route against its own
     /// forecast. Routes whose forecast fetch failed are skipped rather than
     /// ranked against someone else's weather.
-    private func windowRanking(hoursByRouteID: [UUID: [HourlyWeather]]) -> BestWindowScan.WindowRanking? {
+    /// The dropdown's option list — the same viable starts the scan itself
+    /// searches, so the pill can never offer a time the scan would reject.
+    private func candidateStarts() -> [Date] {
+        let day = day(at: selectedDayOffset)
+        return BestWindowScan.candidateStarts(
+            on: day,
+            ridingWindowMinutes: preferencesStore.preferences.effectiveRidingWindowMinutes,
+            hoursAvailable: preferencesStore.todaySettings.hoursAvailable,
+            backBy: Recommendations.backBy(backBy, projectedOnto: day),
+            earliest: selectedDayOffset == 0 ? .now : nil
+        )
+    }
+
+    private func windowRanking(hoursByRouteID: [UUID: [HourlyWeather]], pinnedStart: Date? = nil) -> BestWindowScan.WindowRanking? {
         let routes = routeModels.map { $0.asRoute() }
         let settings = preferencesStore.todaySettings
         return Recommendations.windowRanking(
@@ -353,7 +473,8 @@ public struct RideView: View {
             // literal is unreachable in practice: a route with no start
             // never got a forecast, so it was skipped.)
             startLocationFor: { route in travelOrigin ?? route.start ?? Coordinate(latitude: 51.7520, longitude: -0.8010) },
-            scorer: scorer(routes: routes)
+            scorer: scorer(routes: routes),
+            pinnedStart: pinnedStart
         )
     }
 
@@ -390,7 +511,7 @@ public struct RideView: View {
         )
     }
 
-    private func chips(for rankedRide: RankedRide, weather: WeatherSnapshot?, windowStart: Date?) -> [ConditionChipData] {
+    private func chips(for rankedRide: RankedRide, weather: WeatherSnapshot?, windowStart: Date?, includeWindow: Bool = true) -> [ConditionChipData] {
         guard let weather else { return [] }
         // ponytail: a chip is a terse capsule, not a sentence — the factor's
         // `reason` (shown in full in the breakdown sheet's FactorRow) is too
@@ -401,17 +522,27 @@ public struct RideView: View {
             sky: weather.sky,
             travelMinutes: travelMinutesByRouteID[rankedRide.route.id],
             rideHours: preferencesStore.todaySettings.hoursAvailable,
-            windowText: windowStart.flatMap(windowText)
+            windowText: windowStart.flatMap(windowText),
+            includeClock: includeWindow
         )
     }
 
-    /// "10:00–13:00" for the shared best window — suppressed on Today when
-    /// the window is effectively "ride now", where the plain duration chip
-    /// says more.
-    private func windowText(start: Date) -> String? {
-        if selectedDayOffset == 0, start.timeIntervalSince(.now) < 45 * 60 { return nil }
+    /// "10:00–13:00" — the window pill's text, and the breakdown sheet's
+    /// clock chip.
+    private func rangeText(from start: Date) -> String {
         let end = start.addingTimeInterval(preferencesStore.todaySettings.hoursAvailable * 3600)
         return start.formatted(date: .omitted, time: .shortened) + "–" + end.formatted(date: .omitted, time: .shortened)
+    }
+
+    private func timeLabel(_ date: Date) -> String {
+        date.formatted(date: .omitted, time: .shortened)
+    }
+
+    /// The sheet's clock chip — suppressed on Today when the window is
+    /// effectively "ride now", where the plain duration chip says more.
+    private func windowText(start: Date) -> String? {
+        if selectedDayOffset == 0, start.timeIntervalSince(.now) < 45 * 60 { return nil }
+        return rangeText(from: start)
     }
 
     // Rows drop the est-time (it always truncated next to the weather +
