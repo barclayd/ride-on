@@ -66,8 +66,9 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         card.tap()
 
-        // Tap opens the breakdown sheet; View Route pushes Route Detail.
-        XCTAssertTrue(app.navigationBars["Why This Ride"].waitForExistence(timeout: 5))
+        // Tap opens the breakdown sheet (titled with the route's name);
+        // View Route pushes Route Detail.
+        XCTAssertTrue(app.buttons["View Route"].waitForExistence(timeout: 5))
         app.buttons["View Route"].tap()
         XCTAssertTrue(app.buttons["Export GPX"].waitForExistence(timeout: 5))
     }
@@ -81,11 +82,12 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
 
-        XCTAssertTrue(app.navigationBars["Why This Ride"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["View Route"].waitForExistence(timeout: 5))
 
         // The 10-day scan is deterministic in fixture-world (day 2 is the
-        // seeded standout), so the sheet always shows a best-day verdict.
-        XCTAssertTrue(app.descendants(matching: .any)["best-day-badge"].firstMatch.waitForExistence(timeout: 5))
+        // seeded standout), so the sheet always shows a best-day verdict
+        // under the score ring.
+        XCTAssertTrue(app.descendants(matching: .any)["best-day-line"].firstMatch.waitForExistence(timeout: 5))
     }
 
     // ponytail: file-picker UI automation is flaky (system sheet, no stable
