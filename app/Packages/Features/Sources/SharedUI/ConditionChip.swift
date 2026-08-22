@@ -73,12 +73,18 @@ public struct ConditionChip: View {
 public struct ConditionChipRow: View {
     public var chips: [ConditionChipData]
 
-    public init(chips: [ConditionChipData]) {
+    /// Center the rows when the surrounding content is centered (the
+    /// breakdown sheet); the hero card keeps the default leading alignment
+    /// to match its leading-aligned name/stats.
+    public var centered: Bool
+
+    public init(chips: [ConditionChipData], centered: Bool = false) {
         self.chips = chips
+        self.centered = centered
     }
 
     public var body: some View {
-        ChipFlowLayout(spacing: 8) {
+        ChipFlowLayout(spacing: 8, centered: centered) {
             ForEach(chips.prefix(4)) { ConditionChip($0) }
         }
     }
@@ -88,6 +94,7 @@ public struct ConditionChipRow: View {
 /// chips onto a new row when they don't fit, no third-party dependency.
 private struct ChipFlowLayout: Layout {
     var spacing: CGFloat
+    var centered: Bool = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
@@ -110,19 +117,30 @@ private struct ChipFlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var origin = bounds.origin
-        var rowHeight: CGFloat = 0
-
+        // Two passes: group subviews into rows first so a centered row can
+        // be offset by its leftover width before anything is placed.
+        var rows: [[(subview: Subviews.Element, size: CGSize)]] = [[]]
+        var rowWidth: CGFloat = 0
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
-            if origin.x + size.width > bounds.maxX, origin.x > bounds.minX {
-                origin.x = bounds.minX
-                origin.y += rowHeight + spacing
-                rowHeight = 0
+            if rowWidth + size.width > bounds.width, rowWidth > 0 {
+                rows.append([])
+                rowWidth = 0
             }
-            subview.place(at: origin, anchor: .topLeading, proposal: .unspecified)
-            origin.x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
+            rows[rows.count - 1].append((subview, size))
+            rowWidth += size.width + (rowWidth > 0 ? spacing : 0)
+        }
+
+        var y = bounds.minY
+        for row in rows where !row.isEmpty {
+            let contentWidth = row.reduce(0) { $0 + $1.size.width } + spacing * CGFloat(row.count - 1)
+            var x = centered ? bounds.minX + max(0, (bounds.width - contentWidth) / 2) : bounds.minX
+            let rowHeight = row.map(\.size.height).max() ?? 0
+            for (subview, size) in row {
+                subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified)
+                x += size.width + spacing
+            }
+            y += rowHeight + spacing
         }
     }
 }
