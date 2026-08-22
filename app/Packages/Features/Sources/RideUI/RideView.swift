@@ -396,7 +396,7 @@ public struct RideView: View {
         // `reason` (shown in full in the breakdown sheet's FactorRow) is too
         // long here, so this always builds the short "N km/h" form instead.
         return ConditionChipData.rideChips(
-            windLabel: "\(UnitFormat.speed(kph: weather.windKph, system: unitSystem)) wind",
+            windLabel: UnitFormat.speed(kph: weather.windKph, system: unitSystem),
             temperatureC: weather.temperatureC,
             sky: weather.sky,
             travelMinutes: travelMinutesByRouteID[rankedRide.route.id],
