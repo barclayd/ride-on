@@ -53,20 +53,28 @@ public enum Recommendations {
         bike: Bike,
         startLocationFor: (Route) -> Coordinate,
         scorer: WeightedScorer,
+        /// A user-chosen ride start (the hero card's window pill): skip the
+        /// scan and rank every route at exactly this instant.
+        pinnedStart: Date? = nil,
         now: Date = .now
     ) -> BestWindowScan.WindowRanking? {
         let projectedBackBy = Self.backBy(backBy, projectedOnto: day)
-        var starts = BestWindowScan.candidateStarts(
-            on: day,
-            ridingWindowMinutes: ridingWindowMinutes,
-            hoursAvailable: hoursAvailable,
-            backBy: projectedBackBy,
-            earliest: Calendar.current.isDate(day, inSameDayAs: now) ? now : nil
-        )
-        if starts.isEmpty {
-            // Today after the riding window has closed: "score a ride
-            // starting now" beats an empty screen.
-            starts = [now]
+        var starts: [Date]
+        if let pinnedStart {
+            starts = [pinnedStart]
+        } else {
+            starts = BestWindowScan.candidateStarts(
+                on: day,
+                ridingWindowMinutes: ridingWindowMinutes,
+                hoursAvailable: hoursAvailable,
+                backBy: projectedBackBy,
+                earliest: Calendar.current.isDate(day, inSameDayAs: now) ? now : nil
+            )
+            if starts.isEmpty {
+                // Today after the riding window has closed: "score a ride
+                // starting now" beats an empty screen.
+                starts = [now]
+            }
         }
         return BestWindowScan.best(starts: starts, scorer: scorer) { start in
             routes.compactMap { route in

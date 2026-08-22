@@ -57,6 +57,50 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.buttons["ride-card"].firstMatch.waitForExistence(timeout: 5))
     }
 
+    func testRideWindowPillOverrideAndResetToRecommended() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["ride-card"].firstMatch.waitForExistence(timeout: 5))
+        let pill = app.descendants(matching: .any)["ride-window-pill"].firstMatch
+        // The pill only exists while today's riding window still has viable
+        // starts — run this suite at 23:00 and there's rightly nothing to tap.
+        try XCTSkipUnless(pill.waitForExistence(timeout: 5), "Riding window closed — no start pill to test")
+        pill.tap()
+
+        // The scan's pick is marked "· Recommended" in the dropdown.
+        XCTAssertTrue(app.buttons.matching(
+            NSPredicate(format: "label CONTAINS 'Recommended'")
+        ).firstMatch.waitForExistence(timeout: 5))
+
+        // Pick a start that isn't the recommendation (a plain time row).
+        let otherStart = app.buttons.matching(
+            NSPredicate(format: "label MATCHES %@", #"\d{1,2}:\d{2}\s?([ap]m|[AP]M)?"#)
+        ).firstMatch
+        try XCTSkipUnless(otherStart.waitForExistence(timeout: 2), "Only one viable start left — nothing to override")
+        otherStart.tap()
+
+        // Overridden: reopening the menu offers the one-tap reset row.
+        XCTAssertTrue(pill.waitForExistence(timeout: 5))
+        pill.tap()
+        let resetRow = app.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH 'Use Recommended'")
+        ).firstMatch
+        XCTAssertTrue(resetRow.waitForExistence(timeout: 5))
+        resetRow.tap()
+
+        // Back on the recommendation: the reset row is gone from the menu.
+        XCTAssertTrue(pill.waitForExistence(timeout: 5))
+        pill.tap()
+        XCTAssertTrue(app.buttons.matching(
+            NSPredicate(format: "label CONTAINS 'Recommended'")
+        ).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH 'Use Recommended'")
+        ).firstMatch.exists)
+    }
+
     func testRideCardTapOpensBreakdownThenViewRouteOpensRouteDetail() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]

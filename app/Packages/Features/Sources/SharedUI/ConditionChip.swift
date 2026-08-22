@@ -165,14 +165,17 @@ public extension ConditionChipData {
     /// real number for this route and this day, never a canned icon set.
     /// When the best-window scan picked a start (`windowText`), the clock
     /// chip shows the window instead of the bare duration — same slot, so
-    /// the §6 four-chip cap holds.
+    /// the §6 four-chip cap holds. The hero card passes
+    /// `includeClock: false`: its window moved into the top-leading start
+    /// pill, so a clock chip would say it twice.
     static func rideChips(
         windLabel: String,
         temperatureC: Double,
         sky: SkyCondition,
         travelMinutes: Int?,
         rideHours: Double,
-        windowText: String? = nil
+        windowText: String? = nil,
+        includeClock: Bool = true
     ) -> [ConditionChipData] {
         var chips: [ConditionChipData] = []
 
@@ -198,17 +201,19 @@ public extension ConditionChipData {
             ))
         }
 
-        // No word suffixes ("wind"/"away"/"ride") — the SF Symbols carry the
-        // meaning, and short labels let all four chips fit one row.
-        let hoursText = rideHours < 1
-            ? "~\(Int((rideHours * 60).rounded()))m"
-            : "~\(rideHours.formatted(.number.precision(.fractionLength(0...1))))h"
-        chips.append(ConditionChipData(
-            symbol: "clock.fill",
-            text: windowText ?? hoursText,
-            tint: .secondary,
-            accessibilityText: windowText.map { "riding window \($0)" } ?? "\(hoursText) ride"
-        ))
+        if includeClock {
+            // No word suffixes ("wind"/"away"/"ride") — the SF Symbols carry
+            // the meaning, and short labels let all four chips fit one row.
+            let hoursText = rideHours < 1
+                ? "~\(Int((rideHours * 60).rounded()))m"
+                : "~\(rideHours.formatted(.number.precision(.fractionLength(0...1))))h"
+            chips.append(ConditionChipData(
+                symbol: "clock.fill",
+                text: windowText ?? hoursText,
+                tint: .secondary,
+                accessibilityText: windowText.map { "riding window \($0)" } ?? "\(hoursText) ride"
+            ))
+        }
 
         return chips
     }
