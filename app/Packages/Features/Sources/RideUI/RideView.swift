@@ -689,12 +689,13 @@ private struct ContextEditorSheet: View {
     }
 }
 
-/// The breakdown sheet: `ScoreRing` tier header, this route's condition
-/// chips, the 10-day `BestDayBadge` verdict (loaded async — ride day + tier,
-/// or an explicit "give it a miss"; tapping a ride day jumps the day
-/// selector there), one clean `FactorRow` explainer per factor, a View
-/// Route push, weather attribution footer. System glass at partial detents
-/// (free) on iOS; a standard modal with a Done button on macOS.
+/// The breakdown sheet, titled with the route's name: `ScoreRing` tier
+/// header with the 10-day best-day verdict directly beneath it (loaded
+/// async — recommended day + tier reasoning as plain text, no card; tapping
+/// a ride day jumps the day selector there), this route's condition chips,
+/// one clean `FactorRow` explainer per factor, a View Route push, weather
+/// attribution footer. System glass at partial detents (free) on iOS; a
+/// standard modal with a Done button on macOS.
 private struct BreakdownSheet: View {
     var rankedRide: RankedRide
     var chips: [ConditionChipData]
@@ -710,15 +711,13 @@ private struct BreakdownSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    ScoreRing(score: rankedRide.score, size: ringSize)
-                    Text(rankedRide.route.name)
-                        .font(.headline)
-                    ConditionChipRow(chips: chips)
-                    if let recommendation {
-                        BestDayBadge(recommendation: recommendation) {
-                            onSelectDay(recommendation.context.date)
+                    VStack(spacing: 8) {
+                        ScoreRing(score: rankedRide.score, size: ringSize)
+                        if let recommendation {
+                            bestDayLine(recommendation)
                         }
                     }
+                    ConditionChipRow(chips: chips)
                     VStack(spacing: 12) {
                         ForEach(rankedRide.factorScores, id: \.factor) { score in
                             FactorRow(score: score)
@@ -735,7 +734,7 @@ private struct BreakdownSheet: View {
                 }
                 .padding()
             }
-            .navigationTitle("Why This Ride")
+            .navigationTitle(rankedRide.route.name)
             .navigationBarTitleDisplayModeIfAvailable()
             .task {
                 let loaded = await loadRecommendation()
@@ -751,6 +750,47 @@ private struct BreakdownSheet: View {
             #endif
         }
         .presentationDetents([.medium, .large])
+    }
+
+    /// The best-day verdict as plain text under the score ring — day +
+    /// tier reasoning ("Best day: Tomorrow / Great conditions"), or the
+    /// explicit skip. A ride day is a button that jumps the day selector.
+    @ViewBuilder
+    private func bestDayLine(_ recommendation: DayRecommendation) -> some View {
+        if recommendation.tier.isWorthRiding {
+            Button {
+                onSelectDay(recommendation.context.date)
+            } label: {
+                verdictText(
+                    headline: "Best day: \(dayName(recommendation.context.date))",
+                    reason: recommendation.tier.summary
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows that day's ranking")
+        } else {
+            verdictText(headline: "Give it a miss", reason: "No day worth riding in the next 10 days")
+        }
+    }
+
+    private func verdictText(headline: String, reason: String) -> some View {
+        VStack(spacing: 2) {
+            Text(headline)
+                .font(.subheadline.weight(.semibold))
+            Text(reason)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("best-day-line")
+    }
+
+    private func dayName(_ date: Date) -> String {
+        let calendar = Calendar.current
+        return calendar.isDateInToday(date) ? "Today"
+            : calendar.isDateInTomorrow(date) ? "Tomorrow"
+            : date.formatted(.dateTime.weekday(.wide))
     }
 }
 
