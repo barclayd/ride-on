@@ -3,11 +3,12 @@ import Engine
 import DesignSystem
 
 /// DESIGN-SYSTEM.md §6 component 8: compact tier ring used on list rows and
-/// the breakdown header. A thin wrapper around the stock
-/// `Gauge`/`.accessoryCircularCapacity` style (Apple's ready-made ring) —
-/// "stock components first" per §1.2. The gauge fill is the raw 0–1 score;
-/// the center shows the `RideTier` letter (S/A/B/C/D), the user-facing
-/// grade for how the conditions match the ride.
+/// the breakdown header. Hand-drawn (two stroked `Circle`s) rather than the
+/// stock `Gauge`/`.accessoryCircularCapacity` — the accessory gauge styles
+/// render at a fixed intrinsic size and ignore `.frame`, so `size` was a
+/// no-op and every ring drew at the same (oversized) diameter. The ring
+/// fill is the raw 0–1 score; the center shows the `RideTier` letter
+/// (S/A/B/C/D), the user-facing grade for how the conditions match the ride.
 public struct ScoreRing: View {
     public var score: Double // 0...1, same domain as `RankedRide.score`.
     public var size: CGFloat
@@ -25,15 +26,23 @@ public struct ScoreRing: View {
 
     private var tier: RideTier { RideTier(score: score) }
 
+    private var lineWidth: CGFloat { max(3, size * 0.09) }
+
     public var body: some View {
-        Gauge(value: fill, in: 0...1) {
-            EmptyView()
-        } currentValueLabel: {
+        ZStack {
+            Circle()
+                .stroke(.quaternary, lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: fill)
+                .stroke(
+                    ConditionPalette.color(forScore: score),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
             Text(tier.letter)
-                .font(.system(.body, design: .rounded).bold())
+                .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
         }
-        .gaugeStyle(.accessoryCircularCapacity)
-        .tint(ConditionPalette.color(forScore: score))
+        .padding(lineWidth / 2) // stroke straddles the path — keep it inside the frame
         .frame(width: size, height: size)
         .accessibilityLabel("Rated \(tier.letter). \(tier.summary).")
         .onAppear {
