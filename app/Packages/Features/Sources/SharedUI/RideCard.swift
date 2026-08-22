@@ -129,7 +129,7 @@ public struct RideCard: View {
 
     // "read as a sentence" per DESIGN-SYSTEM.md §8's VoiceOver example.
     private var accessibilitySentence: String {
-        let chipText = chips.map(\.text).joined(separator: ", ")
+        let chipText = chips.map(\.accessibilityText).joined(separator: ", ")
         let scoreText = score.map { "Score \(Int(($0 * 100).rounded())) out of 100. " } ?? ""
         return "\(routeName), recommended. \(scoreText)\(chipText)"
     }

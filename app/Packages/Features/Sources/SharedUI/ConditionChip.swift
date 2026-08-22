@@ -12,11 +12,16 @@ public struct ConditionChipData: Identifiable, Hashable {
     /// differ by symbol too (Differentiate Without Color, DESIGN-SYSTEM.md §3),
     /// this is just the tint.
     public var tint: Color
+    /// What VoiceOver speaks. Visible text drops word suffixes ("wind",
+    /// "away", "ride") because the symbol carries the meaning — spoken text
+    /// must keep them or "10 km/h, 15m, ~3.0h" is ambiguous.
+    public var accessibilityText: String
 
-    public init(symbol: String, text: String, tint: Color) {
+    public init(symbol: String, text: String, tint: Color, accessibilityText: String? = nil) {
         self.symbol = symbol
         self.text = text
         self.tint = tint
+        self.accessibilityText = accessibilityText ?? text
     }
 
     public var id: String { symbol + text }
@@ -48,6 +53,8 @@ public struct ConditionChip: View {
         .font(.footnote.weight(.medium))
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(data.accessibilityText)
 
         // Custom glass must fall back to an opaque-ish material when
         // transparency is reduced (DESIGN-SYSTEM.md §2).
@@ -151,7 +158,12 @@ public extension ConditionChipData {
     ) -> [ConditionChipData] {
         var chips: [ConditionChipData] = []
 
-        chips.append(ConditionChipData(symbol: "wind", text: windLabel, tint: .secondary))
+        chips.append(ConditionChipData(
+            symbol: "wind",
+            text: windLabel,
+            tint: .secondary,
+            accessibilityText: "\(windLabel) wind"
+        ))
 
         chips.append(ConditionChipData(
             symbol: sky.systemImageName,
@@ -160,13 +172,25 @@ public extension ConditionChipData {
         ))
 
         if let travelMinutes {
-            chips.append(ConditionChipData(symbol: "location.fill", text: "\(travelMinutes)m away", tint: .secondary))
+            chips.append(ConditionChipData(
+                symbol: "location.fill",
+                text: "\(travelMinutes)m",
+                tint: .secondary,
+                accessibilityText: "\(travelMinutes) minutes away"
+            ))
         }
 
+        // No word suffixes ("wind"/"away"/"ride") — the SF Symbols carry the
+        // meaning, and short labels let all four chips fit one row.
         let hoursText = rideHours < 1
-            ? "~\(Int((rideHours * 60).rounded()))m ride"
-            : "~\(String(format: "%.1f", rideHours))h ride"
-        chips.append(ConditionChipData(symbol: "clock.fill", text: windowText ?? hoursText, tint: .secondary))
+            ? "~\(Int((rideHours * 60).rounded()))m"
+            : "~\(rideHours.formatted(.number.precision(.fractionLength(0...1))))h"
+        chips.append(ConditionChipData(
+            symbol: "clock.fill",
+            text: windowText ?? hoursText,
+            tint: .secondary,
+            accessibilityText: windowText.map { "riding window \($0)" } ?? "\(hoursText) ride"
+        ))
 
         return chips
     }
