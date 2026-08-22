@@ -85,7 +85,7 @@ public struct RideView: View {
             }
         }
         .animation(Motion.panelMaterialize, value: weatherLoad.phase)
-        .navigationTitle(dayLabel(offset: selectedDayOffset))
+        .navigationTitle(titleLabel)
         .task(id: "\(selectedDayOffset)|" + routeModels.map(\.id.uuidString).joined()) {
             await loadWeather()
         }
@@ -165,9 +165,11 @@ public struct RideView: View {
 
     // MARK: - Day selection
 
-    /// Stock `Menu` + `Picker` so selection gets the system checkmark for
-    /// free. Only the next 10 days appear — the bound is WeatherKit's
-    /// hour-level forecast range, not a UI choice.
+    /// Stock `Menu` + inline `Picker` so selection gets the system checkmark
+    /// for free without a nested "Day" submenu. The label is a bare calendar
+    /// glyph — the large title already names the selected day. Only the next
+    /// 10 days appear — the bound is WeatherKit's hour-level forecast range,
+    /// not a UI choice.
     private var daySelector: some View {
         Menu {
             Picker("Day", selection: $selectedDayOffset) {
@@ -175,12 +177,9 @@ public struct RideView: View {
                     Text(dayLabel(offset: offset)).tag(offset)
                 }
             }
+            .pickerStyle(.inline)
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "calendar")
-                Text(dayLabel(offset: selectedDayOffset))
-                    .font(.subheadline.weight(.medium))
-            }
+            Image(systemName: "calendar")
         }
         .accessibilityLabel("Ride day: \(dayLabel(offset: selectedDayOffset)). Double tap to pick another day.")
         .accessibilityIdentifier("ride-day-selector")
@@ -194,6 +193,16 @@ public struct RideView: View {
         case 0: String(localized: "Today")
         case 1: String(localized: "Tomorrow")
         default: day(at: offset).formatted(.dateTime.weekday(.wide).day())
+        }
+    }
+
+    /// The large title adds the month ("Thursday 28 August") — with the
+    /// selector reduced to a glyph, the title is the only place the full
+    /// date appears.
+    private var titleLabel: String {
+        switch selectedDayOffset {
+        case 0, 1: dayLabel(offset: selectedDayOffset)
+        default: day(at: selectedDayOffset).formatted(.dateTime.weekday(.wide).day().month(.wide))
         }
     }
 
