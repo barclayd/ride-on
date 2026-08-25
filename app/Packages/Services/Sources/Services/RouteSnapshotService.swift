@@ -122,7 +122,15 @@ public enum RouteSnapshotService {
             latitude: region.center.latitude + region.span.latitudeDelta / 4,
             longitude: region.center.longitude + region.span.longitudeDelta / 4
         )
-        let pa = snapshot.point(for: a), pb = snapshot.point(for: b)
+        var pa = snapshot.point(for: a), pb = snapshot.point(for: b)
+        #if os(macOS)
+        // AppKit's `point(for:)` is bottom-left origin (which is why the
+        // polyline draws correctly in the non-flipped `lockFocus` context);
+        // SwiftUI overlays are top-left. Flip here so `SnapshotProjection`
+        // is top-left origin on both platforms.
+        pa.y = snapshot.image.size.height - pa.y
+        pb.y = snapshot.image.size.height - pb.y
+        #endif
         let ma = MKMapPoint(a), mb = MKMapPoint(b)
         let scaleX = (pb.x - pa.x) / (mb.x - ma.x)
         let scaleY = (pb.y - pa.y) / (mb.y - ma.y)
@@ -162,7 +170,8 @@ public enum RouteSnapshotService {
     }
 
     private static func projectionDiskURL(for key: String) -> URL? {
-        diskCacheURL(for: key)?.deletingPathExtension().appendingPathExtension("projection.json")
+        // "v2": v1 sidecars were bottom-left origin on macOS — must not be served.
+        diskCacheURL(for: key)?.deletingPathExtension().appendingPathExtension("projection-v2.json")
     }
 
     private static func draw(polyline coordinates: [Coordinate], on snapshot: MKMapSnapshotter.Snapshot) -> PlatformImage {
