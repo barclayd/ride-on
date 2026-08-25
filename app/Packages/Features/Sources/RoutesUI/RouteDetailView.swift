@@ -84,7 +84,7 @@ public struct RouteDetailView: View {
                 // The inline hero stays inert (an interactive map inside a
                 // ScrollView steals the scroll gesture) — tapping expands to
                 // a fully pannable map sheet instead (REDESIGN.md D).
-                RouteMapHero(routeID: route.id, coordinates: route.coordinates)
+                RouteMapHero(routeID: route.id, coordinates: route.coordinates, elevationPoints: elevationPoints, scrub: scrub)
                     .frame(height: 260)
                     .clipShape(.rect(cornerRadius: CornerRadius.hero))
                     .contentShape(.rect)
@@ -506,13 +506,21 @@ final class ElevationScrubState {
 /// now the same cached `RouteSnapshotService` bitmap the Routes list and
 /// import sheet use: bounded cost, no re-render on scrub, no live map left
 /// mounted on a screen the user parks on. The live, pannable map lives only in
-/// the tap-to-expand sheet now. (Trade: the scrub-synced *map* marker is gone;
-/// the elevation chart still shows the scrub position.)
+/// the tap-to-expand sheet now.
+///
+/// The scrub-synced map dot is back without a live `Map`: the service's
+/// `SnapshotProjection` maps the scrub coordinate into the bitmap's point
+/// space, and a plain SwiftUI `Circle` overlay is positioned there. Only the
+/// overlay child reads the scrub state, so a hover moves one circle — the
+/// bitmap and this view's body never re-render.
 private struct RouteMapHero: View {
     let routeID: UUID
     let coordinates: [Coordinate]
+    let elevationPoints: [ElevationPoint]
+    let scrub: ElevationScrubState
     @Environment(\.colorScheme) private var colorScheme
     @State private var snapshot: PlatformImage?
+    @State private var projection: SnapshotProjection?
 
     var body: some View {
         // The image lives in an `.overlay` of a clear spacer so it plays NO
@@ -532,13 +540,71 @@ private struct RouteMapHero: View {
                 }
             }
             .clipped()
+            .overlay {
+                if let snapshot, let projection {
+                    ScrubMapDot(
+                        scrub: scrub,
+                        elevationPoints: elevationPoints,
+                        coordinates: coordinates,
+                        projection: projection,
+                        imageSize: snapshot.size
+                    )
+                }
+            }
             .task(id: routeID) {
+                let size = CGSize(width: 1400, height: 520)
                 snapshot = await RouteSnapshotService.snapshot(
                     routeID: routeID,
                     coordinates: coordinates,
-                    size: CGSize(width: 1400, height: 520),
+                    size: size,
+                    colorScheme: colorScheme
+                )
+                projection = await RouteSnapshotService.projection(
+                    routeID: routeID,
+                    coordinates: coordinates,
+                    size: size,
                     colorScheme: colorScheme
                 )
             }
+    }
+}
+
+/// The elevation-scrub position marked on the map hero. Reads the scrub
+/// `@Observable` itself (the ScrubIndicator pattern) so a hover re-renders
+/// only this dot, never the snapshot or Route Detail's body. Positions the
+/// dot by projecting the scrubbed coordinate into the snapshot's point space,
+/// then mirroring the hero's `.scaledToFill()` + `.clipped()` transform.
+private struct ScrubMapDot: View {
+    let scrub: ElevationScrubState
+    let elevationPoints: [ElevationPoint]
+    let coordinates: [Coordinate]
+    let projection: SnapshotProjection
+    let imageSize: CGSize
+
+    var body: some View {
+        GeometryReader { geo in
+            // `ElevationPoint.id` is the coordinate index, so the nearest
+            // chart sample maps straight back to a track coordinate.
+            if let distance = scrub.selectedDistanceKm,
+               let nearest = elevationPoints.min(by: { abs($0.distanceKm - distance) < abs($1.distanceKm - distance) }),
+               nearest.id < coordinates.count,
+               imageSize.width > 0, imageSize.height > 0 {
+                let pixel = projection.point(for: coordinates[nearest.id])
+                let scale = max(geo.size.width / imageSize.width, geo.size.height / imageSize.height)
+                let x = (geo.size.width - imageSize.width * scale) / 2 + pixel.x * scale
+                let y = (geo.size.height - imageSize.height * scale) / 2 + pixel.y * scale
+
+                if (0...geo.size.width).contains(x), (0...geo.size.height).contains(y) {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                        .shadow(radius: 2)
+                        .position(x: x, y: y)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

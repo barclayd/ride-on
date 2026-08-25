@@ -11,6 +11,25 @@ import UIKit
 public typealias PlatformImage = UIImage
 #endif
 
+/// The coordinate → snapshot-image-point mapping, captured from the
+/// snapshotter when the image is rendered. Web-Mercator is affine in
+/// `MKMapPoint` space (no rotation, uniform axes), so four numbers reproduce
+/// `MKMapSnapshotter.Snapshot.point(for:)` exactly — including for
+/// disk-cached images, where the snapshot object is long gone. Lets callers
+/// place overlays (e.g. the elevation-scrub dot) on a cached snapshot.
+public struct SnapshotProjection: Codable, Sendable {
+    var originX: Double
+    var originY: Double
+    var scaleX: Double
+    var scaleY: Double
+
+    /// Position of `coordinate` in the snapshot image's point space.
+    public func point(for coordinate: Coordinate) -> CGPoint {
+        let mapPoint = MKMapPoint(CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude))
+        return CGPoint(x: (mapPoint.x - originX) * scaleX, y: (mapPoint.y - originY) * scaleY)
+    }
+}
+
 /// `MKMapSnapshotter`-based route thumbnails for the Routes list, per
 /// DESIGN-SYSTEM.md: `.standard` map type, POIs excluded, polyline drawn on.
 /// Disk-cached (Caches dir) keyed by route id + size + light/dark, with an
@@ -19,6 +38,12 @@ public typealias PlatformImage = UIImage
 public enum RouteSnapshotService {
     // ponytail: NSCache is internally thread-safe (Apple docs), just not marked Sendable.
     nonisolated(unsafe) private static let memoryCache = NSCache<NSString, PlatformImage>()
+    nonisolated(unsafe) private static let projectionCache = NSCache<NSString, ProjectionBox>()
+
+    private final class ProjectionBox {
+        let value: SnapshotProjection
+        init(_ value: SnapshotProjection) { self.value = value }
+    }
 
     // ponytail: takes plain id/coordinates rather than `RouteModel` — the
     // SwiftData model isn't Sendable, and this service has no business
@@ -36,6 +61,30 @@ public enum RouteSnapshotService {
             return image
         }
 
+        return await renderFresh(key: key, coordinates: coordinates, size: size, colorScheme: colorScheme)?.image
+    }
+
+    /// The projection for the same snapshot `snapshot(...)` returns. Served
+    /// from cache; on a miss (e.g. a PNG cached before projections existed)
+    /// it re-renders once, which also refreshes the image caches.
+    public static func projection(routeID: UUID, coordinates: [Coordinate], size: CGSize, colorScheme: ColorScheme) async -> SnapshotProjection? {
+        guard coordinates.count > 1 else { return nil }
+
+        let key = cacheKey(routeID: routeID, size: size, colorScheme: colorScheme)
+
+        if let cached = projectionCache.object(forKey: key as NSString) {
+            return cached.value
+        }
+        if let diskURL = projectionDiskURL(for: key), let data = try? Data(contentsOf: diskURL),
+           let projection = try? JSONDecoder().decode(SnapshotProjection.self, from: data) {
+            projectionCache.setObject(ProjectionBox(projection), forKey: key as NSString)
+            return projection
+        }
+
+        return await renderFresh(key: key, coordinates: coordinates, size: size, colorScheme: colorScheme)?.projection
+    }
+
+    private static func renderFresh(key: String, coordinates: [Coordinate], size: CGSize, colorScheme: ColorScheme) async -> (image: PlatformImage, projection: SnapshotProjection)? {
         let options = MKMapSnapshotter.Options()
         options.size = size
         options.mapType = .standard
@@ -47,12 +96,42 @@ public enum RouteSnapshotService {
 
         guard let snapshot = try? await MKMapSnapshotter(options: options).start() else { return nil }
         let image = draw(polyline: coordinates, on: snapshot)
+        let projection = projection(from: snapshot, fitting: coordinates)
 
         memoryCache.setObject(image, forKey: key as NSString)
+        projectionCache.setObject(ProjectionBox(projection), forKey: key as NSString)
         if let diskURL = diskCacheURL(for: key), let data = pngData(image) {
             try? data.write(to: diskURL)
         }
-        return image
+        if let diskURL = projectionDiskURL(for: key), let data = try? JSONEncoder().encode(projection) {
+            try? data.write(to: diskURL)
+        }
+        return (image, projection)
+    }
+
+    /// Solve the affine map from two probe points the snapshotter projects
+    /// for us — exact by construction, no guessing at MapKit's internal
+    /// region-to-aspect fitting.
+    private static func projection(from snapshot: MKMapSnapshotter.Snapshot, fitting coordinates: [Coordinate]) -> SnapshotProjection {
+        let region = region(fitting: coordinates)
+        let a = CLLocationCoordinate2D(
+            latitude: region.center.latitude - region.span.latitudeDelta / 4,
+            longitude: region.center.longitude - region.span.longitudeDelta / 4
+        )
+        let b = CLLocationCoordinate2D(
+            latitude: region.center.latitude + region.span.latitudeDelta / 4,
+            longitude: region.center.longitude + region.span.longitudeDelta / 4
+        )
+        let pa = snapshot.point(for: a), pb = snapshot.point(for: b)
+        let ma = MKMapPoint(a), mb = MKMapPoint(b)
+        let scaleX = (pb.x - pa.x) / (mb.x - ma.x)
+        let scaleY = (pb.y - pa.y) / (mb.y - ma.y)
+        return SnapshotProjection(
+            originX: ma.x - pa.x / scaleX,
+            originY: ma.y - pa.y / scaleY,
+            scaleX: scaleX,
+            scaleY: scaleY
+        )
     }
 
     public static func region(fitting coordinates: [Coordinate]) -> MKCoordinateRegion {
@@ -80,6 +159,10 @@ public enum RouteSnapshotService {
         let dir = cachesDir.appendingPathComponent("RouteSnapshots", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("\(key).png")
+    }
+
+    private static func projectionDiskURL(for key: String) -> URL? {
+        diskCacheURL(for: key)?.deletingPathExtension().appendingPathExtension("projection.json")
     }
 
     private static func draw(polyline coordinates: [Coordinate], on snapshot: MKMapSnapshotter.Snapshot) -> PlatformImage {
