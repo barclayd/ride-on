@@ -522,6 +522,12 @@ private struct RouteMapHero: View {
     @State private var snapshot: PlatformImage?
     @State private var projection: SnapshotProjection?
 
+    // The size requested from the snapshotter — the point space the
+    // projection maps into. The dot math must use this, NOT `snapshot.size`:
+    // an NSImage reloaded from the cached PNG reports pixel dimensions
+    // (2800x1040 @2x), which halved the scale and drifted the dot off route.
+    private static let snapshotSize = CGSize(width: 1400, height: 520)
+
     var body: some View {
         // The image lives in an `.overlay` of a clear spacer so it plays NO
         // part in layout sizing: `.scaledToFill()` reports an aspect-corrected
@@ -541,28 +547,27 @@ private struct RouteMapHero: View {
             }
             .clipped()
             .overlay {
-                if let snapshot, let projection {
+                if snapshot != nil, let projection {
                     ScrubMapDot(
                         scrub: scrub,
                         elevationPoints: elevationPoints,
                         coordinates: coordinates,
                         projection: projection,
-                        imageSize: snapshot.size
+                        imageSize: Self.snapshotSize
                     )
                 }
             }
             .task(id: routeID) {
-                let size = CGSize(width: 1400, height: 520)
                 snapshot = await RouteSnapshotService.snapshot(
                     routeID: routeID,
                     coordinates: coordinates,
-                    size: size,
+                    size: Self.snapshotSize,
                     colorScheme: colorScheme
                 )
                 projection = await RouteSnapshotService.projection(
                     routeID: routeID,
                     coordinates: coordinates,
-                    size: size,
+                    size: Self.snapshotSize,
                     colorScheme: colorScheme
                 )
             }
