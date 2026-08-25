@@ -1,6 +1,7 @@
 import SwiftUI
 import Charts
 import Accessibility
+import Engine
 import Models
 
 /// One sample along the route: distance travelled so far -> elevation.
@@ -38,9 +39,16 @@ public struct ElevationProfile: View {
     private static let maxRenderedPoints = 500
 
     private var displayPoints: [ElevationPoint] {
-        guard points.count > Self.maxRenderedPoints else { return points }
-        let stride = Double(points.count - 1) / Double(Self.maxRenderedPoints - 1)
-        return (0..<Self.maxRenderedPoints).map { points[Int((Double($0) * stride).rounded())] }
+        // Raw GPX elevations are integer-metre quantized; on a near-flat route
+        // the autoscaled y-axis turns those 1 m steps into full-height spikes.
+        // Smooth the trace with the same smoother the gain figure uses.
+        let smoothed = ElevationSmoother.movingAverage(points.map(\.elevationM))
+        let smoothedPoints = zip(points, smoothed).map { point, elevation in
+            ElevationPoint(id: point.id, distanceKm: point.distanceKm, elevationM: elevation)
+        }
+        guard smoothedPoints.count > Self.maxRenderedPoints else { return smoothedPoints }
+        let stride = Double(smoothedPoints.count - 1) / Double(Self.maxRenderedPoints - 1)
+        return (0..<Self.maxRenderedPoints).map { smoothedPoints[Int((Double($0) * stride).rounded())] }
     }
 
     /// Pinned y-domain (with a little headroom). Without it, the scrub
