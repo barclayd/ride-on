@@ -43,6 +43,7 @@ public struct RouteDetailView: View {
     @State private var isInspectorPresented = true
     @State private var isMapExpanded = false
     @State private var isEditing = false
+    @State private var editActionOwner = UUID()
 
     public init(routeID: UUID) {
         self.routeID = routeID
@@ -74,7 +75,7 @@ public struct RouteDetailView: View {
         #endif
         // Expose the edit action to the Mac menu bar ("Edit Route Details…");
         // nil when no route is showing so the command disables itself.
-        .focusedSceneValue(\.routeEditAction, route == nil ? nil : { isEditing = true })
+        .focusedSceneValue(\.routeEditAction, route == nil ? nil : RouteEditAction(owner: editActionOwner) { isEditing = true })
     }
 
     @ViewBuilder

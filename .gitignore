@@ -19,3 +19,4 @@ app/Generated/
 # Bun / worker (Phase 1)
 node_modules/
 .wrangler/
+*.profraw
