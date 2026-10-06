@@ -77,7 +77,7 @@ struct RideOnApp: App {
     @MainActor
     private func importOpenedGPX(at url: URL) async {
         let importer = RouteImporter(classifyClient: services.classify, elevationClient: services.elevation, modelContext: modelContainer.mainContext)
-        try? await importer.importGPX(fileURL: url)
+        _ = try? await importer.importGPX(fileURL: url)
     }
 }
 

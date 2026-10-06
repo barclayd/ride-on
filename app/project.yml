@@ -56,6 +56,10 @@ targets:
         # Lets CloudKit's silent pushes wake the app so SwiftData pulls
         # remote changes in the background (iOS-only key, ignored on macOS).
         UIBackgroundModes: [remote-notification]
+        # Opened GPX/FIT files are imported as copies (app-owned data), never
+        # edited in place. False is the implicit default; declaring it
+        # silences Xcode's "doesn't declare opening in place" warning.
+        LSSupportsOpeningDocumentsInPlace: false
         NSLocationWhenInUseUsageDescription: "Ride On uses your location to find rides near you and estimate travel time."
         NSHealthShareUsageDescription: "Ride On reads your cycling workouts to match them to your saved routes and log rides automatically."
         NSHealthUpdateUsageDescription: "Ride On may save ride data it records back to Health."

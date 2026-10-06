@@ -4,6 +4,7 @@ import HealthKit
 import CoreLocation
 import Models
 import Engine
+import os
 
 /// Contextual HealthKit authorization for cycling workouts + routes — called
 /// from `PermissionPrimingSheet.onAllow` once the user opts into ride
@@ -80,15 +81,18 @@ public struct LiveHealthKitStore: HealthStoreProviding {
         guard let route = routeSamples.first else { return [] }
 
         return try await withCheckedThrowingContinuation { continuation in
-            var coordinates: [Coordinate] = []
+            // HealthKit delivers route batches on its own queue; the lock
+            // makes the accumulation Sendable-safe across those callbacks.
+            let coordinates = OSAllocatedUnfairLock<[Coordinate]>(initialState: [])
             let query = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
                 if let error {
                     continuation.resume(throwing: error)
                     return
                 }
-                coordinates.append(contentsOf: (locations ?? []).map { Coordinate(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude) })
+                let batch = (locations ?? []).map { Coordinate(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude) }
+                coordinates.withLock { $0.append(contentsOf: batch) }
                 if done {
-                    continuation.resume(returning: coordinates)
+                    continuation.resume(returning: coordinates.withLock { $0 })
                 }
             }
             store.execute(query)

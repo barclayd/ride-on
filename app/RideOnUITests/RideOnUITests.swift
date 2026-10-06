@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class RideOnUITests: XCTestCase {
     func testTabsExistAndRideShowsARecommendation() {
         let app = XCUIApplication()

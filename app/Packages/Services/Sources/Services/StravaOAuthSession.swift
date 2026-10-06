@@ -17,7 +17,7 @@ public final class StravaOAuthSession: NSObject {
 
     public func requestAuthorizationCode() async throws -> String {
         #if os(iOS)
-        if await UIApplication.shared.canOpenURL(StravaAuthConfig.appAuthorizeURL) {
+        if UIApplication.shared.canOpenURL(StravaAuthConfig.appAuthorizeURL) {
             return try await requestAppToAppCode()
         }
         #endif
@@ -68,9 +68,11 @@ public final class StravaOAuthSession: NSObject {
 extension StravaOAuthSession: ASWebAuthenticationPresentationContextProviding {
     public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         #if os(iOS)
-        UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first ?? ASPresentationAnchor()
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let keyWindow = scenes.lazy.compactMap(\.keyWindow).first { return keyWindow }
+        // OAuth is user-initiated from a visible scene, so one always exists.
+        guard let scene = scenes.first else { preconditionFailure("Strava OAuth started with no window scene") }
+        return ASPresentationAnchor(windowScene: scene)
         #else
         NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first ?? ASPresentationAnchor()
         #endif

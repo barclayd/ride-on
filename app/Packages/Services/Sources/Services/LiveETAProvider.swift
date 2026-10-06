@@ -8,8 +8,8 @@ public struct LiveETAProvider: ETAProviding {
 
     public func travelTime(from: Coordinate, to: Coordinate, mode: TravelMode) async throws -> TimeInterval {
         let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: MKPlacemark(coordinate: from.clLocationCoordinate2D))
-        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: to.clLocationCoordinate2D))
+        request.source = MKMapItem(location: from.clLocation, address: nil)
+        request.destination = MKMapItem(location: to.clLocation, address: nil)
         request.transportType = mode.transportType
 
         do {
@@ -31,8 +31,8 @@ public enum ETAProvidingError: Error, Sendable {
 }
 
 private extension Coordinate {
-    var clLocationCoordinate2D: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    var clLocation: CLLocation {
+        CLLocation(latitude: latitude, longitude: longitude)
     }
 }
 
