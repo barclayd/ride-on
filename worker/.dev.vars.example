@@ -1,2 +1,2 @@
-STRAVA_CLIENT_ID=your-strava-client-id
-STRAVA_CLIENT_SECRET=your-strava-client-secret
+MET_OFFICE_API_KEY=your-global-spot-api-key
+API_KEYS_JSON='[{"ownerId":"dan","token":"replace-with-a-random-token-at-least-32-characters"}]'

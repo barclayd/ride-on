@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import type { z } from 'zod';
+import { readBoundedBody } from './body.ts';
 import { AppError } from './errors.ts';
 
 /**
@@ -21,8 +22,13 @@ export const readJsonBody = async <Schema extends z.ZodType>(
 
   let raw: unknown;
   try {
-    raw = await c.req.json();
-  } catch {
+    raw = JSON.parse(
+      new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(
+        await readBoundedBody(c.req.raw, 64_000),
+      ),
+    );
+  } catch (error) {
+    if (error instanceof AppError) throw error;
     throw new AppError(400, 'BAD_REQUEST', 'Request body must be valid JSON');
   }
 

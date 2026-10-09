@@ -1,5 +1,330 @@
 # Ride On — Build Plan
 
+## Current direction: API MVP (2026-10-09)
+
+This section records the API-first pivot discussed with Dan. It supersedes the
+earlier client-first scope below wherever they conflict. The earlier plan remains
+a record of the existing implementation, not a checklist for this MVP.
+
+### Product promise and agreed scope
+
+Given a collection of imported routes, a calendar day and the rider's current
+preferences, recommend which ride offers the best fit with the forecast and
+explain the choice. Develop and evaluate this decision in the API before adapting
+the clients to consume it.
+
+- The MVP accepts a day and now recommends a departure as well as a route.
+  Dan confirmed 20 km/h as the initial moving speed, overridable per request,
+  and daylight hours with the whole ride required to fit. User-specified
+  departure times and narrower riding windows remain later refinements.
+- Prefer consistently comfortable conditions throughout the modelled ride and
+  show hourly variation. Match forecast hours to progress along the route;
+  one good hour cannot stand in for the complete ride.
+- Weather assessment uses locations along each route's GPX geometry. There is no
+  home location, travel-time calculation, nearby-route filter or travel radius.
+- Dan's initial preference is comfortable weather: warmer temperatures, lower
+  winds and avoiding rain. In the first comparison, Dan conditionally preferred
+  18°C with 22 km/h wind over 13°C with 8 km/h wind when the stronger wind is in
+  the right direction for the ride. Wind direction relative to route geometry is
+  therefore in scope for the MVP. Comfortable ranges, tolerances and relative
+  priorities are still to be calibrated; "warmer" does not yet define a scoring
+  curve. Dan clarified that favourable wind means assistance for most of the
+  ride, without a special preference for assistance towards the end. For this
+  day-level MVP, assess that coverage by route distance; angle thresholds and
+  the balance between assistance and adverse sections still need calibration.
+- With equally light, favourable winds, Dan preferred a dry 13°C day to 18°C
+  with two daytime hours of light rain. Preserve this specific comparison as a
+  ranking expectation; it does not establish a blanket rain exclusion or exact
+  numerical weights.
+- When no route meets the rider's minimum standards, still return the best
+  available route with its drawbacks and an explicit statement that none meets
+  those standards. Relative ranking and minimum-standard assessment are separate
+  outputs. The minimum standards are personal, configurable and not yet defined
+  as a complete policy.
+- Temperature expectations depend on the rider, month and location. Dan gave
+  indicative examples of probably skipping below 16°C in summer and below 0°C
+  in January, and suggested the location's average high for the month as a
+  reference. These are examples for Dan's profile, not product-wide defaults,
+  exact adopted thresholds or a complete seasonal/climate formula.
+- Climbing is neutral for Dan. Other riders may eventually prefer less or more
+  climbing, and a rider's preferences may change with the season or the day.
+- The first evaluation set will use Dan's GPX files and his reviews of concrete
+  route-and-weather comparisons.
+
+### Proposed API boundary
+
+Keep the existing TypeScript and Hono backend on Cloudflare Workers. Dan accepted
+this stack after considering Rust; optimise and measure the complete request path
+before introducing another runtime or language.
+
+The two core operations are implemented; full contracts and setup are in
+[`docs/api.md`](docs/api.md).
+
+| Operation | Input | Responsibility and output |
+|---|---|---|
+| `POST /routes` | GPX file | Validate and store the route, derive reusable geometry and available route facts, return an ID and data-quality warnings. |
+| `POST /recommendations` | Route IDs, target date, explicit time zone and current preferences | Fetch or reuse forecasts along the routes, search daylight departures at the requested moving speed and rank the choices with explanations and forecast coverage. |
+
+GPX export uploads are the proposed first import path, including files originating
+in Garmin or cycle.travel. Direct account connections are a separate future
+integration decision. Route storage and access must be scoped to its owner;
+private bearer tokens now resolve an owner, with D1 storage scoped to that owner.
+
+### Preference and engine design
+
+Keep objective route facts, forecast observations, rider preferences and the
+context needed to resolve those preferences separate. Context includes the target
+date and route locations, plus a historical climate reference when the selected
+preference policy needs one. An uploaded route has no permanent personal score.
+Changing preferences must allow it to be rescored without another upload or
+geometry-processing pass.
+
+Start with explicit preferences in each recommendation request. A later saved
+profile can supply a baseline, with per-request overrides. If profiles are
+introduced, the API resolves them into one effective preference snapshot;
+precedence must be documented. Explicitly configured calendar or climate rules
+can automatically adapt the effective values to the requested month and route
+location. The software must not invent or silently learn a seasonal rule from two
+examples. A rider can still change their policy or override it for a request.
+
+#### Proposed temperature preference contract
+
+Support a small set of named, validated policy types, rather than encoding any
+one rider's limits in the evaluator:
+
+| Policy | Rider configuration | Context required |
+|---|---|---|
+| Fixed | Explicit comfort range and/or minimum temperature | None beyond the forecast |
+| Calendar | Explicit values by month, with a declared fallback for unspecified months | Target date in the assessment time zone |
+| Climate-relative | A personal tolerance relative to a specified monthly climate reference, optionally bounded by personal absolute limits | Target month and historical reference data for route locations |
+
+Fixed and calendar minimum-temperature policies are implemented. Climate-relative
+rules and saved profiles remain future work. Preference ranking and minimum-standard rules remain distinct under
+each policy. Dan's 16°C and 0°C examples do not establish a fixed offset below a
+monthly average high, summer month boundaries, or values for the other months.
+Do not interpolate the examples into an annual schedule without declaring that
+as an assumption.
+
+Resolve the chosen policy on the server before evaluation. Return the effective
+limits and their origin (profile, month rule, climate reference or explicit
+override), so clients can explain both the result and why a limit changes. Keep
+the personal policy independent of weather-provider response formats. Other
+factors can acquire their own supported contextual rules as needed; there is no
+need for arbitrary user code or a general-purpose rule language in this MVP.
+
+Historical monthly reference data and a live forecast are different inputs. If
+climate-relative rules are used, define and retain the source, reference period,
+statistic, location mapping and version for reproducibility. Missing reference
+data must use an explicitly configured fallback or produce an unresolved
+assessment; it must not silently select a different temperature policy.
+
+The first implementation evaluates minimum temperature at each modelled route
+section midpoint; any value below the configured threshold fails. It reports
+those sections, observation times and worst actual value. This strict sampled
+policy and the provisional comfort curves need calibration; they do not establish
+Dan's personal seasonal limits. Apply seasonal conventions through configured month rules or local data,
+not a worldwide assumption that summer is the same set of months everywhere.
+
+Temperature, route-relative wind (strength and direction) and rain are the first
+scoring factors.
+Each factor owns its preference interpretation and returns both a contribution
+and a reason. Additional factors such as elevation fit should be additive to this
+design, with inactive factors having no effect. A tailwind-home preference must
+not be assumed for every rider; Dan's profile has no extra weighting for the final
+section. Any future use of elevation to estimate duration is distinct from
+whether the rider enjoys climbing.
+
+Keep forecast retrieval and caching separate from a deterministic evaluator:
+identical route facts, forecast snapshots, resolved contextual preferences and
+algorithm version must produce identical results. Retain enough version and input metadata
+to reproduce an evaluation. Clients present the API's assessment rather than
+reimplementing scoring or preference rules.
+
+### Weather and result requirements
+
+Dan trusts Met Office forecasts for UK rides. Resolve this as a strict UK source
+policy, with no silent fallback to another provider; his preference outside the
+UK remains unspecified. Other riders may configure a different source or an
+explicitly allowed fallback order. Source trust is separate from comfort scoring.
+
+Keep provider-specific requests and payloads behind a generic internal contract.
+The evaluator consumes normalised evidence with declared units, statistics,
+time intervals, requested/resolved locations, source provenance and missing-data
+status. Historical climate references have a separate contract. Less capable
+providers must report gaps rather than invent matching data.
+
+Met Office Weather DataHub offers suitable forecast APIs. The supplied key enables
+Global Spot; its hourly adapter and strict/ordered source selection are now
+implemented and verified locally. BPF v2 remains an optional later product.
+Research, quotas and integration design are recorded in
+[`docs/weather-providers.md`](docs/weather-providers.md), with draft types in
+[`worker/src/weather/contracts.ts`](worker/src/weather/contracts.ts).
+The local ignored live check (`evaluation/met-office-live-check.json`) retrieved all eight required
+series at 18 sample points across six routes. This is not complete spatial coverage
+or a route recommendation. The subsequent local ignored API check (`evaluation/api-live-check.json`)
+now covers all six routes, 55 weather locations and 86 departures through the local
+Workers runtime, D1 and KV. Shared caching and recommendation endpoints are implemented;
+remote provisioning and deployment remain outstanding.
+
+Sample locations along the route at a useful spatial resolution; do not assume a
+single starting-point forecast represents the route, or issue one weather request
+per raw GPX point. Preserve hourly variation for both scoring and explanations.
+Route-point sampling does not imply the weather source can resolve every point.
+
+Return meaningful reasons and trade-offs with the ranking, plus forecast source,
+issue/retrieval times where available, coverage and the assessment policy used.
+Missing forecasts must be explicit rather than converted into neutral comfort.
+A fit score is not a probability of good weather, and individual hourly rain
+probabilities are not automatically a whole-ride rain probability.
+
+Keep relative comfort ranking separate from the rider's minimum standards:
+
+- If all assessable routes fall below the standards, return the best available
+  route and its alternatives, explicitly labelled as below the standards. Explain
+  the selected route's drawbacks and exactly which standards it fails.
+- Include a collection-level assessment as well as per-route assessments, so
+  every client can clearly say that none of the routes meets the standards.
+- Minimum-standard failures must remain visible regardless of a high overall
+  comfort score. Warmth cannot erase a failed rain threshold, for example.
+- Treat standards as rider-configurable inputs, separate from ranking priorities.
+  A missing threshold is not an invented limit, and an unconfigured profile must
+  not be presented as a completed minimum-standard assessment.
+- Insufficient forecast coverage is an unknown assessment, not a standards
+  failure or a pass. If some routes cannot be assessed, say that none of the
+  assessed routes qualifies rather than claiming that none of all submitted
+  routes qualifies. If none can be ranked reliably, return an explicit
+  insufficient-data result instead of inventing a best route.
+
+Implemented selection rule: prefer routes known to meet all configured standards,
+ranked by comfort. When none qualifies, offer the highest-ranked assessable route
+as the best available fallback. Return structured failure reasons (criterion,
+configured limit, forecast evidence and affected hours/route sections) alongside
+readable explanations. The request/response fields and threshold rules are documented
+in `docs/api.md`; every result includes the resolved preferences and algorithm version.
+
+For speed, perform reusable route analysis during ingestion and cache forecasts
+with an explicit freshness policy. Set measurable latency and workload targets
+once the initial route collection is available, separating fresh-fetch requests
+from requests answered using cached forecasts.
+
+### Day-level comparison policy (refined with Dan)
+
+The API accepts a day and searches daylight departures, then scores conditions
+encountered at the rider's estimated arrival along each route. Dan chose 20 km/h
+as the starting pace; whole rides must fit in daylight. This supersedes the earlier
+proposal to aggregate the entire day without modelling a departure.
+
+The first evaluator uses constant moving speed, a 30-minute departure grid,
+500-metre route sections, and weather samples every 10 km. Duration does not yet
+account for breaks, elevation or wind. The daylight window is the conservative
+intersection of sunrise-to-sunset across sampled locations. These assumptions are
+returned in each response, and speed/departure grid are request inputs.
+
+Provisional comfort is 75% distance-weighted mean plus 25% worst sampled section.
+Temperature, route-relative headwind/crosswind/gust and precipitation each have
+explicit preference settings. Wind assistance is reported by route distance; no
+tailwind-home bonus is added. Dates and time zones include DST handling. Native
+weather period semantics are preserved, and missing evidence is explicit.
+
+### Working API slice (2026-10-09)
+
+Implemented GPX ingestion, D1 ownership, bearer authentication, provider contracts,
+Global Spot hourly, shared forecast caching, daylight departure search, preference
+resolution and ranked explanations. `docs/api.md` describes the exact boundaries.
+The earlier surface-classification and Strava endpoints were removed with Dan's
+authorization to start afresh. The app clients remain to be adapted.
+
+All six supplied files were uploaded through the local Workers HTTP API and ranked
+using live Met Office forecasts. The cold baseline was about 605 ms; after lookup
+optimization, ten warm comparisons had a median of 29 ms and maximum/p95 of 37 ms,
+with all 55 weather lookups cached. These are local observations, not cloud latency
+or load guarantees. See the stored report for inputs, provenance and rankings.
+
+Next: review real ranked comparisons with Dan to tune the provisional curves and
+personal standards. Climate normals, elevation preferences, pace modelling and
+additional providers are subsequent extensions. Remote D1, Worker secrets and an
+appropriate Workers plan must be configured before deploying this rebuild.
+
+### First evaluation milestone
+
+1. Import a small, varied selection of Dan's real GPX files and inspect their
+   geometry, distance, elevation availability and data quality.
+2. Pair those routes with fixed forecast scenarios. Ask for pairwise choices,
+   acceptability and reasons, rather than a permanent rating for each route.
+3. Record the preferences used for every judgement so seasonal or daily changes
+   do not become contradictory labels.
+4. Turn agreed comparisons into repeatable acceptance tests. Include different
+   rider preferences, missing weather, differing conditions along a route and
+   days where none of the routes is appealing. Check that a below-standard best
+   available route is returned with explicit failures, and that missing data is
+   not mistaken for a minimum-standard failure. Include the same weather evaluated
+   under different rider/month profiles and missing climate-reference data. Keep
+   season-unspecified human comparisons separate from confirmed seasonal cases;
+   the earlier dry-13°C preference does not assert that 13°C meets summer minimums.
+   Reserve some comparisons to check
+   generalisation instead of tuning against every example.
+5. Implement the smallest API slice that passes those checks; review its rankings
+   together before expanding integrations, factors or client work.
+
+### Initial route collection inspected (2026-10-09)
+
+All six supplied files in `/Users/danbarclay/Downloads/GPX` parsed successfully,
+with finite coordinates inside latitude/longitude bounds. This is a geometry
+inspection, not full schema or riding-suitability validation. The reproducible
+inventory, source fingerprints and measurement definitions are in
+`evaluation/initial-route-inventory.json` (local and Git-ignored).
+
+| Route | Distance | Ascent from supplied elevations | Geometry |
+|---|---:|---:|---|
+| London Loop | 39.8 km | 137 m | Same start and end |
+| Braintree | 51.0 km | 274 m | Different start and end |
+| Potters Bar | 77.1 km | Unknown | End within 185 m of start |
+| Woking to Brighton | 84.1 km | Unknown | Different start and end |
+| Pilgrim's Way | 96.4 km | 969 m | Different start and end |
+| East Anglia | 111.7 km | 671 m | Different start and end |
+
+Distances follow supplied track geometry; ascent is the unsmoothed sum of positive
+elevation changes, not a surveyed value. These are all cycle.travel GPX 1.0
+exports, each containing one track segment and no point timestamps. They do not
+yet demonstrate compatibility with Garmin exports or other GPX structures.
+
+Ingestion and assessment cases revealed by the collection:
+
+- Missing elevation: Potters Bar and Woking to Brighton remain eligible for
+  weather scoring; elevation must be unknown, not zero.
+- Repeated coordinates: East Anglia and London Loop each contain one consecutive
+  duplicate. A zero-length leg must not create a bearing or distort weighting.
+- Variable spacing: use distance-based spatial sampling or segment-length
+  weighting so dense sections do not dominate the weather assessment.
+- Geographic variation: London Loop spans about 9 km east/west and 6 km
+  north/south; East Anglia spans about 64 km north/south and Pilgrim's Way about
+  60 km east/west. The collection supports comparing compact and dispersed routes.
+- Route direction: four routes finish far from their start. "Favourable wind"
+  cannot universally mean a tailwind on a homeward leg. Preserve supplied
+  traversal order; do not assume routes can safely be reversed.
+- Metadata: the Woking to Brighton file's embedded name is truncated to
+  "Woking to Brigh". Retain the original metadata; the inventory uses the filename
+  for its display name.
+
+The preference comparisons and Dan's responses are recorded in
+[`evaluation/preference-comparisons.json`](evaluation/preference-comparisons.json).
+These conditions are invented examples, not fetched forecasts. The wind response
+is conditional on assistance for most of the ride; the rain response ranks dry
+13°C ahead of 18°C with two hours of light rain. Neither establishes universal
+weights, and exact forecast inputs still need definition for executable fixtures.
+Dan also specified that a day with no qualifying routes should still return the
+best available route with drawbacks and an explicit no-routes-meet-standards
+assessment. This is an agreed response requirement, not a numeric threshold.
+
+The working slice now provides those request/response schemas and daytime policies.
+Fixed scenarios exercise different personal limits without evaluator changes. Human
+comparison records remain distinct from synthetic numeric test inputs; Dan's
+personal numerical calibration is the next review step.
+
+---
+
+## Earlier app implementation plan
+
 **Ride On** answers one question every morning: *which of my routes should I ride today?*
 Routes are built elsewhere (Strava, cycle.travel, Garmin) and imported; Ride On scores them daily against wind, weather-vs-your-preferences, travel time, your time budget, training intent, bike choice, and novelty — and explains itself.
 

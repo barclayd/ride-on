@@ -1,10 +1,6 @@
-export type Env = {
-  CLASSIFY_CACHE: KVNamespace;
-  STRAVA_CLIENT_ID: string;
-  STRAVA_CLIENT_SECRET: string;
-};
+export type Env = Cloudflare.Env;
 
-export type Bindings = { Bindings: Env };
+export type Bindings = { Bindings: Env; Variables: { ownerId: string } };
 
 /** A [lat, lon] pair. */
 export type Point = readonly [number, number];

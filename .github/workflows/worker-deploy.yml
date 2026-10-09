@@ -13,19 +13,30 @@ concurrency:
 
 jobs:
   deploy:
+    # Enable only after remote D1, API secrets and the Workers plan are configured.
+    if: ${{ vars.API_MVP_DEPLOYMENT_READY == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: worker
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
       - run: bun install --frozen-lockfile
       - run: bun run check
+      # Provision remote D1 and required Worker secrets before the first API MVP deployment.
+      - run: bun run migrate:remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - run: bun run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      # Smoke-test the artifact that just shipped — real Valhalla, real Strava error path.
+      # Check the deployed API version and private-endpoint authentication without spending weather quota.
       - run: bun test test/smoke.test.ts
         env:
           WORKER_URL: https://ride-on-api.barclaysd.workers.dev
