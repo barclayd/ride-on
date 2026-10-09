@@ -20,3 +20,7 @@ app/Generated/
 node_modules/
 .wrangler/
 *.profraw
+
+# Local personal-route inventories and live forecast diagnostics. Tests use synthetic data.
+/evaluation/initial-route-inventory.json
+/evaluation/*-live-check.json

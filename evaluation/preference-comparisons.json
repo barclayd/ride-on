@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-10-09",
+  "purpose": "Human preference calibration examples for the API MVP. These are not live forecasts or executable scoring fixtures yet.",
+  "rider": "Dan",
+  "context": {
+    "route_characteristics": "Otherwise equally appealing; climbing is neutral for this rider.",
+    "assessment": "Day input; recommend route and departure with consistently comfortable conditions throughout the modelled ride and show hourly variation. Supersedes the earlier all-day aggregation proposal.",
+    "weather_source_preference": {
+      "region": "UK",
+      "provider": "Met Office",
+      "policy": "strict",
+      "other_provider_fallback_allowed": false,
+      "outside_region_preference": null,
+      "scope": "Dan's personal preference; other riders may choose different providers or explicitly allow fallback.",
+      "interpretation": "Only trust Met Office for UK forecasts. Missing data must be reported rather than silently replaced with a different provider. The source policy is personal; product integration status is tracked separately in the weather provider notes."
+    },
+    "wind_preference": {
+      "user_response_verbatim": "I mean wind helping for most of the ride",
+      "scope": "Assistance across most of the route, with no extra preference for the final section.",
+      "mvp_measurement_interpretation": "Weight assistance by route distance; use hourly weather matched to progress at the request moving speed, initially 20 km/h.",
+      "tailwind_home_bonus": false,
+      "angle_thresholds": null,
+      "strength_and_gust_tolerances": null
+    },
+    "season": null,
+    "daytime_bounds": "Daylight hours; the whole ride must fit.",
+    "temperature_preference": {
+      "status": "contextual_policy_with_indicative_examples",
+      "scope": "Dan's personal profile only; not global software defaults.",
+      "user_response_verbatim": "For me personally it depends completely what the month is And there's probably relative to the average high for that month for the location. e.g. <16C in summer I'd probably skip that day and in january at <0 I'd skip that tday too",
+      "depends_on": [
+        "month",
+        "route_location"
+      ],
+      "suggested_reference": "Average high for the target month and location; the exact climate statistic and source are not selected.",
+      "examples": [
+        {
+          "season_label": "summer",
+          "months": null,
+          "temperature_below_c": 16,
+          "response": "probably skip",
+          "binding_threshold": false
+        },
+        {
+          "month": 1,
+          "temperature_below_c": 0,
+          "response": "skip",
+          "binding_threshold": false
+        }
+      ],
+      "climate_offset_c": null,
+      "absolute_floor_c": null,
+      "interpretation": "Temperature acceptability depends on seasonal and local expectations. The examples do not define a complete annual schedule, fixed climate offset or absolute year-round floor.",
+      "unresolved": [
+        "Which temperature statistic and spatial/temporal coverage define a below-minimum day.",
+        "Exact months or climate rule and values outside the two examples.",
+        "Historical reference source and period, location sampling and missing-data fallback if a climate-relative policy is used."
+      ]
+    },
+    "minimum_standards": {
+      "thresholds": null,
+      "all_routes_below_standards_behavior": "Return the best available assessable route with its drawbacks and make clear that no routes meet the rider's minimum standards.",
+      "ranking_and_standard_assessment_are_separate": true,
+      "user_response_verbatim": "I'd want the best available route with the drawbacks, but also making it very clear that no routes match minimum standards"
+    },
+    "riding": {
+      "average_speed_kph": 20,
+      "source": "User-selected starting estimate, overridable per request",
+      "duration_model": "Constant moving speed; no stops, elevation or wind adjustment yet."
+    }
+  },
+  "comparisons": [
+    {
+      "id": "temperature-wind-001",
+      "status": "conditional_response_recorded",
+      "weather_source": "invented_constant_daytime_conditions",
+      "question": "Assuming both rides otherwise appeal equally and have no rain forecast throughout the daytime, would you choose A: 18°C with steady 22 km/h wind, or B: 13°C with steady 8 km/h wind?",
+      "options": {
+        "A": {
+          "temperature_c": 18,
+          "wind_speed_kph": 22,
+          "wind_description": "steady",
+          "wind_from_degrees": null,
+          "rain_description": "no rain forecast throughout daytime"
+        },
+        "B": {
+          "temperature_c": 13,
+          "wind_speed_kph": 8,
+          "wind_description": "steady",
+          "wind_from_degrees": null,
+          "rain_description": "no rain forecast throughout daytime"
+        }
+      },
+      "user_response_verbatim": "Warmer and windier if the wind was in the right direction for the cycle",
+      "follow_up": {
+        "question": "When you say the right direction, do you mainly mean wind helping for most of the ride, or wind helping towards the end, even if you face a headwind earlier?",
+        "user_response_verbatim": "I mean wind helping for most of the ride"
+      },
+      "conditional_choice": {
+        "option": "A",
+        "condition": "The wind helps for most of the ride; assistance at the end has no special bonus."
+      },
+      "unconditional_choice": null,
+      "interpretation": "Wind strength alone is insufficient. In this scenario, Dan conditionally prefers the warmer option when the stronger wind assists for most of the ride. This does not establish that stronger tailwinds are always better.",
+      "unresolved": [
+        "Precise route geometry, wind directions and angle thresholds for an executable fixture.",
+        "The rider's choice with a headwind or crosswind instead.",
+        "How gusts or very strong favourable winds affect acceptability."
+      ]
+    },
+    {
+      "id": "temperature-rain-001",
+      "status": "response_recorded",
+      "weather_source": "invented_daytime_conditions",
+      "question": "With equally light, favourable winds, would you prefer 18°C with light rain forecast for two daytime hours, or 13°C with no rain forecast throughout the daytime?",
+      "options": {
+        "A": {
+          "temperature_c": 18,
+          "wind_description": "light and favourable, equal to option B",
+          "rain_description": "light rain forecast for two daytime hours",
+          "rain_forecast_hours": 2,
+          "hourly_rain_probability": null,
+          "rain_amount_mm": null
+        },
+        "B": {
+          "temperature_c": 13,
+          "wind_description": "light and favourable, equal to option A",
+          "rain_description": "no rain forecast throughout daytime",
+          "rain_forecast_hours": 0,
+          "hourly_rain_probability": null,
+          "rain_amount_mm": null
+        }
+      },
+      "user_response_verbatim": "B",
+      "unconditional_choice": "B",
+      "interpretation": "Within this scenario, Dan prefers dry conditions at 13°C over 18°C with two daytime hours of light rain. This is a relative preference, not evidence that any rain makes a route unacceptable.",
+      "expected_order_within_scenario": [
+        "B",
+        "A"
+      ],
+      "unresolved": [
+        "Rain probability, amount, spatial extent and daytime bounds for an executable fixture.",
+        "How much rain would make an otherwise appealing route unacceptable."
+      ],
+      "follow_up": {
+        "status": "response_recorded",
+        "question": "If every route has rain forecast, would you still want the best available ride with its drawbacks explained, or a no suitable ride result when none meets your comfort preferences?",
+        "user_response_verbatim": "I'd want the best available route with the drawbacks, but also making it very clear that no routes match minimum standards",
+        "interpretation": "Return the best available route and drawbacks while explicitly stating when no routes meet the rider's minimum standards. This settles the response behaviour; it does not establish rain or other minimum thresholds."
+      }
+    },
+    {
+      "id": "spatial-wind-001",
+      "status": "proposed_not_yet_presented",
+      "weather_source": "invented_segment_level_conditions",
+      "question": "At the same comfortable temperature with no rain forecast, would you prefer a route with moderate wind helping for most of the distance but a headwind near the end, or a route with light wind throughout?",
+      "user_response_verbatim": null,
+      "unconditional_choice": null
+    }
+  ]
+}

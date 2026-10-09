@@ -26,7 +26,7 @@ app/
 │   └─ Features/               SPM package, one manifest, multiple static-library products: RideUI (day selector, card stack, context capsule, breakdown sheet), RoutesUI (library list, import, Route Detail), YouUI (preference rows, weights, saved places, ride log), OnboardingUI (9-step first-run flow — welcome, four reactive dial steps, Strava connect, speed prefill, finish), SharedUI (the closed 8-component DESIGN-SYSTEM.md §6 inventory: RideCard, ConditionChip, FactorRow, ElevationProfile, SurfaceBar, DialScreen, BestDayBadge, ScoreRing — plus the non-inventory `PermissionPrimingSheet` helper). Each depends on Models/Services/DesignSystem as needed
 ├─ RideOnTests/                app-layer XCTest integration tests (import pipeline, live-classify smoke check, AppServices wiring)
 └─ RideOnUITests/              XCUITest E2E tests (launch with --fixture-world)
-worker/                       Cloudflare Worker (Hono): /classify (Valhalla surface classification), /strava/* OAuth — see worker/CLAUDE.md
+worker/                       Cloudflare Worker (Hono): GPX upload, route storage and weather-aligned ride recommendations — see worker/CLAUDE.md and docs/api.md
 ```
 
 ## Build & test commands
@@ -76,10 +76,12 @@ macOS build:
 xcodebuild -project app/RideOn.xcodeproj -scheme RideOn -destination 'platform=macOS' build
 ```
 
-Worker commands: see `worker/CLAUDE.md`. The classification worker is deployed and live at
-`https://ride-on-api.barclaysd.workers.dev` — `Packages/Services/Sources/Services/ClassifyService.swift`'s
-`LiveClassifyClient` hits it directly (see `RideOnTests/LiveClassifyIntegrationTests.swift`
-for a skipped-by-default live-network check against it).
+Worker commands: see `worker/CLAUDE.md`. The API-first rebuild is implemented
+locally with `/routes` and `/recommendations`; it has not been deployed. The existing
+client `ClassifyService.swift` and Strava token transports still target legacy
+endpoints and need migration before using the rebuilt backend. The API algorithm
+is now the current product focus; the app package map below/above describes the
+existing client implementation, not the target business-logic ownership.
 
 ## Signing (real team: R2GGK3VN2C)
 

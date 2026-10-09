@@ -1,0 +1,51 @@
+# Workers integration tests with MSW 3
+
+Run `bun run test:integration` from `worker/` with Node.js 24+. `bun run check`
+includes this suite after the Bun unit tests. CI pins Node 24 and Bun 1.4.0.
+
+The tests exercise the public API in an actual `workerd` isolate via Miniflare,
+with a fresh D1 database and KV namespace per test. SQL comes from the real
+migration files, split with Wrangler's SQL parser and applied as D1 statements.
+Worker restarts retain those bindings, testing storage independently of JS memory.
+
+The test entry point calls the production application factory, overriding only
+the clock and request logging. The real authentication, GPX parser, route store,
+Met Office HTTP adapter, source selection, cache and recommendation engine run.
+MSW 3.0.2 `http` handlers receive the actual outbound requests and return realistic
+Global Spot payloads. This covers serialization and provider normalization instead
+of replacing a provider with already-normalized weather.
+
+Miniflare's `outboundService` resolves requests with MSW's documented `getResponse`
+API. `setupServer` only intercepts requests in its own JS process, so it cannot
+intercept an isolated Worker's fetch directly. The outbound bridge provides that
+boundary without a mock HTTP server, global fetch patch or production test flag.
+No handler means a recorded failure and an immediate blocked response. Normal
+teardown rejects both unhandled requests and resolver exceptions, including those
+that application error handling catches. The guard has its own regression test.
+
+Use Node for this suite: Miniflare's Undici dispatcher/restart implementation is
+not fully compatible with Bun's Undici shim. Bun still runs the existing fast unit
+tests. Miniflare and esbuild are pinned to Wrangler's own versions to avoid a
+second runtime version; update them together when upgrading Wrangler.
+
+Covered scenarios include:
+
+- Upload, migration-backed persistence, restart, daylight and pace defaults.
+- Preference changes and speed overrides reusing cached forecasts.
+- Hourly departure selection and route-relative wind direction.
+- Minimum-standard failures with evidence, unresolved monthly limits and fallbacks.
+- Missing fields at later route locations and partial forecast horizons.
+- Upstream auth, quota and service errors; recovery; no credential leaks or redirects.
+- Invalid JSON, wrong units, distant forecast locations and stale model runs.
+- KV corruption, retrieval freshness and persistence across a Worker restart.
+- Authentication, owner isolation, malformed/oversized input and multipart imports.
+- No weather calls for impossible dates, unknown providers or rejected requests.
+
+Assertions focus on observable decisions and contract invariants. Avoid snapshots
+of whole responses, sleeps to wait for readiness, or importing scoring functions to
+calculate expected rankings. Each test owns its handlers and storage. Fixtures are
+synthetic, the clock is fixed, and credentials are test-only constants.
+
+This suite tests local runtime behavior, not Cloudflare's distributed KV propagation,
+production latency, real Met Office availability, or forecast accuracy. Unit tests
+cover transport cancellation/timeouts and the remaining scalar/interval edge cases.

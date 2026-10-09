@@ -2,15 +2,24 @@
   "name": "ride-on-api",
   "account_id": "3343118697a4beccae42090c4520cd29",
   "main": "src/index.ts",
-  "compatibility_date": "2026-07-03",
+  "compatibility_date": "2026-10-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "secrets": { "required": ["MET_OFFICE_API_KEY", "API_KEYS_JSON"] },
   "observability": {
     "enabled": true
   },
 
-  // KV namespace for classify-route caching (route-hash keyed, see src/cache.ts)
+  "d1_databases": [
+    {
+      "binding": "ROUTES_DB",
+      "database_name": "ride-on-routes",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Reuse the existing development namespace; new weather entries have their own prefix.
   "kv_namespaces": [
     {
-      "binding": "CLASSIFY_CACHE",
+      "binding": "WEATHER_CACHE",
       "id": "2a198dd680b1461ca0c0010d0dbce05c"
     }
   ]
