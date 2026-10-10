@@ -31,6 +31,15 @@ const sunshine = z.strictObject({
 const climbing = z.strictObject({
   preference: z.enum(['flatter', 'neutral', 'hillier']),
 });
+const distance = z
+  .strictObject({
+    minKm: z.number().min(0).max(400),
+    maxKm: z.number().positive().max(400),
+  })
+  .refine((range) => range.minKm <= range.maxKm, {
+    message: 'Minimum preferred distance must not exceed the maximum.',
+    path: ['minKm'],
+  });
 const weights = z.strictObject({
   temperature: z.number().min(0).max(1),
   wind: z.number().min(0).max(1),
@@ -50,6 +59,7 @@ export const preferencesSchema = z
     wind,
     sunshine,
     climbing: climbing.default({ preference: 'neutral' }),
+    distance: distance.nullable().default(null),
     weights,
     minimumStandards,
   })
@@ -69,6 +79,8 @@ const preferenceOverrides = z.strictObject({
   wind: wind.partial().optional(),
   sunshine: sunshine.partial().optional(),
   climbing: climbing.partial().optional(),
+  // Replace a range as a whole; null explicitly removes the preference.
+  distance: distance.nullable().optional(),
   weights: weights.partial().optional(),
   minimumStandards: z
     .strictObject({
@@ -143,6 +155,7 @@ export const defaultSettings: Settings = {
     },
     sunshine: { sunnyIntervalsComfort: 0.7 },
     climbing: { preference: 'neutral' },
+    distance: null,
     weights: {
       temperature: 0.3,
       wind: 0.2,
@@ -182,6 +195,10 @@ export const mergeSettings = (
       wind: { ...base.preferences.wind, ...preferences?.wind },
       sunshine: { ...base.preferences.sunshine, ...preferences?.sunshine },
       climbing: { ...base.preferences.climbing, ...preferences?.climbing },
+      distance:
+        preferences?.distance === undefined
+          ? base.preferences.distance
+          : preferences.distance,
       weights: { ...base.preferences.weights, ...preferences?.weights },
       // A policy is replaced as a whole. Null explicitly removes a saved limit.
       minimumStandards: Object.fromEntries(

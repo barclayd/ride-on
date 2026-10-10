@@ -233,7 +233,7 @@ The rest of the Preferences tab maps onto existing fields:
 
 ## 5. Climbing preference
 
-The climbing contract for API v0.7.0 is defined in [the API documentation](api.md#climbing-preference).
+The climbing contract, introduced in API v0.7.0, is defined in [the API documentation](api.md#climbing-preference).
 It supersedes this section's original missing-elevation proposal; the other
 proposals in this brief are separate work.
 
@@ -243,8 +243,8 @@ proposals in this brief are separate work.
   `preferenceLevels` alias is required for this control.
 - Default to `neutral`, including older profiles. This leaves weather scoring
   unchanged. Label it **No preference** in the interface.
-- Dan chose ascent per kilometre rather than total climbing. The active score
-  combines 90% weather comfort with 10% climbing comfort. Hillier rises linearly
+- Dan chose ascent per kilometre rather than total climbing. Climbing contributes
+  10%; weather retains 90%, or 80% with preferred distance also active. Hillier rises linearly
   from 0 to 100 over 0–20 m/km; flatter is the inverse. The factor saturates at
   20 m/km. Minimum conditions still take priority. There is no ascent limit yet.
 - When climbing matters, incomplete elevation makes the route `unassessable`,
@@ -253,8 +253,32 @@ proposals in this brief are separate work.
 - Results include `distanceM`, `ascentM`, `ascentMPerKm`, `best.weatherScore` and
   `best.factors.climbing`. Neutral has a null climbing factor. Preserve elevation
   estimate warnings; this is not a steepness or effort estimate.
-- `algorithmVersion` is `comfort-v0.5`. Neutral must reproduce the accepted v4
-  profile's weather scores, ranking and departures.
+- `algorithmVersion` is now `comfort-v0.6`. Neutral climbing with no distance
+  preference reproduces the accepted v4 profile's weather scores, ranking and departures.
+
+## 5a. Preferred distance (implemented in API v0.8.0)
+
+The [preferred-distance contract](api.md#preferred-distance) supports a broad
+range without a hard filter. Use `preferences.distance: { minKm, maxKm }` on
+`POST /recommendations` for a temporary override, or inside `settings.preferences`
+on the user endpoints to save it. Both bounds are required: `0 <= minKm <= maxKm <= 400`,
+with `maxKm > 0`. Decimals and equal bounds are supported.
+
+- Default to `null` (**No preference**), including older profiles. Omission
+  preserves a saved range; explicit `null` disables it. Replace the whole range,
+  never just one bound. Unrelated updates must preserve it.
+- Every distance inside the inclusive band gets the same distance factor. Outside
+  routes stay available, with a gradual penalty and a shorter/longer drawback.
+- Distance contributes 10%. With climbing also active, the score is 80% weather,
+  10% distance and 10% climbing. Weather minimums and whole-ride windows retain
+  priority. There is no recovery/exertion model or hard maximum distance preference.
+- Use each route's `distanceFit.status` and `deviationKm` for presentation;
+  `distanceFit` is `null` when disabled. `best.factors.distance` is 0–100, or `null`
+  when disabled. Do not calculate scores or re-sort in the extension.
+- No distance preference preserves previous scores and ordering. Distance-only
+  changes reuse compatible weather cache entries.
+- Pairing a 15–40 km range with `climbing: { preference: 'flatter' }` can express
+  a shorter, gentler ride for one search without changing the usual profile.
 
 ## 6. Default minimum standards
 

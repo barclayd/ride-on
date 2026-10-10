@@ -92,7 +92,9 @@ Omitted values are preserved, including other weights and minimum standards.
 `minimumStandards: {}` preserves all limits. Set an individual limit to `null`
 to remove it, e.g. `{ "maximumGustKph": null }`. A `minimumTemperature` policy
 (including a monthly map) replaces the previous policy as a whole. A `weather`
-policy also replaces the whole source selection. Other settings reject nulls.
+policy also replaces the whole source selection. `preferences.distance` replaces
+both bounds together, and `null` removes the distance preference. Other settings
+reject nulls. See [preferred distance](#preferred-distance).
 Changing weather product does not implicitly change forecast statistics: save
 `weather` and `forecast` together when switching between Global Spot and BPF.
 
@@ -448,7 +450,8 @@ days still need calibration. Earlier profiles remain available for comparison; n
 Use `preferences.climbing.preference` with `flatter`, `neutral` or `hillier`.
 The default is `neutral`, including for older stored profiles that have no climbing
 field. Reading an older profile supplies the default without rewriting its storage
-or changing its version. Neutral preserves the existing weather scores and ranking.
+or changing its version. Neutral adds no climbing influence; with no distance
+preference, it preserves the existing weather scores and ranking.
 
 Save a preference through `POST /users` or `PATCH /users/me`, or override it for
 one recommendation without changing the saved profile:
@@ -478,8 +481,9 @@ Climbing means **estimated ascent per kilometre**, not total ascent, maximum slo
 or effort. With equal weather, `flatter` prefers 60 km with 600 m ascent (10 m/km)
 over 30 km with 450 m ascent (15 m/km); `hillier` reverses that preference.
 
-For active preferences, the final score is **90% weather comfort + 10% climbing
-comfort**. The climbing factor rises linearly from 0 to 100 between 0 and 20 m/km
+With climbing active and no distance preference, the final score is **90% weather
+comfort + 10% climbing comfort**. With distance also active it is **80% weather +
+10% climbing + 10% distance**. The climbing factor rises linearly from 0 to 100 between 0 and 20 m/km
 for `hillier`, and falls from 100 to 0 for `flatter`. It stays at its endpoint
 beyond 20 m/km. These are provisional, versioned calibration choices, not
 physiological thresholds. Scores do not depend on which other routes are selected.
@@ -494,13 +498,82 @@ When climbing is active, a route without complete elevation remains visible in
 `unranked` with status `unassessable` and issue `missing-elevation`. It receives no
 combined score and causes no weather requests. Known zero ascent is valid flat
 terrain. An impossible time window still returns `no_feasible_departure` first.
-Neutral can assess routes without elevation using weather alone.
+Neutral can assess routes without elevation using weather and any distance preference.
 
 Available ascent remains an **unsmoothed GPX estimate**, with the existing
 `ASCENT_IS_UNSMOOTHED_ESTIMATE` warning. GPS noise, elevation source and point
 density can affect it. This release does not claim reliable steepness, adjust
 ride duration for climbing, or add maximum-ascent restrictions. Climbing-only
 changes need no new weather variables and reuse compatible cached forecasts.
+
+### Preferred distance
+
+Set `preferences.distance` to `{ "minKm": 30, "maxKm": 60 }` for an inclusive
+preferred band in kilometres. The default is `null` (**No preference**), including
+older profiles; reading them supplies `null` without rewriting storage or changing
+their version. All distances inside the range fit equally. Routes outside it stay
+available with a gradually reduced distance factor and an explicit drawback.
+This is a scoring preference, not a hard distance limit or a minimum condition.
+
+Both bounds are required whenever a range is supplied: `0 <= minKm <= maxKm <= 400`
+and `maxKm > 0`. Decimal values and equal bounds are allowed. These bounds match
+the current 400 km route-import limit. A range replaces both saved bounds together;
+partial objects, empty objects, unknown fields and custom strengths are rejected.
+Omission inherits the saved preference, while explicit `null` disables it.
+
+For a short, flatter ride, send this to `POST /recommendations`:
+
+```json
+{
+  "routeIds": ["<uploaded-route-id>"],
+  "date": "2026-10-11",
+  "preferences": {
+    "distance": { "minKm": 15, "maxKm": 40 },
+    "climbing": { "preference": "flatter" }
+  }
+}
+```
+
+Request overrides never save settings. Use `POST /users` or `PATCH /users/me`
+to save a usual range; updates require the last-read profile version:
+
+```json
+{
+  "expectedVersion": 1,
+  "settings": {
+    "preferences": { "distance": { "minKm": 30, "maxKm": 60 } }
+  }
+}
+```
+
+Send `"distance": null` at the same location to remove a saved range, or inside
+a recommendation's `preferences` to disable it for that search only. Unrelated
+profile updates preserve the range. Clients may display other units but must
+convert to kilometres at this boundary.
+
+Distance contributes **10%** of the combined score whenever configured. Weather
+retains **90%**, or **80%** with an active climbing preference. No range and neutral
+climbing use weather alone. The range does not change weather weights, weather
+minimums, ride duration or the requirement for the whole ride to fit its window.
+A route meeting configured weather minimums still outranks one that fails them.
+Active climbing still requires complete elevation even when distance is configured.
+
+For route length `d` in kilometres, the 0–1 distance comfort is `d / minKm` below
+the range, `1` inside it, and `max(0, 1 - (d - maxKm) / maxKm)` above it. For a
+30–60 km range, 15 km and 90 km each receive a distance factor of 50; 30, 45 and
+60 km all receive 100; 120 km and longer receive 0. The factor varies continuously
+at the boundaries and does not depend on other selected routes. This relative
+taper is a provisional, versioned calibration choice, not a physiological recovery
+model. Together with `flatter`, it expresses a short-distance, gentler-terrain
+preference without estimating total exertion.
+
+Each ranked or unranked route exposes `distanceFit`: `null` when disabled, otherwise
+`{ "status": "within_range" | "below_range" | "above_range", "deviationKm": number }`.
+Deviation is zero inside the band and the positive distance to the nearest boundary
+outside it. Candidate `factors.distance` is 0–100, or `null` when disabled;
+`weatherScore` remains the original weather-only score. Comparison and deviation
+use unrounded route distance; clients can round display values without reclassifying
+the fit. Distance-only changes reuse compatible cached forecasts.
 
 ### Personal minimum standards
 
@@ -529,8 +602,9 @@ The response includes:
 | `rankings` | Ordered routes; each has `best`, up to three tested alternative departures, duration, daylight, effective window, warnings and coverage counts. |
 | `unranked` | Routes with `unassessable` evidence (weather, or elevation when climbing matters) or `no_feasible_departure`. |
 | `distanceM`, `ascentM`, `ascentMPerKm` | Route distance and estimated total/ascent-per-kilometre facts; ascent fields are `null` when elevation is incomplete. |
+| `distanceFit` | `null` with no distance preference; otherwise `status` (`within_range`, `below_range`, `above_range`) and nonnegative `deviationKm`. Outside-range routes stay eligible. |
 | `best.departureAt`, `best.finishAt` | Suggested start and estimated finish. |
-| `best.score`, `best.weatherScore`, `best.factors` | Combined ride score, original weather-only score and temperature/wind/dryness/clear-sky/sunshine/climbing factors. These are not probabilities. |
+| `best.score`, `best.weatherScore`, `best.factors` | Combined ride score, original weather-only score and temperature/wind/dryness/clear-sky/sunshine/climbing/distance factors. These are not probabilities. |
 | `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate, categorical sky-condition distance fractions and assisted-distance fraction. |
 | `best.standards` | `meets`, `below`, `unknown`, or `not_configured`, with structured failures. |
 | `minimumStandardsStatus` | Collection-level `match_found`, `none_meet`, `unknown`, `not_configured`, or `no_feasible_departure`. |
@@ -549,7 +623,7 @@ change that conclusion. If another route/departure lacks evidence, or a month
 rule is unresolved, return `unknown` instead. No feasible departure is distinct
 from bad weather. Missing data never becomes zero rain or zero wind.
 
-## Algorithm v0.5
+## Algorithm v0.6
 
 The duration model is distance / constant moving speed. Weather is matched to the
 estimated arrival at each section midpoint; wind uses that section's heading.
@@ -570,8 +644,10 @@ Clear-sky comfort is `1 − totalCloudCoverFraction`. Per-section comfort is the
 normalized preference-weighted factor mean. There is no fixed morning bonus: all
 weather factors are evaluated at the expected arrival time, including hourly cloud or weather symbols. Weather
 score is 100 × (75% distance-weighted mean comfort + 25% worst section comfort).
-It is unchanged from v0.4. Neutral climbing uses this score directly; an active
-climbing preference combines it with the route-level factor as described above.
+It is unchanged from v0.4. Neutral climbing and no distance preference use this
+score directly; active climbing and distance preferences each contribute 10% via
+their route-level factors as described above. With no distance preference, v0.6
+preserves v0.5 scores and ordering, including active climbing.
 Ties choose the earlier departure, then route ID. These curves, spans and the
 consistency weight are versioned implementation choices for review and calibration.
 
@@ -679,8 +755,8 @@ This is an offline algorithm comparison, not a fresh forecast or new HTTP test.
 
 The API is hosted at **https://ride-on-api.barclaysd.workers.dev**; its first production
 release was v0.3.0 on 10 October 2026. The importer/shortlist release was v0.4.0.
-The session-only authentication release is v0.6.0. The climbing preference
-release is v0.7.0 with algorithm `comfort-v0.5`;
+The session-only authentication release was v0.6.0, and climbing preferences
+arrived in v0.7.0 (`comfort-v0.5`). Preferred distance is v0.8.0 with algorithm `comfort-v0.6`;
 `GET /health` reports the running version. The canonical custom domain is
 `https://api.ride-on.cc`. Both Met Office credentials and `AUTH_CONFIG_JSON` are
 Worker secrets. The obsolete `API_KEYS_JSON` secret is no longer used. Provider
@@ -691,7 +767,7 @@ credentials in a client.
 The production `ride-on-routes` D1 database is in Western Europe. Its ID is recorded
 in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before
 publishing the authentication-enabled Worker. No new database migration is
-required for v0.6.0 or v0.7.0.
+required for v0.6.0, v0.7.0 or v0.8.0.
 The additive authentication migration preserves route facts, shortlists and user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used
 by `wrangler dev --local`; production data and local data are separate. The

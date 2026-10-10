@@ -20,9 +20,18 @@ The API should own scoring, preference interpretation, feasibility and result or
 | Date selection | Display the actual dates available for planning. Prefer **Next few days** to a permanently fixed **Next 5 days** label. Explain partial coverage, for example: **Saturday available; Sunday's forecast isn't available yet.** Availability must come from the API. |
 | Time window | Offer **Daylight hours** and **Choose times**. Label custom fields **Earliest start** and **Latest finish**. Add: **Your whole ride must fit inside this window.** Custom windows remain subject to daylight constraints for this release. |
 | Expired selections | Show **These dates have passed**, with an action to choose available dates. Do not silently replace an expired search with a different date range. |
-| Climbing preference | Use **Flatter**, **No preference** and **Hillier**. Dan has chosen climbing per kilometre, with a modest influence: 90% weather comfort and 10% terrain preference. No preference preserves weather-only scoring. This is the API v0.7.0 contract; no maximum-ascent control is included yet. |
+| Climbing preference | Use **Flatter**, **No preference** and **Hillier**. Dan has chosen climbing per kilometre, contributing 10% when active. No preference removes its influence. No maximum-ascent control is included yet. |
+| Preferred distance | Offer **No preference** or a range with **From** and **To** distances and explicit units. All distances inside the band are equally suitable; nearby distances outside it remain options. Default to No preference. The range contributes 10% when active; with climbing too, the score is 80% weather, 10% distance and 10% climbing. Both controls are supported by API v0.8.0. |
 
 Simple controls must also handle an existing **Custom** preference. Display that state clearly and preserve its saved values until the rider deliberately chooses a replacement. Opening or saving an unrelated setting must not reset custom preferences.
+
+Allow a distance range and climbing choice **Just for this ride search** without
+changing usual preferences. Saving them to the profile should be an explicit
+action. For example, a 15–40 km range plus Flatter expresses a short, gentler ride;
+do not claim a recovery or exertion score. API bounds are 0–400 km with a positive
+upper bound; clients displaying miles convert at the boundary. Send both bounds
+together, or `null` to turn off distance preference. See the
+[distance contract](api.md#preferred-distance).
 
 ## Result states
 
@@ -50,6 +59,12 @@ Use that message only when the API confirms this outcome. Missing forecasts requ
 > We couldn't confirm a ride that meets your minimum conditions because some forecasts are unavailable.
 
 The API supplies the final ordering and assessment. The extension must not recreate the scoring rules or re-sort recommendations using its own interpretation of these states.
+
+Use `distanceFit` to show **Shorter than your preferred range** or **Longer than
+your preferred range** on otherwise usable results. Keep these rides visible
+with their scores; do not label them below minimum conditions merely because of
+distance. Display the API's ordering and drawbacks, including when every route
+falls outside the preferred range. No preference means no distance-fit label.
 
 ## Scores and weather summaries
 

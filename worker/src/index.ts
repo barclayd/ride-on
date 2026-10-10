@@ -111,7 +111,7 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.7.0' }));
+  app.get('/health', (c) => c.json({ ok: true, version: '0.8.0' }));
   app.route('/', identityRoutes());
   for (const path of [
     '/routes',
@@ -461,7 +461,12 @@ export const createApp = (
       assumptions: [
         ...(input.preferences.climbing.preference !== 'neutral'
           ? [
-              'Climbing preference uses estimated ascent per kilometre, not slope steepness or total effort. The score combines 90% weather comfort and 10% climbing preference; minimum conditions still take priority. Routes without complete elevation are unranked.',
+              'Climbing preference uses estimated ascent per kilometre, not slope steepness or total effort. It contributes 10% of the score; minimum conditions still take priority. Routes without complete elevation are unranked.',
+            ]
+          : []),
+        ...(input.preferences.distance !== null
+          ? [
+              'Preferred distance contributes 10% of the score. Every distance inside the inclusive range fits equally; scores decrease gradually outside it without excluding routes. Weather retains 90% of the score, or 80% when climbing is also active. Minimum conditions and whole-ride time windows still take priority.',
             ]
           : []),
         ...(input.preferences.weights.sunshine > 0
