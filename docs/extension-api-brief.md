@@ -233,19 +233,28 @@ The rest of the Preferences tab maps onto existing fields:
 
 ## 5. Climbing preference
 
-- Add `preferences.climbing: { preference: 'flatter' | 'neutral' | 'hillier' }`,
-  default `neutral`. Existing stored profiles read back as `neutral`.
-- Add a route-level `climbing` factor from `ascentM / (distanceM / 1000)` (m/km).
-  `flatter` favours low m/km; `hillier` favours high m/km; `neutral` has no
-  effect, identical to today's scores. Choose and document the curve and its
-  weight.
-- A route with `ascentM: null` gets a `null` climbing factor, excluded from the
-  weighting. It is never treated as flat. Add a warning in `assumptions` or the
-  route warnings.
-- Expose `best.factors.climbing` and the route's `ascentM` and `distanceM` in
-  each ranking. The extension shows `{km} km` and wants ascent available later.
-- Bump `algorithmVersion`. Replaying v4 with `neutral` must give identical
-  rankings.
+The climbing contract for API v0.7.0 is defined in [the API documentation](api.md#climbing-preference).
+It supersedes this section's original missing-elevation proposal; the other
+proposals in this brief are separate work.
+
+- Use `preferences.climbing: { preference: 'flatter' | 'neutral' | 'hillier' }`.
+  Save it inside `settings.preferences` on the user endpoints, or send it inside
+  `preferences` on `/recommendations` for a temporary override. No
+  `preferenceLevels` alias is required for this control.
+- Default to `neutral`, including older profiles. This leaves weather scoring
+  unchanged. Label it **No preference** in the interface.
+- Dan chose ascent per kilometre rather than total climbing. The active score
+  combines 90% weather comfort with 10% climbing comfort. Hillier rises linearly
+  from 0 to 100 over 0–20 m/km; flatter is the inverse. The factor saturates at
+  20 m/km. Minimum conditions still take priority. There is no ascent limit yet.
+- When climbing matters, incomplete elevation makes the route `unassessable`,
+  with `missing-elevation` in `issues` and no combined score. Keep it visible in
+  `unranked`; never treat missing ascent as zero or silently omit the factor.
+- Results include `distanceM`, `ascentM`, `ascentMPerKm`, `best.weatherScore` and
+  `best.factors.climbing`. Neutral has a null climbing factor. Preserve elevation
+  estimate warnings; this is not a steepness or effort estimate.
+- `algorithmVersion` is `comfort-v0.5`. Neutral must reproduce the accepted v4
+  profile's weather scores, ranking and departures.
 
 ## 6. Default minimum standards
 

@@ -26,6 +26,8 @@ const candidate = z.object({
   departureAt: z.iso.datetime(),
   finishAt: z.iso.datetime(),
   score: z.number().min(0).max(100),
+  weatherScore: z.number().min(0).max(100),
+  factors: z.object({ climbing: z.number().min(0).max(100).nullable() }),
   conditions,
   standards: z.object({
     status: z.enum(['meets', 'below', 'unknown', 'not_configured']),
@@ -87,6 +89,9 @@ const responseSchema = z.object({
   rankings: z.array(
     z.object({
       routeId: z.uuid(),
+      distanceM: z.number().positive(),
+      ascentM: z.number().nonnegative().nullable(),
+      ascentMPerKm: z.number().nonnegative().nullable(),
       best: candidate,
       alternatives: z.array(candidate),
       estimatedDurationMinutes: z.number(),

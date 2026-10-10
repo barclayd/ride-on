@@ -6,6 +6,7 @@ import { AppError } from './errors.ts';
 import { resolveAccess } from './identity/access.ts';
 import { authConfig } from './identity/config.ts';
 import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
+import { assessClimbing } from './recommendations/climbing.ts';
 import { planDepartures } from './recommendations/daylight.ts';
 import {
   recommendRides,
@@ -110,7 +111,7 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.6.0' }));
+  app.get('/health', (c) => c.json({ ok: true, version: '0.7.0' }));
   app.route('/', identityRoutes());
   for (const path of [
     '/routes',
@@ -358,7 +359,12 @@ export const createApp = (
       route,
       plan: planDepartures(route, input, startedAt.getTime()),
     }));
-    const feasible = plans.filter(({ plan }) => plan.departures.length > 0);
+    const feasible = plans.filter(
+      ({ route, plan }) =>
+        plan.departures.length > 0 &&
+        assessClimbing(route, input.preferences.climbing.preference).status !==
+          'unknown',
+    );
     const locations = feasible.flatMap(({ route }) => route.weatherLocations);
     if (locations.length > 256)
       throw new AppError(
@@ -453,6 +459,11 @@ export const createApp = (
       riding: input.riding,
       forecast: input.forecast,
       assumptions: [
+        ...(input.preferences.climbing.preference !== 'neutral'
+          ? [
+              'Climbing preference uses estimated ascent per kilometre, not slope steepness or total effort. The score combines 90% weather comfort and 10% climbing preference; minimum conditions still take priority. Routes without complete elevation are unranked.',
+            ]
+          : []),
         ...(input.preferences.weights.sunshine > 0
           ? [
               'Sunshine comfort uses forecast weather symbols: sunny, sunny intervals or other conditions. Category shares describe route sections, not sunshine duration or probability. Unknown symbols remain missing.',
@@ -478,7 +489,7 @@ export const createApp = (
             ]),
         'Conditions are evaluated at the midpoint of each route section of up to 500 metres, using weather locations at most 10 km apart.',
         'Instant forecasts and short wind means use the nearest hourly validity, up to 30 minutes away. Gusts and precipitation probabilities retain their native period bounds.',
-        'Comfort weights are provisional. Score combines 75% distance-weighted mean comfort and 25% worst sampled comfort; it is not a probability.',
+        'Comfort weights are provisional. Weather score combines 75% distance-weighted mean comfort and 25% worst sampled comfort; it is not a probability.',
         'Precipitation includes rain, snow and other forms. The highest local hourly probability is not the probability of precipitation anywhere on the whole ride.',
       ],
       weather: {
