@@ -12,7 +12,8 @@ export type ForecastCache = Readonly<{
   put: (key: string, value: string, ttlSeconds: number) => Promise<void>;
 }>;
 const range = z.object({ start: utcInstant, end: utcInstant });
-const cachedSchema = z.object({
+/** Validated cacheable evidence; offline calibration uses the same snapshot shape. */
+export const cachedForecastSchema = z.object({
   status: z.enum(['complete', 'partial']),
   location: z.object({
     requested: z.object({ id: z.string(), coordinate: coordinateSchema }),
@@ -109,7 +110,7 @@ export const withForecastCache = (
           try {
             const text = await cache.get(key);
             if (!text) return null;
-            const parsed = cachedSchema.safeParse(JSON.parse(text));
+            const parsed = cachedForecastSchema.safeParse(JSON.parse(text));
             if (!parsed.success) return null;
             const result = parsed.data;
             const age = now - Date.parse(result.provenance.retrievedAt);
@@ -167,7 +168,7 @@ export const withForecastCache = (
           !result ||
           found[index] ||
           !key ||
-          !cachedSchema.safeParse(result).success
+          !cachedForecastSchema.safeParse(result).success
         )
           return;
         try {

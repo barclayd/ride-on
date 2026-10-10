@@ -1,5 +1,6 @@
 {
-  "status": "provisional-calibration",
+  "status": "superseded-for-Dan",
+  "supersededBy": "sunshine-profile-v4.json",
   "basis": "Dan clarified that visible sunshine matters most, including through thin high cloud. Sunshine is currently a categorical weather-symbol proxy, not a forecast duration or probability. Exact weights, the sunny-intervals comfort value and wind tolerances remain hypotheses for human grading.",
   "request": {
     "weather": { "mode": "strict", "providerId": "met-office-bpf" },
