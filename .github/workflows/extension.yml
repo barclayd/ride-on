@@ -65,7 +65,10 @@ jobs:
             git diff --quiet "$last" HEAD -- "${src[@]}" && changed=false || changed=true
           fi
           mkdir -p .output
-          git log --no-merges --format='- %s' ${last:+"$last.."}HEAD -- "${src[@]}" > .output/notes.md
+          # GitHub's "Source code" archive is named ride-on-extension-v<version>.zip; point at the right one.
+          { echo "Chrome Web Store upload: \`ride-on-extension-$next-chrome.zip\` (not the Source code archives)."
+            echo
+            git log --no-merges --format='- %s' ${last:+"$last.."}HEAD -- "${src[@]}"; } > .output/notes.md
           echo "version=$next" >> "$GITHUB_OUTPUT"
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
           echo "Extension $next (changed since ${last:-no tag}: $changed)" >> "$GITHUB_STEP_SUMMARY"
