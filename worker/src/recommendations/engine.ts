@@ -548,6 +548,12 @@ export const recommendRides = (
       daylight: plan.daylight
         ? { start: iso(plan.daylight.start), end: iso(plan.daylight.end) }
         : null,
+      effectiveWindow: plan.effectiveWindow
+        ? {
+            start: iso(plan.effectiveWindow.start),
+            end: iso(plan.effectiveWindow.end),
+          }
+        : null,
       status: assessed.length
         ? 'assessed'
         : candidates.length
@@ -561,7 +567,11 @@ export const recommendRides = (
       ).length,
       best: assessed[0] ?? null,
       alternatives: assessed.slice(1, 1 + alternativeLimit),
-      issues: [...new Set(unknown.flatMap((candidate) => candidate.reasons))],
+      issues: candidates.length
+        ? [...new Set(unknown.flatMap((candidate) => candidate.reasons))]
+        : [
+            'No future departure on the configured grid fits the full estimated ride inside daylight and the requested window.',
+          ],
       warnings: [
         ...route.warnings,
         ...(unknown.length

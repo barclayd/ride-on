@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { z } from 'zod';
+import {
+  preferencesSchema,
+  ridingWindowSchema,
+} from '../src/recommendations/input.ts';
 import { routeGpx } from './fixtures.ts';
 import { type Harness, RIDE_DATE } from './harness.ts';
 
@@ -69,8 +73,12 @@ const responseSchema = z.object({
   ]),
   riding: z.object({
     averageSpeedKph: z.number(),
-    window: z.literal('daylight'),
+    window: ridingWindowSchema,
+    departureStepMinutes: z.number(),
   }),
+  savedUser: z.object({ id: z.string(), version: z.number() }).nullable(),
+  resolvedPreferences: preferencesSchema,
+  timeZone: z.string(),
   resolvedMinimumTemperature: z.object({
     valueC: z.number().nullable(),
     resolved: z.boolean(),
@@ -83,6 +91,10 @@ const responseSchema = z.object({
       alternatives: z.array(candidate),
       estimatedDurationMinutes: z.number(),
       daylight: z.object({ start: z.iso.datetime(), end: z.iso.datetime() }),
+      effectiveWindow: z.object({
+        start: z.iso.datetime(),
+        end: z.iso.datetime(),
+      }),
       departuresAssessed: z.number(),
       departuresUnknown: z.number(),
       warnings: z.array(z.string()),

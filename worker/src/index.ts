@@ -9,10 +9,14 @@ import {
   requiredWeatherFor,
 } from './recommendations/engine.ts';
 import {
-  recommendationSchema,
+  mergeSettings,
+  recommendationRequestSchema,
+  recommendationWithSettings,
+  resolvedRecommendationSchema,
   resolveMinimumTemperature,
+  settingsSchema,
 } from './recommendations/input.ts';
-import { readJsonBody } from './request.ts';
+import { readJsonBody, validateInput } from './request.ts';
 import { importGpx } from './routes/gpx.ts';
 import {
   createD1RouteStore,
@@ -20,6 +24,13 @@ import {
   routeSummary,
 } from './routes/model.ts';
 import type { Bindings, Env } from './types.ts';
+import {
+  createD1UserStore,
+  createUserSchema,
+  type User,
+  type UserStore,
+  updateUserSchema,
+} from './users/model.ts';
 import { type ForecastCache, withForecastCache } from './weather/cache.ts';
 import type { ForecastProvider, ForecastRequest } from './weather/contracts.ts';
 import { createMetOfficeBpf } from './weather/met-office-bpf.ts';
@@ -35,6 +46,7 @@ const quality = {
 export const createApp = (
   dependencies: {
     routeStore?: RouteStore;
+    userStore?: UserStore;
     providers?: Readonly<Record<string, ForecastProvider>>;
     cache?: ForecastCache;
     now?: () => Date;
@@ -45,6 +57,8 @@ export const createApp = (
   const now = dependencies.now ?? (() => new Date());
   const store = (env: Env) =>
     dependencies.routeStore ?? createD1RouteStore(env.ROUTES_DB);
+  const users = (env: Env) =>
+    dependencies.userStore ?? createD1UserStore(env.ROUTES_DB);
   app.use('*', async (c, next) => {
     const start = Date.now();
     c.header('Cache-Control', 'no-store');
@@ -54,8 +68,8 @@ export const createApp = (
         `${c.req.method} ${new URL(c.req.url).pathname} ${c.res.status} ${Date.now() - start}ms`,
       );
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.2.0' }));
-  for (const path of ['/routes', '/recommendations'])
+  app.get('/health', (c) => c.json({ ok: true, version: '0.3.0' }));
+  for (const path of ['/routes', '/recommendations', '/users', '/users/*'])
     app.use(path, async (c, next) => {
       c.set(
         'ownerId',
@@ -63,6 +77,70 @@ export const createApp = (
       );
       await next();
     });
+  app.post('/users', async (c) => {
+    const input = await readJsonBody(c, createUserSchema);
+    const timestamp = now().toISOString();
+    const user: User = {
+      schemaVersion: 1,
+      id: c.get('ownerId'),
+      version: 1,
+      displayName: input.displayName,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      settings: validateInput(
+        settingsSchema,
+        mergeSettings(input.settings ?? {}),
+      ),
+    };
+    if (!(await users(c.env).create(user)))
+      throw new AppError(
+        409,
+        'USER_ALREADY_EXISTS',
+        'Your user profile already exists. Use PATCH /users/me to update it.',
+      );
+    c.header('Location', '/users/me');
+    return c.json({ user }, 201);
+  });
+  app.get('/users/me', async (c) => {
+    const user = await users(c.env).get(c.get('ownerId'));
+    if (!user)
+      throw new AppError(
+        404,
+        'USER_NOT_FOUND',
+        'Create your user profile with POST /users.',
+      );
+    return c.json({ user });
+  });
+  app.patch('/users/me', async (c) => {
+    const input = await readJsonBody(c, updateUserSchema);
+    const current = await users(c.env).get(c.get('ownerId'));
+    if (!current)
+      throw new AppError(
+        404,
+        'USER_NOT_FOUND',
+        'Create your user profile with POST /users.',
+      );
+    const conflict = () =>
+      new AppError(
+        409,
+        'USER_VERSION_CONFLICT',
+        'Your profile has changed. Read GET /users/me and retry with its version.',
+      );
+    if (current.version !== input.expectedVersion) throw conflict();
+    const user: User = {
+      ...current,
+      version: current.version + 1,
+      updatedAt: now().toISOString(),
+      displayName: input.displayName ?? current.displayName,
+      settings: validateInput(
+        settingsSchema,
+        mergeSettings(input.settings ?? {}, current.settings),
+      ),
+    };
+    if (!(await users(c.env).update(user, input.expectedVersion)))
+      throw conflict();
+    return c.json({ user });
+  });
   app.get('/routes', async (c) =>
     c.json({ routes: await store(c.env).list(c.get('ownerId')), limit: 100 }),
   );
@@ -119,8 +197,15 @@ export const createApp = (
     return c.json({ route: routeSummary(route) }, 201);
   });
   app.post('/recommendations', async (c) => {
-    const input = await readJsonBody(c, recommendationSchema);
-    const routes = await store(c.env).getMany(c.get('ownerId'), input.routeIds);
+    const raw = await readJsonBody(c, recommendationRequestSchema);
+    const [user, routes] = await Promise.all([
+      users(c.env).get(c.get('ownerId')),
+      store(c.env).getMany(c.get('ownerId'), raw.routeIds),
+    ]);
+    const input = validateInput(
+      resolvedRecommendationSchema,
+      recommendationWithSettings(raw, user?.settings),
+    );
     if (routes.length !== input.routeIds.length)
       throw new AppError(
         404,
@@ -221,6 +306,7 @@ export const createApp = (
       generatedAt: startedAt.toISOString(),
       date: input.date,
       timeZone: input.timeZone,
+      savedUser: user ? { id: user.id, version: user.version } : null,
       resolvedPreferences: input.preferences,
       resolvedMinimumTemperature: resolveMinimumTemperature(input),
       riding: input.riding,
@@ -244,6 +330,11 @@ export const createApp = (
         'Assisted distance requires a tailwind component of at least 3 km/h that exceeds the crosswind component. Calm circular rides do not need tailwinds to score well.',
         'Duration uses constant moving speed; stops, climbing and wind do not yet change the estimate.',
         'The full ride must fit within the common sunrise-to-sunset window across sampled route locations.',
+        ...(input.riding.window === 'daylight'
+          ? []
+          : [
+              'The full ride must also fit inside your requested local-time window. Departure slots are anchored at its start.',
+            ]),
         'Conditions are evaluated at the midpoint of each route section of up to 500 metres, using weather locations at most 10 km apart.',
         'Instant forecasts and short wind means use the nearest hourly validity, up to 30 minutes away. Gusts and precipitation probabilities retain their native period bounds.',
         'Comfort weights are provisional. Score combines 75% distance-weighted mean comfort and 25% worst sampled comfort; it is not a probability.',
