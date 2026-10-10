@@ -26,18 +26,35 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
 - **Language:** English (UK)
 - **Description:**
 
-  > Ride On picks the best of your saved cycle.travel routes, and the best time to ride it.
+  > Ride On tells you which of your saved cycle.travel routes to ride, and when to set off.
   >
-  > Choose the days and the time you have, and Ride On scores every route you track against the
-  > hour-by-hour forecast: wind along the route (favouring tailwinds), temperature, rain and
-  > sunshine, plus the distance and climbing you like. The best ride and start time come first.
+  > cycle.travel is brilliant for planning routes, but it can't tell you which one suits Saturday's
+  > weather. Ride On checks the hour-by-hour forecast along each route you track, at the time you'd
+  > actually be riding it, and ranks them for you. No more opening a weather app for every route and
+  > guessing which way the wind will blow.
   >
-  > • Popup: your ranked rides, when you can ride, and your preferences
-  > • On cycle.travel's Journeys page: track routes and see each one's best time at a glance
+  > HOW IT WORKS
+  > 1. Track the routes you're considering, straight from your cycle.travel Journeys page.
+  > 2. Say when you can ride: today, tomorrow, the weekend or days you pick, and your time window.
+  > 3. Ride On picks the best route and start time, with an estimated finish, and tells you why:
+  >    temperature, wind along the route, gusts, rain and sunshine at ride time.
+  >
+  > WHAT YOU GET
+  > • Your rides ranked with a comfort score out of 100, and a clear best pick
+  > • The warnings you'd want before setting off, like "Headwind for the first half" or gusts over
+  >   your limit
+  > • Routes that don't fit your time window or fall below your minimums are flagged, not hidden
+  > • Preferences that are yours: distance and climbing, how much rain and sunshine matter, a
+  >   minimum temperature (fixed or by month), and rain and gust limits
+  > • Best times shown right on cycle.travel's Journeys page, next to each route
   > • Forecasts from Apple Weather or the Met Office
   >
-  > Needs a Ride On account (sign in with Google or Apple) and a cycle.travel account with
-  > saved journeys. Not affiliated with cycle.travel.
+  > PRIVATE BY DESIGN
+  > Ride On runs only on your cycle.travel Journeys page and uploads only the routes you track. No
+  > ads, no analytics, no tracking. Ask us to delete your data at any time.
+  >
+  > Needs a Ride On account (sign in with Google or Apple) and a cycle.travel account with saved
+  > journeys. Ride On isn't affiliated with cycle.travel.
 
 ### Images
 
