@@ -6,6 +6,7 @@ providers and deterministic route/departure ranking. The legacy `/classify` and
 remain separate; adapt them after the API algorithm has been calibrated.
 
 Read `../docs/api.md` for contracts, defaults, setup, validation and limitations.
+Read `../docs/planning-api.md` for multi-day searches, presets and coverage.
 Read `../docs/weather-providers.md` for verified weather mappings and provider rules.
 
 ## Conventions

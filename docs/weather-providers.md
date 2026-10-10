@@ -216,6 +216,9 @@ Keep our weather interface internal and expose route assessments to our clients.
 Retain attribution in the response metadata; check the applicable subscription
 terms when finalising any public forecast display or data export.
 
+See [multi-day planning](planning-api.md) for v0.10.0 horizon reuse, actual coverage
+and the distinction between advertised capability and available evidence.
+
 ## Internal contracts
 
 The types are in [`worker/src/weather/contracts.ts`](../worker/src/weather/contracts.ts).
@@ -301,7 +304,7 @@ quota-aware retry behaviour. Avoid retry storms when a daily quota is exhausted.
 
 The adapter deduplicates identical coordinates within a request. A KV-compatible
 wrapper now caches normalized evidence for 20 minutes. Keys include source identity,
-coordinates, descriptors, range and quality limits; cached values retain the model
+coordinates, descriptors, provider-horizon range and quality limits; cached values retain the model
 run and resolved location. Both retrieval age and model age are checked on reuse.
 Changing preferences or speed can rescore the same day snapshot. Nearby-site reuse
 and cross-request coalescing remain future work. Cache writes are awaited so a

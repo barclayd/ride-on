@@ -19,7 +19,7 @@ import {
   resolveMinimumTemperature,
 } from './input.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.7';
+export const ALGORITHM_VERSION = 'comfort-v0.8';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -134,6 +134,10 @@ type Failure = {
   standard: string;
   limit: number;
   actual: number;
+  at: string;
+  date: string;
+  timeZone: string;
+  positionKm: number;
   affectedDistanceKm: number;
   sections: { fromKm: number; toKm: number; observedAt: string }[];
 };
@@ -204,8 +208,6 @@ const assessCandidate = (
   climbing: ReturnType<typeof assessClimbing>,
   distance: ReturnType<typeof assessDistance>,
 ) => {
-  if (climbing.status === 'unknown')
-    return { status: 'unknown' as const, reasons: ['missing-elevation'] };
   const rows: Observation[] = [];
   const missing = new Set<string>();
   const preferences = input.preferences;
@@ -363,12 +365,17 @@ const assessCandidate = (
     limit: number,
     actual: number,
     affected: readonly Observation[],
+    worst: Observation | undefined,
   ) => {
-    if (!affected.length) return;
+    if (!affected.length || !worst) return;
     failures.push({
       standard,
       limit,
       actual,
+      at: iso(worst.at),
+      date: input.date,
+      timeZone: input.timeZone,
+      positionKm: round((worst.fromM + worst.toM) / 2000),
       affectedDistanceKm: round(
         affected.reduce((sum, row) => sum + row.distanceM, 0) / 1000,
       ),
@@ -386,6 +393,7 @@ const assessCandidate = (
       limit,
       minimum,
       rows.filter((row) => row.temperatureC < limit),
+      rows.find((row) => row.temperatureC === minimum),
     );
   }
   for (const [standard, field] of [
@@ -400,6 +408,7 @@ const assessCandidate = (
         limit,
         Math.max(...rows.map((row) => row[field])),
         rows.filter((row) => row[field] > limit),
+        rows.reduce((worst, row) => (row[field] > worst[field] ? row : worst)),
       );
   }
   const standardsStatus = failures.length
@@ -471,6 +480,7 @@ const assessCandidate = (
     );
   return {
     status: 'assessed' as const,
+    date: input.date,
     departureAt: iso(departure),
     finishAt: iso(departure + durationMs),
     score: round(score),
@@ -502,11 +512,34 @@ type Assessed = Extract<
   ReturnType<typeof assessCandidate>,
   { status: 'assessed' }
 >;
-const order = (a: Assessed, b: Assessed) =>
+export const orderDepartures = (a: Assessed, b: Assessed) =>
   Number(b.standards.status === 'meets') -
     Number(a.standards.status === 'meets') ||
   b.score - a.score ||
   a.departureAt.localeCompare(b.departureAt);
+
+export const standardsStatusFor = (
+  evaluated: readonly {
+    departuresUnknown: number;
+    departuresStandardsUnknown: number;
+    best: { standards: { status: string } } | null;
+  }[],
+  configured: boolean,
+) => {
+  const unknown = evaluated.some(
+    (r) => r.departuresUnknown > 0 || r.departuresStandardsUnknown > 0,
+  );
+  const meets = evaluated.some((r) => r.best?.standards.status === 'meets');
+  return !configured
+    ? 'not_configured'
+    : meets
+      ? 'match_found'
+      : unknown
+        ? 'unknown'
+        : evaluated.some((r) => r.best)
+          ? 'none_meet'
+          : 'no_feasible_departure';
+};
 
 export const recommendRides = (
   routes: readonly Route[],
@@ -566,11 +599,20 @@ export const recommendRides = (
         distance,
       ),
     );
-    const assessed = candidates
+    const weatherAssessed = candidates
       .filter(
         (candidate): candidate is Assessed => candidate.status === 'assessed',
       )
-      .sort(order);
+      .sort(orderDepartures);
+    const assessed = climbing.status === 'unknown' ? [] : weatherAssessed;
+    const partial =
+      climbing.status === 'unknown'
+        ? [...weatherAssessed].sort(
+            (a, b) =>
+              b.weatherScore - a.weatherScore ||
+              a.departureAt.localeCompare(b.departureAt),
+          )[0]
+        : undefined;
     const unknown = candidates.filter(
       (candidate) => candidate.status === 'unknown',
     );
@@ -601,14 +643,32 @@ export const recommendRides = (
           : 'no_feasible_departure',
       departuresTested: candidates.length,
       departuresAssessed: assessed.length,
-      departuresUnknown: unknown.length,
+      departuresUnknown: candidates.length - assessed.length,
+      departuresWeatherAssessed: weatherAssessed.length,
+      assessedDepartures: assessed.map((c) => ({
+        departureAt: c.departureAt,
+        finishAt: c.finishAt,
+      })),
+      partialAssessment: partial
+        ? {
+            ...partial,
+            status: 'partial' as const,
+            score: null,
+            reasonCode: 'missing-elevation',
+          }
+        : null,
       departuresStandardsUnknown: assessed.filter(
         (candidate) => candidate.standards.status === 'unknown',
       ).length,
       best: assessed[0] ?? null,
       alternatives: assessed.slice(1, 1 + alternativeLimit),
       issues: candidates.length
-        ? [...new Set(unknown.flatMap((candidate) => candidate.reasons))]
+        ? [
+            ...new Set([
+              ...unknown.flatMap((candidate) => candidate.reasons),
+              ...(climbing.status === 'unknown' ? ['missing-elevation'] : []),
+            ]),
+          ]
         : [
             'No future departure on the configured grid fits the full estimated ride inside daylight and the requested window.',
           ],
@@ -631,26 +691,13 @@ export const recommendRides = (
     .filter((route) => route.best !== null)
     .sort((a, b) =>
       a.best && b.best
-        ? order(a.best, b.best) || a.routeId.localeCompare(b.routeId)
+        ? orderDepartures(a.best, b.best) || a.routeId.localeCompare(b.routeId)
         : 0,
     );
-  const unknown = evaluated.some(
-    (route) =>
-      route.departuresUnknown > 0 || route.departuresStandardsUnknown > 0,
+  const minimumStandardsStatus = standardsStatusFor(
+    evaluated,
+    Object.keys(input.preferences.minimumStandards).length > 0,
   );
-  const configured = Object.keys(input.preferences.minimumStandards).length > 0;
-  const meets = ranked.some(
-    (route) => route.best?.standards.status === 'meets',
-  );
-  const minimumStandardsStatus = !configured
-    ? 'not_configured'
-    : meets
-      ? 'match_found'
-      : unknown
-        ? 'unknown'
-        : ranked.length
-          ? 'none_meet'
-          : 'no_feasible_departure';
   return {
     algorithmVersion: ALGORITHM_VERSION,
     recommendedRouteId: ranked[0]?.routeId ?? null,

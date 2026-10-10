@@ -1,5 +1,9 @@
 # API brief v2: Chrome extension (design 3, API v0.9.0)
 
+**Implementation update:** API v0.10.0 addresses the agreed requests. Use
+[the implemented contract](planning-api.md) and [design decisions](extension-api-v2-decisions.md).
+The asks below are historical proposals, not the final response schema.
+
 The extension (`extension/`) now implements design handoff 3 against the **live
 v0.9.0 API**. This brief lists where the extension still works around missing
 API support, and what the API should add. It updates

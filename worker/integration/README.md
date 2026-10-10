@@ -84,3 +84,12 @@ cover transport cancellation/timeouts and the remaining scalar/interval edge cas
 The wind calibration scenario changes only personal crosswind sensitivity, reverses
 the sunshine-versus-crosswind ordering, preserves the helpful-tailwind winner and
 reuses KV after a Worker restart. Out-of-range sensitivity fails before weather I/O.
+
+## Multi-day planning
+
+`planning.test.ts` exercises the real Worker against MSW 3 WeatherKit fixtures:
+server-owned multi-day selection, optional previews, horizon reuse after restart,
+actual coverage/cutoffs/gaps, provider failure states, expired dates, functional
+rain/sunshine presets, optimistic saved planning/units and weather-only diagnostics.
+`node scripts/benchmark-planning.ts` from `worker/` is an explicit local benchmark;
+it uses synthetic routes and never calls a live provider.

@@ -67,7 +67,7 @@ const integration = (name: string, run: (h: Harness) => Promise<void>) =>
     }
   });
 const readUser = async (r: { json: () => Promise<unknown> }) =>
-  z.object({ user: userSchema }).parse(await r.json()).user;
+  z.object({ user: userSchema.strip() }).parse(await r.json()).user;
 const createUser = async (
   h: Harness,
   settings: Record<string, unknown> = {},

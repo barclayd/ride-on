@@ -46,7 +46,7 @@ const upload = async (
     .parse(await response.json()).route;
 };
 const readUser = async (response: { json: () => Promise<unknown> }) =>
-  z.object({ user: userSchema }).parse(await response.json()).user;
+  z.object({ user: userSchema.strip() }).parse(await response.json()).user;
 const createUser = async (
   h: Harness,
   preferences: Record<string, unknown> = {},

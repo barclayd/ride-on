@@ -13,6 +13,7 @@ import { createMetOfficeGlobalSpot } from './met-office-global-spot.ts';
 type Registration = {
   id: string;
   name: string;
+  forecastHorizonHours: number;
   attribution: Provenance['attribution'];
   recommendedSettings: Pick<Settings, 'weather' | 'forecast'>;
   configured: (env: Env) => boolean;
@@ -23,6 +24,7 @@ const registrations: readonly Registration[] = [
   {
     id: 'apple-weather',
     name: 'Apple Weather',
+    forecastHorizonHours: 240,
     attribution: [appleWeatherAttribution],
     recommendedSettings: {
       weather: { mode: 'strict', providerId: 'apple-weather' },
@@ -39,6 +41,7 @@ const registrations: readonly Registration[] = [
   {
     id: 'met-office',
     name: 'Met Office Global Spot',
+    forecastHorizonHours: 48,
     attribution: [
       {
         text: 'Powered by Met Office data',
@@ -59,6 +62,7 @@ const registrations: readonly Registration[] = [
   {
     id: 'met-office-bpf',
     name: 'Met Office Blended Probabilistic',
+    forecastHorizonHours: 120,
     attribution: [
       {
         text: 'Powered by Met Office data',
@@ -85,6 +89,7 @@ export const describeWeatherProviders = (env: Env) =>
   registrations.map((r) => ({
     id: r.id,
     name: r.name,
+    forecastHorizonHours: r.forecastHorizonHours,
     configured: r.configured(env),
     recommendedSettings: r.recommendedSettings,
     attribution: r.attribution,
@@ -97,3 +102,7 @@ export const createWeatherProviders = (
   Object.fromEntries(
     registrations.map((r) => [r.id, r.create(env, cache, now)]),
   );
+
+/** Advertised product capability, not a claim about available evidence. */
+export const forecastHorizonHours = (providerId: string) =>
+  registrations.find((r) => r.id === providerId)?.forecastHorizonHours;

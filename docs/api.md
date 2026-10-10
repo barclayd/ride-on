@@ -5,6 +5,9 @@ D1 stores route facts, source identities, shortlists and user profiles, KV cache
 route/departure combinations. This replaces the legacy classification and Strava
 OAuth endpoints. The existing app clients have not yet been migrated.
 
+API v0.10.0 adds [multi-day planning, preference presets and richer result metadata](planning-api.md).
+That guide is the authoritative contract for the extension's next integration.
+
 ## Run locally
 
 Use Node.js 24+ and Bun 1.4.0. From `worker/`:
@@ -498,8 +501,11 @@ unrounded values; reported scores and ascent per kilometre are rounded.
 
 When climbing is active, a route without complete elevation remains visible in
 `unranked` with status `unassessable` and issue `missing-elevation`. It receives no
-combined score and causes no weather requests. Known zero ascent is valid flat
-terrain. An impossible time window still returns `no_feasible_departure` first.
+combined score. From v0.10.0, an optional `partialAssessment` exposes weather-only evidence with
+`score: null`; the route remains outside the combined ranking. Use its elevation-specific
+verdict instead of labelling the forecast incomplete.
+Weather is fetched for that diagnostic when a departure is feasible. Known zero
+ascent is valid flat terrain. An impossible time window still returns `no_feasible_departure` first.
 Neutral can assess routes without elevation using weather and any distance preference.
 
 Available ascent remains an **unsmoothed GPX estimate**, with the existing
@@ -625,7 +631,7 @@ change that conclusion. If another route/departure lacks evidence, or a month
 rule is unresolved, return `unknown` instead. No feasible departure is distinct
 from bad weather. Missing data never becomes zero rain or zero wind.
 
-## Algorithm v0.7
+## Algorithm v0.8
 
 The duration model is distance / constant moving speed. Weather is matched to the
 estimated arrival at each section midpoint; wind uses that section's heading.
@@ -694,14 +700,15 @@ are sampled along the route every 10 km. These are engineering starting policies
 not a claim of kilometre-scale forecast accuracy.
 
 KV stores normalized evidence for 20 minutes, keyed by provider/product/adapter,
-coordinates, required descriptors, day range and quality limits. Retrieval and
+coordinates, required descriptors, provider-horizon range and quality limits. Retrieval and
 the selected freshness basis and any provider-declared `provenance.expiresAt` are
 checked on every hit. Attribution may include `logo: { lightUrl, darkUrl }` and
 `notice`; preserve and display these along with the legal link for Apple weather.
 Changing only preferences or speed
-can reuse the same day snapshot. Changing the route collection's time range may
-miss the cache, as can changing the required measurements (for example enabling
-cloud scoring). Global Spot coalesces identical coordinates. BPF coalesces samples
+can reuse the same horizon snapshot across dates and windows. Registered providers
+use a rolling whole-hour anchor; expiry, a new anchor, or changed required
+measurements (for example enabling cloud scoring) may cause new calls. Concurrent
+cold requests are not globally coalesced. See [planning and caching](planning-api.md). Global Spot coalesces identical coordinates. BPF coalesces samples
 that resolve to the same forecast site within each comparison and caches its site
 catalogue for 24 hours. Failed reads/writes do not turn into fabricated
 weather. Concurrent requests can still fetch the same missing key: this MVP has
@@ -774,7 +781,8 @@ The API is hosted at **https://ride-on-api.barclaysd.workers.dev**; its first pr
 release was v0.3.0 on 10 October 2026. The importer/shortlist release was v0.4.0.
 The session-only authentication release was v0.6.0, and climbing preferences
 arrived in v0.7.0 (`comfort-v0.5`). Preferred distance was v0.8.0 (`comfort-v0.6`).
-Apple Weather is v0.9.0 with algorithm `comfort-v0.7`;
+Apple Weather was v0.9.0 (`comfort-v0.7`). Multi-day planning and preference presets
+are v0.10.0 with algorithm `comfort-v0.8`;
 `GET /health` reports the running version. The canonical custom domain is
 `https://api.ride-on.cc`. Both Met Office credentials and `AUTH_CONFIG_JSON` are
 Worker secrets. Apple Weather uses the separate `APPLE_WEATHER_CONFIG_JSON` secret.
@@ -786,7 +794,7 @@ credentials in a client.
 The production `ride-on-routes` D1 database is in Western Europe. Its ID is recorded
 in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before
 publishing the authentication-enabled Worker. No new database migration is
-required for v0.6.0 through v0.9.0.
+required for v0.6.0 through v0.10.0.
 The additive authentication migration preserves route facts, shortlists and user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used
 by `wrangler dev --local`; production data and local data are separate. The
