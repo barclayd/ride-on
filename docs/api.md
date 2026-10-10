@@ -13,28 +13,30 @@ Use Node.js 24+ and Bun 1.4.0. From `worker/`:
 bun install --frozen-lockfile
 # On a new checkout, copy .dev.vars.example to .dev.vars and fill its placeholders.
 bun run migrate:local
+bun run dev:session
 bun run dev
 ```
 
-`.dev.vars` contains `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY` and `API_KEYS_JSON`. The latter is a JSON
-array of `{ "ownerId": "dan", "token": "a-random-token-at-least-32-characters-long" }`.
-Use distinct, securely generated tokens per owner. The current local checkout is
-already configured; do not overwrite its secrets. Secrets and local database
-state are ignored by Git. Route IDs in the live report refer to this local database.
+`.dev.vars` contains `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY` and a separate
+local `AUTH_CONFIG_JSON`. `dev:session` creates a 24-hour bearer session in local
+D1 and saves it to ignored, owner-readable `.local-session.json`; it never accesses
+production. Pass an existing local owner ID to reuse that local dataset. The
+current checkout's weather secrets must not be overwritten. Secrets and local
+database state are ignored by Git. Route IDs in local live reports refer to local D1.
 
-Product endpoints require a session cookie, a session bearer token, or an existing
-private API key. `/health`, provider discovery and login entrypoints are public.
-Responses use `Cache-Control: no-store`. Cookie writes and browser CORS use exact
-trusted origins. See [authentication](authentication.md) for Apple, Google,
-passkeys, extension handoff, account linking and migration of existing profiles.
+Product endpoints require a session cookie or session bearer token. `/health`,
+provider discovery and login entrypoints are public. Responses use
+`Cache-Control: no-store`. Cookie writes and browser CORS use exact trusted origins.
+See [authentication](authentication.md) for Apple, Google, passkeys, extension
+handoff and account linking. Legacy private API keys and the profile-claim endpoint
+have been retired; clients use normal sign-in.
 
 ## Users and saved preferences
 
 `POST /users` creates the authenticated rider's cycling profile; it does not issue
 a login token. New social logins receive server-assigned owner IDs on first product
-API access. Existing private-key users can claim their previous profile **before**
-that first access, preserving route ownership. Clients cannot choose another user
-ID or read/update somebody else's profile. Saved settings stay independent of the
+API access. Existing login-to-owner bindings are retained automatically; no claim
+step is needed. Clients cannot choose another user ID or read/update somebody else's profile. Saved settings stay independent of the
 login provider.
 
 ```http
@@ -59,7 +61,7 @@ Authorization: Bearer <token>
 }
 ```
 
-Returns `201 { "user": { "id": "dan", "schemaVersion": 1, "version": 1,
+Returns `201 { "user": { "id": "user_<server-generated-id>", "schemaVersion": 1, "version": 1,
 "displayName": "Dan", "createdAt": "...", "updatedAt": "...", "settings": { ... } } }`
 with every resolved setting and `Location: /users/me`. `settings` is optional at
 creation; omitted values use the documented API defaults. This example is a
@@ -570,7 +572,7 @@ credentials are read. See `worker/integration/README.md` for scope and conventio
 `bun run build:check` verifies the production Worker bundle. Live checks are explicit:
 
 ```sh
-bun --env-file=.dev.vars scripts/evaluate-local.ts /path/to/GPX 2026-10-10 ../evaluation/api-live-check.json
+bun scripts/evaluate-local.ts /path/to/GPX 2026-10-10 ../evaluation/api-live-check.json
 # With existing route IDs, append --reuse; do not repeatedly re-upload.
 ```
 
@@ -615,22 +617,28 @@ This is an offline algorithm comparison, not a fresh forecast or new HTTP test.
 ## Production deployment
 
 The API is hosted at **https://ride-on-api.barclaysd.workers.dev**; its first production
-release was v0.3.0 on 10 October 2026. The importer/shortlist release was v0.4.0. The authentication release is v0.5.0;
+release was v0.3.0 on 10 October 2026. The importer/shortlist release was v0.4.0.
+The session-only authentication release is v0.6.0;
 `GET /health` reports the running version. The canonical custom domain is
-`https://api.ride-on.cc`. Both Met Office credentials, `API_KEYS_JSON` and
-`AUTH_CONFIG_JSON` are Worker secrets. Provider activation is described in
+`https://api.ride-on.cc`. Both Met Office credentials and `AUTH_CONFIG_JSON` are
+Worker secrets. The obsolete `API_KEYS_JSON` secret is no longer used. Provider
+activation is described in
 [authentication](authentication.md). Never commit their values or put Met Office
 credentials in a client.
 
 The production `ride-on-routes` D1 database is in Western Europe. Its ID is recorded
-in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before publishing v0.5.0.
+in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before
+publishing the authentication-enabled Worker. No new database migration is
+required for v0.6.0.
 The additive authentication migration preserves route facts, shortlists and user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used
 by `wrangler dev --local`; production data and local data are separate. The
 existing KV namespace is bound as `WEATHER_CACHE`, with the new weather key
 prefix. Legacy classification cache entries remain untouched.
 
-Dan's saved profile was copied through the production user API. Existing GPX
+Dan's saved profile was copied through the production user API and is now linked
+to his Apple login. The one-time claim was completed on 10 October 2026; extension
+and app clients must use normal sign-in without repeating it. Existing GPX
 imports remain local: upload routes to production to obtain production route IDs.
 A short synthetic route verified GPX ingestion, database persistence, saved-profile
 resolution, time-window planning and real recommendations from both Met Office

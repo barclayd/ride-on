@@ -10,7 +10,6 @@
     "required": [
       "MET_OFFICE_API_KEY",
       "MET_OFFICE_BPF_API_KEY",
-      "API_KEYS_JSON",
       "AUTH_CONFIG_JSON"
     ]
   },

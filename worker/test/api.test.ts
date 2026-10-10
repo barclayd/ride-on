@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { unauthorized } from '../src/identity/access.ts';
 import { createApp } from '../src/index.ts';
 import type { Route } from '../src/routes/model.ts';
 import { type RouteStore, storedRouteSummary } from '../src/routes/store.ts';
@@ -8,12 +9,7 @@ import { forecastsFor, now, simpleGpx } from './fixtures/rides.ts';
 
 const aliceToken = 'a'.repeat(40);
 const bobToken = 'b'.repeat(40);
-const env = {
-  API_KEYS_JSON: JSON.stringify([
-    { ownerId: 'alice', token: aliceToken },
-    { ownerId: 'bob', token: bobToken },
-  ]),
-} as Env;
+const env = {} as Env;
 const setup = () => {
   const routes = new Map<string, Route>();
   const cache = new Map<string, string>();
@@ -75,6 +71,19 @@ const setup = () => {
     },
   };
   const app = createApp({
+    // Unit tests isolate HTTP orchestration; real session verification and
+    // owner persistence are covered against D1 in the integration suite.
+    resolveAccess: async (request) => {
+      const token = request.headers.get('Authorization');
+      const ownerId =
+        token === `Bearer ${aliceToken}`
+          ? 'alice'
+          : token === `Bearer ${bobToken}`
+            ? 'bob'
+            : null;
+      if (!ownerId) throw unauthorized();
+      return { ownerId, headers: new Headers() };
+    },
     routeStore: store,
     userStore: {
       get: async () => null,

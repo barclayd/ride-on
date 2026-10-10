@@ -1,14 +1,14 @@
 # Ride On authentication
 
-The v0.5 API uses Better Auth 1.7.7 on Cloudflare Workers with native D1 storage.
+The v0.6 API uses Better Auth 1.7.7 on Cloudflare Workers with native D1 storage.
 Apple, Google and passkeys share one login identity, which maps to one cycling
-profile. The existing private API keys keep working during migration. Weather
-scoring, saved preferences, imports and route ownership use the same contracts.
+profile. Product APIs accept authenticated sessions only. Weather scoring, saved preferences, imports and route ownership use the same contracts.
 
-The canonical API domain is `https://api.ride-on.cc`. Provider credentials and the
-custom domain must be activated before live social login works. The test suite
-uses synthetic credentials and signed provider/WebAuthn responses; passing tests
-does not demonstrate live provider approval or a physical-device ceremony.
+The canonical API domain is `https://api.ride-on.cc`. Apple and Google are configured
+in production. Apple sign-in and the existing profile binding were verified end to
+end on 10 October 2026. Google authorization startup is verified; a full Google
+login and a physical-device passkey ceremony remain to be checked. The automated
+suite uses synthetic credentials and signed provider/WebAuthn responses.
 
 ## Provider setup
 
@@ -79,8 +79,14 @@ bun run deploy
 For local social login, use an HTTPS development hostname registered separately
 with the providers, matching `baseUrl`, origins and its passkey RP ID. Set the
 JSON as a single quoted value of `AUTH_CONFIG_JSON` in ignored `.dev.vars`.
-Leave it empty for existing private-key-only local development. Unit/integration
-tests need neither a domain nor real keys. Deploy migrations before the new Worker;
+For local bearer-session development, run `bun run migrate:local` followed by
+`bun run dev:session` before `bun run dev`. This creates a separate localhost auth
+configuration and a 24-hour session in local D1, saving the token in ignored,
+owner-readable `.local-session.json`. It never connects to production. An optional
+local owner ID selects an existing local dataset; it is not a production login or
+profile migration. Keep production credentials out of this local configuration.
+Unit/integration tests need neither a domain nor real keys. Deploy migrations
+before the new Worker;
 `0004_identity.sql` adds auth tables without rewriting profiles or routes.
 
 ## Sessions and profiles
@@ -90,33 +96,28 @@ tests need neither a domain nor real keys. Deploy migrations before the new Work
 `503 PROVIDER_NOT_CONFIGURED`; no fallback provider is selected.
 
 `GET /auth/me` requires a session and returns the login user, a nullable `ownerId`
-and session ID/expiry. It does not provision a cycling profile or claim ownership.
+and session ID/expiry. It does not provision a cycling profile or assign an owner.
 Use `POST /users` after sign-in to create a new rider's profile; its saved settings
 API stays unchanged. First access to a product endpoint binds a new, server-generated
 owner ID to the login. Clients cannot supply an owner ID.
 
-**Existing users must claim their existing owner before accessing product APIs:**
+**The existing profile migration is complete.** Dan's Apple identity is already
+bound to owner `dan`; its preferences and data remain under that same owner ID.
+Signing in with the same Apple account automatically uses that binding. Clients
+must not implement a claim step, hardcode `dan`, or embed an old private API key.
 
-```http
-POST /auth/claim-profile
-Authorization: Bearer <new-session-token>
-Content-Type: application/json
-
-{"apiKey":"the-existing-private-api-key"}
-```
-
-This requires a login from the last ten minutes and proof of the existing API key.
-It preserves the existing profile, route IDs, imports and shortlist. A repeated
-claim of the same owner is idempotent. A different existing binding or another
-login's claim returns `409 PROFILE_ALREADY_BOUND`; the API never merges, moves or
-drops route data automatically. Do not infer ownership from a matching email.
-The old private key continues to work until explicitly removed from `API_KEYS_JSON`.
+The legacy private-key authentication path and `POST /auth/claim-profile` were
+removed in v0.6.0. Old API keys return `401`; the removed endpoint returns `404`.
+The `auth_user_owners` table and all existing rows are retained. New users receive
+their own owner automatically on first product access, then use `POST /users` to
+create their settings. An unlinked Google account is a separate identity; use
+explicit account linking from the existing Apple login to share its profile.
 
 Sessions last seven days and refresh after one day of use. API calls return any
 refreshed session cookie and `set-auth-token` header; bearer clients should persist
-that header when present. Product endpoints accept either session bearer tokens,
-cookies, or existing API keys. Explicit invalid bearer credentials never fall back
-to browser session cookies. Logout/revocation checks D1 on the next request; cookie
+that header when present. Product endpoints accept session bearer tokens or
+cookies. Explicit invalid bearer credentials never fall back to browser session
+cookies. Logout/revocation checks D1 on the next request; cookie
 session caching is disabled. No separate JWT/refresh-token system is introduced.
 
 Cookie-authenticated writes require an exact trusted `Origin`. Browser fetches
@@ -230,7 +231,8 @@ The extension's ready-made browser handoff currently selects Apple or Google.
 The MSW 3 suite runs real Better Auth, D1, WebAuthn verification and the production
 Worker in Miniflare. Synthetic providers enforce token-exchange PKCE and validate
 Apple's signed client secret. Tests cover invalid provider signatures/audiences,
-state, replay, private email linking, profile claims, concurrent code redemption,
+state, replay, private email linking, preservation of existing owner bindings,
+retired-key rejection, concurrent owner creation and code redemption,
 CSRF, isolation, immediate logout/revocation and provider outages. Synthetic ES256
 authenticators exercise actual registration and sign-in, malicious origins/RP IDs,
 missing user verification, bad signatures, expiry, counters and challenge replay.

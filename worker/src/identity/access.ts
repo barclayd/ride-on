@@ -1,10 +1,9 @@
-import { authenticate } from '../auth.ts';
 import { AppError } from '../errors.ts';
 import type { Env } from '../types.ts';
 import { type AuthConfig, createIdentity, type Identity } from './config.ts';
 
 export const unauthorized = () =>
-  new AppError(401, 'UNAUTHORIZED', 'A valid session or API key is required.');
+  new AppError(401, 'UNAUTHORIZED', 'A valid session is required.');
 
 export const sessionHeaders = (request: Request) => {
   const headers = new Headers(request.headers);
@@ -47,6 +46,8 @@ export const requireSession = async (
   identity: Identity,
   fresh = false,
 ) => {
+  if (!request.headers.has('Authorization') && !request.headers.has('Cookie'))
+    throw unauthorized();
   checkCookieOrigin(request, identity.config);
   const result = await identity.auth.api.getSession({
     headers: sessionHeaders(request),
@@ -72,20 +73,6 @@ export const existingOwner = (db: D1Database, userId: string) =>
     .first<{ owner_id: string }>();
 
 export const resolveAccess = async (request: Request, env: Env) => {
-  // Preserve existing clients and permit migration even before social login is configured.
-  try {
-    return {
-      ownerId: await authenticate(
-        request.headers.get('Authorization') ?? undefined,
-        env.API_KEYS_JSON,
-      ),
-      headers: new Headers(),
-    };
-  } catch (error) {
-    if (!(error instanceof AppError) || ![401, 503].includes(error.status))
-      throw error;
-  }
-  if (!env.AUTH_CONFIG_JSON) throw unauthorized();
   const session = await requireSession(request, createIdentity(env));
   let binding = await existingOwner(env.ROUTES_DB, session.user.id);
   if (!binding) {
@@ -98,27 +85,4 @@ export const resolveAccess = async (request: Request, env: Env) => {
   }
   if (!binding) throw new Error('Owner binding was not persisted');
   return { ownerId: binding.owner_id, headers: session.headers };
-};
-
-export const claimOwner = async (
-  db: D1Database,
-  userId: string,
-  ownerId: string,
-) => {
-  // Ownership is immutable: a concurrent first product request or another claim
-  // wins atomically, rather than leaving routes stranded under an old owner.
-  await db
-    .prepare(
-      'INSERT INTO auth_user_owners (auth_user_id, owner_id) VALUES (?, ?) ON CONFLICT DO NOTHING',
-    )
-    .bind(userId, ownerId)
-    .run();
-  const binding = await existingOwner(db, userId);
-  if (binding?.owner_id !== ownerId)
-    throw new AppError(
-      409,
-      'PROFILE_ALREADY_BOUND',
-      'This login or profile already has an owner. Sign in with the linked account.',
-    );
-  return ownerId;
 };

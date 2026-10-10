@@ -1,5 +1,4 @@
 MET_OFFICE_API_KEY=your-global-spot-api-key
 MET_OFFICE_BPF_API_KEY=your-bpf-v2-api-key
-API_KEYS_JSON='[{"ownerId":"dan","token":"replace-with-a-random-token-at-least-32-characters"}]'
-# Leave empty for private-key-only local development. See docs/authentication.md.
+# bun run dev:session fills this with a separate local auth configuration.
 AUTH_CONFIG_JSON=''

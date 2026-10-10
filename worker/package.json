@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev --local",
+    "dev:session": "bun scripts/create-local-session.ts",
     "deploy": "wrangler deploy",
     "check": "bun run types && bun run lint && bun run test",
     "types": "tsgo --noEmit",
