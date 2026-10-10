@@ -34,6 +34,18 @@ bun run test:e2e     # e2e build against a mock API on 127.0.0.1:8787 + Playwrig
 E2E never touches the real API or cycle.travel: `e2e/extension.spec.ts` runs a mock API and
 serves a minimal Journeys page fixture. Screenshots land in `test-results/`.
 
+## Release
+
+`.github/workflows/extension.yml` runs on PRs and every merge to `main` that touches `extension/`:
+check, e2e, then the store zip (uploaded as the `extension-zip` artifact). On `main`, if extension
+source changed since the last `extension-v*` tag (tests and docs don't count), it tags the next
+patch version and publishes a GitHub Release with the zip. For a minor or major bump, raise
+`version` in `package.json`; the higher one wins.
+
+Store zips are built with `EXTENSION_VERSION=<v> STORE_BUILD=1 bun run zip`: the version is set
+and the manifest `key` dropped. The first upload, listing copy and privacy answers are in
+[STORE.md](STORE.md); the privacy policy is [PRIVACY.md](PRIVACY.md).
+
 ## API
 
 Contracts: `docs/api.md`. What the extension still works around is in
