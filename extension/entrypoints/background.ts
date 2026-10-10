@@ -406,6 +406,11 @@ export default defineBackground(() => {
       signingInWith: null,
     }),
   }));
+  // ponytail: builds up to 0.1.0 kept the token in storage.local; drop it (costs one sign-in).
+  // Delete once no such install remains.
+  browser.runtime.onInstalled.addListener(() =>
+    browser.storage.local.remove('token'),
+  );
   // ponytail: a browser restart starts from the saved default window and the usual
   // preferences, until the API can store planning (docs/extension-api-brief-v2.md).
   browser.runtime.onStartup.addListener(() =>

@@ -275,8 +275,20 @@ const test = base.extend<{
   },
 });
 
+// Same store as lib/api.ts setToken.
 const signIn = (worker: Worker) =>
-  worker.evaluate("chrome.storage.local.set({ token: 'test-token' })");
+  worker.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const open = indexedDB.open('ride-on');
+        open.onupgradeneeded = () => open.result.createObjectStore('auth');
+        open.onsuccess = () => {
+          const tx = open.result.transaction('auth', 'readwrite');
+          tx.objectStore('auth').put('test-token', 'token');
+          tx.oncomplete = resolve;
+        };
+      }),
+  );
 
 const openPopup = async (context: BrowserContext, extensionId: string) => {
   const page = await context.newPage();

@@ -789,19 +789,6 @@ const PrefsTab = ({ view }: { view: View }) => {
                 />
               </div>
             ))}
-            <div class="ro-switch-row">
-              Favour tailwinds
-              <Switch
-                on={local.favourTailwinds}
-                label="Favour tailwinds"
-                onClick={() =>
-                  send({
-                    type: 'setLocal',
-                    local: { favourTailwinds: !local.favourTailwinds },
-                  })
-                }
-              />
-            </div>
           </div>
         )}
       </section>

@@ -38,7 +38,6 @@ export type Search = {
 export type LocalPrefs = {
   sunshine: "Don't mind" | 'Nice to have' | 'Important';
   rain: "Don't mind" | 'Prefer dry' | 'Strongly prefer dry';
-  favourTailwinds: boolean;
   // Last values of each limit, so switching one off and on again loses nothing.
   floorMode: 'fixed' | 'monthly';
   floorFixedC: number;
@@ -49,7 +48,6 @@ export type LocalPrefs = {
 export const DEFAULT_LOCAL: LocalPrefs = {
   sunshine: 'Nice to have',
   rain: 'Prefer dry',
-  favourTailwinds: true,
   floorMode: 'fixed',
   floorFixedC: 3,
   floorMonthsC: [0, 0, 2, 4, 6, 8, 10, 10, 7, 5, 2, 0],

@@ -14,9 +14,7 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
    **Package → View public key** into `key` in `wxt.config.ts`, so unpacked builds share the store
    ID and only one redirect is needed.
 4. Fill in the tabs from the answers below, plus the images.
-5. **Distribution → Visibility**: start with **Unlisted** or **Private** (trusted testers). Before
-   making it public, move the session token out of `storage.local` (see the `ponytail:` note in
-   `lib/api.ts`).
+5. **Distribution → Visibility**: start with **Unlisted** or **Private** (trusted testers).
 6. Submit for review. Later versions: upload the next release's zip; the version must be higher
    than the published one, which CI guarantees.
 
@@ -62,8 +60,7 @@ starting point for the screenshots. Don't use real journey names.
   the weather forecast.
 - **`identity`:** Sign-in to Ride On with Google or Apple via `chrome.identity.launchWebAuthFlow`
   (OAuth with PKCE).
-- **`storage`:** Keeps the session token, ride preferences and the latest recommendations on the
-  device.
+- **`storage`:** Keeps ride preferences and the latest recommendations on the device.
 - **Host permission `https://api.ride-on.cc/*`:** The extension's own backend: imports tracked
   routes and returns weather-based ride recommendations.
 - **Content script on `https://cycle.travel/user/journeys*`:** Reads the user's saved journeys so

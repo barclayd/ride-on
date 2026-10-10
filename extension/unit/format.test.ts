@@ -340,7 +340,6 @@ const prefs: Preferences = {
 const local: LocalPrefs = {
   sunshine: 'Nice to have',
   rain: 'Prefer dry',
-  favourTailwinds: true,
   floorMode: 'fixed',
   floorFixedC: 3,
   floorMonthsC: [0, 0, 2, 4, 6, 8, 10, 10, 7, 5, 2, 0],
