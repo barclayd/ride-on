@@ -1,0 +1,114 @@
+name: extension
+
+on:
+  pull_request:
+    paths:
+      - "extension/**"
+      - ".github/workflows/extension.yml"
+  push:
+    branches: [main]
+    paths:
+      - "extension/**"
+      - ".github/workflows/extension.yml"
+  workflow_dispatch:
+
+# PRs: newest push wins. main: queue, so each release sees the previous run's tag.
+concurrency:
+  group: extension-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: extension
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      changed: ${{ steps.version.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags + history for the version bump
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('extension/bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      # ponytail: browsers aren't cached; Playwright says a restore is about as slow as the download.
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
+
+      # Next version = last extension-v* tag + 1 patch, or package.json's if that's higher
+      # (bump it there for minor/major). Tests and docs alone don't count as a change.
+      - id: version
+        run: |
+          src=(. ':!e2e' ':!unit' ':!*.md' ':!playwright.config.ts')
+          last=$(git tag -l 'extension-v*' --sort=-v:refname | head -1)
+          pkg=$(jq -r .version package.json)
+          if [ -z "$last" ]; then
+            next=$pkg changed=true
+          else
+            prev=${last#extension-v}
+            next=$(printf '%s\n' "$pkg" "${prev%.*}.$((${prev##*.} + 1))" | sort -V | tail -1)
+            git diff --quiet "$last" HEAD -- "${src[@]}" && changed=false || changed=true
+          fi
+          mkdir -p .output
+          git log --no-merges --format='- %s' ${last:+"$last.."}HEAD -- "${src[@]}" > .output/notes.md
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "Extension $next (changed since ${last:-no tag}: $changed)" >> "$GITHUB_STEP_SUMMARY"
+
+      # Store build: production API, computed version, no manifest `key` (the Web Store rejects it).
+      - run: bun run zip
+        env:
+          EXTENSION_VERSION: ${{ steps.version.outputs.version }}
+          STORE_BUILD: "1"
+      - run: >
+          unzip -p .output/*-chrome.zip manifest.json
+          | jq -e --arg v "$EXTENSION_VERSION" '.version == $v and (has("key") | not)'
+        env:
+          EXTENSION_VERSION: ${{ steps.version.outputs.version }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: extension-zip
+          path: |
+            extension/.output/*-chrome.zip
+            extension/.output/notes.md
+          include-hidden-files: true # .output
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: extension-e2e
+          path: extension/test-results
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: extension-zip
+      - run: >
+          gh release create "extension-v$VERSION" ./*-chrome.zip
+          --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
+          --title "Chrome extension $VERSION" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
