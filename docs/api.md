@@ -1,6 +1,6 @@
 # Ride On API MVP
 
-Implemented locally on 9 October, with sky and wind calibration on 10 October 2026. TypeScript, Hono and Cloudflare Workers;
+Implemented on 9 October, calibrated and first deployed on 10 October 2026. TypeScript, Hono and Cloudflare Workers;
 D1 stores route facts and user profiles, KV caches forecasts, and a deterministic evaluator ranks
 route/departure combinations. This replaces the legacy classification and Strava
 OAuth endpoints. The existing app clients have not yet been migrated.
@@ -474,28 +474,57 @@ forecast. It records all candidate departures and before/after results in an
 ignored report. It refuses missing routes, unmatched evidence or baseline drift.
 This is an offline algorithm comparison, not a fresh forecast or new HTTP test.
 
-## Deployment status
+## Production deployment
 
-This rebuild is local and has not replaced the existing deployed Worker. Before
-its first deployment, create the remote D1 database, copy its ID into
-`wrangler.jsonc`, apply its migration, and provision the required Worker secrets.
-The existing development KV namespace is reused with a new key prefix. Old cached
-classification keys are untouched. See [D1 migration commands](https://developers.cloudflare.com/d1/wrangler-commands/).
+API v0.3.0 is deployed at **https://ride-on-api.barclaysd.workers.dev** as of
+10 October 2026. `/health` is public; routes, profiles and recommendations require
+the existing per-user bearer token. Both Met Office credentials and
+`API_KEYS_JSON` are Worker secrets. Never commit their values or put Met Office
+credentials in a client.
 
-The configured maximum workload needs Workers Paid: the six-route cold comparison
-alone exceeds the Free plan's 50 external subrequests, and CPU must also be measured
-on the deployed tier. Free has 10 ms CPU; network wait is excluded from CPU time.
-See [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
-No plan changes, remote resources, deployments or purchases were made in this work.
+The production `ride-on-routes` D1 database is in Western Europe, with both route
+and user migrations applied. Its ID is recorded in `wrangler.jsonc`.
+`preview_database_id: "ROUTES_DB"` preserves the existing local-only database used
+by `wrangler dev --local`; production data and local data are separate. The
+existing KV namespace is bound as `WEATHER_CACHE`, with the new weather key
+prefix. Legacy classification cache entries remain untouched.
+
+Dan's saved profile was copied through the production user API. Existing GPX
+imports remain local: upload routes to production to obtain production route IDs.
+A short synthetic route verified GPX ingestion, database persistence, saved-profile
+resolution, time-window planning and real recommendations from both Met Office
+Global Spot and BPF. The temporary route was then removed. Health and unauthenticated
+access checks passed. BPF still reports its documented unknown model-run age;
+retrieval freshness is explicitly selected. This is a functional deployment
+check, not a full-library load test. Its report is kept in the ignored
+`evaluation/production-api-live-check.json` file.
+
+Cloudflare accepted the configured 5,000 ms CPU ceiling; startup took 50 ms for
+this deployment. Network wait is separate from CPU time. The full comparison
+workload requires Workers Paid limits, particularly for weather subrequests.
+No subscription or plan was changed. See [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
 
 CI checks and bundles the Worker on pull requests, with Node 24 and Bun 1.4.0.
-Automatic deployment is gated by the repository variable
-`API_MVP_DEPLOYMENT_READY=true`. Leave it unset until remote resources, secrets and
-the Workers plan are ready; merging this foundation does not deploy it.
-When enabled, deployment applies migrations
-before publishing and runs health/auth smoke checks. Remote setup is required
-before that workflow can succeed. Existing clients that call `/classify` or
-`/strava/*` will need migration before they use this rebuilt backend.
+Automatic deployment remains gated by repository variable
+`API_MVP_DEPLOYMENT_READY=true`; this initial production deployment used the
+authenticated local Wrangler session. The gate remains unset. Before enabling it,
+verify the GitHub `CLOUDFLARE_API_TOKEN` has access to both Workers deployment and
+D1 migrations. When enabled, the workflow applies migrations before publishing
+and runs health/authentication smoke checks.
+
+For an authorized manual deployment from `worker/`:
+
+```sh
+bun run check
+bun run build:check
+bun run migrate:remote
+bun run deploy
+WORKER_URL=https://ride-on-api.barclaysd.workers.dev bun test test/smoke.test.ts
+```
+
+The migration and deployment commands above target production. Use
+`bun run migrate:local` and `bun run dev` for local work. Existing clients calling
+`/classify` or `/strava/*` need migration to the new API.
 
 ## Errors
 

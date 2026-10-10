@@ -14,11 +14,17 @@
   "observability": {
     "enabled": true
   },
+  "limits": {
+    "cpu_ms": 5000
+  },
 
   "d1_databases": [
     {
       "binding": "ROUTES_DB",
       "database_name": "ride-on-routes",
+      "database_id": "bb9fd337-a5c9-4005-8d72-6157a9f3bbbf",
+      // Keep existing local routes and profiles in their original local database.
+      "preview_database_id": "ROUTES_DB",
       "migrations_dir": "migrations"
     }
   ],

@@ -54,9 +54,15 @@ bun run lint:fix
 
 ## Deployment
 
-Remote D1 setup and secrets have not been applied for this rebuild. Automatic
-deployment stays off until repository variable `API_MVP_DEPLOYMENT_READY=true`. Follow
-`../docs/api.md` before deploying. Workers Paid is needed for the configured
-comparison workload. Never infer cloud latency/CPU results from local timings.
-Use `bun run deploy` only when deployment is in scope. Required secrets are
-`MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY` and `API_KEYS_JSON`; no Strava secrets are used.
+API v0.3.0 is deployed at `https://ride-on-api.barclaysd.workers.dev`. Production D1
+and the three required secrets are configured. See `../docs/api.md` for the
+verified deployment state and commands. Local development stays on the original
+local database through `preview_database_id: "ROUTES_DB"`.
+
+Automatic deployment remains gated by `API_MVP_DEPLOYMENT_READY=true`; it is
+currently unset. Verify the GitHub deployment token's Workers and D1 permissions
+before enabling it. Use `bun run deploy` only when deployment is in scope. Required
+secrets are `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY` and `API_KEYS_JSON`; no
+Strava secrets are used. The configured CPU ceiling is 5 seconds; full collection
+workloads require Workers Paid limits. Do not infer production load capacity from
+local timings or the small production verification route.
