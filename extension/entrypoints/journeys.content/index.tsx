@@ -3,28 +3,21 @@ import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/utils/define-content-script';
-import {
-  fetchJourney,
-  fetchJourneyGpx,
-  fetchJourneyList,
-  type JourneyListItem,
-} from '../../lib/cycletravel';
+import { fetchJourney, fetchJourneyGpx } from '../../lib/cycletravel';
 import { send } from '../../lib/state';
 import { MAX_TRACKED, type RouteSummary } from '../../lib/types';
 import {
-  Badge,
-  CardLines,
-  CloseButton,
-  DayPresets,
+  Attribution,
+  Banners,
+  CoverageWarn,
+  chooseAvailableDates,
   ErrorChip,
+  Expired,
   iconUrl,
   injectFonts,
-  Pips,
-  Score,
+  RideCard,
   useView,
-  type View,
 } from '../../ui/components';
-import { type Card, timeLabel } from '../../ui/format';
 import css from '../../ui/tokens.css?inline';
 
 type Row = { id: string; element: HTMLElement; mount: HTMLElement };
@@ -47,141 +40,12 @@ const shadowMount = (host: HTMLElement) => {
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : 'Something went wrong.';
 
-const Pinned = ({ card, href }: { card: Card; href: string | null }) => (
-  <article
-    class={`ro-pinned${card.top ? ' ro-top' : card.state === 'no-ride' ? ' ro-no-ride' : ''}`}
-  >
-    <div class="ro-pinned-head">
-      <Badge card={card} />
-      {href ? (
-        <a class="ro-name" href={href} title={card.name}>
-          {card.name}
-        </a>
-      ) : (
-        <span class="ro-name" title={card.name}>
-          {card.name}
-        </span>
-      )}
-      <CloseButton
-        title="Stop considering"
-        onClick={() => send({ type: 'untrack', routeId: card.routeId })}
-      />
-    </div>
-    <CardLines card={card}>No ride meets your minimums.</CardLines>
-    <div class="ro-footer">
-      <span class="ro-bar">
-        <span style={{ width: `${card.score ?? 0}%` }} />
-      </span>
-      <Score card={card} />
-      <Pips level={card.confidence} />
-      <span class="ro-serif ro-muted" style={{ fontSize: '12px' }}>
-        {card.km} km
-      </span>
-    </div>
-  </article>
-);
+const CHIP_STATES = new Set(['below', 'nofit', 'incomplete']);
 
-const chipLabel = (card: Card) =>
-  card.state === 'ok'
-    ? `${card.day} ${card.window}`
-    : card.state === 'no-ride'
-      ? 'No good window'
-      : 'Considering…';
-
-const Picker = (props: {
-  view: View;
-  tracked: Map<string, string>; // externalId → routeId
-  busy: Set<string>;
-  toggle: (externalId: string) => void;
-  onClose: () => void;
-}) => {
-  const [journeys, setJourneys] = useState<JourneyListItem[] | null>(null);
-  const [filter, setFilter] = useState('');
-  useEffect(() => {
-    fetchJourneyList().then(setJourneys, () => setJourneys([]));
-  }, []);
-  const count = props.view.cards.length;
-  const query = filter.trim().toLowerCase();
-  const shown = (journeys ?? []).filter((j) =>
-    j.name.toLowerCase().includes(query),
-  );
-  return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: the scrim only closes; the dialog holds the controls.
-    <div
-      class="ro-scrim"
-      onClick={(e) => e.target === e.currentTarget && props.onClose()}
-      onKeyDown={(e) => e.key === 'Escape' && props.onClose()}
-    >
-      <div
-        class="ro-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Under consideration"
-      >
-        <div class="ro-dialog-head">
-          Under consideration
-          <CloseButton title="Close" onClick={props.onClose} />
-        </div>
-        <div class="ro-dialog-filter">
-          <input
-            type="search"
-            placeholder="Filter routes"
-            aria-label="Filter routes"
-            value={filter}
-            onInput={(e) => setFilter(e.currentTarget.value)}
-            // biome-ignore lint/a11y/noAutofocus: the picker opens to filter.
-            autoFocus
-          />
-          <span class="ro-serif ro-muted" style={{ fontSize: '12px' }}>
-            {count} / {MAX_TRACKED} selected
-          </span>
-        </div>
-        <div class="ro-dialog-list">
-          {journeys === null && <p class="ro-empty">Loading your routes…</p>}
-          {shown.map((journey) => {
-            const id = String(journey.id);
-            const checked = props.tracked.has(id);
-            const busy = props.busy.has(id);
-            return (
-              <button
-                key={id}
-                type="button"
-                class="ro-pick"
-                aria-pressed={checked}
-                disabled={busy || (!checked && count >= MAX_TRACKED)}
-                onClick={() => props.toggle(id)}
-              >
-                <span class={`ro-check${checked ? ' ro-on' : ''}`}>
-                  {checked ? '✓' : ''}
-                </span>
-                <span>{journey.name}</span>
-                <span>
-                  {Math.round(journey.distance / 1000)} km · {journey.date}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <div class="ro-dialog-foot">
-          <button
-            type="button"
-            class="ro-primary"
-            style={{ padding: '9px 18px' }}
-            onClick={props.onClose}
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Page = ({ rows, overlay }: { rows: Row[]; overlay: HTMLElement }) => {
+const Page = ({ rows }: { rows: Row[] }) => {
   const view = useView();
   const [busy, setBusy] = useState(new Set<string>());
   const [notice, setNotice] = useState<string | null>(null);
-  const [picking, setPicking] = useState(false);
   const synced = useRef(false);
   const signedIn = view?.state.auth === 'signed-in';
   const routes = view?.state.routes ?? {};
@@ -228,7 +92,7 @@ const Page = ({ rows, overlay }: { rows: Row[]; overlay: HTMLElement }) => {
       <div class="ro-strip">
         <img src={iconUrl()} alt="" />
         <div class="ro-strip-text">
-          <span>Under consideration</span>
+          <span>Tracked routes</span>
           <span>
             Sign in to Ride On to track rides and get weather-matched times.
           </span>
@@ -267,19 +131,21 @@ const Page = ({ rows, overlay }: { rows: Row[]; overlay: HTMLElement }) => {
     }
   };
 
-  const { cards, planning } = view;
-  const full = cards.length >= MAX_TRACKED;
+  const { cards } = view;
+  const count = tracked.size;
+  const full = count >= MAX_TRACKED;
   const cardByRoute = new Map(cards.map((card) => [card.routeId, card]));
   const href = (route: RouteSummary | undefined) =>
-    route?.source ? `/map/journey/${route.source.externalId}` : null;
+    route?.source ? `/map/journey/${route.source.externalId}` : '';
+  const openWhen = () => send({ type: 'openPopup', tab: 'when' });
 
   return (
-    <section class="ro-module" aria-label="Under consideration">
+    <section class="ro-module" aria-label="Tracked routes">
       <div class="ro-module-head">
         <div class="ro-module-title">
-          <span>Under consideration</span>
+          <span>Tracked routes</span>
           <span>
-            {cards.length} / {MAX_TRACKED}
+            {count} / {MAX_TRACKED}
           </span>
         </div>
         <div class="ro-module-actions">
@@ -289,51 +155,63 @@ const Page = ({ rows, overlay }: { rows: Row[]; overlay: HTMLElement }) => {
               {notice}
             </span>
           )}
-          <DayPresets view={view} inline />
           <button
             type="button"
-            class="ro-secondary ro-serif"
-            onClick={() => send({ type: 'openPopup', tab: 'when' })}
+            class="ro-window"
+            data-expired={!view.range}
+            onClick={openWhen}
           >
-            {timeLabel(planning)}
-          </button>
-          <button
-            type="button"
-            class="ro-secondary"
-            onClick={() => setPicking(true)}
-          >
-            Customise
+            {view.range
+              ? `${view.datesText} · ${view.timeText}`
+              : 'Dates passed'}
           </button>
         </div>
       </div>
-      <div class="ro-grid ro-loading" data-loading={view.state.loading}>
-        {cards.map((card) => (
-          <Pinned
-            key={card.routeId}
-            card={card}
-            href={href(routes[card.routeId])}
-          />
-        ))}
-        {!full && (
-          <button type="button" class="ro-add" onClick={() => setPicking(true)}>
-            + Add ride
-          </button>
-        )}
-      </div>
+      {!view.range && (
+        <Expired
+          view={view}
+          variant="page"
+          onChoose={() => {
+            chooseAvailableDates(view);
+            openWhen();
+          }}
+        />
+      )}
+      <Banners view={view} />
+      {cards.length > 0 && (
+        <div class="ro-grid ro-loading" data-loading={view.state.loading}>
+          {cards.map((card) => (
+            <RideCard
+              key={card.routeId}
+              card={card}
+              href={href(routes[card.routeId])}
+            />
+          ))}
+        </div>
+      )}
+      <CoverageWarn view={view} />
+      <Attribution view={view} />
       {rows.map((row) => {
         const routeId = tracked.get(row.id);
         const card = routeId && cardByRoute.get(routeId);
         const working = busy.has(row.id);
         return createPortal(
-          card ? (
+          routeId ? (
             <button
               type="button"
-              class={`ro-chip ${card.state === 'no-ride' ? 'ro-no-ride' : 'ro-tracked'}`}
+              class="ro-chip ro-tracked"
+              data-state={
+                !view.range
+                  ? 'below'
+                  : card && CHIP_STATES.has(card.state)
+                    ? card.state
+                    : 'meets'
+              }
               title="Stop considering"
               disabled={working}
               onClick={() => toggle(row.id)}
             >
-              {chipLabel(card)}
+              {!view.range ? 'Dates passed' : card ? card.chip : 'Checking…'}
             </button>
           ) : (
             <button
@@ -352,17 +230,6 @@ const Page = ({ rows, overlay }: { rows: Row[]; overlay: HTMLElement }) => {
           row.mount,
         );
       })}
-      {picking &&
-        createPortal(
-          <Picker
-            view={view}
-            tracked={tracked}
-            busy={busy}
-            toggle={toggle}
-            onClose={() => setPicking(false)}
-          />,
-          overlay,
-        )}
     </section>
   );
 };
@@ -382,8 +249,6 @@ export default defineContentScript({
     const moduleHost = document.createElement('ride-on-module');
     if (toolbar) toolbar.before(moduleHost);
     else header?.after(moduleHost);
-    const overlayHost = document.createElement('ride-on-overlay');
-    document.body.append(overlayHost);
     const rows = [
       ...document.querySelectorAll<HTMLElement>('li.journey_row'),
     ].map((element) => {
@@ -397,10 +262,7 @@ export default defineContentScript({
         mount: shadowMount(host),
       };
     });
-    render(
-      <Page rows={rows} overlay={shadowMount(overlayHost)} />,
-      shadowMount(moduleHost),
-    );
+    render(<Page rows={rows} />, shadowMount(moduleHost));
     send({ type: 'refresh' });
   },
 });

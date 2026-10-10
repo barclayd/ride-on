@@ -1,16 +1,20 @@
 // Pieces shared by the popup and the Journeys page.
-import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { onStateChange, readState, type State, send } from '../lib/state';
-import { DEFAULT_PLANNING, type Planning, type Preset } from '../lib/types';
 import {
-  buildCards,
+  attributions,
+  availability,
+  type Banner,
+  buildResults,
   type Card,
+  type CardState,
   clock,
-  horizonDates,
-  localDate,
-  presetAvailable,
+  type Day,
+  datesLabel,
+  resolveDays,
+  retrievedAt,
+  timeText,
 } from './format';
 
 export const iconUrl = () => browser.runtime.getURL('/ride-on-icon.png');
@@ -37,11 +41,14 @@ export const injectFonts = () => {
 export type View = {
   state: State;
   timeZone: string;
-  today: string;
-  planning: Planning;
-  horizon: string[];
-  cards: Card[];
-};
+  strip: Day[];
+  range: [string, string] | null; // the selected days; null once they've passed
+  selected: Day[];
+  datesText: string;
+  timeText: string;
+  retrieved: string | null;
+  attributions: ReturnType<typeof attributions>;
+} & ReturnType<typeof buildResults>;
 
 export const useView = (): View | null => {
   const [state, setState] = useState<State | null>(null);
@@ -51,23 +58,44 @@ export const useView = (): View | null => {
     return stop;
   }, []);
   if (!state) return null;
+  const { user, planning } = state;
   const timeZone =
-    state.user?.settings.timeZone ??
-    Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const today = localDate(new Date(), timeZone);
+    user?.settings.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const strip = availability(
+    new Date(),
+    timeZone,
+    user?.settings.weather ?? { mode: 'strict', providerId: 'met-office' },
+  );
+  const range = resolveDays(planning.days, strip);
+  const selected = range
+    ? strip.filter((d) => d.date >= range[0] && d.date <= range[1])
+    : [];
+  const results = buildResults(
+    range ? (state.selection?.routeIds ?? []) : [],
+    state.routes,
+    selected,
+    state.days,
+    timeZone,
+    Object.keys(user?.settings.preferences.minimumStandards ?? {}).length > 0,
+  );
+  const at = retrievedAt(Object.values(state.days));
+  const days = planning.days;
   return {
     state,
     timeZone,
-    today,
-    planning: state.user?.settings.planning ?? DEFAULT_PLANNING,
-    horizon: horizonDates(state.recs, today),
-    cards: buildCards(
-      state.selection?.routeIds ?? [],
-      state.routes,
-      state.recs,
-      timeZone,
-      today,
-    ),
+    strip,
+    range,
+    selected,
+    datesText: range
+      ? datesLabel(...range)
+      : days.kind === 'range'
+        ? datesLabel(days.start, days.end)
+        : '',
+    timeText: timeText(planning, results.daylight, timeZone),
+    retrieved: at && clock(at, timeZone),
+    attributions: attributions(Object.values(state.days)),
+    ...results,
+    banners: range ? results.banners : [],
   };
 };
 
@@ -78,10 +106,10 @@ export const Segmented = <T extends string>(props: {
   options: Option<T>[];
   value: T | null;
   onChange: (value: T) => void;
-  inline?: boolean;
+  wrap?: boolean;
 }) => (
   <fieldset
-    class={props.inline ? 'ro-segmented ro-inline' : 'ro-segmented'}
+    class={props.wrap ? 'ro-segmented ro-wrap' : 'ro-segmented'}
     aria-label={props.label}
   >
     {props.options.map((option) => (
@@ -98,73 +126,6 @@ export const Segmented = <T extends string>(props: {
   </fieldset>
 );
 
-export const DayPresets = ({
-  view,
-  inline,
-}: {
-  view: View;
-  inline?: boolean;
-}) => {
-  const { planning, horizon } = view;
-  const presets: [Preset, string][] = [
-    ['today', 'Today'],
-    ['tomorrow', 'Tomorrow'],
-    ['weekend', 'Weekend'],
-    ['next', inline ? `Next ${horizon.length} days` : `${horizon.length} days`],
-  ];
-  return (
-    <Segmented
-      label="Days"
-      inline={inline}
-      value={planning.days.kind === 'preset' ? planning.days.preset : null}
-      options={presets.map(([value, label]) => ({
-        value,
-        label,
-        disabled: !presetAvailable(value, horizon),
-      }))}
-      onChange={(preset) =>
-        send({
-          type: 'setPlanning',
-          planning: { ...planning, days: { kind: 'preset', preset } },
-        })
-      }
-    />
-  );
-};
-
-const rankClass = (card: Card) =>
-  card.state === 'ok'
-    ? card.top
-      ? 'ro-top'
-      : ''
-    : card.state === 'no-ride'
-      ? 'ro-no-ride'
-      : 'ro-pending';
-
-export const Badge = ({ card }: { card: Card }) => (
-  <span class={`ro-badge ${rankClass(card)}`}>{card.rankLabel}</span>
-);
-
-export const Rank = ({ card }: { card: Card }) => (
-  <span class={`ro-rank ${rankClass(card)}`}>{card.n}</span>
-);
-
-export const Pips = ({ level }: { level: number }) => (
-  <span class="ro-pips" title="Forecast confidence">
-    {[5, 8, 11].map((height, i) => (
-      <span
-        key={height}
-        class={i < level ? 'ro-on' : ''}
-        style={{ height: `${height}px` }}
-      />
-    ))}
-  </span>
-);
-
-export const Score = ({ card }: { card: Card }) => (
-  <span class="ro-score">{card.score ?? '—'}</span>
-);
-
 export const CloseButton = (props: { title: string; onClick: () => void }) => (
   <button
     type="button"
@@ -177,32 +138,157 @@ export const CloseButton = (props: { title: string; onClick: () => void }) => (
   </button>
 );
 
-export const When = ({ card }: { card: Card }) =>
-  card.state === 'ok' ? (
-    <span class="ro-when">
-      {card.day} · {card.window}
+const STATES: Record<CardState, string> = {
+  meets: 'Meets your preferences',
+  below: 'Below your minimums',
+  nofit: "Doesn't fit your window",
+  incomplete: 'Forecast incomplete',
+  pending: 'Checking…',
+};
+const MEDALS = ['Gold', 'Silver', 'Bronze'];
+
+// The page shows the distance by the name and no medals; the popup medals its top three scored rides.
+export const RideCard = (props: {
+  card: Card;
+  medal?: number;
+  href?: string | null; // the page links each ride to its journey
+}) => {
+  const { card, medal } = props;
+  const tint =
+    medal !== undefined
+      ? `ro-${MEDALS[medal].toLowerCase()}`
+      : card.flag === 'Best pick'
+        ? 'ro-flag-best'
+        : card.flag
+          ? 'ro-flag-available'
+          : '';
+  return (
+    <div class={`ro-ride ${tint}`} data-state={card.state}>
+      <div class="ro-ride-head">
+        <div class="ro-pills">
+          {medal !== undefined && (
+            <span class="ro-medal" title={MEDALS[medal]}>
+              {medal + 1}
+            </span>
+          )}
+          {card.flag && <span class="ro-pill ro-flag">{card.flag}</span>}
+          <span class={`ro-pill ro-${card.state}`}>{STATES[card.state]}</span>
+        </div>
+        <CloseButton
+          title="Stop considering"
+          onClick={() => send({ type: 'untrack', routeId: card.routeId })}
+        />
+      </div>
+      <div class="ro-ride-title">
+        {props.href ? (
+          <a class="ro-name" href={props.href}>
+            {card.name}
+          </a>
+        ) : (
+          <span class="ro-name">{card.name}</span>
+        )}
+        {props.href !== undefined && <span>{card.km} km</span>}
+      </div>
+      {(card.when ?? card.duration) && (
+        <span class="ro-when">{card.when ?? card.duration}</span>
+      )}
+      {card.weather && <span class="ro-conditions">{card.weather}</span>}
+      {card.reason && <span class="ro-conditions">{card.reason}</span>}
+      {card.drawbacks.map((drawback) => (
+        <span key={drawback} class="ro-drawback">
+          {drawback}
+        </span>
+      ))}
+      {card.trade.length > 0 && (
+        <div class="ro-trades">
+          {card.trade.map((trade) => (
+            <span key={trade}>{trade}</span>
+          ))}
+        </div>
+      )}
+      {card.coverage && <span class="ro-coverage">{card.coverage}</span>}
+      {card.score !== null ? (
+        <div class="ro-score">
+          <span>Comfort score {card.score}/100</span>
+          <div>
+            <div style={{ width: `${card.score}%` }} />
+          </div>
+        </div>
+      ) : (
+        card.state === 'incomplete' && <span class="ro-no-score">No score</span>
+      )}
+    </div>
+  );
+};
+
+const BANNERS: Record<Banner, string> = {
+  nomatch:
+    'None of these rides meets all your minimum conditions. Here are the best available options.',
+  incomplete:
+    "We couldn't confirm a ride that meets your minimum conditions because some forecasts are unavailable.",
+  distance:
+    'None of your selected rides is within your preferred distance range. These are the best options at other distances.',
+};
+
+export const Banners = ({ view }: { view: View }) =>
+  view.banners.map((banner) => (
+    <div key={banner} class={`ro-banner ro-${banner}`} role="status">
+      {BANNERS[banner]}
+    </div>
+  ));
+
+export const CoverageWarn = ({ view }: { view: View }) =>
+  view.range && view.coverageWarn ? (
+    <span class="ro-coverage ro-warn-below">
+      Some forecasts don't cover your whole window.
     </span>
   ) : null;
 
-export const CardLines = (props: {
-  card: Card;
-  children?: ComponentChildren;
-}) => {
-  const { card } = props;
-  return card.state === 'ok' ? (
-    <>
-      <When card={card} />
-      <span class="ro-conditions">{card.conditions}</span>
-      {card.drawback && <span class="ro-drawback">{card.drawback}</span>}
-    </>
-  ) : card.state === 'no-ride' ? (
-    <span class="ro-drawback">
-      {props.children} {card.reason}
-    </span>
-  ) : (
-    <span class="ro-conditions">Checking the forecast…</span>
-  );
-};
+// Required wherever a provider's data shows (Apple: trademark logo, legal link, derived-data notice).
+// ponytail: light logo only; use logo.darkUrl if a dark theme lands.
+export const Attribution = ({ view }: { view: View }) =>
+  view.attributions.length > 0 ? (
+    <div class="ro-attribution">
+      {view.attributions.map((a) => (
+        <span key={a.url}>
+          <a href={a.url} target="_blank" rel="noreferrer">
+            {a.logo ? <img src={a.logo.lightUrl} alt={a.text} /> : a.text}
+          </a>
+          {a.notice && <span>{a.notice}</span>}
+        </span>
+      ))}
+    </div>
+  ) : null;
+
+// Never silently swap a passed search for new dates; the rider picks again.
+export const chooseAvailableDates = (view: View) =>
+  send({
+    type: 'setPlanning',
+    planning: {
+      ...view.state.planning,
+      days: { kind: 'preset', preset: 'next' },
+    },
+  });
+
+export const Expired = (props: {
+  view: View;
+  variant: 'when' | 'rides' | 'page';
+  onChoose: () => void;
+}) => (
+  <div class={`ro-expired ro-${props.variant}`} role="alert">
+    <div>
+      <span>These dates have passed</span>
+      <span>
+        {props.variant === 'rides'
+          ? props.view.datesText
+          : `${props.view.datesText} · ${props.view.timeText}`}
+      </span>
+    </div>
+    <button type="button" class="ro-primary" onClick={props.onChoose}>
+      Choose available dates
+    </button>
+  </div>
+);
 
 // Keep the last results on screen and say how old they are.
 export const ErrorChip = ({ view }: { view: View }) =>

@@ -9,6 +9,8 @@ import {
   type Page,
   type Worker,
 } from '@playwright/test';
+import type { RouteSummary, User } from '../lib/types';
+import { applyPatch } from '../ui/format';
 
 const EXTENSION = path.resolve('.output/chrome-mv3-e2e');
 const JOURNEYS = readFileSync(path.resolve('e2e/journeys.html'), 'utf8');
@@ -17,20 +19,63 @@ const day = (offset: number) =>
     Date.now() + offset * 86_400_000,
   );
 
-// ---- Mock Ride On API (port baked into the e2e build) ----
+// ---- Mock Ride On API v0.9.0 (port baked into the e2e build) ----
 
-type Route = {
-  id: string;
-  name: string;
-  distanceM: number;
-  source: { providerId: string; externalId: string };
-  version: number;
-  updatedAt: string;
+const APPLE_LEGAL =
+  'https://developer.apple.com/weatherkit/data-source-attribution/';
+const provider = (
+  id: string,
+  name: string,
+  configured: boolean,
+  freshnessBasis: string,
+  attribution: object,
+) => ({
+  id,
+  name,
+  configured,
+  recommendedSettings: {
+    weather: { mode: 'strict', providerId: id },
+    forecast: { representation: 'deterministic', freshnessBasis },
+  },
+  attribution: [attribution],
+});
+const METOFFICE = {
+  text: 'Powered by Met Office data',
+  url: 'https://www.metoffice.gov.uk/',
 };
+const PROVIDERS = [
+  provider('apple-weather', 'Apple Weather', true, 'retrieval-time', {
+    text: 'Apple Weather',
+    url: APPLE_LEGAL,
+    logo: {
+      lightUrl:
+        'https://weatherkit.apple.com/assets/branding/en/Apple_Weather_blk_en_2X_090122.png',
+      darkUrl:
+        'https://weatherkit.apple.com/assets/branding/en/Apple_Weather_wht_en_2X_090122.png',
+    },
+    notice:
+      'Ride On route assessments are derived from and modify Apple Weather data.',
+  }),
+  provider(
+    'met-office',
+    'Met Office Global Spot',
+    true,
+    'model-run',
+    METOFFICE,
+  ),
+  provider(
+    'met-office-bpf',
+    'Met Office Blended Probabilistic',
+    false,
+    'model-run',
+    METOFFICE,
+  ),
+];
+
 let calls: { method: string; path: string; body: any }[] = [];
-let user: any;
+let user: User;
 let selection: { version: number; routeIds: string[]; updatedAt: null };
-let routes: Record<string, Route>;
+let routes: Record<string, RouteSummary>;
 
 const reset = () => {
   calls = [];
@@ -40,21 +85,18 @@ const reset = () => {
     displayName: 'Test Rider',
     settings: {
       timeZone: 'Europe/London',
-      planning: {
-        days: { kind: 'preset', preset: 'next' },
-        window: { start: '06:00', end: '20:00' },
+      weather: { mode: 'strict', providerId: 'met-office' }, // an existing profile
+      forecast: {
+        representation: 'deterministic',
+        freshnessBasis: 'model-run',
       },
       preferences: {
         temperature: { comfortMinC: 10, comfortMaxC: 22 },
-        wind: { comfortableHeadwindKph: 15 },
+        wind: { comfortableHeadwindKph: 15, comfortableCrosswindKph: 20 },
+        climbing: { preference: 'neutral' },
+        distance: null,
         minimumStandards: {},
       },
-    },
-    preferenceLevels: {
-      sunshine: 'nice',
-      rain: 'light-ok',
-      climbing: 'neutral',
-      comfortableWindKph: 15,
     },
   };
   selection = { version: 1, routeIds: ['r101'], updatedAt: null };
@@ -70,20 +112,26 @@ const reset = () => {
   };
 };
 
-const recommendations = () => ({
-  message: 'ok',
+const recommendations = (date: string) => ({
+  date,
+  recommendedRouteId: selection.routeIds[0] ?? null,
+  minimumStandardsStatus: 'not_configured',
   rankings: selection.routeIds.map((routeId, i) => ({
     routeId,
     routeName: routes[routeId].name,
     distanceKm: routes[routeId].distanceM / 1000,
-    issues: [],
-    confidence: 3,
-    verdict: { status: 'ride', reason: null },
+    distanceFit: null,
+    estimatedDurationMinutes: 180,
+    daylight: { start: `${date}T06:15:00Z`, end: `${date}T17:20:00Z` },
+    effectiveWindow: { start: `${date}T06:15:00Z`, end: `${date}T17:20:00Z` },
+    status: 'assessed',
+    departuresUnknown: 0,
+    departuresStandardsUnknown: 0,
     best: {
-      date: day(0),
-      departureAt: `${day(0)}T0${8 + i}:00:00Z`,
-      finishAt: `${day(0)}T1${1 + i}:00:00Z`,
+      departureAt: `${date}T0${8 + i}:00:00Z`,
+      finishAt: `${date}T1${1 + i}:00:00Z`,
       score: 84 - i * 10,
+      standards: { status: 'not_configured', failures: [] },
       conditions: {
         temperatureC: { minimum: 9, maximum: 14 },
         averageWindSpeedKph: 15,
@@ -92,35 +140,56 @@ const recommendations = () => ({
         averageCrosswindKph: 4,
         maximumPrecipitationProbability: 0.05,
       },
-      drawbacks: [],
     },
+    issues: [],
+    warnings: [],
   })),
   unranked: [],
-  range: { start: day(0), end: day(4), preset: 'next', fallback: false },
-  days: [0, 1, 2, 3, 4].map((offset) => ({
-    date: day(offset),
-    daylight: {
-      sunrise: `${day(offset)}T06:15:00Z`,
-      sunset: `${day(offset)}T17:20:00Z`,
-    },
-    temperatureMaxC: 14,
-    quality: 80 - offset * 8,
-  })),
+  weather: {
+    locations: [
+      {
+        provenance: {
+          retrievedAt: new Date().toISOString(),
+          attribution: PROVIDERS.find(
+            (p) =>
+              user.settings.weather.mode === 'strict' &&
+              p.id === user.settings.weather.providerId,
+          )?.attribution,
+        },
+      },
+    ],
+  },
 });
 
 const handle = (method: string, url: URL, body: any): [number, unknown] => {
   const key = `${method} ${url.pathname}`;
-  if (key === 'GET /users/me') return [200, user];
+  if (key === 'GET /users/me') return [200, { user }];
   if (key === 'PATCH /users/me') {
-    const { planning, preferenceLevels } = body.settings;
+    if (body.expectedVersion !== user.version)
+      return [409, { error: { code: 'USER_VERSION_CONFLICT', message: 'x' } }];
     user = {
       ...user,
       version: user.version + 1,
-      settings: { ...user.settings, ...(planning && { planning }) },
-      preferenceLevels: { ...user.preferenceLevels, ...preferenceLevels },
+      settings: {
+        ...user.settings,
+        weather: body.settings.weather ?? user.settings.weather,
+        forecast: body.settings.forecast ?? user.settings.forecast,
+        preferences: applyPatch(
+          user.settings.preferences,
+          body.settings.preferences ?? {},
+        ),
+      },
     };
-    return [200, user];
+    return [200, { user }];
   }
+  if (key === 'GET /weather-providers')
+    return [
+      200,
+      {
+        defaultPolicy: PROVIDERS[0].recommendedSettings.weather,
+        providers: PROVIDERS,
+      },
+    ];
   if (key === 'GET /routes')
     return [200, { routes: Object.values(routes), nextCursor: null }];
   if (key === 'GET /route-selection') return [200, { selection }];
@@ -147,7 +216,7 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
     };
     return [version === 1 ? 201 : 200, { route: routes[id] }];
   }
-  if (key === 'POST /recommendations') return [200, recommendations()];
+  if (key === 'POST /recommendations') return [200, recommendations(body.date)];
   if (key === 'POST /api/auth/sign-out') return [200, {}];
   return [404, { error: { code: 'NOT_FOUND', message: key } }];
 };
@@ -172,6 +241,9 @@ base.afterAll(
   () => new Promise<void>((resolve) => server.close(() => resolve())),
 );
 base.beforeEach(reset);
+
+const recCalls = () => calls.filter((c) => c.path === '/recommendations');
+const patches = () => calls.filter((c) => c.method === 'PATCH');
 
 // ---- Extension fixtures ----
 
@@ -218,6 +290,14 @@ const box = async (page: Page, selector: string) => {
   return rect;
 };
 
+// The popup never scrolls: 380 wide, at most 600 tall.
+const expectPanelFits = async (page: Page) => {
+  const panel = await box(page, '.ro-panel');
+  expect(panel.width).toBe(380);
+  expect(panel.height).toBeLessThanOrEqual(600);
+  return panel;
+};
+
 // ---- Popup ----
 
 test('signed out: offers Google and Apple and shrinks to fit', async ({
@@ -231,71 +311,180 @@ test('signed out: offers Google and Apple and shrinks to fit', async ({
   await expect(
     page.getByRole('button', { name: 'Continue with Apple' }),
   ).toBeVisible();
-  const panel = await box(page, '.ro-panel');
-  expect(panel.width).toBe(380);
+  const panel = await expectPanelFits(page);
   expect(panel.height).toBeLessThan(600);
   await page.screenshot({ path: test.info().outputPath('signed-out.png') });
 });
 
-test('When tab: fixed header, Days and Time fully visible, list ranked', async ({
+test('Rides tab opens first with one request per forecast day', async ({
   context,
   worker,
   extensionId,
 }) => {
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  await expect(page.locator('.ro-best')).toContainText('Hilly Loop');
-  const panel = await box(page, '.ro-panel');
-  expect(panel.width).toBe(380);
-  expect(panel.height).toBeLessThanOrEqual(600);
-  const time = await box(page, '.ro-card:has(.ro-label:text-is("Time"))');
-  expect(time.y + time.height).toBeLessThanOrEqual(panel.y + panel.height);
-  expect(calls.find((c) => c.path === '/recommendations')?.body).toMatchObject({
+  await expect(page.getByRole('tab', { name: 'Rides' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  const card = page.locator('.ro-ride').first();
+  await expect(card).toContainText('Hilly Loop');
+  await expect(card.locator('.ro-medal')).toHaveText('1');
+  await expect(card.locator('.ro-flag')).toHaveText('Best pick');
+  await expect(card.locator('.ro-score')).toContainText('Comfort score 84/100');
+  await expect(
+    page.getByRole('link', { name: 'Powered by Met Office data' }),
+  ).toHaveAttribute('href', 'https://www.metoffice.gov.uk/');
+  await expectPanelFits(page);
+  await expect(page.locator('.ro-sync')).toHaveCount(0);
+  const dates = recCalls().map((c) => c.body.date);
+  expect(dates).toContain(day(0));
+  expect(new Set(dates).size).toBe(dates.length);
+  expect(recCalls()[0].body).toEqual({
     routeIds: ['r101'],
-    days: { kind: 'preset', preset: 'next' },
+    date: expect.any(String),
+    riding: { window: 'daylight' },
   });
+  await page.screenshot({ path: test.info().outputPath('rides.png') });
+});
+
+test('When tab: Days and Time visible; custom times re-query', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  await expect(page.locator('.ro-ride')).toContainText('Hilly Loop');
+  await page.getByRole('tab', { name: 'When' }).click();
+  const panel = await expectPanelFits(page);
+  for (const label of ['Days', 'Time']) {
+    const card = await box(page, `.ro-card:has(.ro-label:text-is("${label}"))`);
+    expect(card.y + card.height).toBeLessThanOrEqual(panel.y + panel.height);
+  }
+  await expect(page.locator('.ro-day')).toHaveCount(7);
   await page.screenshot({ path: test.info().outputPath('when.png') });
 
-  await page.getByRole('button', { name: 'Weekend' }).click();
+  await page.getByRole('button', { name: 'Choose times' }).click();
   await expect
-    .poll(() => calls.find((c) => c.method === 'PATCH')?.body)
+    .poll(() => recCalls().at(-1)?.body.riding)
+    .toEqual({ window: { start: '08:00', end: '14:00' } });
+  await page.getByRole('button', { name: 'Save as my default window' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Saved as your default window' }),
+  ).toBeVisible();
+  expect(patches()).toEqual([]); // planning stays in this browser
+});
+
+test('passed dates ask for new ones instead of swapping silently', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  await worker.evaluate(
+    `chrome.storage.local.set({ state: { planning: { days: { kind: 'range', start: '2020-01-04', end: '2020-01-05' }, time: { mode: 'daylight', start: '08:00', end: '14:00' } } } })`,
+  );
+  const page = await openPopup(context, extensionId);
+  await expect(page.getByRole('alert')).toContainText(
+    'These dates have passed',
+  );
+  await expect(page.locator('.ro-ride')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Choose available dates' }).click();
+  await expect(page.getByRole('tab', { name: 'When' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Next few days' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('Preferences: search-only distance, then PATCH carries supported fields only', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  await expect(page.locator('.ro-ride')).toContainText('Hilly Loop');
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+  const panel = await expectPanelFits(page);
+  const footer = await box(page, '.ro-sync');
+  expect(Math.round(footer.y + footer.height)).toBe(
+    Math.round(panel.y + panel.height),
+  );
+  await expect(page.locator('.ro-sync')).toHaveText('Synced');
+  await page.screenshot({ path: test.info().outputPath('preferences.png') });
+
+  // A range applies to this search only until saved as usual.
+  await page.getByRole('button', { name: 'Choose a range' }).click();
+  await expect(page.locator('.ro-scope')).toHaveText('For this search');
+  await expect
+    .poll(() => recCalls().at(-1)?.body.preferences)
+    .toEqual({
+      climbing: { preference: 'neutral' },
+      distance: { minKm: 15, maxKm: 40 },
+    });
+  expect(patches()).toEqual([]);
+  await page.getByRole('button', { name: 'Save as usual preferences' }).click();
+  await expect
+    .poll(() => patches()[0]?.body)
     .toEqual({
       expectedVersion: 1,
       settings: {
-        planning: {
-          days: { kind: 'preset', preset: 'weekend' },
-          window: { start: '06:00', end: '20:00' },
+        preferences: {
+          climbing: { preference: 'neutral' },
+          distance: { minKm: 15, maxKm: 40 },
         },
       },
     });
-});
+  await expect(page.locator('.ro-scope')).toHaveText('Your usual preferences');
 
-test('Preferences: save sends only the changed level', async ({
-  context,
-  worker,
-  extensionId,
-}) => {
-  await signIn(worker);
-  const page = await openPopup(context, extensionId);
-  await page.getByRole('tab', { name: 'Preferences' }).click();
-  const save = page.getByRole('button', { name: 'Save preferences' });
-  await expect(save).toBeDisabled();
-  await page.getByRole('button', { name: 'Avoid any' }).click();
-  await expect(page.getByText('Unsaved changes')).toBeVisible();
-  const panel = await box(page, '.ro-panel');
-  const bar = await box(page, '.ro-save');
-  expect(Math.round(bar.y + bar.height)).toBe(
-    Math.round(panel.y + panel.height),
-  );
-  await page.screenshot({ path: test.info().outputPath('preferences.png') });
-  await save.click();
-  await expect(
-    page.getByText('Synced with your Ride On profile'),
-  ).toBeVisible();
-  expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
-    expectedVersion: 1,
-    settings: { preferenceLevels: { rain: 'avoid' } },
+  await page.getByRole('switch', { name: 'Set limit: Gusts above' }).click();
+  await expect.poll(() => patches().length).toBe(2);
+  const { body } = patches()[1];
+  expect(body.expectedVersion).toBe(2);
+  expect(Object.keys(body.settings)).toEqual(['preferences']);
+  expect(Object.keys(body.settings.preferences).sort()).toEqual([
+    'minimumStandards',
+    'temperature',
+    'wind',
+  ]);
+  expect(body.settings.preferences.minimumStandards).toEqual({
+    minimumTemperature: null,
+    maximumPrecipitationProbability: null,
+    maximumGustKph: 45,
   });
+  await expect(page.locator('.ro-sync')).toHaveText('Synced');
+
+  // The saved Met Office choice shows; unconfigured providers don't.
+  const picker = page.getByLabel('Forecast provider');
+  await expect(picker).toHaveValue('met-office');
+  await expect(picker.locator('option')).toHaveText([
+    'Apple Weather',
+    'Met Office Global Spot',
+  ]);
+  const before = recCalls().length;
+  await picker.selectOption('apple-weather');
+  await expect.poll(() => patches().length).toBe(3);
+  expect(patches()[2].body).toEqual({
+    expectedVersion: 3,
+    settings: PROVIDERS[0].recommendedSettings,
+  });
+  await expect.poll(() => recCalls().length).toBeGreaterThan(before);
+  await expect(picker).toHaveValue('apple-weather');
+  const logo = page.getByRole('img', { name: 'Apple Weather' });
+  await expect(logo).toHaveAttribute('src', /Apple_Weather_blk/);
+  await expect(page.locator('.ro-attribution a').first()).toHaveAttribute(
+    'href',
+    APPLE_LEGAL,
+  );
+  await expect(page.locator('.ro-attribution')).toContainText(
+    'derived from and modify Apple Weather data',
+  );
+  await page.locator('.ro-sign-out').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath('apple-weather.png') });
 });
 
 // ---- cycle.travel Journeys page ----
@@ -330,7 +519,7 @@ const fakeCycleTravel = (context: BrowserContext) =>
     ),
   ]);
 
-test('Journeys page: chips, pinned card and + Consider imports the route', async ({
+test('Journeys page: Tracked routes, window button, row chips and + Consider', async ({
   context,
   worker,
 }) => {
@@ -340,11 +529,26 @@ test('Journeys page: chips, pinned card and + Consider imports the route', async
   await page.goto('https://cycle.travel/user/journeys');
 
   const module = page.locator('ride-on-module');
-  await expect(module.locator('.ro-pinned')).toContainText('Hilly Loop');
-  await expect(page.locator('#jr_101 .ro-chip')).toHaveText(/^Today /);
+  await expect(module.locator('.ro-module-title')).toContainText(
+    'Tracked routes1 / 12',
+  );
+  await expect(module.locator('.ro-ride')).toContainText('Hilly Loop');
+  await expect(module.locator('.ro-ride .ro-name')).toHaveAttribute(
+    'href',
+    '/map/journey/101',
+  );
+  await expect(module.locator('.ro-window')).toHaveText(/ · /);
+  const chip = page.locator('#jr_101 .ro-chip');
+  await expect(chip).toHaveText(/^\w{3} \d{1,2} · \d\d:\d\d$/);
+  await expect(chip).toHaveAttribute('data-state', 'meets');
   await expect(page.locator('#jr_101')).toHaveAttribute(
     'data-ride-on-tracked',
     '',
+  );
+  await expect(page.locator('#jr_102 .ro-chip')).toHaveText('+ Consider');
+  await expect(module.locator('.ro-grid')).toHaveAttribute(
+    'data-loading',
+    'false',
   );
   await page.screenshot({
     path: test.info().outputPath('journeys.png'),
@@ -352,8 +556,9 @@ test('Journeys page: chips, pinned card and + Consider imports the route', async
   });
 
   await page.locator('#jr_102 .ro-chip').click();
-  await expect(page.locator('#jr_102 .ro-chip')).toHaveText(/^Today /);
-  await expect(module.locator('.ro-pinned')).toHaveCount(2);
+  await expect(page.locator('#jr_102 .ro-chip')).toHaveText(/ · /);
+  await expect(module.locator('.ro-ride')).toHaveCount(2);
+  await expect(module.locator('.ro-module-title')).toContainText('2 / 12');
   const imported = calls.find(
     (c) => c.path === '/route-imports' && c.body.source.externalId === '102',
   );

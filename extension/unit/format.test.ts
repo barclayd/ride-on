@@ -1,177 +1,384 @@
 import { expect, test } from 'bun:test';
-import type { RankedRoute, Recommendations, User } from '../lib/types';
+import type { LocalPrefs } from '../lib/state';
+import type {
+  Departure,
+  Failure,
+  Preferences,
+  Recommendations,
+  RouteResult,
+} from '../lib/types';
 import {
-  addDays,
-  buildCards,
-  conditionsLine,
-  daysLabel,
-  draftFromUser,
+  applyPatch,
+  availability,
+  buildResults,
+  convert,
+  coverageText,
+  datesLabel,
+  draftFrom,
+  draftPatch,
   pickDay,
-  pickDrawback,
-  preferencesPatch,
+  presetDates,
   resolveDays,
+  rideSummary,
+  searchPatch,
+  validateRange,
 } from '../ui/format';
 
-const horizon = (start: string, n = 5) =>
-  Array.from({ length: n }, (_, i) => addDays(start, i));
-const wed = horizon('2026-10-14'); // Wed–Sun
-const mon = horizon('2026-10-12'); // Mon–Fri
+const TZ = 'Europe/London'; // BST in mid-October
+const NOW = new Date('2026-10-14T09:00:00Z'); // Wednesday 10:00
+const strict = { mode: 'strict', providerId: 'met-office' } as const;
+const strip = availability(NOW, TZ, strict); // Wed 14 … Tue 20
 
-test('resolveDays mirrors the API presets, clipping and past fallback', () => {
-  const preset = (p: 'today' | 'tomorrow' | 'weekend' | 'next') =>
-    ({ kind: 'preset', preset: p }) as const;
-  expect(resolveDays(preset('weekend'), wed)).toEqual([
-    '2026-10-17',
-    '2026-10-18',
+test('availability follows the provider horizon', () => {
+  expect(strip.map((d) => d.kind)).toEqual([
+    'full',
+    'full',
+    'partial',
+    'none',
+    'none',
+    'none',
+    'none',
   ]);
-  expect(resolveDays(preset('weekend'), mon)).toBeNull();
-  expect(resolveDays(preset('tomorrow'), wed)).toEqual([
-    '2026-10-15',
-    '2026-10-15',
-  ]);
-  const range = (start: string, end: string) =>
-    ({ kind: 'range', start, end }) as const;
-  expect(resolveDays(range('2026-10-13', '2026-10-15'), wed)).toEqual([
-    '2026-10-14',
-    '2026-10-15',
-  ]);
-  expect(resolveDays(range('2026-10-01', '2026-10-02'), wed)).toEqual([
-    '2026-10-14',
-    '2026-10-18',
-  ]);
+  expect(strip[2]).toEqual({
+    date: '2026-10-16',
+    kind: 'partial',
+    until: '10:00',
+  });
+  const bpf = availability(NOW, TZ, {
+    mode: 'ordered-fallback',
+    providerIds: ['met-office', 'met-office-bpf'],
+  });
+  expect(bpf.map((d) => d.kind).join()).toBe(
+    'full,full,full,full,full,partial,none',
+  );
+  const apple = availability(NOW, TZ, {
+    mode: 'strict',
+    providerId: 'apple-weather',
+  });
+  expect(apple.every((d) => d.kind === 'full')).toBe(true);
+  // "Next few days" stops at five even with ten days of forecast.
+  expect(presetDates('next', apple)).toEqual(['2026-10-14', '2026-10-18']);
 });
 
-test('pickDay extends a single day to a range, then resets', () => {
-  expect(pickDay(['2026-10-16', '2026-10-16'], '2026-10-14')).toEqual({
-    kind: 'range',
-    start: '2026-10-14',
-    end: '2026-10-16',
+test('presets, picked days and expiry', () => {
+  expect(presetDates('today', strip)).toEqual(['2026-10-14', '2026-10-14']);
+  expect(presetDates('tomorrow', strip)).toEqual(['2026-10-15', '2026-10-15']);
+  expect(presetDates('weekend', strip)).toEqual(['2026-10-17', '2026-10-18']);
+  expect(presetDates('next', strip)).toEqual(['2026-10-14', '2026-10-16']);
+  const range = (start: string, end: string) =>
+    ({ kind: 'range', start, end }) as const;
+  expect(resolveDays(range('2026-10-01', '2026-10-02'), strip)).toBeNull();
+  expect(resolveDays(range('2026-10-13', '2026-10-25'), strip)).toEqual([
+    '2026-10-14',
+    '2026-10-20',
+  ]);
+  expect(pickDay(['2026-10-15', '2026-10-15'], '2026-10-14')).toEqual(
+    range('2026-10-14', '2026-10-15'),
+  );
+  expect(pickDay(['2026-10-14', '2026-10-16'], '2026-10-15')).toEqual(
+    range('2026-10-15', '2026-10-15'),
+  );
+  expect(datesLabel('2026-10-17', '2026-10-18')).toBe('Sat 17 – Sun 18 Oct');
+  expect(datesLabel('2026-10-31', '2026-11-01')).toBe('Sat 31 Oct – Sun 1 Nov');
+});
+
+test('coverage note', () => {
+  expect(coverageText(strip.slice(0, 2))).toBeNull();
+  expect(coverageText(strip.slice(0, 4))).toBe(
+    "Wednesday and Thursday available; Friday's forecast only covers the morning; Saturday's forecast isn't available yet.",
+  );
+});
+
+test('distance range validation and units', () => {
+  expect(validateRange('10', '20', 'km')).toEqual({
+    fromError: null,
+    toError: null,
+    km: [10, 20],
   });
-  expect(pickDay(['2026-10-14', '2026-10-16'], '2026-10-15')).toEqual({
-    kind: 'range',
-    start: '2026-10-15',
-    end: '2026-10-15',
-  });
-  expect(
-    daysLabel(
-      { kind: 'range', start: '2026-10-17', end: '2026-10-19' },
-      horizon('2026-10-17'),
-      '2026-10-17',
-    ),
-  ).toBe('Sat 17 – Mon 19');
+  expect(validateRange('', '5', 'km').fromError).toBe('Enter a distance.');
+  expect(validateRange('-1', '5', 'km').fromError).toBe("Can't be below 0.");
+  expect(validateRange('1a', '5', 'km').fromError).toBe(
+    'Use numbers only, for example 15 or 22.5.',
+  );
+  expect(validateRange('0', '0', 'km').toError).toBe('Must be more than 0.');
+  expect(validateRange('10', '500', 'km').toError).toBe('Can be up to 400 km.');
+  expect(validateRange('30', '20', 'km').fromError).toBe(
+    "Can't be more than To.",
+  );
+  expect(validateRange('10', '20', 'mi').km?.map(Math.round)).toEqual([16, 32]);
+  expect(convert('20', 'km', 'mi')).toBe('12.4');
+  expect(convert('12.4', 'mi', 'km')).toBe('20');
+  expect(convert('abc', 'km', 'mi')).toBe('abc');
+  const search = {
+    climbing: 'flatter',
+    mode: 'range',
+    from: '10',
+    to: '20',
+  } as const;
+  expect(rideSummary(search, 'km')).toBe(
+    '10–20 km · Flatter: a shorter, gentler ride',
+  );
+  expect(searchPatch({ ...search, mode: 'none' }, 'km').distance).toBeNull();
+  expect('distance' in searchPatch({ ...search, to: 'x' }, 'km')).toBe(false);
 });
 
 const conditions = {
-  temperatureC: { minimum: 9, maximum: 14.4 },
-  averageWindSpeedKph: 15,
-  averageHeadwindKph: 3,
-  averageTailwindKph: 12,
-  averageCrosswindKph: 4,
+  temperatureC: { minimum: 12, maximum: 15 },
+  averageWindSpeedKph: 10,
+  averageHeadwindKph: 2,
+  averageTailwindKph: 8,
+  averageCrosswindKph: 3,
   maximumPrecipitationProbability: 0.05,
 };
-
-test('card text', () => {
-  expect(conditionsLine(conditions)).toBe('14° · tailwind 12 km/h · dry');
-  expect(
-    pickDrawback([
-      'Precipitation is possible during this ride; …',
-      'Gusts exceed your comfort setting.',
-    ]),
-  ).toBe('Gusts exceed your comfort setting.');
+const departure = (
+  at: string,
+  score: number,
+  status: Departure['standards']['status'] = 'meets',
+  failures: Departure['standards']['failures'] = [],
+): Departure => ({
+  departureAt: at,
+  finishAt: new Date(Date.parse(at) + 2 * 3_600_000).toISOString(),
+  score,
+  standards: { status, failures },
+  conditions,
 });
+const result = (
+  routeId: string,
+  best: Departure | null,
+  extra: Partial<RouteResult> = {},
+): RouteResult => ({
+  routeId,
+  routeName: `Route ${routeId}`,
+  distanceKm: 30,
+  distanceFit: null,
+  estimatedDurationMinutes: 120,
+  daylight: { start: '2026-10-14T06:20:00Z', end: '2026-10-14T17:10:00Z' },
+  effectiveWindow: null,
+  status: best ? 'assessed' : 'unassessable',
+  departuresUnknown: 0,
+  departuresStandardsUnknown: 0,
+  best,
+  issues: [],
+  warnings: [],
+  ...extra,
+});
+const recs = (
+  date: string,
+  status: Recommendations['minimumStandardsStatus'],
+  rankings: RouteResult[],
+  unranked: RouteResult[] = [],
+): Recommendations => ({
+  date,
+  recommendedRouteId: rankings[0]?.routeId ?? null,
+  minimumStandardsStatus: status,
+  rankings,
+  unranked,
+  weather: { locations: [] },
+});
+const gust: Failure = {
+  standard: 'maximumGustKph',
+  limit: 45,
+  actual: 52.4,
+  sections: [],
+};
 
-test('buildCards orders ranked rides, then no-ride, then pending', () => {
-  const ranked = (routeId: string, score: number): RankedRoute => ({
-    routeId,
-    routeName: routeId,
-    distanceKm: 50.4,
-    issues: [],
-    confidence: 2,
-    verdict: { status: 'ride', reason: null },
-    best: {
-      date: '2026-10-14',
-      departureAt: '2026-10-14T08:00:00Z',
-      finishAt: '2026-10-14T11:00:00Z',
-      score,
-      conditions,
-      drawbacks: [],
-    },
-  });
-  const recs: Recommendations = {
-    message: '',
-    rankings: [ranked('a', 81.6), ranked('b', 70)],
-    unranked: [
-      {
-        ...ranked('c', 0),
-        best: null,
-        verdict: { status: 'no_ride', reason: 'Gusts reach 52 km/h.' },
-      },
-    ],
-  };
-  const cards = buildCards(
-    ['p', 'c', 'b', 'a'],
-    {},
-    recs,
-    'Europe/London',
+test('cards: meeting rides lead, then below, unassessable and pending', () => {
+  const day = recs(
     '2026-10-14',
+    'match_found',
+    [
+      result('a', departure('2026-10-14T08:00:00Z', 80)),
+      result('b', departure('2026-10-14T09:00:00Z', 90, 'below', [gust])),
+    ],
+    [result('c', null, { issues: ['missing-elevation'] })],
   );
-  expect(cards.map((c) => [c.routeId, c.rankLabel])).toEqual([
-    ['a', 'Best pick'],
-    ['b', '#2'],
-    ['c', 'No ride'],
-    ['p', '…'],
-  ]);
-  expect(cards[0]).toMatchObject({
-    day: 'Today',
-    window: '09:00–12:00',
-    score: 82,
-    km: 50,
+  const out = buildResults(
+    ['b', 'a', 'c', 'd'],
+    {},
+    [strip[0]],
+    { '2026-10-14': day },
+    TZ,
+    true,
+  );
+  expect(out.status).toBe('match_found');
+  expect(out.banners).toEqual([]);
+  expect(out.daylight?.start).toBe('2026-10-14T06:20:00Z');
+  const [a, b, c, d] = out.cards;
+  expect(a).toMatchObject({
+    routeId: 'a',
+    state: 'meets',
+    flag: 'Best pick',
+    chip: 'Wed 14 · 09:00',
+    when: 'Wed 14 Oct · depart 09:00 · finish ~11:00',
+    weather: 'At ride time: 12–15° · tailwind 8 km/h · dry',
+    score: 80,
   });
-  expect(cards[2].reason).toBe('Gusts reach 52 km/h.');
+  expect(b).toMatchObject({
+    state: 'below',
+    flag: null,
+    chip: 'Below minimums',
+    drawbacks: ['Gusts reach 52 km/h (your limit 45 km/h)'],
+  });
+  expect(c).toMatchObject({
+    state: 'incomplete',
+    score: null,
+    trade: ["No elevation data, so climbing isn't scored"],
+    reason:
+      "Can't be assessed without elevation data while you have a climbing preference.",
+  });
+  expect(d).toMatchObject({ state: 'pending', chip: 'Checking…' });
 });
 
-test('preferences send only changed fields and never custom', () => {
-  const user = {
-    settings: {
-      preferences: {
-        temperature: { comfortMinC: 10, comfortMaxC: 22 },
-        wind: { comfortableHeadwindKph: 15 },
-        minimumStandards: {
-          minimumTemperature: {
-            kind: 'monthly',
-            valuesC: { '10': 4 },
-            fallbackC: null,
-          },
-        },
-      },
+test('cards merge the selected days and keep each ride’s best departure', () => {
+  const out = buildResults(
+    ['a'],
+    {},
+    strip.slice(0, 2),
+    {
+      '2026-10-14': recs('2026-10-14', 'match_found', [
+        result('a', departure('2026-10-14T08:00:00Z', 60)),
+      ]),
+      '2026-10-15': recs('2026-10-15', 'match_found', [
+        result('a', departure('2026-10-15T08:00:00Z', 75)),
+      ]),
     },
-    preferenceLevels: {
-      sunshine: 'custom',
-      rain: 'light-ok',
-      climbing: 'neutral',
-      comfortableWindKph: 15,
-    },
-  } as unknown as User;
-  const base = draftFromUser(user, '2026-10-14');
-  expect(base).toMatchObject({
-    sunshine: null,
-    colderThanC: 4,
-    rainAbovePct: 70,
-    gustsAboveKph: 50,
-  });
-  expect(preferencesPatch(base, base)).toEqual({});
-  expect(
-    preferencesPatch(base, {
-      ...base,
-      rain: 'avoid',
-      comfortMaxC: 24,
-      colderThanC: 2,
+    TZ,
+    true,
+  );
+  expect(out.cards[0].chip).toBe('Thu 15 · 09:00');
+  expect(out.coverageWarn).toBe(false);
+});
+
+test('banners, flags and rides that cannot be scored', () => {
+  const below = recs('2026-10-14', 'none_meet', [
+    result('a', departure('2026-10-14T08:00:00Z', 70, 'below', [gust]), {
+      distanceFit: { status: 'above_range', deviationKm: 5 },
     }),
-  ).toEqual({
-    preferenceLevels: { rain: 'avoid' },
-    preferences: {
-      temperature: { comfortMinC: 10, comfortMaxC: 24 },
-      minimumStandards: { minimumTemperature: { kind: 'fixed', valueC: 2 } },
-    },
+  ]);
+  const none = buildResults(
+    ['a'],
+    {},
+    [strip[0]],
+    { '2026-10-14': below },
+    TZ,
+    true,
+  );
+  expect(none.banners).toEqual(['nomatch', 'distance']);
+  expect(none.cards[0]).toMatchObject({
+    flag: 'Best available',
+    trade: ['Longer than your preferred range'],
   });
+
+  // A selected day without a response can't confirm a match.
+  const partial = buildResults(
+    ['a'],
+    {},
+    strip.slice(0, 3),
+    { '2026-10-14': below },
+    TZ,
+    true,
+  );
+  expect(partial.status).toBe('unknown');
+  expect(partial.banners[0]).toBe('incomplete');
+  expect(partial.coverageWarn).toBe(true);
+
+  const unset = buildResults(
+    ['a'],
+    {},
+    [strip[0]],
+    { '2026-10-14': below },
+    TZ,
+    false,
+  );
+  expect(unset.status).toBe('not_configured');
+  expect(unset.cards[0].flag).toBe('Best pick');
+
+  const nofit = buildResults(
+    ['a'],
+    {},
+    [strip[0]],
+    {
+      '2026-10-14': recs(
+        '2026-10-14',
+        'no_feasible_departure',
+        [],
+        [
+          result('a', null, {
+            status: 'no_feasible_departure',
+            estimatedDurationMinutes: 150,
+            effectiveWindow: {
+              start: '2026-10-14T07:00:00Z',
+              end: '2026-10-14T09:00:00Z',
+            },
+          }),
+        ],
+      ),
+    },
+    TZ,
+    true,
+  );
+  expect(nofit.cards[0]).toMatchObject({
+    state: 'nofit',
+    duration: 'Estimated ride time 2h 30m',
+    reason: 'Your window, 08:00–10:00, allows 2h 00m.',
+  });
+
+  const later = buildResults(['a'], {}, [strip[3]], {}, TZ, true);
+  expect(later.cards[0]).toMatchObject({
+    state: 'incomplete',
+    reason: "Can't be assessed. Saturday's forecast isn't available yet.",
+  });
+});
+
+const prefs: Preferences = {
+  temperature: { comfortMinC: 12, comfortMaxC: 22 },
+  wind: { comfortableHeadwindKph: 15, comfortableCrosswindKph: 20 },
+  climbing: { preference: 'neutral' },
+  distance: { minKm: 20, maxKm: 40 },
+  minimumStandards: { maximumGustKph: 40, maximumPrecipitationRateMmH: 2 },
+};
+const local: LocalPrefs = {
+  sunshine: 'Nice to have',
+  rain: 'Prefer dry',
+  favourTailwinds: true,
+  floorMode: 'fixed',
+  floorFixedC: 3,
+  floorMonthsC: [0, 0, 2, 4, 6, 8, 10, 10, 7, 5, 2, 0],
+  rainPct: 50,
+  gustKph: 45,
+};
+
+test('preferences draft round-trips through a PATCH', () => {
+  const draft = draftFrom(prefs, local);
+  expect(draft).toMatchObject({
+    gustOn: true,
+    gustKph: 40,
+    rainOn: false,
+    rainPct: 50,
+  });
+  const patch = draftPatch({
+    ...draft,
+    floorOn: true,
+    floorFixedC: 2,
+    gustOn: false,
+  });
+  // Only fields the API accepts; the rain rate isn't on the tab so it's never sent.
+  expect(Object.keys(patch)).toEqual([
+    'temperature',
+    'wind',
+    'minimumStandards',
+  ]);
+  expect(patch.minimumStandards).toEqual({
+    minimumTemperature: { kind: 'fixed', valueC: 2 },
+    maximumPrecipitationProbability: null,
+    maximumGustKph: null,
+  });
+  expect(applyPatch(prefs, patch).minimumStandards).toEqual({
+    minimumTemperature: { kind: 'fixed', valueC: 2 },
+    maximumPrecipitationRateMmH: 2,
+  });
+  const monthly = draftPatch({ ...draft, floorOn: true, floorMode: 'monthly' });
+  const floor = monthly.minimumStandards?.minimumTemperature;
+  expect(floor?.kind === 'monthly' && floor.valuesC['7']).toBe(10);
+  expect(applyPatch(prefs, { distance: null }).distance).toBeNull();
 });
