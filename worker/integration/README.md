@@ -31,6 +31,11 @@ second runtime version; update them together when upgrading Wrangler.
 Covered scenarios include:
 
 - Upload, migration-backed persistence, restart, daylight and pace defaults.
+- Cycle.travel/Garmin/Strava GPX import identities, large string IDs, repeat/concurrent imports and atomic refresh conflicts.
+- Owner-scoped source lookup, route detail, stable library pagination and legacy upload compatibility.
+- Durable explicit shortlists, deselection, empty lists, ownership and optimistic version conflicts.
+- Imported geometry changes reaching the weather/scoring pipeline; only chosen rides fetching weather.
+- Import body bounds, malformed GPX, rejected URL-fetch attempts and unchanged storage after failures.
 - User creation, owner isolation, profile persistence, duplicate/concurrent writes and version conflicts.
 - Saved settings versus temporary nested overrides, explicit limit removal and validation after merging.
 - Whole-ride windows, time zones, DST rejection and no weather calls for routes that cannot fit.

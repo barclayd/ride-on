@@ -1,7 +1,7 @@
 # Ride On API MVP
 
 Implemented on 9 October, calibrated and first deployed on 10 October 2026. TypeScript, Hono and Cloudflare Workers;
-D1 stores route facts and user profiles, KV caches forecasts, and a deterministic evaluator ranks
+D1 stores route facts, source identities, shortlists and user profiles, KV caches forecasts, and a deterministic evaluator ranks
 route/departure combinations. This replaces the legacy classification and Strava
 OAuth endpoints. The existing app clients have not yet been migrated.
 
@@ -116,7 +116,10 @@ Returns HTTP 201 with:
     "distanceM": 84000,
     "ascentM": null,
     "originalPointCount": 652,
-    "warnings": ["MISSING_ELEVATION"]
+    "warnings": ["MISSING_ELEVATION"],
+    "source": null,
+    "version": 1,
+    "updatedAt": "2026-10-09T18:00:00.000Z"
   }
 }
 ```
@@ -133,8 +136,143 @@ Upload derives distance, direction and sections of at most 500 m, plus weather
 locations every 10 km and the endpoint. Geometry is processed once; preferences
 are never stored on the route. The original file is fingerprinted with SHA-256;
 the stored record contains sampled geometry rather than the original GPX file.
-Duplicate uploads currently create distinct IDs. `GET /routes` returns up to 100
-of the owner's newest route summaries.
+Plain file uploads to this endpoint create distinct IDs. For repeatable external
+imports, use `POST /route-imports` below. Neither endpoint changes the shortlist.
+
+## External route imports and library
+
+`GET /route-sources` advertises the configured source adapters. The initial sources
+are `cycle-travel`, `garmin` and `strava`, each reporting
+`importModes: ["gpx-upload"]` and `accountConnection: false`. All three accept a
+GPX export supplied by the user or an extension. This does **not** sign in to their
+accounts, enumerate saved rides, or fetch arbitrary URLs. Source identity is
+client-supplied provenance, not proof of ownership on the external site.
+
+```http
+POST /route-imports
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "source": { "providerId": "cycle-travel", "externalId": "12345" },
+  "gpx": "<gpx version=\"1.1\">...</gpx>",
+  "name": "Weekend loop"
+}
+```
+
+`gpx` is the complete UTF-8 GPX document, JSON-escaped by the client; the abbreviated
+example above is not a valid route. `name` is optional; otherwise the GPX name is
+used. The built-in adapters require the saved journey/route/course ID as a
+positive decimal **string**, without leading zeros (up to 40 digits). Keep Strava's
+large IDs as strings throughout the client. Do not use a URL, display name, or
+filename as the external ID. Requests are bounded to 6 MB of JSON, with the same
+5 MB GPX byte limit and geometry validation as file uploads.
+
+Returns `{ "outcome": "created", "route": { ...summary, "source": { ... },
+"version": 1, "updatedAt": "..." } }` with HTTP 201 and
+`Location: /routes/<id>`. Identity is unique per authenticated owner, source and
+external ID; the same ID on different sites or for different users is independent.
+
+- An identical GPX and effective name returns HTTP 200 with `outcome: "unchanged"`.
+  The route ID, timestamps and version stay unchanged, including concurrent retries.
+- To change the GPX or name, send the same source identity with `expectedVersion`
+  equal to the current route version. Returns HTTP 200 with `outcome: "updated"`
+  and an incremented version. The route ID and creation time are preserved;
+  direction, distance and weather sampling are rebuilt from the new geometry.
+- A changed import without a current version returns `409 ROUTE_VERSION_CONFLICT`.
+  Stale versions also conflict on identical data. Read the current source match,
+  reconcile the change, and retry deliberately; do not blindly retry stale content.
+  Failed or racing writes cannot partially replace the saved route.
+
+Identity comes from the source ID, not matching geometry. Exporting the same ride
+from two different sites creates two entries; a plain file upload isn't automatically
+linked to a later source import. Byte changes anywhere in the GPX count as changes,
+even if its geometry is equivalent. No automatic cross-source matching or ride-history
+penalty is applied.
+
+`GET /routes/<id>` returns one owned summary with source, version and timestamps.
+`GET /routes` returns `{ "routes": [...], "limit": 100, "nextCursor": null }`.
+Use `limit=1..100` and the returned `cursor` for additional pages, retaining any
+filters. Ordering is newest creation first, then route ID; refreshing a source
+does not reorder it. New imports may appear on a refreshed first page.
+
+Filter by `sourceProviderId`, optionally with `sourceExternalId`, to map an external
+saved ride to its API ID without importing it again:
+
+```http
+GET /routes?sourceProviderId=cycle-travel&sourceExternalId=12345
+```
+
+Existing uploads remain valid after migration, with `source: null`, `version: 1`
+and `updatedAt` equal to their original creation time. Another owner's route returns
+404, and another owner's pagination cursor is rejected.
+
+## Saved shortlist
+
+The library contains imported rides; the shortlist contains the small set the rider
+currently wants to consider. Removing a route from the shortlist keeps it in the
+library, ready to select again later. Importing or refreshing a route never selects
+or reselects it. No saved user profile is required, but the bearer token must map
+to an owner as usual.
+
+`GET /route-selection` initially returns:
+
+```json
+{ "selection": { "version": 0, "routeIds": [], "updatedAt": null } }
+```
+
+`PUT /route-selection` replaces the entire shortlist, preserving the submitted order:
+
+```json
+{
+  "expectedVersion": 0,
+  "routeIds": ["replace-with-an-owned-route-UUID"]
+}
+```
+
+Returns HTTP 200 with `selection`, the incremented version and update timestamp.
+Use the last-read version for subsequent edits. Concurrent/stale writes return
+`409 SELECTION_VERSION_CONFLICT`; re-read and reconcile before retrying. Select up
+to 12 distinct owned routes; `[]` clears the shortlist. Unknown/unowned IDs reject
+the whole update with 404. Invalid lists return 400. Shortlists are private and
+persist across devices using the same owner token.
+
+Clients read the shortlist and pass its `routeIds` to `POST /recommendations`,
+together with the day/window. Recommendations continue to require explicit IDs:
+they never silently include the entire library, and a one-off comparison never
+changes the saved shortlist. An empty list returns 400 without weather requests;
+the client should ask the rider to select at least one route.
+
+The Cycle.travel extension flow is: identify selected saved journeys → upload each
+GPX with its stable source ID → save the chosen API IDs → request a recommendation
+for those IDs → map scores back to source IDs for the saved-rides page. Import one
+file per request and handle its result independently; one invalid file need not
+discard successful imports. No extension UI is implemented yet.
+
+### Adapter boundary and account connections
+
+`RouteSourceProvider` in `worker/src/routes/sources.ts` owns source identifiers,
+capability metadata and normalization into the shared `Route` contract. The
+application accepts a replaceable provider registry; persistence, shortlists,
+weather sampling and ranking do not switch on website names. A contract test uses
+a fourth source with nonnumeric IDs. Future account connectors can add discovery,
+OAuth credentials and download transport at this boundary; those flows and input
+modes still need implementation and must be advertised truthfully.
+
+Verified provider interfaces (10 October 2026):
+
+- [Cycle.travel saved journeys](https://cycle.travel/advice/map/organising) expose
+  GPX downloads; [its GPS help](https://cycle.travel/help/route_planning/gps)
+  documents track exports. No public account API was verified for this implementation.
+- [Strava's Routes API](https://developers.strava.com/docs/reference/#api-Routes)
+  exposes routes and GPX exports through athlete authorization. A future connector
+  needs its OAuth flow, consent and token lifecycle; GPX upload requires none of those.
+- [Garmin's Courses API](https://developer.garmin.com/gc-developer-program/courses-api/)
+  documents publishing courses **to** Garmin Connect. It does not establish a general
+  API for reading a person's existing saved courses; exported GPX is the supported
+  import path here. Account discovery remains separate work.
 
 ## Recommend a route and departure
 
@@ -476,14 +614,17 @@ This is an offline algorithm comparison, not a fresh forecast or new HTTP test.
 
 ## Production deployment
 
-API v0.3.0 is deployed at **https://ride-on-api.barclaysd.workers.dev** as of
-10 October 2026. `/health` is public; routes, profiles and recommendations require
+The API is hosted at **https://ride-on-api.barclaysd.workers.dev**; its first production
+release was v0.3.0 on 10 October 2026. The importer/shortlist release is v0.4.0;
+`GET /health` reports the running version. `/health` is public; all other endpoints require
 the existing per-user bearer token. Both Met Office credentials and
 `API_KEYS_JSON` are Worker secrets. Never commit their values or put Met Office
 credentials in a client.
 
-The production `ride-on-routes` D1 database is in Western Europe, with both route
-and user migrations applied. Its ID is recorded in `wrangler.jsonc`.
+The production `ride-on-routes` D1 database is in Western Europe. Its ID is recorded
+in `wrangler.jsonc`. Apply `0003_route_imports_selection.sql` before publishing
+v0.4.0: it extends existing routes and adds shortlists without replacing route facts
+or user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used
 by `wrangler dev --local`; production data and local data are separate. The
 existing KV namespace is bound as `WEATHER_CACHE`, with the new weather key
@@ -500,7 +641,7 @@ check, not a full-library load test. Its report is kept in the ignored
 `evaluation/production-api-live-check.json` file.
 
 Cloudflare accepted the configured 5,000 ms CPU ceiling; startup took 50 ms for
-this deployment. Network wait is separate from CPU time. The full comparison
+the initial deployment. Network wait is separate from CPU time. The full comparison
 workload requires Workers Paid limits, particularly for weather subrequests.
 No subscription or plan was changed. See [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
 
@@ -529,7 +670,7 @@ The migration and deployment commands above target production. Use
 ## Errors
 
 Malformed inputs: 400; invalid/missing token: 401; unknown or another owner's route:
-404; duplicate profile or stale profile version: 409; oversized body: 413; unsupported media type: 415; invalid GPX or too many
+404; duplicate profile, stale profile/route/selection version or unversioned changed import: 409; oversized body: 413; unsupported media type: 415; unsupported route source, invalid GPX or too many
 weather locations: 422; missing access configuration: 503. Errors use
 `{ "error": { "code": "...", "message": "..." } }`. Weather/provider problems are
 represented in a successful assessment response with explicit unavailable data,
