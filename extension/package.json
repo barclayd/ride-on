@@ -1,0 +1,26 @@
+{
+  "name": "ride-on-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "postinstall": "wxt prepare",
+    "check": "biome check . && tsc --noEmit && bun test unit",
+    "lint:fix": "biome check --write .",
+    "test:unit": "bun test unit",
+    "test:e2e": "WXT_API_URL=http://127.0.0.1:8787 wxt build --mode e2e && playwright test"
+  },
+  "dependencies": {
+    "preact": "10"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@playwright/test": "^1.64.0",
+    "@types/bun": "^1.4.2",
+    "typescript": "5",
+    "wxt": "^0.21.4"
+  }
+}
