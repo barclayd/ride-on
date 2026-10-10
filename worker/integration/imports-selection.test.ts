@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { HttpResponse } from 'msw/http';
 import { z } from 'zod';
 import { selectionSchema } from '../src/routes/selection.ts';
-import { first, recommend, upload } from './client.ts';
+import { first, recommendMetOffice as recommend, upload } from './client.ts';
 import { hourlyForecast, metOffice, routeGpx } from './fixtures.ts';
 import {
   ALICE_TOKEN,

@@ -47,7 +47,7 @@ bun run lint:fix
 - `src/routes/`: GPX normalization, replaceable source adapters, versioned source imports, paginated owner-scoped D1 persistence and saved shortlists. Imports never select rides; recommendations always take explicit route IDs.
 - `src/recommendations/`: strict preference resolution, daylight/time-window planning and pure scoring.
 - `src/users/`: owner-bound saved settings, schema versions and atomic optimistic updates.
-- `src/weather/`: generic contracts, Met Office adapter, source policy and KV-compatible cache.
+- `src/weather/`: generic contracts, Apple Weather and Met Office adapters, provider presets, source policy and KV-compatible cache.
 - `migrations/`: D1 migrations, applied before deployment.
 - `test/`: deterministic ingestion, HTTP, algorithm, provider and cache tests.
 - `integration/`: MSW 3 scenarios against the real Worker runtime and fresh local D1/KV.
@@ -56,14 +56,14 @@ bun run lint:fix
 ## Deployment
 
 The API is deployed at `https://ride-on-api.barclaysd.workers.dev`; `/health` reports its version. Production D1
-and its weather/authentication secrets are configured. Apple and Google use `AUTH_CONFIG_JSON`; see the authentication guide. See `../docs/api.md` for the
+and its weather/authentication secrets are configured. Apple and Google login use `AUTH_CONFIG_JSON`; see the authentication guide. Apple Weather uses a separate `APPLE_WEATHER_CONFIG_JSON` secret; see `../docs/apple-weather.md`. See `../docs/api.md` for the
 verified deployment state and commands. Local development stays on the original
 local database through `preview_database_id: "ROUTES_DB"`.
 
 Automatic deployment remains gated by `API_MVP_DEPLOYMENT_READY=true`; it is
 currently unset. Verify the GitHub deployment token's Workers and D1 permissions
 before enabling it. Use `bun run deploy` only when deployment is in scope. Required
-secrets are `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY` and `AUTH_CONFIG_JSON`; no
+secrets are `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY`, `APPLE_WEATHER_CONFIG_JSON` and `AUTH_CONFIG_JSON`; no
 Strava secrets are used. The configured CPU ceiling is 5 seconds; full collection
 workloads require Workers Paid limits. Do not infer production load capacity from
 local timings or the small production verification route.

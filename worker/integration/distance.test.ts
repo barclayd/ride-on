@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { HttpResponse } from 'msw/http';
 import { z } from 'zod';
 import { userSchema } from '../src/users/model.ts';
-import { first, recommend } from './client.ts';
+import { first, recommendMetOffice as recommend } from './client.ts';
 import { hourlyForecast, metOffice } from './fixtures.ts';
 import {
   ALICE_TOKEN,

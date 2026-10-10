@@ -20,7 +20,13 @@ export const cachedForecastSchema = z.object({
     coordinate: coordinateSchema,
     sourceLocationId: z.string().nullable(),
     distanceFromRequestedM: z.number().nonnegative(),
-    method: z.enum(['nearest-site', 'grid-cell', 'interpolated', 'exact']),
+    method: z.enum([
+      'nearest-site',
+      'grid-cell',
+      'interpolated',
+      'exact',
+      'provider-location',
+    ]),
   }),
   provenance: z.object({
     source: z.object({
@@ -31,7 +37,17 @@ export const cachedForecastSchema = z.object({
     dataVersion: z.string().nullable(),
     forecastRunAt: utcInstant.optional(),
     retrievedAt: utcInstant,
-    attribution: z.array(z.object({ text: z.string(), url: z.string() })),
+    expiresAt: utcInstant.optional(),
+    attribution: z.array(
+      z.object({
+        text: z.string(),
+        url: z.string(),
+        logo: z
+          .object({ lightUrl: z.string(), darkUrl: z.string() })
+          .optional(),
+        notice: z.string().optional(),
+      }),
+    ),
   }),
   issuedAt: utcInstant.nullable(),
   series: z.array(
@@ -122,6 +138,8 @@ export const withForecastCache = (
             if (
               age < 0 ||
               age > ttl * 1000 ||
+              (result.provenance.expiresAt !== undefined &&
+                Date.parse(result.provenance.expiresAt) <= now) ||
               !Number.isFinite(runAge) ||
               runAge > request.maxAgeSeconds * 1000 ||
               runAge < -300_000 ||

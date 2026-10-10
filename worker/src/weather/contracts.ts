@@ -18,7 +18,12 @@ export type ResolvedLocation = Readonly<{
   coordinate: Coordinate;
   sourceLocationId: string | null;
   distanceFromRequestedM: number;
-  method: 'nearest-site' | 'grid-cell' | 'interpolated' | 'exact';
+  method:
+    | 'nearest-site'
+    | 'grid-cell'
+    | 'interpolated'
+    | 'exact'
+    | 'provider-location';
 }>;
 
 export type SourceIdentity = Readonly<{
@@ -35,7 +40,14 @@ export type Provenance = Readonly<{
   /** Forecast model run used for freshness; absent when the provider does not expose it. */
   forecastRunAt?: string;
   retrievedAt: string;
-  attribution: readonly Readonly<{ text: string; url: string }>[];
+  /** Provider-declared data expiry, independent of our cache TTL and model age. */
+  expiresAt?: string;
+  attribution: readonly Readonly<{
+    text: string;
+    url: string;
+    logo?: Readonly<{ lightUrl: string; darkUrl: string }>;
+    notice?: string;
+  }>[];
 }>;
 
 /** Canonical units. Rain and all precipitation are deliberately distinct. */

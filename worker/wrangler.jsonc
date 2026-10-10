@@ -10,6 +10,7 @@
     "required": [
       "MET_OFFICE_API_KEY",
       "MET_OFFICE_BPF_API_KEY",
+      "APPLE_WEATHER_CONFIG_JSON",
       "AUTH_CONFIG_JSON"
     ]
   },

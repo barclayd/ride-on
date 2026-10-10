@@ -13,6 +13,7 @@ import {
   requiredWeatherFor,
 } from './recommendations/engine.ts';
 import {
+  defaultSettings,
   mergeSettings,
   recommendationRequestSchema,
   recommendationWithSettings,
@@ -49,8 +50,10 @@ import {
 } from './users/model.ts';
 import { type ForecastCache, withForecastCache } from './weather/cache.ts';
 import type { ForecastProvider, ForecastRequest } from './weather/contracts.ts';
-import { createMetOfficeBpf } from './weather/met-office-bpf.ts';
-import { createMetOfficeGlobalSpot } from './weather/met-office-global-spot.ts';
+import {
+  createWeatherProviders,
+  describeWeatherProviders,
+} from './weather/providers.ts';
 import { getForecastForPolicy } from './weather/source-policy.ts';
 
 const HOUR = 3_600_000;
@@ -111,7 +114,7 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.8.0' }));
+  app.get('/health', (c) => c.json({ ok: true, version: '0.9.0' }));
   app.route('/', identityRoutes());
   for (const path of [
     '/routes',
@@ -120,6 +123,7 @@ export const createApp = (
     '/route-imports',
     '/route-selection',
     '/recommendations',
+    '/weather-providers',
     '/users',
     '/users/*',
   ])
@@ -132,6 +136,12 @@ export const createApp = (
       copySessionHeaders(access.headers, c.res.headers);
       await next();
     });
+  app.get('/weather-providers', (c) =>
+    c.json({
+      defaultPolicy: defaultSettings.weather,
+      providers: describeWeatherProviders(c.env),
+    }),
+  );
   app.post('/users', async (c) => {
     const input = await readJsonBody(c, createUserSchema);
     const timestamp = now().toISOString();
@@ -378,17 +388,8 @@ export const createApp = (
       put: async (key: string, value: string, ttlSeconds: number) =>
         c.env.WEATHER_CACHE.put(key, value, { expirationTtl: ttlSeconds }),
     };
-    const configured = dependencies.providers ?? {
-      'met-office-bpf': createMetOfficeBpf({
-        apiKey: c.env.MET_OFFICE_BPF_API_KEY ?? '',
-        now,
-        cache,
-      }),
-      'met-office': createMetOfficeGlobalSpot({
-        apiKey: c.env.MET_OFFICE_API_KEY ?? '',
-        now,
-      }),
-    };
+    const configured =
+      dependencies.providers ?? createWeatherProviders(c.env, cache, now);
     const providers = Object.fromEntries(
       Object.entries(configured).map(([id, provider]) => [
         id,
@@ -493,7 +494,7 @@ export const createApp = (
               'The full ride must also fit inside your requested local-time window. Departure slots are anchored at its start.',
             ]),
         'Conditions are evaluated at the midpoint of each route section of up to 500 metres, using weather locations at most 10 km apart.',
-        'Instant forecasts and short wind means use the nearest hourly validity, up to 30 minutes away. Gusts and precipitation probabilities retain their native period bounds.',
+        'Instant forecasts and short wind means use the nearest hourly validity, up to 30 minutes away. Full-hour means, gusts and precipitation probabilities retain their native period bounds. An hourly precipitation amount is converted to an hourly average rate when supplied by the provider.',
         'Comfort weights are provisional. Weather score combines 75% distance-weighted mean comfort and 25% worst sampled comfort; it is not a probability.',
         'Precipitation includes rain, snow and other forms. The highest local hourly probability is not the probability of precipitation anywhere on the whole ride.',
       ],

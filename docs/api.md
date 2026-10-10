@@ -17,15 +17,15 @@ bun run dev:session
 bun run dev
 ```
 
-`.dev.vars` contains `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY` and a separate
-local `AUTH_CONFIG_JSON`. `dev:session` creates a 24-hour bearer session in local
+`.dev.vars` contains `APPLE_WEATHER_CONFIG_JSON`, `MET_OFFICE_API_KEY`,
+`MET_OFFICE_BPF_API_KEY` and a separate local `AUTH_CONFIG_JSON`. `dev:session` creates a 24-hour bearer session in local
 D1 and saves it to ignored, owner-readable `.local-session.json`; it never accesses
 production. Pass an existing local owner ID to reuse that local dataset. The
 current checkout's weather secrets must not be overwritten. Secrets and local
 database state are ignored by Git. Route IDs in local live reports refer to local D1.
 
-Product endpoints require a session cookie or session bearer token. `/health`,
-provider discovery and login entrypoints are public. Responses use
+Product endpoints, including `/weather-providers`, require a session cookie or session bearer token. `/health`,
+authentication provider discovery and login entrypoints are public. Responses use
 `Cache-Control: no-store`. Cookie writes and browser CORS use exact trusted origins.
 See [authentication](authentication.md) for Apple, Google, passkeys, extension
 handoff and account linking. Legacy private API keys and the profile-claim endpoint
@@ -100,7 +100,8 @@ Changing weather product does not implicitly change forecast statistics: save
 
 Recommendations resolve **API defaults → saved user settings → request overrides**.
 Request overrides never write to the profile. A caller without a saved profile
-can continue using the original API defaults and per-request settings. Responses
+uses the current API defaults and per-request settings. From v0.9.0 these select
+Apple Weather; existing saved source policies are preserved. Responses
 include `savedUser: { "id": "dan", "version": 1 }` (or `null`) and the exact
 resolved settings, so a result can be traced to the profile used. Date, route IDs
 and the day's time window belong to the recommendation request, not the profile.
@@ -385,15 +386,16 @@ coverage; a provider without it cannot silently assume sunshine. Zero leaves the
 sky factor and cloud summary null when no cloud evidence was requested.
 
 `forecast` defaults to `{ "representation": "deterministic", "freshnessBasis":
-"model-run" }`. The ensemble summary explicitly selects marginal p50 temperature,
+"retrieval-time" }` for new profiles and requests without a saved profile, alongside
+strict Apple Weather. The ensemble summary explicitly selects marginal p50 temperature,
 wind speed, gust, precipitation rate and cloud, ensemble-mean wind direction, and
 hourly probability of precipitation > 0 mm. It is not a joint forecast scenario.
 `weather.descriptors` returns these meanings. The selection is provider independent;
 an adapter must supply the exact requested statistics to be used.
 
-BPF does not expose model-run time in the verified responses. Retrieval freshness
-must be chosen explicitly; `unknown-model-run` remains visible and `forecastRunAt`
-is absent. Retrieval age never establishes model age. Unsupported combinations
+BPF and Apple do not expose a verified model-run time. Use their retrieval-time
+presets; `unknown-model-run` remains visible and `forecastRunAt`
+is absent. Existing model-run policies are preserved. Retrieval age never establishes model age. Unsupported combinations
 return unassessable weather without spending forecast quota.
 
 ### Visible sunshine versus clear skies
@@ -623,7 +625,7 @@ change that conclusion. If another route/departure lacks evidence, or a month
 rule is unresolved, return `unknown` instead. No feasible departure is distinct
 from bad weather. Missing data never becomes zero rain or zero wind.
 
-## Algorithm v0.6
+## Algorithm v0.7
 
 The duration model is distance / constant moving speed. Weather is matched to the
 estimated arrival at each section midpoint; wind uses that section's heading.
@@ -653,6 +655,9 @@ consistency weight are versioned implementation choices for review and calibrati
 
 Instant forecasts and ten-minute wind means use the nearest hourly validity,
 within 30 minutes. This is an approximation, not a forecast of every minute.
+Full-hour means use their native interval bounds, including Apple's cloud cover
+and precipitation rate derived from hourly accumulation. This v0.7 addition leaves
+Met Office's short wind means and existing calibration unchanged.
 Native intervals are used for hourly gust maxima and precipitation probabilities;
 probabilities are neither interpolated nor multiplied across sections. Reported
 precipitation risk is the maximum local hourly probability encountered, not a
@@ -665,23 +670,35 @@ A provider implements `ForecastProvider`, returns the generic descriptor/series
 contract and preserves units, time periods, missing values and provenance. Register
 its factory in the API's provider map; no scoring changes are needed for equivalent
 measurements. Different statistics require explicit product decisions rather than
-passing a percentile off as a deterministic value. Met Office Global Spot hourly and BPF v2 UK
-are configured with separate secrets. Tests exercise a second synthetic provider.
+passing a percentile off as a deterministic value. Apple Weather, Met Office Global
+Spot hourly and BPF v2 UK are configured with separate secrets. See the
+[Apple provider guide](apple-weather.md) for mapping, setup, cost and attribution.
+
+`GET /weather-providers` requires authentication and returns `defaultPolicy` and
+`providers`, each with `id`, `name`, `configured`, `recommendedSettings` and
+`attribution`. It makes no forecast calls. Apply a selected provider's complete
+`recommendedSettings` on a recommendation, or as a saved-user settings patch, to
+switch the source and compatible forecast representation/freshness together.
+`configured` reflects local configuration, not upstream health or remaining quota.
 
 `weather: { "mode": "ordered-fallback", "providerIds": ["met-office", "another-provider"] }`
 allows that exact ordered list. The source-selection layer chooses one provider
 for the entire comparison, with no field mixing or silent outside fallback.
-The default is strict Met Office; this is not an inferred worldwide preference.
+New profiles and requests without a profile default to strict `apple-weather`.
+Existing saved choices remain unchanged, including Dan's strict Met Office policy.
 
-Quality limits: hourly resolution, model runs at most six hours old by default
-(or retrieval age only when explicitly selected), resolved
+Quality limits: hourly resolution, retrieval age at most six hours for the Apple
+default (or model age for a saved/selected model-run policy), resolved
 weather location within 10 km of the query and evaluated section. Weather points
 are sampled along the route every 10 km. These are engineering starting policies,
 not a claim of kilometre-scale forecast accuracy.
 
 KV stores normalized evidence for 20 minutes, keyed by provider/product/adapter,
 coordinates, required descriptors, day range and quality limits. Retrieval and
-the selected freshness basis are checked on every hit. Changing only preferences or speed
+the selected freshness basis and any provider-declared `provenance.expiresAt` are
+checked on every hit. Attribution may include `logo: { lightUrl, darkUrl }` and
+`notice`; preserve and display these along with the legal link for Apple weather.
+Changing only preferences or speed
 can reuse the same day snapshot. Changing the route collection's time range may
 miss the cache, as can changing the required measurements (for example enabling
 cloud scoring). Global Spot coalesces identical coordinates. BPF coalesces samples
@@ -756,10 +773,12 @@ This is an offline algorithm comparison, not a fresh forecast or new HTTP test.
 The API is hosted at **https://ride-on-api.barclaysd.workers.dev**; its first production
 release was v0.3.0 on 10 October 2026. The importer/shortlist release was v0.4.0.
 The session-only authentication release was v0.6.0, and climbing preferences
-arrived in v0.7.0 (`comfort-v0.5`). Preferred distance is v0.8.0 with algorithm `comfort-v0.6`;
+arrived in v0.7.0 (`comfort-v0.5`). Preferred distance was v0.8.0 (`comfort-v0.6`).
+Apple Weather is v0.9.0 with algorithm `comfort-v0.7`;
 `GET /health` reports the running version. The canonical custom domain is
 `https://api.ride-on.cc`. Both Met Office credentials and `AUTH_CONFIG_JSON` are
-Worker secrets. The obsolete `API_KEYS_JSON` secret is no longer used. Provider
+Worker secrets. Apple Weather uses the separate `APPLE_WEATHER_CONFIG_JSON` secret.
+The obsolete `API_KEYS_JSON` secret is no longer used. Provider
 activation is described in
 [authentication](authentication.md). Never commit their values or put Met Office
 credentials in a client.
@@ -767,7 +786,7 @@ credentials in a client.
 The production `ride-on-routes` D1 database is in Western Europe. Its ID is recorded
 in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before
 publishing the authentication-enabled Worker. No new database migration is
-required for v0.6.0, v0.7.0 or v0.8.0.
+required for v0.6.0 through v0.9.0.
 The additive authentication migration preserves route facts, shortlists and user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used
 by `wrangler dev --local`; production data and local data are separate. The

@@ -156,7 +156,10 @@ integration(
   'BPF requires explicit representation and retrieval freshness before spending quota',
   async (h) => {
     const route = await upload(h);
-    const result = await recommend(h, [route.id], { weather: profile.weather });
+    const result = await recommend(h, [route.id], {
+      weather: profile.weather,
+      forecast: { freshnessBasis: 'model-run' },
+    });
     assert.equal(result.recommendedRouteId, null);
     assert.ok(
       result.weather.locations.every((l) =>
