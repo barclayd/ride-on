@@ -3,6 +3,22 @@ import type { z } from 'zod';
 import { readBoundedBody } from './body.ts';
 import { AppError } from './errors.ts';
 
+export const validateInput = <Schema extends z.ZodType>(
+  schema: Schema,
+  raw: unknown,
+): z.output<Schema> => {
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const path = issue?.path.join('.');
+    const message = issue
+      ? `${path ? `"${path}" ` : ''}${issue.message}`
+      : 'Request body failed validation';
+    throw new AppError(400, 'BAD_REQUEST', message);
+  }
+  return result.data;
+};
+
 /**
  * Reject non-JSON bodies, malformed JSON, and schema mismatches up front so
  * every POST handler receives a fully-typed body instead of `unknown`.
@@ -32,15 +48,5 @@ export const readJsonBody = async <Schema extends z.ZodType>(
     throw new AppError(400, 'BAD_REQUEST', 'Request body must be valid JSON');
   }
 
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    const issue = result.error.issues[0];
-    const path = issue?.path.join('.');
-    const message = issue
-      ? `${path ? `"${path}" ` : ''}${issue.message}`
-      : 'Request body failed validation';
-    throw new AppError(400, 'BAD_REQUEST', message);
-  }
-
-  return result.data;
+  return validateInput(schema, raw);
 };

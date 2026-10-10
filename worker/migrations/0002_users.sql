@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY NOT NULL,
+  version INTEGER NOT NULL CHECK (version >= 1),
+  user_json TEXT NOT NULL
+);

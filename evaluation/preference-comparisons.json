@@ -30,7 +30,7 @@
         "scope": "Qualitative personal feedback; exact benefit, penalty curves and gust limits remain uncalibrated.",
         "implemented_experiment": {
           "profile": "sunshine-profile-v4.json",
-          "status": "provisional; fitted to feedback and awaiting another grading pass",
+          "status": "reviewed six-route ranking approved by Dan on 2026-10-10; calibration on other days remains open",
           "crosswind_comfort_kph": 5,
           "crosswind_sensitivity": 5,
           "weight_changes": {
@@ -246,6 +246,15 @@
         "Exact sensitivity and wind-versus-sunshine weights on other days.",
         "Whether departures chosen after this adjustment match the rider's preference."
       ]
+    },
+    {
+      "id": "wind-calibration-v4-ranking-review",
+      "recorded_on": "2026-10-10",
+      "status": "ranking_approved_on_reviewed_day",
+      "profile": "sunshine-profile-v4.json",
+      "forecast_date": "2026-10-11",
+      "user_response_verbatim": "That ranking is perfect now, excellent job.",
+      "interpretation": "The reviewed six-route ranking is accepted. This does not establish universal settings, validate unseen weather or add minimum standards."
     }
   ]
 }

@@ -44,7 +44,8 @@ bun run lint:fix
 - `src/auth.ts`: private API bearer tokens mapped to owners.
 - `src/body.ts`, `request.ts`, `errors.ts`: bounded input and errors.
 - `src/routes/`: GPX normalization and owner-scoped D1 persistence.
-- `src/recommendations/`: strict preferences, daylight planning and pure scoring.
+- `src/recommendations/`: strict preference resolution, daylight/time-window planning and pure scoring.
+- `src/users/`: owner-bound saved settings, schema versions and atomic optimistic updates.
 - `src/weather/`: generic contracts, Met Office adapter, source policy and KV-compatible cache.
 - `migrations/`: D1 migrations, applied before deployment.
 - `test/`: deterministic ingestion, HTTP, algorithm, provider and cache tests.

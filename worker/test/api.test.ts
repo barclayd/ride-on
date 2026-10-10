@@ -57,6 +57,11 @@ const setup = () => {
   };
   const app = createApp({
     routeStore: store,
+    userStore: {
+      get: async () => null,
+      create: async () => false,
+      update: async () => false,
+    },
     providers: { fixture: provider },
     cache: {
       get: async (key) => cache.get(key) ?? null,

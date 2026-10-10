@@ -1,7 +1,7 @@
 # Ride On API MVP
 
 Implemented locally on 9 October, with sky and wind calibration on 10 October 2026. TypeScript, Hono and Cloudflare Workers;
-D1 stores route facts, KV caches forecasts, and a deterministic evaluator ranks
+D1 stores route facts and user profiles, KV caches forecasts, and a deterministic evaluator ranks
 route/departure combinations. This replaces the legacy classification and Strava
 OAuth endpoints. The existing app clients have not yet been migrated.
 
@@ -27,6 +27,79 @@ The server resolves the owner from that token; callers cannot choose another
 owner in a request. Responses use `Cache-Control: no-store`. Browser clients will
 need an explicit origin/authentication design when they are introduced; no broad
 CORS policy is enabled. Current tokens are for development/private API use.
+
+## Users and saved preferences
+
+The private API uses the existing token-to-owner identity. `POST /users` creates
+that authenticated user's profile; it does not issue a token. To add another
+person during this MVP, provision a distinct owner/token in `API_KEYS_JSON`, then
+create their profile using that token. Existing route ownership is unchanged.
+Clients cannot choose another user ID or read/update somebody else's profile.
+Public signup, login and account recovery remain separate work.
+
+```http
+POST /users
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "displayName": "Dan",
+  "settings": {
+    "timeZone": "Europe/London",
+    "riding": { "averageSpeedKph": 20, "departureStepMinutes": 30 },
+    "preferences": {
+      "wind": { "comfortableCrosswindKph": 5, "crosswindSensitivity": 5 },
+      "weights": { "temperature": 0.15, "wind": 0.4, "dryness": 0.2, "clearSkies": 0, "sunshine": 0.25 }
+    },
+    "weather": { "mode": "strict", "providerId": "met-office" },
+    "forecast": { "representation": "deterministic", "freshnessBasis": "model-run" }
+  }
+}
+```
+
+Returns `201 { "user": { "id": "dan", "schemaVersion": 1, "version": 1,
+"displayName": "Dan", "createdAt": "...", "updatedAt": "...", "settings": { ... } } }`
+with every resolved setting and `Location: /users/me`. `settings` is optional at
+creation; omitted values use the documented API defaults. This example is a
+partial profile, not an import of the complete reviewed profile.
+
+`GET /users/me` returns the saved user. `PATCH /users/me` changes selected values:
+
+```json
+{
+  "expectedVersion": 1,
+  "settings": {
+    "preferences": {
+      "temperature": { "comfortMinC": 12 },
+      "minimumStandards": { "maximumGustKph": 35 }
+    }
+  }
+}
+```
+
+The patch can also set `displayName`. It merges nested settings and validates the
+complete result before writing, returning the updated user with an incremented
+`version`. Include the version you last read as `expectedVersion`; a stale or
+concurrent update returns `409 USER_VERSION_CONFLICT`. Read the current profile
+and reconcile before retrying. Duplicate creation returns `409 USER_ALREADY_EXISTS`;
+a missing profile returns `404 USER_NOT_FOUND`. Failed writes do not replace it.
+
+Omitted values are preserved, including other weights and minimum standards.
+`minimumStandards: {}` preserves all limits. Set an individual limit to `null`
+to remove it, e.g. `{ "maximumGustKph": null }`. A `minimumTemperature` policy
+(including a monthly map) replaces the previous policy as a whole. A `weather`
+policy also replaces the whole source selection. Other settings reject nulls.
+Changing weather product does not implicitly change forecast statistics: save
+`weather` and `forecast` together when switching between Global Spot and BPF.
+
+Recommendations resolve **API defaults → saved user settings → request overrides**.
+Request overrides never write to the profile. A caller without a saved profile
+can continue using the original API defaults and per-request settings. Responses
+include `savedUser: { "id": "dan", "version": 1 }` (or `null`) and the exact
+resolved settings, so a result can be traced to the profile used. Date, route IDs
+and the day's time window belong to the recommendation request, not the profile.
 
 ## Upload a route
 
@@ -115,6 +188,41 @@ requested date/time zone and an astronomical horizon. Terrain shading and stops
 are not modelled. Today's elapsed departure slots are excluded. The API chooses
 among discrete departure slots, not every possible start minute.
 
+### Ride time windows
+
+For a ride entirely between 09:00 and 13:00 on the selected date:
+
+```json
+{
+  "routeIds": ["replace-with-an-uploaded-UUID"],
+  "date": "2026-10-11",
+  "riding": { "window": { "start": "09:00", "end": "13:00" } }
+}
+```
+
+Clock times use the effective `timeZone` (request override, saved user setting,
+then Europe/London). A window is a **whole-ride constraint**, not just a range of
+start times. The ride must start at or after its start and finish at or before its
+end; finishing exactly at the end is allowed. Estimated duration still uses moving
+speed, excluding breaks. Daylight remains required. Each route's `effectiveWindow`
+shows the intersection of the requested window, route daylight and the current
+time; `daylight` remains the separate astronomical interval.
+
+Departures use the configured step anchored at the supplied start: a 09:10 start
+with a 30-minute step tests 09:10, 09:40, etc. Elapsed slots and slots outside the
+common daylight interval are excluded. With `"window": "daylight"` or no window,
+the existing grid anchored at local midnight is unchanged. A request never reuses
+a previous request's window. The engine compares only feasible complete rides;
+routes that cannot fit appear in `unranked` with `no_feasible_departure` and an
+explanation. If none fits, `recommendedRouteId` is null and no forecast calls are
+made. Minimum-standard failure remains distinct from insufficient riding time.
+
+Use zero-padded 24-hour `HH:mm`, 00:00–23:59. Start must precede end on the same
+calendar day. Overnight, empty and malformed windows return 400. A boundary in a
+missing or repeated hour during a clock change also returns 400 rather than
+silently shifting it; choose an unambiguous time or another explicit time zone.
+The response timestamps remain UTC for reliable client display.
+
 ### Cloud-aware ensemble assessment
 
 Use this request fragment for BPF v2 UK forecasts:
@@ -149,7 +257,7 @@ return unassessable weather without spending forecast quota.
 ### Visible sunshine versus clear skies
 
 Dan's follow-up clarifies that **visible sunshine matters most**, even through
-thin high cloud. The current experimental profile is
+thin high cloud. The current personal profile is
 `evaluation/sunshine-profile-v4.json`: weights 0.15 temperature / 0.40 wind /
 0.20 dryness / 0.25 sunshine / 0 clear skies. The older cloud-only profile is
 retained as an experiment, not Dan's active profile. Other riders can choose either
@@ -183,7 +291,7 @@ gust and useful-assistance calculations remain separate. The combined wind
 discomfort is clamped to 0–1, so scores remain bounded. This is a comfort setting,
 not a safety limit or an automatically inferred minimum standard.
 
-The provisional v4 profile uses sensitivity 5 and a comfortable crosswind of
+The v4 profile uses sensitivity 5 and a comfortable crosswind of
 5 km/h (about 3.1 mph), with the weights above. Light winds below this threshold
 remain comfortable whatever the route direction. Sustained crosswinds beyond it
 carry more weight relative to sunshine. Other riders retain their own settings;
@@ -192,8 +300,8 @@ route names, locations and ranks never enter the scoring formula.
 This calibration replays the same forecasts as v3. Braintree stays first and East
 Anglia moves from second to sixth after all 86 departures are re-evaluated. These
 are fitted results on one reviewed day, not validation on unseen weather. The
-middle ordering and exact settings still require human grading. Earlier profiles
-remain available for comparison; no seasonal minimum temperatures were invented.
+reviewed ranking was approved by Dan on 10 October 2026. Exact settings on other
+days still need calibration. Earlier profiles remain available for comparison; no seasonal minimum temperatures were invented.
 
 ### Personal minimum standards
 
@@ -209,8 +317,8 @@ These are syntax examples, not adopted settings. A missing month uses the explic
 fallback or remains unknown. Equality meets a threshold; any sampled breach fails
 it. Failure evidence includes the limit, worst actual value, affected distance,
 route sections and their modelled observation times. A zero scoring weight does
-not switch off a configured minimum standard. Climate-relative temperature rules,
-saved profiles and climbing preferences remain future extensions; unsupported
+not switch off a configured minimum standard. Climate-relative temperature rules
+and climbing preferences remain future extensions; unsupported
 configuration is rejected rather than guessed.
 
 ### Result contract
@@ -220,7 +328,7 @@ The response includes:
 | Field | Meaning |
 |---|---|
 | `recommendedRouteId` | Best assessable route, or `null` if none can be recommended. |
-| `rankings` | Ordered routes; each has `best`, up to three tested alternative departures, duration, daylight, warnings and coverage counts. |
+| `rankings` | Ordered routes; each has `best`, up to three tested alternative departures, duration, daylight, effective window, warnings and coverage counts. |
 | `unranked` | Routes with `unassessable` weather or `no_feasible_departure`. |
 | `best.departureAt`, `best.finishAt` | Suggested start and estimated finish. |
 | `best.score`, `best.factors` | Provisional comfort score and temperature/wind/dryness/clear-sky/sunshine factors. These are not probabilities. |
@@ -228,7 +336,7 @@ The response includes:
 | `best.standards` | `meets`, `below`, `unknown`, or `not_configured`, with structured failures. |
 | `minimumStandardsStatus` | Collection-level `match_found`, `none_meet`, `unknown`, `not_configured`, or `no_feasible_departure`. |
 | `message`, `best.drawbacks` | Readable conclusion and trade-offs. |
-| `resolvedPreferences`, `resolvedMinimumTemperature`, `riding` | Exact effective settings and seasonal limit origin. |
+| `savedUser`, `resolvedPreferences`, `resolvedMinimumTemperature`, `riding` | Saved profile identity/version, exact effective settings and seasonal limit origin. |
 | `algorithmVersion`, `generatedAt`, `assumptions` | How and when the assessment was made. |
 | `weather` | Requested/selected provider, attempts, per-location provenance/issues, range, quality limits and cache hits/misses. |
 
@@ -358,7 +466,9 @@ bun scripts/replay-calibration.ts /path/to/GPX \
 
 The tool validates route hashes and snapshot structure, reproduces the baseline
 ranking and saved candidate scores, then changes only the profile's preferences.
-It retains the original provider, statistics, day, speed and evaluation clock;
+Append `09:00 13:00` to replay a whole-ride window; this also records the
+unrestricted result under the same profile for comparison. It retains the
+original provider, statistics, day, speed and evaluation clock;
 the profile's weather selection is deliberately not used to relabel a captured
 forecast. It records all candidate departures and before/after results in an
 ignored report. It refuses missing routes, unmatched evidence or baseline drift.
@@ -390,7 +500,7 @@ before that workflow can succeed. Existing clients that call `/classify` or
 ## Errors
 
 Malformed inputs: 400; invalid/missing token: 401; unknown or another owner's route:
-404; oversized body: 413; unsupported media type: 415; invalid GPX or too many
+404; duplicate profile or stale profile version: 409; oversized body: 413; unsupported media type: 415; invalid GPX or too many
 weather locations: 422; missing access configuration: 503. Errors use
 `{ "error": { "code": "...", "message": "..." } }`. Weather/provider problems are
 represented in a successful assessment response with explicit unavailable data,

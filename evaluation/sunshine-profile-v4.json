@@ -1,6 +1,6 @@
 {
-  "status": "provisional-calibration",
-  "basis": "Dan wants sustained crosswind discomfort to outweigh East Anglia's sunshine advantage, while retaining Braintree's useful tailwind, comfortable light-wind loops and a strong preference for visible sunshine. The exact settings below are fitted hypotheses for another human grading pass, not confirmed minimum standards or universal defaults.",
+  "status": "ranking-approved-on-reviewed-day",
+  "basis": "Dan approved the six-route ranking from the saved 11 October 2026 forecast after reviewing the v4 wind calibration. These personal settings remain subject to testing on other days; they are not universal defaults or confirmed minimum standards.",
   "supersedes": "sunshine-profile-v3.json",
   "request": {
     "weather": { "mode": "strict", "providerId": "met-office-bpf" },
@@ -12,5 +12,11 @@
       "weights": { "temperature": 0.15, "wind": 0.4, "dryness": 0.2, "clearSkies": 0, "sunshine": 0.25 },
       "minimumStandards": {}
     }
+  },
+  "humanReview": {
+    "recordedOn": "2026-10-10",
+    "forecastDate": "2026-10-11",
+    "response": "That ranking is perfect now, excellent job.",
+    "scope": "Approval of the reviewed ranking; no new claim about unseen forecasts, exact thresholds or seasonal minimum standards."
   }
 }

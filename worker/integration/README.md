@@ -31,6 +31,9 @@ second runtime version; update them together when upgrading Wrangler.
 Covered scenarios include:
 
 - Upload, migration-backed persistence, restart, daylight and pace defaults.
+- User creation, owner isolation, profile persistence, duplicate/concurrent writes and version conflicts.
+- Saved settings versus temporary nested overrides, explicit limit removal and validation after merging.
+- Whole-ride windows, time zones, DST rejection and no weather calls for routes that cannot fit.
 - Preference changes and speed overrides reusing cached forecasts.
 - Hourly departure selection and route-relative wind direction.
 - BPF percentile/mean selection, total cloud, native precipitation intervals and site reuse.

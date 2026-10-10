@@ -38,15 +38,39 @@ export const planDepartures = (
   const daylight = daylightWindow(route, input.date, input.timeZone);
   const durationMs =
     (route.distanceM / (input.riding.averageSpeedKph / 3.6)) * 1000;
-  if (!daylight) return { daylight, durationMs, departures: [] as number[] };
-  const step = input.riding.departureStepMinutes * 60_000;
   const dayStart = Temporal.PlainDate.from(input.date).toZonedDateTime(
     input.timeZone,
   ).epochMilliseconds;
-  const earliest = Math.max(daylight.start, nowMs);
-  const first = dayStart + Math.ceil((earliest - dayStart) / step) * step;
+  const window = input.riding.window;
+  const toInstant = (time: string) =>
+    Temporal.PlainDateTime.from(`${input.date}T${time}`).toZonedDateTime(
+      input.timeZone,
+      { disambiguation: 'reject' },
+    ).epochMilliseconds;
+  const requested =
+    window === 'daylight'
+      ? null
+      : { start: toInstant(window.start), end: toInstant(window.end) };
+  const start = Math.max(
+    daylight?.start ?? Infinity,
+    requested?.start ?? -Infinity,
+    nowMs,
+  );
+  const end = Math.min(daylight?.end ?? -Infinity, requested?.end ?? Infinity);
+  const effectiveWindow = start < end ? { start, end } : null;
+  if (!effectiveWindow)
+    return {
+      daylight,
+      effectiveWindow,
+      durationMs,
+      departures: [] as number[],
+    };
+  const step = input.riding.departureStepMinutes * 60_000;
+  // Anchor explicit windows at their requested start, including e.g. 09:10.
+  const anchor = requested?.start ?? dayStart;
+  const first = anchor + Math.ceil((start - anchor) / step) * step;
   const departures: number[] = [];
-  for (let start = first; start + durationMs <= daylight.end; start += step)
-    departures.push(start);
-  return { daylight, durationMs, departures };
+  for (let departure = first; departure + durationMs <= end; departure += step)
+    departures.push(departure);
+  return { daylight, effectiveWindow, durationMs, departures };
 };

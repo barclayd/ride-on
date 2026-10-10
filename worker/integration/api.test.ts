@@ -192,6 +192,7 @@ integration(
     assert.equal(result.recommendedRouteId, route.id);
     assert.deepEqual(result.riding, {
       averageSpeedKph: 20,
+      departureStepMinutes: 30,
       window: 'daylight',
     });
     assert.equal(ride.best.score, 100);

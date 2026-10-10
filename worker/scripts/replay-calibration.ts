@@ -7,11 +7,21 @@ import { recommendationSchema } from '../src/recommendations/input.ts';
 import { importGpx } from '../src/routes/gpx.ts';
 import { cachedForecastSchema } from '../src/weather/cache.ts';
 
-const [directory, originalPath, snapshotPath, profilePath, outputPath] =
-  Bun.argv.slice(2);
+const [
+  directory,
+  originalPath,
+  snapshotPath,
+  profilePath,
+  outputPath,
+  windowStart,
+  windowEnd,
+  ...extra
+] = Bun.argv.slice(2);
+if (extra.length || Boolean(windowStart) !== Boolean(windowEnd))
+  throw new Error('Optional window requires both START_HH:mm and END_HH:mm.');
 if (!directory || !originalPath || !snapshotPath || !profilePath || !outputPath)
   throw new Error(
-    'Supply GPX_DIRECTORY BASELINE_REPORT SNAPSHOT PROFILE OUTPUT-live-check.json.',
+    'Supply GPX_DIRECTORY BASELINE_REPORT SNAPSHOT PROFILE OUTPUT-live-check.json [START_HH:mm END_HH:mm].',
   );
 if (
   !outputPath.endsWith('-live-check.json') ||
@@ -54,11 +64,21 @@ const snapshot = z
 const profile = z
   .object({ request: z.object({ preferences: z.unknown() }) })
   .parse(JSON.parse(await Bun.file(profilePath).text()));
-// Only preferences are varied. The saved source, statistics, day and clock are retained.
-const input = recommendationSchema.parse({
+// Preferences and an optional window are varied. The saved source, statistics, day and clock are retained.
+const unrestrictedInput = recommendationSchema.parse({
   ...original.request,
   preferences: profile.request.preferences,
 });
+const input =
+  windowStart && windowEnd
+    ? recommendationSchema.parse({
+        ...unrestrictedInput,
+        riding: {
+          ...unrestrictedInput.riding,
+          window: { start: windowStart, end: windowEnd },
+        },
+      })
+    : unrestrictedInput;
 const expected = new Map(
   original.response.rankings.map((r) => [r.sourceHash, r]),
 );
@@ -220,7 +240,19 @@ await Bun.write(
       weatherRequests: 0,
       sourcePolicy: original.request.weather,
       forecast: original.request.forecast,
-      note: 'Only profile preferences changed. This is a replay of saved evidence, not a fresh forecast or new HTTP call. Scores remain provisional; no minimum standards were inferred.',
+      note: 'Profile preferences and optionally the riding window changed. This replays saved evidence, not a fresh forecast or new HTTP call. No minimum standards were inferred.',
+      ...(windowStart
+        ? {
+            unrestricted: recommendRides(
+              routes,
+              unrestrictedInput,
+              forecasts,
+              clock,
+              10_000,
+              100,
+            ),
+          }
+        : {}),
       request: input,
       baseline,
       calibrated,
