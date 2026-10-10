@@ -52,6 +52,8 @@ Covered scenarios include:
 - Import body bounds, malformed GPX, rejected URL-fetch attempts and unchanged storage after failures.
 - User creation, owner isolation, profile persistence, duplicate/concurrent writes and version conflicts.
 - Saved settings versus temporary nested overrides, explicit limit removal and validation after merging.
+- Climbing preferences persisted through user endpoints, temporary overrides, neutral backfill for old profiles, weather-cache reuse and minimum-condition precedence.
+- Complete versus partial GPX elevation, known zero ascent and no weather calls for routes unassessable under an active climbing preference.
 - Whole-ride windows, time zones, DST rejection and no weather calls for routes that cannot fit.
 - Preference changes and speed overrides reusing cached forecasts.
 - Hourly departure selection and route-relative wind direction.

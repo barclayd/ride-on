@@ -443,6 +443,65 @@ are fitted results on one reviewed day, not validation on unseen weather. The
 reviewed ranking was approved by Dan on 10 October 2026. Exact settings on other
 days still need calibration. Earlier profiles remain available for comparison; no seasonal minimum temperatures were invented.
 
+### Climbing preference
+
+Use `preferences.climbing.preference` with `flatter`, `neutral` or `hillier`.
+The default is `neutral`, including for older stored profiles that have no climbing
+field. Reading an older profile supplies the default without rewriting its storage
+or changing its version. Neutral preserves the existing weather scores and ranking.
+
+Save a preference through `POST /users` or `PATCH /users/me`, or override it for
+one recommendation without changing the saved profile:
+
+```json
+{
+  "routeIds": ["<uploaded-route-id>"],
+  "date": "2026-10-11",
+  "preferences": { "climbing": { "preference": "flatter" } }
+}
+```
+
+```json
+{
+  "expectedVersion": 1,
+  "settings": {
+    "preferences": { "climbing": { "preference": "hillier" } }
+  }
+}
+```
+
+Omitting the preference or supplying an empty climbing patch preserves the saved
+value. Explicit `neutral` disables its scoring effect. `null`, unknown modes,
+custom strengths and ascent limits are not accepted in this version.
+
+Climbing means **estimated ascent per kilometre**, not total ascent, maximum slope
+or effort. With equal weather, `flatter` prefers 60 km with 600 m ascent (10 m/km)
+over 30 km with 450 m ascent (15 m/km); `hillier` reverses that preference.
+
+For active preferences, the final score is **90% weather comfort + 10% climbing
+comfort**. The climbing factor rises linearly from 0 to 100 between 0 and 20 m/km
+for `hillier`, and falls from 100 to 0 for `flatter`. It stays at its endpoint
+beyond 20 m/km. These are provisional, versioned calibration choices, not
+physiological thresholds. Scores do not depend on which other routes are selected.
+Configured minimum conditions always take priority over the combined score.
+
+Each result exposes `distanceM`, `ascentM` and `ascentMPerKm`. Candidates expose
+`weatherScore` alongside the combined `score`, and `factors.climbing` on a 0–100
+scale. The factor is `null` when the preference is neutral. Calculations use
+unrounded values; reported scores and ascent per kilometre are rounded.
+
+When climbing is active, a route without complete elevation remains visible in
+`unranked` with status `unassessable` and issue `missing-elevation`. It receives no
+combined score and causes no weather requests. Known zero ascent is valid flat
+terrain. An impossible time window still returns `no_feasible_departure` first.
+Neutral can assess routes without elevation using weather alone.
+
+Available ascent remains an **unsmoothed GPX estimate**, with the existing
+`ASCENT_IS_UNSMOOTHED_ESTIMATE` warning. GPS noise, elevation source and point
+density can affect it. This release does not claim reliable steepness, adjust
+ride duration for climbing, or add maximum-ascent restrictions. Climbing-only
+changes need no new weather variables and reuse compatible cached forecasts.
+
 ### Personal minimum standards
 
 No minimum standards are invented by default. Set any combination of:
@@ -458,8 +517,7 @@ fallback or remains unknown. Equality meets a threshold; any sampled breach fail
 it. Failure evidence includes the limit, worst actual value, affected distance,
 route sections and their modelled observation times. A zero scoring weight does
 not switch off a configured minimum standard. Climate-relative temperature rules
-and climbing preferences remain future extensions; unsupported
-configuration is rejected rather than guessed.
+remain a future extension; unsupported configuration is rejected rather than guessed.
 
 ### Result contract
 
@@ -469,9 +527,10 @@ The response includes:
 |---|---|
 | `recommendedRouteId` | Best assessable route, or `null` if none can be recommended. |
 | `rankings` | Ordered routes; each has `best`, up to three tested alternative departures, duration, daylight, effective window, warnings and coverage counts. |
-| `unranked` | Routes with `unassessable` weather or `no_feasible_departure`. |
+| `unranked` | Routes with `unassessable` evidence (weather, or elevation when climbing matters) or `no_feasible_departure`. |
+| `distanceM`, `ascentM`, `ascentMPerKm` | Route distance and estimated total/ascent-per-kilometre facts; ascent fields are `null` when elevation is incomplete. |
 | `best.departureAt`, `best.finishAt` | Suggested start and estimated finish. |
-| `best.score`, `best.factors` | Provisional comfort score and temperature/wind/dryness/clear-sky/sunshine factors. These are not probabilities. |
+| `best.score`, `best.weatherScore`, `best.factors` | Combined ride score, original weather-only score and temperature/wind/dryness/clear-sky/sunshine/climbing factors. These are not probabilities. |
 | `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate, categorical sky-condition distance fractions and assisted-distance fraction. |
 | `best.standards` | `meets`, `below`, `unknown`, or `not_configured`, with structured failures. |
 | `minimumStandardsStatus` | Collection-level `match_found`, `none_meet`, `unknown`, `not_configured`, or `no_feasible_departure`. |
@@ -490,7 +549,7 @@ change that conclusion. If another route/departure lacks evidence, or a month
 rule is unresolved, return `unknown` instead. No feasible departure is distinct
 from bad weather. Missing data never becomes zero rain or zero wind.
 
-## Algorithm v0.4
+## Algorithm v0.5
 
 The duration model is distance / constant moving speed. Weather is matched to the
 estimated arrival at each section midpoint; wind uses that section's heading.
@@ -509,8 +568,10 @@ and 20% gust excess (30 km/h span), with each excess clamped to 0–1. Dryness i
 `1 − (0.8 × precipitationProbability + 0.2 × clamp(rateMmH / 2))`.
 Clear-sky comfort is `1 − totalCloudCoverFraction`. Per-section comfort is the
 normalized preference-weighted factor mean. There is no fixed morning bonus: all
-factors are evaluated at the expected arrival time, including hourly cloud or weather symbols. Final
+weather factors are evaluated at the expected arrival time, including hourly cloud or weather symbols. Weather
 score is 100 × (75% distance-weighted mean comfort + 25% worst section comfort).
+It is unchanged from v0.4. Neutral climbing uses this score directly; an active
+climbing preference combines it with the route-level factor as described above.
 Ties choose the earlier departure, then route ID. These curves, spans and the
 consistency weight are versioned implementation choices for review and calibration.
 
@@ -618,7 +679,8 @@ This is an offline algorithm comparison, not a fresh forecast or new HTTP test.
 
 The API is hosted at **https://ride-on-api.barclaysd.workers.dev**; its first production
 release was v0.3.0 on 10 October 2026. The importer/shortlist release was v0.4.0.
-The session-only authentication release is v0.6.0;
+The session-only authentication release is v0.6.0. The climbing preference
+release is v0.7.0 with algorithm `comfort-v0.5`;
 `GET /health` reports the running version. The canonical custom domain is
 `https://api.ride-on.cc`. Both Met Office credentials and `AUTH_CONFIG_JSON` are
 Worker secrets. The obsolete `API_KEYS_JSON` secret is no longer used. Provider
@@ -629,7 +691,7 @@ credentials in a client.
 The production `ride-on-routes` D1 database is in Western Europe. Its ID is recorded
 in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before
 publishing the authentication-enabled Worker. No new database migration is
-required for v0.6.0.
+required for v0.6.0 or v0.7.0.
 The additive authentication migration preserves route facts, shortlists and user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used
 by `wrangler dev --local`; production data and local data are separate. The

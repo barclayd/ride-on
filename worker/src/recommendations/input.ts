@@ -28,6 +28,9 @@ const wind = z.strictObject({
 const sunshine = z.strictObject({
   sunnyIntervalsComfort: z.number().min(0).max(1),
 });
+const climbing = z.strictObject({
+  preference: z.enum(['flatter', 'neutral', 'hillier']),
+});
 const weights = z.strictObject({
   temperature: z.number().min(0).max(1),
   wind: z.number().min(0).max(1),
@@ -42,7 +45,14 @@ const minimumStandards = z.strictObject({
   maximumPrecipitationRateMmH: z.number().min(0).max(100).optional(),
 });
 export const preferencesSchema = z
-  .strictObject({ temperature, wind, sunshine, weights, minimumStandards })
+  .strictObject({
+    temperature,
+    wind,
+    sunshine,
+    climbing: climbing.default({ preference: 'neutral' }),
+    weights,
+    minimumStandards,
+  })
   .refine((p) => p.temperature.comfortMinC <= p.temperature.comfortMaxC, {
     message: 'Minimum comfortable temperature must not exceed the maximum.',
     path: ['temperature'],
@@ -58,6 +68,7 @@ const preferenceOverrides = z.strictObject({
   temperature: temperature.partial().optional(),
   wind: wind.partial().optional(),
   sunshine: sunshine.partial().optional(),
+  climbing: climbing.partial().optional(),
   weights: weights.partial().optional(),
   minimumStandards: z
     .strictObject({
@@ -131,6 +142,7 @@ export const defaultSettings: Settings = {
       crosswindSensitivity: 1,
     },
     sunshine: { sunnyIntervalsComfort: 0.7 },
+    climbing: { preference: 'neutral' },
     weights: {
       temperature: 0.3,
       wind: 0.2,
@@ -169,6 +181,7 @@ export const mergeSettings = (
       },
       wind: { ...base.preferences.wind, ...preferences?.wind },
       sunshine: { ...base.preferences.sunshine, ...preferences?.sunshine },
+      climbing: { ...base.preferences.climbing, ...preferences?.climbing },
       weights: { ...base.preferences.weights, ...preferences?.weights },
       // A policy is replaced as a whole. Null explicitly removes a saved limit.
       minimumStandards: Object.fromEntries(

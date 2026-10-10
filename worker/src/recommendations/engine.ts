@@ -11,13 +11,14 @@ import {
   weatherDescriptors as descriptors,
   ensembleDescriptors,
 } from '../weather/descriptors.ts';
+import { assessClimbing, CLIMBING_SHARE } from './climbing.ts';
 import { planDepartures } from './daylight.ts';
 import {
   type RecommendationInput,
   resolveMinimumTemperature,
 } from './input.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.4';
+export const ALGORITHM_VERSION = 'comfort-v0.5';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -195,7 +196,10 @@ const assessCandidate = (
   forecasts: ReadonlyMap<string, LocationForecastResult>,
   prepared: PreparedWeather,
   maxLocationDistanceM: number,
+  climbing: ReturnType<typeof assessClimbing>,
 ) => {
+  if (climbing.status === 'unknown')
+    return { status: 'unknown' as const, reasons: ['missing-elevation'] };
   const rows: Observation[] = [];
   const missing = new Set<string>();
   const preferences = input.preferences;
@@ -410,10 +414,15 @@ const assessCandidate = (
   ) =>
     rows.reduce((sum, row) => sum + (row[key] ?? 0) * row.distanceM, 0) /
     route.distanceM;
-  const score =
+  const weatherScore =
     100 *
     (0.75 * mean('comfort') +
       0.25 * Math.min(...rows.map((row) => row.comfort)));
+  const score =
+    climbing.status === 'assessed'
+      ? (1 - CLIMBING_SHARE) * weatherScore +
+        CLIMBING_SHARE * 100 * climbing.comfort
+      : weatherScore;
   const rideHours = Array.from(
     { length: Math.ceil(durationMs / HOUR) },
     (_, index) => {
@@ -454,7 +463,10 @@ const assessCandidate = (
     departureAt: iso(departure),
     finishAt: iso(departure + durationMs),
     score: round(score),
+    weatherScore: round(weatherScore),
     factors: {
+      climbing:
+        climbing.comfort === null ? null : round(100 * climbing.comfort),
       sunshine:
         conditions.skyConditionDistanceFractions === null
           ? null
@@ -520,6 +532,10 @@ export const recommendRides = (
   );
   const evaluated = routes.map((route) => {
     const plan = planDepartures(route, input, nowMs);
+    const climbing = assessClimbing(
+      route,
+      input.preferences.climbing.preference,
+    );
     const candidates = plan.departures.map((departure) =>
       assessCandidate(
         route,
@@ -529,6 +545,7 @@ export const recommendRides = (
         forecasts,
         prepared,
         maxLocationDistanceM,
+        climbing,
       ),
     );
     const assessed = candidates
@@ -543,7 +560,11 @@ export const recommendRides = (
       routeId: route.id,
       routeName: route.name,
       sourceHash: route.sourceHash,
+      distanceM: route.distanceM,
       distanceKm: round(route.distanceM / 1000),
+      ascentM: route.ascentM,
+      ascentMPerKm:
+        climbing.ascentMPerKm === null ? null : round(climbing.ascentMPerKm),
       estimatedDurationMinutes: round(plan.durationMs / 60_000),
       daylight: plan.daylight
         ? { start: iso(plan.daylight.start), end: iso(plan.daylight.end) }
@@ -574,9 +595,14 @@ export const recommendRides = (
           ],
       warnings: [
         ...route.warnings,
+        ...(climbing.status === 'unknown'
+          ? [
+              'Your climbing preference cannot be assessed without complete elevation data.',
+            ]
+          : []),
         ...(unknown.length
           ? [
-              'Some departures could not be assessed; the best available result may change when their forecasts are available.',
+              'Some departures could not be assessed; the best available result may change when the missing data is available.',
             ]
           : []),
       ],
@@ -616,7 +642,9 @@ export const recommendRides = (
         : minimumStandardsStatus === 'unknown'
           ? 'No confirmed match for your minimum standards. Some departures or standards could not be assessed.'
           : ranked.length
-            ? 'Routes ranked by comfort throughout the ride.'
+            ? input.preferences.climbing.preference === 'neutral'
+              ? 'Routes ranked by comfort throughout the ride.'
+              : 'Routes ranked by weather comfort and your climbing preference.'
             : 'No ride could be recommended for this day.',
     rankings: ranked.map((route, index) => ({ rank: index + 1, ...route })),
     unranked: evaluated.filter((route) => route.best === null),
