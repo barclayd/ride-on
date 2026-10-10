@@ -26,6 +26,7 @@ export const validateInput = <Schema extends z.ZodType>(
 export const readJsonBody = async <Schema extends z.ZodType>(
   c: Context,
   schema: Schema,
+  limit = 64_000,
 ): Promise<z.output<Schema>> => {
   const contentType = c.req.header('Content-Type') ?? '';
   if (!contentType.includes('application/json')) {
@@ -40,7 +41,7 @@ export const readJsonBody = async <Schema extends z.ZodType>(
   try {
     raw = JSON.parse(
       new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(
-        await readBoundedBody(c.req.raw, 64_000),
+        await readBoundedBody(c.req.raw, limit),
       ),
     );
   } catch (error) {

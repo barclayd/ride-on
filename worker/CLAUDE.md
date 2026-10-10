@@ -43,7 +43,7 @@ bun run lint:fix
 - `src/index.ts`: Hono routes and dependency composition; `createApp` accepts test dependencies.
 - `src/auth.ts`: private API bearer tokens mapped to owners.
 - `src/body.ts`, `request.ts`, `errors.ts`: bounded input and errors.
-- `src/routes/`: GPX normalization and owner-scoped D1 persistence.
+- `src/routes/`: GPX normalization, replaceable source adapters, versioned source imports, paginated owner-scoped D1 persistence and saved shortlists. Imports never select rides; recommendations always take explicit route IDs.
 - `src/recommendations/`: strict preference resolution, daylight/time-window planning and pure scoring.
 - `src/users/`: owner-bound saved settings, schema versions and atomic optimistic updates.
 - `src/weather/`: generic contracts, Met Office adapter, source policy and KV-compatible cache.
@@ -54,7 +54,7 @@ bun run lint:fix
 
 ## Deployment
 
-API v0.3.0 is deployed at `https://ride-on-api.barclaysd.workers.dev`. Production D1
+The API is deployed at `https://ride-on-api.barclaysd.workers.dev`; `/health` reports its version. Production D1
 and the three required secrets are configured. See `../docs/api.md` for the
 verified deployment state and commands. Local development stays on the original
 local database through `preview_database_id: "ROUTES_DB"`.

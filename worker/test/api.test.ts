@@ -1,10 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createApp } from '../src/index.ts';
-import {
-  type Route,
-  type RouteStore,
-  routeSummary,
-} from '../src/routes/model.ts';
+import type { Route } from '../src/routes/model.ts';
+import { type RouteStore, storedRouteSummary } from '../src/routes/store.ts';
 import type { Env } from '../src/types.ts';
 import type { ForecastProvider } from '../src/weather/contracts.ts';
 import { forecastsFor, now, simpleGpx } from './fixtures/rides.ts';
@@ -30,10 +27,32 @@ const setup = () => {
         const route = routes.get(`${owner}:${id}`);
         return route ? [route] : [];
       }),
-    list: async (owner) =>
-      [...routes.entries()]
+    list: async (owner) => ({
+      routes: [...routes.entries()]
         .filter(([key]) => key.startsWith(`${owner}:`))
-        .map(([, route]) => routeSummary(route)),
+        .map(([, route]) =>
+          storedRouteSummary({
+            route,
+            version: 1,
+            source: null,
+            updatedAt: route.createdAt,
+          }),
+        ),
+      nextCursor: null,
+    }),
+    get: async (owner, id) => {
+      const route = routes.get(`${owner}:${id}`);
+      return route
+        ? { route, version: 1, source: null, updatedAt: route.createdAt }
+        : null;
+    },
+    findSource: async () => null,
+    createImported: async () => {
+      throw new Error('Use the D1 integration harness for imports.');
+    },
+    replaceImported: async () => {
+      throw new Error('Use the D1 integration harness for imports.');
+    },
   };
   const provider: ForecastProvider = {
     source: { providerId: 'fixture', productId: 'hourly', adapterVersion: '1' },

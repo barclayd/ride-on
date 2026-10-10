@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { z } from 'zod';
 import { authenticate } from './auth.ts';
 import { readBoundedBody } from './body.ts';
 import { AppError } from './errors.ts';
@@ -18,11 +19,23 @@ import {
 } from './recommendations/input.ts';
 import { readJsonBody, validateInput } from './request.ts';
 import { importGpx } from './routes/gpx.ts';
+import { importSourceRoute } from './routes/import.ts';
+import {
+  createD1RouteSelectionStore,
+  type RouteSelectionStore,
+  updateSelectionSchema,
+} from './routes/selection.ts';
+import {
+  importRouteSchema,
+  type RouteSourceProvider,
+  routeSourceProviders,
+} from './routes/sources.ts';
 import {
   createD1RouteStore,
+  listRoutesSchema,
   type RouteStore,
-  routeSummary,
-} from './routes/model.ts';
+  storedRouteSummary,
+} from './routes/store.ts';
 import type { Bindings, Env } from './types.ts';
 import {
   createD1UserStore,
@@ -46,6 +59,8 @@ const quality = {
 export const createApp = (
   dependencies: {
     routeStore?: RouteStore;
+    routeSelectionStore?: RouteSelectionStore;
+    routeSources?: ReadonlyMap<string, RouteSourceProvider>;
     userStore?: UserStore;
     providers?: Readonly<Record<string, ForecastProvider>>;
     cache?: ForecastCache;
@@ -59,6 +74,10 @@ export const createApp = (
     dependencies.routeStore ?? createD1RouteStore(env.ROUTES_DB);
   const users = (env: Env) =>
     dependencies.userStore ?? createD1UserStore(env.ROUTES_DB);
+  const selections = (env: Env) =>
+    dependencies.routeSelectionStore ??
+    createD1RouteSelectionStore(env.ROUTES_DB);
+  const sources = dependencies.routeSources ?? routeSourceProviders;
   app.use('*', async (c, next) => {
     const start = Date.now();
     c.header('Cache-Control', 'no-store');
@@ -68,8 +87,17 @@ export const createApp = (
         `${c.req.method} ${new URL(c.req.url).pathname} ${c.res.status} ${Date.now() - start}ms`,
       );
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.3.0' }));
-  for (const path of ['/routes', '/recommendations', '/users', '/users/*'])
+  app.get('/health', (c) => c.json({ ok: true, version: '0.4.0' }));
+  for (const path of [
+    '/routes',
+    '/routes/*',
+    '/route-sources',
+    '/route-imports',
+    '/route-selection',
+    '/recommendations',
+    '/users',
+    '/users/*',
+  ])
     app.use(path, async (c, next) => {
       c.set(
         'ownerId',
@@ -141,9 +169,85 @@ export const createApp = (
       throw conflict();
     return c.json({ user });
   });
-  app.get('/routes', async (c) =>
-    c.json({ routes: await store(c.env).list(c.get('ownerId')), limit: 100 }),
+  app.get('/route-sources', (c) =>
+    c.json({
+      sources: [...sources.values()].map((provider) => provider.descriptor),
+    }),
   );
+  app.post('/route-imports', async (c) => {
+    const input = await readJsonBody(c, importRouteSchema, 6_000_000);
+    const provider = sources.get(input.source.providerId);
+    if (!provider)
+      throw new AppError(
+        422,
+        'UNSUPPORTED_ROUTE_SOURCE',
+        'Use a provider from GET /route-sources.',
+      );
+    const result = await importSourceRoute(
+      { ...input, ownerId: c.get('ownerId'), importedAt: now().toISOString() },
+      provider,
+      store(c.env),
+    );
+    c.header('Location', `/routes/${result.record.route.id}`);
+    return c.json(
+      { outcome: result.outcome, route: storedRouteSummary(result.record) },
+      result.outcome === 'created' ? 201 : 200,
+    );
+  });
+  app.get('/route-selection', async (c) =>
+    c.json({ selection: await selections(c.env).get(c.get('ownerId')) }),
+  );
+  app.put('/route-selection', async (c) => {
+    const input = await readJsonBody(c, updateSelectionSchema);
+    const routes = await store(c.env).getMany(c.get('ownerId'), input.routeIds);
+    if (routes.length !== input.routeIds.length)
+      throw new AppError(
+        404,
+        'ROUTE_NOT_FOUND',
+        'One or more routes were not found.',
+      );
+    const selection = {
+      routeIds: input.routeIds,
+      version: input.expectedVersion + 1,
+      updatedAt: now().toISOString(),
+    };
+    if (
+      !(await selections(c.env).update(
+        c.get('ownerId'),
+        selection,
+        input.expectedVersion,
+      ))
+    )
+      throw new AppError(
+        409,
+        'SELECTION_VERSION_CONFLICT',
+        'Your selection has changed. Read GET /route-selection and reconcile before retrying.',
+      );
+    return c.json({ selection });
+  });
+  app.get('/routes', async (c) => {
+    const query = validateInput(listRoutesSchema, c.req.query());
+    if (
+      query.cursor &&
+      !(await store(c.env).get(c.get('ownerId'), query.cursor))
+    )
+      throw new AppError(
+        400,
+        'INVALID_CURSOR',
+        'Use a nextCursor from your route library.',
+      );
+    return c.json({
+      ...(await store(c.env).list(c.get('ownerId'), query)),
+      limit: query.limit,
+    });
+  });
+  app.get('/routes/:id', async (c) => {
+    const id = validateInput(z.uuid(), c.req.param('id'));
+    const record = await store(c.env).get(c.get('ownerId'), id);
+    if (!record)
+      throw new AppError(404, 'ROUTE_NOT_FOUND', 'The route was not found.');
+    return c.json({ route: storedRouteSummary(record) });
+  });
   app.post('/routes', async (c) => {
     const contentType = c.req.header('Content-Type') ?? '';
     let bytes: Uint8Array;
@@ -194,7 +298,18 @@ export const createApp = (
     }
     const route = await importGpx(xml, name, now().toISOString());
     await store(c.env).save(c.get('ownerId'), route);
-    return c.json({ route: routeSummary(route) }, 201);
+    c.header('Location', `/routes/${route.id}`);
+    return c.json(
+      {
+        route: storedRouteSummary({
+          route,
+          version: 1,
+          updatedAt: route.createdAt,
+          source: null,
+        }),
+      },
+      201,
+    );
   });
   app.post('/recommendations', async (c) => {
     const raw = await readJsonBody(c, recommendationRequestSchema);

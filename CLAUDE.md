@@ -77,7 +77,8 @@ xcodebuild -project app/RideOn.xcodeproj -scheme RideOn -destination 'platform=m
 ```
 
 Worker commands: see `worker/CLAUDE.md`. The API-first rebuild is implemented
-with `/routes`, `/recommendations` and `/users`; API v0.3.0 is deployed at
+with `/routes`, `/recommendations`, `/users`, `/route-imports`, `/route-sources`
+and `/route-selection`; the API is deployed at
 `https://ride-on-api.barclaysd.workers.dev` (10 October 2026). The existing
 client `ClassifyService.swift` and Strava token transports still target legacy
 endpoints and need migration before using the rebuilt backend. The API algorithm
