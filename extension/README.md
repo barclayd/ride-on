@@ -8,7 +8,7 @@ using the Ride On API (v0.9.0). Design: handoff 3 (`design_handoff_ride_on_v2`),
 - **cycle.travel `/user/journeys`** — "Tracked routes" module, date · time button, per-row chips.
   Journeys are imported as GPX (with elevation) when tracked, and re-imported when edited on cycle.travel.
 - **Weather attribution** from the results (Apple Weather logo, legal link and notice; "Powered by
-  Met Office data") shows under the rides, in Preferences and on the page.
+  Met Office data") shows under the rides and in Preferences, not on the page.
 
 ## Run it
 
