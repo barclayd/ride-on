@@ -58,4 +58,4 @@ deployment stays off until repository variable `API_MVP_DEPLOYMENT_READY=true`. 
 `../docs/api.md` before deploying. Workers Paid is needed for the configured
 comparison workload. Never infer cloud latency/CPU results from local timings.
 Use `bun run deploy` only when deployment is in scope. Required secrets are
-`MET_OFFICE_API_KEY` and `API_KEYS_JSON`; no Strava secrets are used.
+`MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY` and `API_KEYS_JSON`; no Strava secrets are used.

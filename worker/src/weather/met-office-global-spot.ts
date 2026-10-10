@@ -11,10 +11,11 @@ import type {
   SampleTime,
 } from './contracts.ts';
 import { descriptorKey, weatherDescriptors as weather } from './descriptors.ts';
+import { readBoundedJson } from './http.ts';
+import { metOfficeSkyCondition } from './met-office-symbols.ts';
 import { forecastRequestSchema, utcInstant } from './validation.ts';
 
 const HOUR = 3_600_000;
-const MAX_RESPONSE_BYTES = 512_000;
 const ENDPOINT =
   'https://data.hub.api.metoffice.gov.uk/sitespecific/v0/point/hourly';
 const source = {
@@ -36,6 +37,11 @@ type Mapping = Readonly<{
 
 // Timing verified against the DataHub glossary and parameter metadata, 2026-10-09.
 const mappings: readonly Mapping[] = [
+  {
+    field: 'significantWeatherCode',
+    descriptor: weather.skyCondition,
+    unit: '1',
+  },
   {
     field: 'screenTemperature',
     descriptor: weather.airTemperature,
@@ -126,6 +132,7 @@ const unavailable = (
 
 const convert = (raw: unknown, mapping: Mapping): number | null => {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+  if (mapping.descriptor.kind === 'category') return metOfficeSkyCondition(raw);
   if (mapping.descriptor.kind === 'probability')
     return raw >= 0 && raw <= 100 ? raw / 100 : null;
   const quantity = mapping.descriptor.measure.quantity;
@@ -200,7 +207,10 @@ export const normaliseGlobalSpot = (
   const issues: ProviderIssue[] = [];
   const ageMs =
     Date.parse(retrievedAt) - Date.parse(feature.properties.modelRunDate);
-  if (ageMs > request.maxAgeSeconds * 1000)
+  if (
+    request.freshnessBasis !== 'retrieval-time' &&
+    ageMs > request.maxAgeSeconds * 1000
+  )
     issues.push(
       issue('stale-data', 'The forecast model run exceeds the allowed age.'),
     );
@@ -346,34 +356,6 @@ export const normaliseGlobalSpot = (
     series,
     issues: uniqueIssues,
   };
-};
-
-const readBoundedJson = async (response: Response): Promise<unknown> => {
-  if (!response.body) throw new Error('Empty response');
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let bytes = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      bytes += value.byteLength;
-      if (bytes > MAX_RESPONSE_BYTES) {
-        await reader.cancel();
-        throw new Error('Response too large');
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const joined = new Uint8Array(bytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    joined.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return JSON.parse(new TextDecoder().decode(joined));
 };
 
 export const createMetOfficeGlobalSpot = (

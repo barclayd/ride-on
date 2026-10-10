@@ -5,6 +5,7 @@ export const globalSpotFixture = () => ({
   type: 'FeatureCollection',
   parameters: [
     {
+      significantWeatherCode: { unit: { symbol: { type: '1' } } },
       screenTemperature: { unit: { symbol: { type: 'Cel' } } },
       feelsLikeTemperature: { unit: { symbol: { type: 'Cel' } } },
       windSpeed10m: { unit: { symbol: { type: 'm/s' } } },
@@ -23,6 +24,7 @@ export const globalSpotFixture = () => ({
         modelRunDate: '2026-10-09T09:00Z',
         timeSeries: [10, 11, 12].map((hour) => ({
           time: `2026-10-09T${hour}:00Z`,
+          significantWeatherCode: 3,
           screenTemperature: 16,
           feelsLikeTemperature: 14,
           windSpeed10m: 4,

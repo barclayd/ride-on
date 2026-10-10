@@ -1,7 +1,8 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-10-09",
-  "purpose": "Human preference calibration examples for the API MVP. These are not live forecasts or executable scoring fixtures yet.",
+  "updated_on": "2026-10-10",
+  "purpose": "Human preference calibration examples for the API MVP. These are not live forecasts. Selected cases have executable calibration tests; exact scoring weights remain provisional.",
   "rider": "Dan",
   "context": {
     "route_characteristics": "Otherwise equally appealing; climbing is neutral for this rider.",
@@ -21,7 +22,31 @@
       "mvp_measurement_interpretation": "Weight assistance by route distance; use hourly weather matched to progress at the request moving speed, initially 20 km/h.",
       "tailwind_home_bonus": false,
       "angle_thresholds": null,
-      "strength_and_gust_tolerances": null
+      "strength_and_gust_tolerances": null,
+      "calibration_update_2026_10_10": {
+        "tailwind": "Useful wind assistance across most of the route should compare favourably with headwind or crosswind. The exact benefit curve and any independent tailwind bonus remain unresolved.",
+        "crosswind": "Sustained crosswinds around 8 mph should lower this rider's score meaningfully; a small positive tailwind component must not imply that the wind is predominantly helpful.",
+        "calm_circular_routes": "A circular ride in winds around 3 mph can be highly comfortable even when only part of its distance has tailwind.",
+        "scope": "Qualitative personal feedback; exact benefit, penalty curves and gust limits remain uncalibrated."
+      }
+    },
+    "sky_preference": {
+      "status": "visible_sunshine_priority_clarified",
+      "scope": "Dan's personal profile; configurable independently for other riders.",
+      "quantity": "Visible sunshine during the modelled ride; hourly weather symbols are the current coarse proxy.",
+      "direction": "More visible sunshine is preferred, including through thin high cloud.",
+      "importance": "major factor",
+      "interpretation": "Visible sunshine is the priority. Total cloud fraction is separate supporting evidence, not a direct substitute for sunlight or precipitation. This supersedes the initial total-cloud-only interpretation.",
+      "minimum_standard": null,
+      "weight": null,
+      "unknown_data_policy": "Missing sunshine evidence must remain unknown when this preference is active; do not assume sunshine or silently remove its weight.",
+      "prior_user_response_verbatim": "cloud cover and having the lowest percentage possible is a massive factor for me",
+      "user_response_verbatim": "Visible sunshine matters most"
+    },
+    "departure_preference": {
+      "calibration_date": "2026-10-10",
+      "interpretation": "Choose earlier departures when the combination of clearer skies, warmth and wind is better. The 10:00 examples are day/route-specific choices, not a fixed daily departure or an unconditional morning bonus.",
+      "fixed_preferred_start": null
     },
     "season": null,
     "daytime_bounds": "Daylight hours; the whole ride must fit.",
@@ -71,6 +96,40 @@
     }
   },
   "comparisons": [
+    {
+      "id": "temperature-cloud-001",
+      "recorded_on": "2026-10-10",
+      "status": "response_recorded",
+      "weather_source": "invented_constant_conditions",
+      "question": "For your personal profile, how should we balance sunshine against warmth when both rides are dry with comfortable wind?",
+      "shared_conditions": {
+        "precipitation": "dry",
+        "wind": "comfortable; held equal",
+        "route_characteristics": "otherwise equally appealing",
+        "season": "not specified; do not override seasonal minimum standards"
+      },
+      "options": {
+        "A": {
+          "temperature_c": 14,
+          "total_cloud_cover_fraction": 0.1
+        },
+        "B": {
+          "temperature_c": 17,
+          "total_cloud_cover_fraction": 0.8
+        }
+      },
+      "user_response_verbatim": "Prefer 14°C with 10% cloud over 17°C with 80% cloud",
+      "unconditional_choice_within_scenario": "A",
+      "expected_order_within_scenario": [
+        "A",
+        "B"
+      ],
+      "interpretation": "Dan chose the cooler, clearer option in this scenario, later clarifying that visible sunshine is the priority. The comparison does not imply that all cloud obscures sunlight or establish universal weights, a cloud rejection threshold or a preference for unlimited cooling.",
+      "unresolved": [
+        "Trade-off for smaller cloud or temperature differences.",
+        "Interaction with stronger wind, precipitation, and seasonal minimum temperatures."
+      ]
+    },
     {
       "id": "temperature-wind-001",
       "status": "conditional_response_recorded",

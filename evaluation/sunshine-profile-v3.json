@@ -1,0 +1,15 @@
+{
+  "status": "provisional-calibration",
+  "basis": "Dan clarified that visible sunshine matters most, including through thin high cloud. Sunshine is currently a categorical weather-symbol proxy, not a forecast duration or probability. Exact weights, the sunny-intervals comfort value and wind tolerances remain hypotheses for human grading.",
+  "request": {
+    "weather": { "mode": "strict", "providerId": "met-office-bpf" },
+    "forecast": { "representation": "ensemble-summary", "freshnessBasis": "retrieval-time" },
+    "preferences": {
+      "temperature": { "comfortMinC": 16, "comfortMaxC": 24 },
+      "wind": { "comfortableHeadwindKph": 5, "comfortableCrosswindKph": 0, "comfortableGustKph": 25 },
+      "sunshine": { "sunnyIntervalsComfort": 0.7 },
+      "weights": { "temperature": 0.15, "wind": 0.2, "dryness": 0.2, "clearSkies": 0, "sunshine": 0.45 },
+      "minimumStandards": {}
+    }
+  }
+}

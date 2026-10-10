@@ -31,6 +31,7 @@ export const forecastsFor = (
     route: Route,
     locationIndex: number,
   ) => number | null = defaultValue,
+  required: readonly ForecastDescriptor[] = requiredWeather,
 ): LocationForecastResult[] =>
   routes.flatMap((route) =>
     route.weatherLocations.map((location, index) => ({
@@ -55,14 +56,16 @@ export const forecastsFor = (
       },
       issuedAt: null,
       issues: [],
-      series: requiredWeather.map((descriptor: ForecastDescriptor) => ({
+      series: required.map((descriptor: ForecastDescriptor) => ({
         descriptor,
         samples: Array.from({ length: 25 }, (_, h) => {
           const valid = Date.parse('2026-10-10T00:00:00Z') + h * hour;
           const quantity =
             descriptor.kind === 'scalar'
               ? descriptor.measure.quantity
-              : 'probability';
+              : descriptor.kind === 'category'
+                ? 'sky-condition'
+                : 'probability';
           return {
             validAt: new Date(valid).toISOString(),
             value: value(quantity, h, route, index),

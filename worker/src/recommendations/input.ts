@@ -34,13 +34,26 @@ const preferencesSchema = z
         comfortableCrosswindKph: 15,
         comfortableGustKph: 25,
       }),
+    sunshine: z
+      .strictObject({
+        sunnyIntervalsComfort: z.number().min(0).max(1).default(0.7),
+      })
+      .default({ sunnyIntervalsComfort: 0.7 }),
     weights: z
       .strictObject({
         temperature: z.number().min(0).max(1).default(0.3),
         wind: z.number().min(0).max(1).default(0.2),
         dryness: z.number().min(0).max(1).default(0.5),
+        clearSkies: z.number().min(0).max(1).default(0),
+        sunshine: z.number().min(0).max(1).default(0),
       })
-      .default({ temperature: 0.3, wind: 0.2, dryness: 0.5 }),
+      .default({
+        temperature: 0.3,
+        wind: 0.2,
+        dryness: 0.5,
+        clearSkies: 0,
+        sunshine: 0,
+      }),
     minimumStandards: z
       .strictObject({
         minimumTemperature: temperatureFloor.optional(),
@@ -93,9 +106,26 @@ export const recommendationSchema = z.strictObject({
       comfortableCrosswindKph: 15,
       comfortableGustKph: 25,
     },
-    weights: { temperature: 0.3, wind: 0.2, dryness: 0.5 },
+    weights: {
+      temperature: 0.3,
+      wind: 0.2,
+      dryness: 0.5,
+      clearSkies: 0,
+      sunshine: 0,
+    },
+    sunshine: { sunnyIntervalsComfort: 0.7 },
     minimumStandards: {},
   }),
+  forecast: z
+    .strictObject({
+      representation: z
+        .enum(['deterministic', 'ensemble-summary'])
+        .default('deterministic'),
+      freshnessBasis: z
+        .enum(['model-run', 'retrieval-time'])
+        .default('model-run'),
+    })
+    .default({ representation: 'deterministic', freshnessBasis: 'model-run' }),
   weather: z
     .discriminatedUnion('mode', [
       z.strictObject({

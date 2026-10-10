@@ -28,7 +28,7 @@ const cachedSchema = z.object({
       adapterVersion: z.string(),
     }),
     dataVersion: z.string().nullable(),
-    forecastRunAt: utcInstant,
+    forecastRunAt: utcInstant.optional(),
     retrievedAt: utcInstant,
     attribution: z.array(z.object({ text: z.string(), url: z.string() })),
   }),
@@ -51,6 +51,7 @@ const cachedSchema = z.object({
                 'maximum',
                 'accumulation',
                 'event',
+                'categorical-summary',
               ]),
             }),
           ]),
@@ -61,7 +62,7 @@ const cachedSchema = z.object({
   // Only complete or horizon-limited snapshots are stored, never transient failures.
   issues: z.array(
     z.object({
-      code: z.literal('outside-forecast-horizon'),
+      code: z.enum(['outside-forecast-horizon', 'unknown-model-run']),
       message: z.string(),
     }),
   ),
@@ -89,6 +90,7 @@ export const withForecastCache = (
             range: request.range,
             required: request.required.map(descriptorKey).sort(),
             maxAgeSeconds: request.maxAgeSeconds,
+            freshnessBasis: request.freshnessBasis ?? 'model-run',
             maxLocationDistanceM: request.maxLocationDistanceM,
             maxTimeStepSeconds: request.maxTimeStepSeconds,
           }),
@@ -111,10 +113,15 @@ export const withForecastCache = (
             if (!parsed.success) return null;
             const result = parsed.data;
             const age = now - Date.parse(result.provenance.retrievedAt);
-            const runAge = now - Date.parse(result.provenance.forecastRunAt);
+            const freshnessAt =
+              request.freshnessBasis === 'retrieval-time'
+                ? result.provenance.retrievedAt
+                : result.provenance.forecastRunAt;
+            const runAge = freshnessAt ? now - Date.parse(freshnessAt) : NaN;
             if (
               age < 0 ||
               age > ttl * 1000 ||
+              !Number.isFinite(runAge) ||
               runAge > request.maxAgeSeconds * 1000 ||
               runAge < -300_000 ||
               JSON.stringify(result.provenance.source) !==

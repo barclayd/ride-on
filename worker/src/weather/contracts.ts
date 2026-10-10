@@ -32,7 +32,7 @@ export type Provenance = Readonly<{
   source: SourceIdentity;
   /** Upstream run/instance/dataset version, not an invented timestamp. */
   dataVersion: string | null;
-  /** Forecast model run used for freshness; absent for non-forecast datasets. */
+  /** Forecast model run used for freshness; absent when the provider does not expose it. */
   forecastRunAt?: string;
   retrievedAt: string;
   attribution: readonly Readonly<{ text: string; url: string }>[];
@@ -40,6 +40,7 @@ export type Provenance = Readonly<{
 
 /** Canonical units. Rain and all precipitation are deliberately distinct. */
 export type WeatherMeasure =
+  | Readonly<{ quantity: 'total-cloud-cover'; unit: 'fraction' }>
   | Readonly<{
       quantity: 'air-temperature' | 'feels-like-temperature';
       unit: 'celsius';
@@ -75,10 +76,17 @@ export type ProbabilityEvent =
 
 export type ForecastDescriptor =
   | Readonly<{
+      kind: 'category';
+      quantity: 'sky-condition';
+      vocabulary: 'sky-condition-v1';
+      basis: 'provider-weather-symbol';
+    }>
+  | Readonly<{
       kind: 'scalar';
       measure: WeatherMeasure;
       statistic:
         | Readonly<{ kind: 'deterministic' }>
+        | Readonly<{ kind: 'ensemble-mean' }>
         /** Percentile in [0, 100], not a probability of the forecast scenario. */
         | Readonly<{ kind: 'percentile'; percentile: number }>;
     }>
@@ -94,14 +102,20 @@ export type SampleTime =
   | Readonly<{
       kind: 'period';
       range: TimeRange;
-      aggregation: 'mean' | 'minimum' | 'maximum' | 'accumulation' | 'event';
+      aggregation:
+        | 'mean'
+        | 'minimum'
+        | 'maximum'
+        | 'accumulation'
+        | 'event'
+        | 'categorical-summary';
     }>;
 
 export type ForecastSample = Readonly<{
   /** Provider's validity/label time, distinct from the bounds of a statistic. */
   validAt: string;
   time: SampleTime;
-  /** Null is unavailable, never dry/calm/comfortable by default. */
+  /** Scalars/probabilities use numbers; categories use the declared vocabulary codes. Null is unavailable. */
   value: number | null;
 }>;
 
@@ -117,8 +131,10 @@ export type ForecastRequest = Readonly<{
   required: readonly ForecastDescriptor[];
   maxTimeStepSeconds: number;
   maxLocationDistanceM: number;
-  /** Maximum age of the upstream model run, not time since retrieval. */
+  /** Maximum age under freshnessBasis; defaults to the upstream model run. */
   maxAgeSeconds: number;
+  /** Retrieval-only freshness cannot establish the age of the underlying model. */
+  freshnessBasis?: 'model-run' | 'retrieval-time';
 }>;
 
 export type ProviderIssue = Readonly<{
@@ -137,7 +153,8 @@ export type ProviderIssue = Readonly<{
     | 'outside-forecast-horizon'
     | 'insufficient-resolution'
     | 'missing-data'
-    | 'stale-data';
+    | 'stale-data'
+    | 'unknown-model-run';
   /** Sanitized; no credentials or raw upstream response bodies. */
   message: string;
   retryAfterSeconds?: number;

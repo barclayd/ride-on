@@ -19,7 +19,9 @@ const location = {
 const request: ForecastRequest = {
   locations: [location],
   range: { start: '2026-10-09T10:00:00Z', end: '2026-10-09T12:00:00Z' },
-  required: Object.values(weather),
+  required: Object.entries(weather)
+    .filter(([key]) => !['totalCloudCover', 'skyCondition'].includes(key))
+    .map(([, descriptor]) => descriptor),
   maxTimeStepSeconds: 3600,
   maxLocationDistanceM: 5000,
   maxAgeSeconds: 6 * 3600,
@@ -196,6 +198,22 @@ describe('Global Spot normalisation', () => {
     expect(result.status).toBe('partial');
     expect(result.series).toHaveLength(1);
     expect(result.issues[0]?.code).toBe('unsupported-statistic');
+  });
+
+  test('explicit retrieval freshness retains the known model run without enforcing model age', () => {
+    const fixture = globalSpotFixture();
+    required(fixture.features[0]).properties.modelRunDate = '2026-10-08T00:00Z';
+    const result = evidence(
+      normalise(fixture, { ...request, freshnessBasis: 'retrieval-time' }),
+    );
+    expect(result.status).toBe('complete');
+    expect(result.provenance.forecastRunAt).toBe('2026-10-08T00:00Z');
+    expect(normalise(fixture).issues[0]?.code).toBe('stale-data');
+    required(fixture.features[0]).properties.modelRunDate = '2026-10-10T00:00Z';
+    expect(
+      normalise(fixture, { ...request, freshnessBasis: 'retrieval-time' })
+        .issues[0]?.code,
+    ).toBe('invalid-response');
   });
 });
 

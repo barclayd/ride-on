@@ -9,6 +9,10 @@ export const coordinateSchema = z.object({
 });
 const measure = z.union([
   z.object({
+    quantity: z.literal('total-cloud-cover'),
+    unit: z.literal('fraction'),
+  }),
+  z.object({
     quantity: z.enum(['air-temperature', 'feels-like-temperature']),
     unit: z.literal('celsius'),
   }),
@@ -31,10 +35,17 @@ const measure = z.union([
 ]);
 export const forecastDescriptorSchema = z.discriminatedUnion('kind', [
   z.object({
+    kind: z.literal('category'),
+    quantity: z.literal('sky-condition'),
+    vocabulary: z.literal('sky-condition-v1'),
+    basis: z.literal('provider-weather-symbol'),
+  }),
+  z.object({
     kind: z.literal('scalar'),
     measure,
     statistic: z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('deterministic') }),
+      z.object({ kind: z.literal('ensemble-mean') }),
       z.object({
         kind: z.literal('percentile'),
         percentile: z.number().min(0).max(100),
@@ -76,6 +87,7 @@ export const forecastRequestSchema = z
     maxTimeStepSeconds: z.number().positive(),
     maxLocationDistanceM: z.number().nonnegative(),
     maxAgeSeconds: z.number().positive(),
+    freshnessBasis: z.enum(['model-run', 'retrieval-time']).optional(),
   })
   .refine((request) => {
     const duration =

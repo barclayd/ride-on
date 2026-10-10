@@ -49,6 +49,7 @@ export const hourlyForecast = (
             const hour = first + index;
             return {
               time: `2026-10-10T${String(hour).padStart(2, '0')}:00:00Z`,
+              significantWeatherCode: 3,
               screenTemperature: 18,
               feelsLikeTemperature: 17,
               windSpeed10m: 3,

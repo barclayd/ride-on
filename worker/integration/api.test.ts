@@ -33,6 +33,71 @@ const integration = (name: string, run: (harness: Harness) => Promise<void>) =>
   });
 
 integration(
+  'sunshine-aware ranking can favour a cooler sunny ride and reverses with personal weights',
+  async (h) => {
+    h.use(
+      metOffice(({ request }) => {
+        const sunny =
+          Number(new URL(request.url).searchParams.get('longitude')) < 0;
+        return HttpResponse.json(
+          hourlyForecast(request, {
+            values: () => ({
+              screenTemperature: sunny ? 14 : 17,
+              significantWeatherCode: sunny ? 3 : 8,
+            }),
+          }),
+        );
+      }),
+    );
+    const sunny = await upload(h, 'Cool sunny intervals', -1);
+    const overcast = await upload(h, 'Warm overcast', 1);
+    const ids = [sunny.id, overcast.id];
+    const result = await recommend(h, ids, {
+      preferences: {
+        weights: { temperature: 0.15, wind: 0.2, dryness: 0.2, sunshine: 0.45 },
+      },
+    });
+    assert.equal(result.recommendedRouteId, sunny.id);
+    assert.equal(
+      first(result.rankings).best.conditions.skyConditionDistanceFractions
+        ?.sunnyIntervals,
+      1,
+    );
+    const calls = h.requests.length;
+    const warmer = await recommend(h, ids, {
+      preferences: {
+        weights: { temperature: 0.99, wind: 0, dryness: 0, sunshine: 0.01 },
+      },
+    });
+    assert.equal(warmer.recommendedRouteId, overcast.id);
+    assert.equal(h.requests.length, calls);
+  },
+);
+
+integration(
+  'an unknown weather symbol cannot turn into a sunny recommendation',
+  async (h) => {
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(
+          hourlyForecast(request, {
+            values: () => ({ significantWeatherCode: 99 }),
+          }),
+        ),
+      ),
+    );
+    const route = await upload(h);
+    const result = await recommend(h, [route.id], {
+      preferences: { weights: { sunshine: 0.45 } },
+    });
+    assert.equal(result.recommendedRouteId, null);
+    assert.ok(
+      first(result.unranked).issues.includes('missing-weather-at-arrival'),
+    );
+  },
+);
+
+integration(
   'GPX → migrated D1 → Met Office HTTP → recommendation survives a Worker restart',
   async (h) => {
     h.use(metOffice());

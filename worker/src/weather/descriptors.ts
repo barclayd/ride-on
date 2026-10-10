@@ -2,6 +2,17 @@ import type { ForecastDescriptor } from './contracts.ts';
 
 /** Provider-neutral vocabulary; precipitation includes rain, snow and other forms. */
 export const weatherDescriptors = {
+  skyCondition: {
+    kind: 'category',
+    quantity: 'sky-condition',
+    vocabulary: 'sky-condition-v1',
+    basis: 'provider-weather-symbol',
+  },
+  totalCloudCover: {
+    kind: 'scalar',
+    measure: { quantity: 'total-cloud-cover', unit: 'fraction' },
+    statistic: { kind: 'deterministic' },
+  },
   airTemperature: {
     kind: 'scalar',
     measure: { quantity: 'air-temperature', unit: 'celsius' },
@@ -51,6 +62,13 @@ export const weatherDescriptors = {
 
 /** Compare meaning, independent of object property order. */
 export const descriptorKey = (descriptor: ForecastDescriptor): string => {
+  if (descriptor.kind === 'category')
+    return JSON.stringify([
+      'category',
+      descriptor.quantity,
+      descriptor.vocabulary,
+      descriptor.basis,
+    ]);
   if (descriptor.kind === 'scalar') {
     return JSON.stringify([
       'scalar',
@@ -83,3 +101,42 @@ export const descriptorKey = (descriptor: ForecastDescriptor): string => {
         ],
   );
 };
+
+/** Marginal medians plus ensemble-mean wind direction, not a joint weather scenario. */
+export const ensembleDescriptors = {
+  skyCondition: weatherDescriptors.skyCondition,
+  airTemperature: {
+    ...weatherDescriptors.airTemperature,
+    statistic: { kind: 'percentile', percentile: 50 },
+  },
+  windSpeed: {
+    ...weatherDescriptors.windSpeed,
+    statistic: { kind: 'percentile', percentile: 50 },
+  },
+  windDirection: {
+    ...weatherDescriptors.windDirection,
+    statistic: { kind: 'ensemble-mean' },
+  },
+  windGust: {
+    ...weatherDescriptors.windGust,
+    statistic: { kind: 'percentile', percentile: 50 },
+  },
+  precipitationRate: {
+    ...weatherDescriptors.precipitationRate,
+    statistic: { kind: 'percentile', percentile: 50 },
+  },
+  totalCloudCover: {
+    ...weatherDescriptors.totalCloudCover,
+    statistic: { kind: 'percentile', percentile: 50 },
+  },
+  precipitationProbability: {
+    kind: 'probability',
+    unit: 'fraction',
+    event: {
+      kind: 'threshold',
+      measure: { quantity: 'precipitation-amount', unit: 'mm' },
+      comparison: 'above',
+      threshold: 0,
+    },
+  },
+} as const satisfies Record<string, ForecastDescriptor>;

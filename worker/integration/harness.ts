@@ -42,6 +42,7 @@ export const createHarness = async () => {
   const bindings = {
     TEST_NOW: FIXED_NOW,
     MET_OFFICE_API_KEY: WEATHER_KEY,
+    MET_OFFICE_BPF_API_KEY: 'integration-bpf-key-not-a-real-secret',
     API_KEYS_JSON: JSON.stringify([
       { ownerId: 'alice', token: ALICE_TOKEN },
       { ownerId: 'bob', token: BOB_TOKEN },
