@@ -6,6 +6,14 @@ import { type Harness, RIDE_DATE } from './harness.ts';
 const conditions = z.object({
   temperatureC: z.object({ minimum: z.number(), maximum: z.number() }),
   maximumGustKph: z.number(),
+  skyConditionDistanceFractions: z
+    .record(z.string(), z.number().min(0).max(1))
+    .nullable(),
+  averageWindSpeedKph: z.number(),
+  averageCrosswindKph: z.number(),
+  cloudCoverFraction: z
+    .object({ mean: z.number(), maximum: z.number() })
+    .nullable(),
   maximumPrecipitationProbability: z.number().min(0).max(1),
   maximumPrecipitationRateMmH: z.number(),
   assistedDistanceFraction: z.number().min(0).max(1),
@@ -102,7 +110,7 @@ const responseSchema = z.object({
           .object({
             source: z.object({ providerId: z.string() }),
             dataVersion: z.string().nullable(),
-            forecastRunAt: z.string(),
+            forecastRunAt: z.string().optional(),
             retrievedAt: z.iso.datetime(),
             attribution: z.array(
               z.object({ text: z.string(), url: z.string() }),

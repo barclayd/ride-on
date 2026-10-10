@@ -12,7 +12,7 @@ The test entry point calls the production application factory, overriding only
 the clock and request logging. The real authentication, GPX parser, route store,
 Met Office HTTP adapter, source selection, cache and recommendation engine run.
 MSW 3.0.2 `http` handlers receive the actual outbound requests and return realistic
-Global Spot payloads. This covers serialization and provider normalization instead
+Global Spot and BPF v2 CoverageJSON payloads. This covers serialization and provider normalization instead
 of replacing a provider with already-normalized weather.
 
 Miniflare's `outboundService` resolves requests with MSW's documented `getResponse`
@@ -33,6 +33,9 @@ Covered scenarios include:
 - Upload, migration-backed persistence, restart, daylight and pace defaults.
 - Preference changes and speed overrides reusing cached forecasts.
 - Hourly departure selection and route-relative wind direction.
+- BPF percentile/mean selection, total cloud, native precipitation intervals and site reuse.
+- Sunshine through cloud, unknown weather symbols, personal sunshine/warmth ranking reversals.
+- Explicit retrieval-only freshness, missing-cloud exclusion and BPF quota recovery.
 - Minimum-standard failures with evidence, unresolved monthly limits and fallbacks.
 - Missing fields at later route locations and partial forecast horizons.
 - Upstream auth, quota and service errors; recovery; no credential leaks or redirects.

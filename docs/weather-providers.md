@@ -1,7 +1,7 @@
 # Weather providers for the API MVP
 
-Researched and live-checked 9 October 2026. The Global Spot hourly adapter and
-source-selection service are implemented and tested locally. A supplied key is
+Researched and live-checked 9–10 October 2026. Global Spot hourly and BPF v2 UK
+adapters and the source-selection service are implemented and tested locally. A supplied key is
 stored in the ignored local secrets file. GPX ingestion, D1 persistence, shared
 forecast caching and the recommendation endpoint are now implemented and verified
 in the local Workers runtime. No remote secret or deployment has been added.
@@ -15,12 +15,71 @@ credentials and HTTP calls stay inside adapters. Dan's UK policy is Met Office
 only; preferences outside the UK remain unspecified. Other riders can select a
 provider or explicitly allow an ordered fallback list.
 
-Start with **Global Spot hourly**, which the supplied subscription enables and
-which has now passed a live integration check. Blended Probabilistic Forecast v2
-remains an optional later adapter/product: its richer uncertainty information
-could help with preferences near comfort limits, but requires another subscription
-key and independent parameter verification. Neither feed has been established to
-match the Met Office consumer app exactly.
+The default remains **Global Spot hourly** (`met-office`). Cloud-aware profiles can
+explicitly select **BPF v2 UK** (`met-office-bpf`) with `ensemble-summary` assessment
+and `retrieval-time` freshness. Both keys have been authenticated locally. Neither
+feed has been established to match the Met Office consumer app exactly. Providers
+are never silently combined or substituted.
+
+### Cloud requirement discovered in human grading — 10 October 2026
+
+Dan identifies low total cloud coverage as a major comfort preference. In an otherwise
+equal, dry, comfortable-wind comparison, he prefers 14°C with 10% cloud to 17°C with
+80% cloud. This belongs in a personal profile, not a mandatory global weight. It also
+means departure selection must balance clearer skies against warmth along the ride;
+the observed preference for earlier departures is not a universal morning bonus.
+
+A single authenticated Global Spot hourly field inspection on 10 October returned
+`significantWeatherCode` but **no numeric cloud-cover field**. Its local, ignored
+diagnostic is `evaluation/2026-10-10-cloud-fields-live-check.json`; no raw forecast or
+credential is stored there. A weather symbol can support a separately labelled
+categorical sky assessment, but it cannot supply an invented cloud percentage.
+
+The official [BPF v2 parameter mapping](https://datahub.metoffice.gov.uk/downloads/bpf-v2-parameter-name-changes)
+lists `cloudAreaFraction`, separately from `lowTypeCloudAreaFraction`, and
+`probabilityOfCloudAreaFractionAboveThreshold`. It also lists
+`durationOfSunshineSumPt24h`, whose whole-day accumulation must not stand in for
+hourly cloud conditions along a ride. The [Met Office median guidance](https://datahub.metoffice.gov.uk/mo-bpf-deterministic)
+suggests the 50th percentile for a representative site forecast. Preserve its
+percentile descriptor in the generic contract and make this statistic selection
+explicit in the evaluator; do not relabel it as a deterministic source forecast
+or interpret a cloud fraction as a probability of sunshine.
+
+The BPF v2 key was supplied and verified on 10 October. The UK collections' live
+metadata and representative responses confirmed the units, dimensions and periods
+listed below. The original Global Spot key is separate and remains configured.
+
+The cloud-aware calibration retains source identity for the whole comparison, exposes
+hourly cloud and wind evidence, and leaves cloud unknown if required data is unavailable.
+Compare equivalent locations, validity times, model runs and statistics when checking
+the consumer website. In particular, sustained/mean wind and maximum gusts are distinct:
+the original review highlighted peak gusts while Dan quoted average winds in mph.
+Display both with clear labels and consistent units before diagnosing a disagreement.
+
+### Clarification: visible sunshine is the actual priority
+
+Dan subsequently chose **visible sunshine**, even through thin high cloud, over
+minimizing total cloud. The cloud-only experiment is therefore superseded for his
+profile. At a London diagnostic site BPF returned hourly `weatherCodePt01h = 3`
+(partly cloudy / sunny intervals) alongside high total cloud. This demonstrates why
+`1 − cloudAreaFraction` must not stand in for visible sunshine.
+
+Both adapters now support a provider-neutral categorical sky descriptor. BPF reads
+`weatherCodePt01h`, validates its one-hour bounds and retains a categorical summary
+rather than treating the axis label `50` as a numerical percentile. Global Spot
+reads `significantWeatherCode` (unit `1`) at nominal hourly validity. The
+[official code definitions](https://datahub.metoffice.gov.uk/definition-of-codes)
+identify sunny and partly-cloudy day separately from cloudy and overcast; the
+[forecast symbol guide](https://weather.metoffice.gov.uk/guides/what-does-this-forecast-mean)
+labels the partly-cloudy day symbol as sunny intervals. Night symbols remain
+separate, and unknown codes remain unavailable.
+
+The engine assigns explicit, provisional comfort values to these categories. It
+never turns a symbol into a cloud fraction or sunshine probability. Daily
+`durationOfSunshineSumPt24h` remains unsuitable for timing sunshine along an hourly
+ride. Neither live UK collection advertised an hourly sunshine-duration or direct
+solar-radiation field in the inspected metadata. Weather symbols are therefore a
+coarser but relevant current proxy, not a measurement of visible sunlight.
 
 ### Verified integration
 
@@ -54,10 +113,10 @@ every GPX point. See the [product overview](https://datahub.metoffice.gov.uk/doc
 Prices exclude VAT; quotas are subscription limits, not a per-rider allowance.
 See [current pricing](https://datahub.metoffice.gov.uk/pricing/site-specific).
 
-For any later BPF integration, use v2: BPF v1 retires on **11 November 2026**, and v2 requires its own
+The new adapter uses v2: BPF v1 retires on **11 November 2026**, and v2 requires its own
 subscription key. See the [migration notice](https://datahub.metoffice.gov.uk/support/changes-and-updates).
 
-### Integration details to verify with a subscription
+### Implemented BPF v2 mapping
 
 The [v2 API guide](https://datahub.metoffice.gov.uk/docs/f/category/site-specific/type/probabilistic-forecast-feature/api-user-guide)
 documents this base URL:
@@ -71,12 +130,56 @@ Discover collections, forecast instances and locations. A position request uses
 reduce payload size. Read each coverage's declared units, axes, shape and time
 bounds; do not hardcode one array layout or assume every variable is hourly.
 The documented air-temperature example uses Kelvin, requiring conversion to °C.
-Obtain representative responses before implementing exact parameter mappings.
+Representative UK responses were checked before implementing these mappings.
 
 Authentication uses the `apikey` header after registration and product
 subscription. Use a Worker secret when deploying. The [FAQ](https://datahub.metoffice.gov.uk/support/faqs)
 documents authentication, quota errors and the attribution “Powered by Met Office
-data”. The supplied Global Spot key has been verified; BPF access has not.
+data”. Both supplied subscription keys have been verified, each against its own product.
+
+
+The adapter uses `uk-spot-percentiles` and `uk-spot-probabilities`, instance
+`blended`. The site catalogue is validated and cached for 24 hours; locations
+resolving to the same nearest site share one pair of calls within a comparison.
+The actual returned site must match the requested ID and remain within the 10 km
+quality limit, also checked against each evaluated route section.
+
+| Field | Meaning and conversion |
+|---|---|
+| `airTemperature1p5m` | p50 Kelvin → °C |
+| `weatherCodePt01h` | hourly categorical weather symbol, native interval; not a percentile |
+| `cloudAreaFraction` | p50 total cloud fraction, 0–1; not low cloud or sunshine probability |
+| `windSpeed10m` | p50 m/s; reported separately from gusts |
+| `windFromDirection10mMean` | degrees FROM; ensemble mean, verified from `realization: mean` metadata |
+| `windSpeedOfGust10mMaximumPt01h` | p50 of the maximum gust over the previous hour, m/s |
+| `lwePrecipitationRate` | p50 m/s → mm/hour by multiplying by 3,600,000 |
+| `probabilityOfLweThicknessOfPrecipitationAmountAboveThresholdSumPt01h` | fraction for precipitation amount > 0 metres over the previous hour; normalized threshold 0 mm |
+
+CoverageJSON dimensions are decoded from `axisNames` and `shape`; array order is
+not assumed. Parameter keys, units, selected statistics, coordinates and interval
+bounds are checked. Missing medians or invalid fractions remain missing. Native
+hour bounds are retained. The wind-direction axis happens to label its single
+value `50`, but the metadata identifies an ensemble mean: it is not relabelled as
+a percentile. Combining marginal summaries does not create a joint scenario.
+
+**Model age is unknown.** The inspected `blended` instance and forecast responses
+do not expose a model-run or publication timestamp. `dataVersion` and `issuedAt`
+remain null, `forecastRunAt` absent, with an `unknown-model-run` issue. Requests
+requiring model-run freshness are rejected before spending quota. An explicit
+`retrieval-time` policy can accept these forecasts, but proves only how recently
+we fetched them; it cannot verify a six-hour model-age limit. Cache identities
+include this policy and a hit cannot upgrade retrieval freshness into model age.
+
+The BPF probability event (> 0 mm in the previous hour) is explicit. It differs
+from Global Spot's unspecified occurrence threshold and centred interval. Do not
+attribute every change in score or precipitation risk to the algorithm when the
+weather product or retrieval time has also changed.
+
+A full six-route comparison at the existing spatial sampling resolves to 50 UK
+sites: about 100 forecast calls plus catalogue discovery. The supplied free plan
+allows 55 calls/day. This is a capacity constraint, not a reason to reduce spatial
+coverage silently. Larger live comparisons need a sufficient allowance. API tests
+use synthetic MSW responses and consume no live quota.
 
 ### Implemented Global Spot mapping
 
@@ -92,6 +195,7 @@ establish these mappings:
 | Gust | `max10mWindGust` | m/s, maximum over previous hour |
 | Precipitation amount | `totalPrecipAmount` | mm accumulated over previous hour |
 | Precipitation rate | `precipitationRate` | mm/hour at validity time |
+| Weather symbol | `significantWeatherCode` | dimensionless categorical symbol at nominal hourly validity |
 | Precipitation probability | `probOfPrecipitation` | Percentage converted to fraction; hour centred on validity time |
 
 Precipitation includes more than rain. The occurrence probability's numeric
@@ -113,7 +217,7 @@ terms when finalising any public forecast display or data export.
 ## Internal contracts
 
 The types are in [`worker/src/weather/contracts.ts`](../worker/src/weather/contracts.ts).
-Runtime request validation, Global Spot response validation and source selection
+Runtime request validation, both adapters’ response validation and source selection
 are now implemented beside them. Only the required envelope, units and selected
 values are checked; unrelated new upstream fields are tolerated.
 
@@ -169,7 +273,8 @@ and hourly rain probabilities cannot simply be added into a whole-ride risk.
 
 ## Source preferences and failures
 
-Dan's resolved UK policy is `{ mode: 'strict', providerId: 'met-office' }`. If that
+Dan's cloud-aware profile uses `{ mode: 'strict', providerId: 'met-office-bpf' }`;
+the original API default remains `met-office`. If that
 source is unavailable, report unavailable evidence. Do not silently substitute
 another provider. In particular, a forecast failure must not produce a claim that
 all routes fail the rider's minimum standards.

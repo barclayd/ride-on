@@ -1,12 +1,15 @@
 import { haversineKm } from '../geo.ts';
 import type { Route } from '../routes/model.ts';
+import { skyConditions } from '../weather/conditions.ts';
 import type {
+  ForecastDescriptor,
   ForecastSample,
   LocationForecastResult,
 } from '../weather/contracts.ts';
 import {
   descriptorKey,
   weatherDescriptors as descriptors,
+  ensembleDescriptors,
 } from '../weather/descriptors.ts';
 import { planDepartures } from './daylight.ts';
 import {
@@ -14,7 +17,7 @@ import {
   resolveMinimumTemperature,
 } from './input.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.1';
+export const ALGORITHM_VERSION = 'comfort-v0.3';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -23,6 +26,25 @@ export const requiredWeather = [
   descriptors.precipitationRate,
   descriptors.precipitationProbability,
 ];
+/** Selection policy is independent of provider identity. No statistic is relabelled. */
+export const requiredWeatherFor = (
+  input: RecommendationInput,
+): readonly ForecastDescriptor[] => {
+  const d =
+    input.forecast.representation === 'ensemble-summary'
+      ? ensembleDescriptors
+      : descriptors;
+  return [
+    d.airTemperature,
+    d.windSpeed,
+    d.windDirection,
+    d.windGust,
+    d.precipitationRate,
+    d.precipitationProbability,
+    ...(input.preferences.weights.clearSkies > 0 ? [d.totalCloudCover] : []),
+    ...(input.preferences.weights.sunshine > 0 ? [d.skyCondition] : []),
+  ];
+};
 const HOUR = 3_600_000;
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const round = (value: number) => Math.round(value * 100) / 100;
@@ -87,6 +109,11 @@ type Observation = {
   fromM: number;
   toM: number;
   temperatureC: number;
+  windSpeedKph: number;
+  cloudCoverFraction: number | null;
+  skyCondition: number | null;
+  sunshine: number | null;
+  clearSkies: number | null;
   headwindKph: number;
   crosswindKph: number;
   gustKph: number;
@@ -106,7 +133,29 @@ type Failure = {
 };
 const summarize = (rows: readonly Observation[]) => {
   const distance = rows.reduce((sum, row) => sum + row.distanceM, 0);
+  const mean = (value: (row: Observation) => number) =>
+    rows.reduce((sum, row) => sum + value(row) * row.distanceM, 0) / distance;
   return {
+    skyConditionDistanceFractions: rows.every((r) => r.skyCondition !== null)
+      ? Object.fromEntries(
+          Object.entries(skyConditions).map(([name, code]) => [
+            name,
+            round(mean((r) => (r.skyCondition === code ? 1 : 0))),
+          ]),
+        )
+      : null,
+    averageWindSpeedKph: round(mean((r) => r.windSpeedKph)),
+    averageHeadwindKph: round(mean((r) => Math.max(0, r.headwindKph))),
+    averageTailwindKph: round(mean((r) => Math.max(0, -r.headwindKph))),
+    averageCrosswindKph: round(mean((r) => r.crosswindKph)),
+    cloudCoverFraction: rows.every((r) => r.cloudCoverFraction !== null)
+      ? {
+          mean: round(mean((r) => r.cloudCoverFraction ?? 0)),
+          maximum: round(
+            Math.max(...rows.map((r) => r.cloudCoverFraction ?? 0)),
+          ),
+        }
+      : null,
     distanceKm: round(distance / 1000),
     temperatureC: {
       minimum: round(Math.min(...rows.map((row) => row.temperatureC))),
@@ -127,7 +176,11 @@ const summarize = (rows: readonly Observation[]) => {
     ),
     assistedDistanceFraction: round(
       rows.reduce(
-        (sum, row) => sum + (row.headwindKph < -1 ? row.distanceM : 0),
+        (sum, row) =>
+          sum +
+          (-row.headwindKph >= 3 && -row.headwindKph > row.crosswindKph
+            ? row.distanceM
+            : 0),
         0,
       ) / distance,
     ),
@@ -147,7 +200,12 @@ const assessCandidate = (
   const missing = new Set<string>();
   const preferences = input.preferences;
   const weights = preferences.weights;
-  const weightTotal = weights.temperature + weights.wind + weights.dryness;
+  const weightTotal =
+    weights.temperature +
+    weights.wind +
+    weights.dryness +
+    weights.clearSkies +
+    weights.sunshine;
   for (const leg of route.legs) {
     const at =
       departure + (durationMs * (leg.fromM + leg.toM)) / (2 * route.distanceM);
@@ -193,13 +251,23 @@ const assessCandidate = (
       precipitationRateMmH,
       precipitationProbability,
     ] = values;
+    const cloudCoverFraction =
+      weights.clearSkies > 0 ? (values[6] ?? null) : null;
+    const skyCondition =
+      weights.sunshine > 0
+        ? (values[weights.clearSkies > 0 ? 7 : 6] ?? null)
+        : null;
     if (
       temperatureC == null ||
       speedMs == null ||
       direction == null ||
       gustMs == null ||
       precipitationRateMmH == null ||
-      precipitationProbability == null
+      precipitationProbability == null ||
+      (weights.clearSkies > 0 && cloudCoverFraction === null) ||
+      (weights.sunshine > 0 &&
+        (skyCondition === null ||
+          !Object.values(skyConditions).some((code) => code === skyCondition)))
     ) {
       missing.add('missing-weather-at-arrival');
       continue;
@@ -220,25 +288,40 @@ const assessCandidate = (
     const wind =
       1 -
       clamp(
-        0.5 *
+        0.45 *
           clamp((headwindKph - preferences.wind.comfortableHeadwindKph) / 20) +
-          0.2 *
+          0.35 *
             clamp(
               (crosswindKph - preferences.wind.comfortableCrosswindKph) / 20,
             ) +
-          0.3 * clamp((gustKph - preferences.wind.comfortableGustKph) / 30),
+          0.2 * clamp((gustKph - preferences.wind.comfortableGustKph) / 30),
       );
     const dryness =
       1 -
       clamp(
         0.8 * precipitationProbability + 0.2 * clamp(precipitationRateMmH / 2),
       );
+    const clearSkies =
+      cloudCoverFraction === null ? null : 1 - cloudCoverFraction;
+    const sunshine =
+      skyCondition === null
+        ? null
+        : skyCondition === skyConditions.sunny
+          ? 1
+          : skyCondition === skyConditions.sunnyIntervals
+            ? preferences.sunshine.sunnyIntervalsComfort
+            : 0;
     rows.push({
       at,
       distanceM: leg.toM - leg.fromM,
       fromM: leg.fromM,
       toM: leg.toM,
       temperatureC,
+      windSpeedKph: speedMs * 3.6,
+      cloudCoverFraction,
+      skyCondition,
+      sunshine,
+      clearSkies,
       headwindKph,
       crosswindKph,
       gustKph,
@@ -250,7 +333,9 @@ const assessCandidate = (
       comfort:
         (weights.temperature * temperature +
           weights.wind * wind +
-          weights.dryness * dryness) /
+          weights.dryness * dryness +
+          weights.clearSkies * (clearSkies ?? 0) +
+          weights.sunshine * (sunshine ?? 0)) /
         weightTotal,
     });
   }
@@ -313,8 +398,16 @@ const assessCandidate = (
       : Object.keys(standards).length
         ? 'meets'
         : 'not_configured';
-  const mean = (key: 'comfort' | 'temperature' | 'wind' | 'dryness') =>
-    rows.reduce((sum, row) => sum + row[key] * row.distanceM, 0) /
+  const mean = (
+    key:
+      | 'comfort'
+      | 'temperature'
+      | 'wind'
+      | 'dryness'
+      | 'clearSkies'
+      | 'sunshine',
+  ) =>
+    rows.reduce((sum, row) => sum + (row[key] ?? 0) * row.distanceM, 0) /
     route.distanceM;
   const score =
     100 *
@@ -334,6 +427,10 @@ const assessCandidate = (
     },
   );
   const drawbacks: string[] = [];
+  if (conditions.cloudCoverFraction && conditions.cloudCoverFraction.mean > 0.5)
+    drawbacks.push(
+      'Cloud covers more than half the sky on average during this ride.',
+    );
   if (minimum < preferences.temperature.comfortMinC)
     drawbacks.push('Some sections are cooler than your comfort range.');
   if (conditions.temperatureC.maximum > preferences.temperature.comfortMaxC)
@@ -357,9 +454,17 @@ const assessCandidate = (
     finishAt: iso(departure + durationMs),
     score: round(score),
     factors: {
+      sunshine:
+        conditions.skyConditionDistanceFractions === null
+          ? null
+          : round(100 * mean('sunshine')),
       temperature: round(100 * mean('temperature')),
       wind: round(100 * mean('wind')),
       dryness: round(100 * mean('dryness')),
+      clearSkies:
+        conditions.cloudCoverFraction === null
+          ? null
+          : round(100 * mean('clearSkies')),
     },
     standards: { status: standardsStatus, failures },
     conditions,
@@ -383,6 +488,8 @@ export const recommendRides = (
   results: readonly LocationForecastResult[],
   nowMs: number,
   maxLocationDistanceM = 10_000,
+  // Offline calibration can retain more candidates; the HTTP API keeps three.
+  alternativeLimit = 3,
 ) => {
   const forecasts = new Map(
     results.map((result) => [
@@ -404,7 +511,7 @@ export const recommendRides = (
       );
       return [
         id,
-        requiredWeather.map((descriptor) =>
+        requiredWeatherFor(input).map((descriptor) =>
           compileSeries(byDescriptor.get(descriptorKey(descriptor)) ?? []),
         ),
       ];
@@ -452,7 +559,7 @@ export const recommendRides = (
         (candidate) => candidate.standards.status === 'unknown',
       ).length,
       best: assessed[0] ?? null,
-      alternatives: assessed.slice(1, 4),
+      alternatives: assessed.slice(1, 1 + alternativeLimit),
       issues: [...new Set(unknown.flatMap((candidate) => candidate.reasons))],
       warnings: [
         ...route.warnings,

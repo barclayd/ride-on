@@ -4,7 +4,10 @@ import { authenticate } from './auth.ts';
 import { readBoundedBody } from './body.ts';
 import { AppError } from './errors.ts';
 import { planDepartures } from './recommendations/daylight.ts';
-import { recommendRides, requiredWeather } from './recommendations/engine.ts';
+import {
+  recommendRides,
+  requiredWeatherFor,
+} from './recommendations/engine.ts';
 import {
   recommendationSchema,
   resolveMinimumTemperature,
@@ -19,6 +22,7 @@ import {
 import type { Bindings, Env } from './types.ts';
 import { type ForecastCache, withForecastCache } from './weather/cache.ts';
 import type { ForecastProvider, ForecastRequest } from './weather/contracts.ts';
+import { createMetOfficeBpf } from './weather/met-office-bpf.ts';
 import { createMetOfficeGlobalSpot } from './weather/met-office-global-spot.ts';
 import { getForecastForPolicy } from './weather/source-policy.ts';
 
@@ -143,6 +147,11 @@ export const createApp = (
         c.env.WEATHER_CACHE.put(key, value, { expirationTtl: ttlSeconds }),
     };
     const configured = dependencies.providers ?? {
+      'met-office-bpf': createMetOfficeBpf({
+        apiKey: c.env.MET_OFFICE_BPF_API_KEY ?? '',
+        now,
+        cache,
+      }),
       'met-office': createMetOfficeGlobalSpot({
         apiKey: c.env.MET_OFFICE_API_KEY ?? '',
         now,
@@ -184,7 +193,13 @@ export const createApp = (
         }
       : null;
     const request: ForecastRequest | null = range
-      ? { locations, range, required: requiredWeather, ...quality }
+      ? {
+          locations,
+          range,
+          required: requiredWeatherFor(input),
+          ...quality,
+          freshnessBasis: input.forecast.freshnessBasis,
+        }
       : null;
     const selected = request
       ? await getForecastForPolicy(
@@ -209,7 +224,24 @@ export const createApp = (
       resolvedPreferences: input.preferences,
       resolvedMinimumTemperature: resolveMinimumTemperature(input),
       riding: input.riding,
+      forecast: input.forecast,
       assumptions: [
+        ...(input.preferences.weights.sunshine > 0
+          ? [
+              'Sunshine comfort uses forecast weather symbols: sunny, sunny intervals or other conditions. Category shares describe route sections, not sunshine duration or probability. Unknown symbols remain missing.',
+            ]
+          : []),
+        ...(input.forecast.representation === 'ensemble-summary'
+          ? [
+              'Weather uses marginal 50th-percentile values and ensemble-mean wind direction, not a joint scenario. Hourly precipitation probability is for more than 0 mm in its native interval.',
+            ]
+          : []),
+        ...(input.forecast.freshnessBasis === 'retrieval-time'
+          ? [
+              'Freshness is measured since retrieval only; the age of the underlying forecast model may be unknown.',
+            ]
+          : []),
+        'Assisted distance requires a tailwind component of at least 3 km/h that exceeds the crosswind component. Calm circular rides do not need tailwinds to score well.',
         'Duration uses constant moving speed; stops, climbing and wind do not yet change the estimate.',
         'The full ride must fit within the common sunrise-to-sunset window across sampled route locations.',
         'Conditions are evaluated at the midpoint of each route section of up to 500 metres, using weather locations at most 10 km apart.',
@@ -221,7 +253,8 @@ export const createApp = (
         requestedPolicy: input.weather,
         selectedSource: selected?.source ?? null,
         attempts: selected?.attempts ?? [],
-        quality,
+        quality: { ...quality, freshnessBasis: input.forecast.freshnessBasis },
+        descriptors: request?.required ?? [],
         range,
         cache: cacheReads,
         locations: results.map((result) =>

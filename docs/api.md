@@ -1,6 +1,6 @@
 # Ride On API MVP
 
-Implemented locally on 9 October 2026. TypeScript, Hono and Cloudflare Workers;
+Implemented locally on 9 October, with sky and wind calibration on 10 October 2026. TypeScript, Hono and Cloudflare Workers;
 D1 stores route facts, KV caches forecasts, and a deterministic evaluator ranks
 route/departure combinations. This replaces the legacy classification and Strava
 OAuth endpoints. The existing app clients have not yet been migrated.
@@ -16,7 +16,7 @@ bun run migrate:local
 bun run dev
 ```
 
-`.dev.vars` contains `MET_OFFICE_API_KEY` and `API_KEYS_JSON`. The latter is a JSON
+`.dev.vars` contains `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY` and `API_KEYS_JSON`. The latter is a JSON
 array of `{ "ownerId": "dan", "token": "a-random-token-at-least-32-characters-long" }`.
 Use distinct, securely generated tokens per owner. The current local checkout is
 already configured; do not overwrite its secrets. Secrets and local database
@@ -94,7 +94,7 @@ Defaults and optional settings are shown below. These comfort values are
       "comfortableCrosswindKph": 15,
       "comfortableGustKph": 25
     },
-    "weights": { "temperature": 0.3, "wind": 0.2, "dryness": 0.5 },
+    "weights": { "temperature": 0.3, "wind": 0.2, "dryness": 0.5, "clearSkies": 0, "sunshine": 0 },
     "minimumStandards": {}
   },
   "weather": { "mode": "strict", "providerId": "met-office" }
@@ -113,6 +113,65 @@ its sampled locations. This is a conservative common daylight window, using the
 requested date/time zone and an astronomical horizon. Terrain shading and stops
 are not modelled. Today's elapsed departure slots are excluded. The API chooses
 among discrete departure slots, not every possible start minute.
+
+### Cloud-aware ensemble assessment
+
+Use this request fragment for BPF v2 UK forecasts:
+
+```json
+{
+  "weather": { "mode": "strict", "providerId": "met-office-bpf" },
+  "forecast": { "representation": "ensemble-summary", "freshnessBasis": "retrieval-time" },
+  "preferences": { "weights": { "temperature": 0.15, "wind": 0.2, "dryness": 0.2, "clearSkies": 0.45 } }
+}
+```
+
+The four weights above are a **provisional personal calibration**, not defaults.
+The original cloud-only experiment is in `evaluation/comfort-profile-v2.json`;
+Dan’s clarified sunshine profile is described below. Global
+clear-sky weight defaults to zero. A positive weight requires numeric total cloud
+coverage; a provider without it cannot silently assume sunshine. Zero leaves the
+sky factor and cloud summary null when no cloud evidence was requested.
+
+`forecast` defaults to `{ "representation": "deterministic", "freshnessBasis":
+"model-run" }`. The ensemble summary explicitly selects marginal p50 temperature,
+wind speed, gust, precipitation rate and cloud, ensemble-mean wind direction, and
+hourly probability of precipitation > 0 mm. It is not a joint forecast scenario.
+`weather.descriptors` returns these meanings. The selection is provider independent;
+an adapter must supply the exact requested statistics to be used.
+
+BPF does not expose model-run time in the verified responses. Retrieval freshness
+must be chosen explicitly; `unknown-model-run` remains visible and `forecastRunAt`
+is absent. Retrieval age never establishes model age. Unsupported combinations
+return unassessable weather without spending forecast quota.
+
+### Visible sunshine versus clear skies
+
+Dan's follow-up clarifies that **visible sunshine matters most**, even through
+thin high cloud. The current experimental profile is
+`evaluation/sunshine-profile-v3.json`: weights 0.15 temperature / 0.20 wind /
+0.20 dryness / 0.45 sunshine / 0 clear skies. The older cloud-only profile is
+retained as an experiment, not Dan's active profile. Other riders can choose either
+or both sky preferences; the default weights for both remain zero.
+
+Both adapters now map hourly weather symbols into the provider-neutral
+`sky-condition-v1` vocabulary: sunny (1), sunny intervals (2), cloudy (3), overcast
+(4), obscured (5), precipitation (6), clear night (7), partly cloudy night (8).
+These numeric codes are category identifiers, not quantities. Unknown symbols
+remain missing. BPF preserves its hourly categorical interval; Global Spot uses
+nominal validity time. Neither is a sunshine duration or probability forecast.
+
+`preferences.sunshine.sunnyIntervalsComfort` defaults to 0.7. Sunny comfort is 1,
+sunny intervals use that setting, and other symbols score 0. These are provisional
+preference scores, **not an assertion that sunny intervals mean 70% sunshine**.
+`best.conditions.skyConditionDistanceFractions` and each ride hour show how much
+sampled route distance received each category. The fractions may sum to 0.99 or
+1.01 after rounding. The separate `sunshine` factor is a comfort score.
+
+This makes a route with visible sunshine through substantial cloud eligible for
+a high sunshine score, while another profile can explicitly prefer lower cloud.
+A missing weather symbol never becomes sunny, even if temperature and wind look
+comfortable. No cloud percentage is inferred from a weather symbol.
 
 ### Personal minimum standards
 
@@ -142,8 +201,8 @@ The response includes:
 | `rankings` | Ordered routes; each has `best`, up to three tested alternative departures, duration, daylight, warnings and coverage counts. |
 | `unranked` | Routes with `unassessable` weather or `no_feasible_departure`. |
 | `best.departureAt`, `best.finishAt` | Suggested start and estimated finish. |
-| `best.score`, `best.factors` | Provisional comfort score and temperature/wind/dryness contributions. These are not probabilities. |
-| `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, headwind, crosswind, gust, precipitation risk/rate and assisted-distance fraction. |
+| `best.score`, `best.factors` | Provisional comfort score and temperature/wind/dryness/clear-sky/sunshine factors. These are not probabilities. |
+| `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate, categorical sky-condition distance fractions and assisted-distance fraction. |
 | `best.standards` | `meets`, `below`, `unknown`, or `not_configured`, with structured failures. |
 | `minimumStandardsStatus` | Collection-level `match_found`, `none_meet`, `unknown`, `not_configured`, or `no_feasible_departure`. |
 | `message`, `best.drawbacks` | Readable conclusion and trade-offs. |
@@ -161,21 +220,26 @@ change that conclusion. If another route/departure lacks evidence, or a month
 rule is unresolved, return `unknown` instead. No feasible departure is distinct
 from bad weather. Missing data never becomes zero rain or zero wind.
 
-## Algorithm v0.1
+## Algorithm v0.3
 
 The duration model is distance / constant moving speed. Weather is matched to the
 estimated arrival at each section midpoint; wind uses that section's heading.
 No tailwind-home weighting or automatic route reversal is applied. Wind assistance
-means the tailwind component exceeds 1 km/h; its fraction is distance-weighted.
+requires a tailwind component of at least 3 km/h that exceeds the crosswind
+component; its fraction is distance-weighted. A small aiding component in a
+predominantly crosswind is no longer counted as assisted distance. Calm loops can
+score well with no assistance; this metric does not add a separate score bonus.
 Stronger aiding wind avoids a headwind penalty but still incurs crosswind/gust
 penalties where relevant.
 
 Each factor is a 0–1 comfort value. Temperature is 1 within the comfort band,
 then decreases linearly to 0 at 10°C outside it. Wind discomfort is the sum of
-50% headwind excess (over a 20 km/h span), 20% crosswind excess (20 km/h span),
-and 30% gust excess (30 km/h span), with each excess clamped to 0–1. Dryness is
+45% headwind excess (over a 20 km/h span), 35% crosswind excess (20 km/h span),
+and 20% gust excess (30 km/h span), with each excess clamped to 0–1. Dryness is
 `1 − (0.8 × precipitationProbability + 0.2 × clamp(rateMmH / 2))`.
-Per-section comfort is the normalized preference-weighted factor mean. Final
+Clear-sky comfort is `1 − totalCloudCoverFraction`. Per-section comfort is the
+normalized preference-weighted factor mean. There is no fixed morning bonus: all
+factors are evaluated at the expected arrival time, including hourly cloud or weather symbols. Final
 score is 100 × (75% distance-weighted mean comfort + 25% worst section comfort).
 Ties choose the earlier departure, then route ID. These curves, spans and the
 consistency weight are versioned implementation choices for review and calibration.
@@ -194,29 +258,32 @@ A provider implements `ForecastProvider`, returns the generic descriptor/series
 contract and preserves units, time periods, missing values and provenance. Register
 its factory in the API's provider map; no scoring changes are needed for equivalent
 measurements. Different statistics require explicit product decisions rather than
-passing a percentile off as a deterministic value. Only Met Office Global Spot
-hourly is configured today. Tests exercise a second synthetic provider.
+passing a percentile off as a deterministic value. Met Office Global Spot hourly and BPF v2 UK
+are configured with separate secrets. Tests exercise a second synthetic provider.
 
 `weather: { "mode": "ordered-fallback", "providerIds": ["met-office", "another-provider"] }`
 allows that exact ordered list. The source-selection layer chooses one provider
 for the entire comparison, with no field mixing or silent outside fallback.
 The default is strict Met Office; this is not an inferred worldwide preference.
 
-Quality limits: hourly resolution, model runs at most six hours old, resolved
+Quality limits: hourly resolution, model runs at most six hours old by default
+(or retrieval age only when explicitly selected), resolved
 weather location within 10 km of the query and evaluated section. Weather points
 are sampled along the route every 10 km. These are engineering starting policies,
 not a claim of kilometre-scale forecast accuracy.
 
 KV stores normalized evidence for 20 minutes, keyed by provider/product/adapter,
 coordinates, required descriptors, day range and quality limits. Retrieval and
-model-run freshness are checked on every hit. Changing only preferences or speed
+the selected freshness basis are checked on every hit. Changing only preferences or speed
 can reuse the same day snapshot. Changing the route collection's time range may
-miss the cache. Exact duplicate coordinates are coalesced upstream; nearby-site
-reuse is not yet implemented. Failed reads/writes do not turn into fabricated
+miss the cache, as can changing the required measurements (for example enabling
+cloud scoring). Global Spot coalesces identical coordinates. BPF coalesces samples
+that resolve to the same forecast site within each comparison and caches its site
+catalogue for 24 hours. Failed reads/writes do not turn into fabricated
 weather. Concurrent requests can still fetch the same missing key: this MVP has
 no distributed quota counter or request coalescer.
 
-The provider uses concurrency four, a ten-second per-fetch deadline, and a
+The provider uses concurrency four, a ten-second per-location deadline (covering both BPF forecast calls), and a
 30-second comparison deadline. Redirects are not followed. Quota/auth errors stop
 queued calls; there are no automatic retries. Responses expose derived ride
 assessments with “Powered by Met Office data” attribution, not a raw weather proxy.
@@ -247,11 +314,21 @@ p95 of 37 ms, all with 55 hits and zero misses. Small local samples are not depl
 latency or load guarantees. Full original forecast snapshots are not archived in
 the report; deterministic reproduction uses the synthetic test fixtures.
 
+The 10 October sunshine iteration assessed all six routes, 55 locations and 86
+fully covered departures for Sunday 11 October. The explicit six-route comparison
+used Global Spot weather symbols (BPF's 55-call allowance cannot cover all sites).
+BPF was independently exercised on London Loop, Braintree and East Anglia using
+its numerical cloud field. Both runs are diagnostic local checks, not calibration
+success claims: Braintree ranks first with the sunshine profile, while East Anglia
+still ranks too highly compared with Dan's initial feedback. Forecasts also changed
+between checks. The original assessment, newer results and normalized replay
+snapshots are kept locally under ignored `evaluation/*-live-check.json` paths.
+
 ## Deployment status
 
 This rebuild is local and has not replaced the existing deployed Worker. Before
 its first deployment, create the remote D1 database, copy its ID into
-`wrangler.jsonc`, apply its migration, and provision both required Worker secrets.
+`wrangler.jsonc`, apply its migration, and provision the required Worker secrets.
 The existing development KV namespace is reused with a new key prefix. Old cached
 classification keys are untouched. See [D1 migration commands](https://developers.cloudflare.com/d1/wrangler-commands/).
 

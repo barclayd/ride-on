@@ -4,7 +4,13 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-09",
   "compatibility_flags": ["nodejs_compat"],
-  "secrets": { "required": ["MET_OFFICE_API_KEY", "API_KEYS_JSON"] },
+  "secrets": {
+    "required": [
+      "MET_OFFICE_API_KEY",
+      "MET_OFFICE_BPF_API_KEY",
+      "API_KEYS_JSON"
+    ]
+  },
   "observability": {
     "enabled": true
   },

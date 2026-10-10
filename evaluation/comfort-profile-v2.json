@@ -1,0 +1,32 @@
+{
+  "status": "superseded-for-Dan; retained as a clear-sky calibration experiment",
+  "basis": "Dan prefers 14C / 10% cloud over 17C / 80% cloud when equally dry with comfortable wind. Crosswinds should not count as helpful tailwinds. Exact weights and wind tolerances are hypotheses for human grading, not settled preferences. Superseded by sunshine-profile-v3.json after Dan clarified that visible sunshine matters most.",
+  "request": {
+    "weather": {
+      "mode": "strict",
+      "providerId": "met-office-bpf"
+    },
+    "forecast": {
+      "representation": "ensemble-summary",
+      "freshnessBasis": "retrieval-time"
+    },
+    "preferences": {
+      "temperature": {
+        "comfortMinC": 16,
+        "comfortMaxC": 24
+      },
+      "wind": {
+        "comfortableHeadwindKph": 5,
+        "comfortableCrosswindKph": 0,
+        "comfortableGustKph": 25
+      },
+      "weights": {
+        "temperature": 0.15,
+        "wind": 0.2,
+        "dryness": 0.2,
+        "clearSkies": 0.45
+      },
+      "minimumStandards": {}
+    }
+  }
+}
