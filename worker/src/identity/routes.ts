@@ -1,13 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { authenticate } from '../auth.ts';
 import { readBoundedBody } from '../body.ts';
 import { AppError } from '../errors.ts';
 import { readJsonBody } from '../request.ts';
 import type { Bindings } from '../types.ts';
 import {
   checkCookieOrigin,
-  claimOwner,
   existingOwner,
   requireSession,
   sessionHeaders,
@@ -77,21 +75,6 @@ export const identityRoutes = () => {
       ownerId: binding?.owner_id ?? null,
       session: { id: session.session.id, expiresAt: session.session.expiresAt },
     });
-  });
-  app.post('/auth/claim-profile', async (c) => {
-    const session = await requireSession(
-      c.req.raw,
-      createIdentity(c.env),
-      true,
-    );
-    const { apiKey } = await readJsonBody(
-      c,
-      z.strictObject({ apiKey: z.string().min(32).max(256) }),
-    );
-    const ownerId = await authenticate(`Bearer ${apiKey}`, c.env.API_KEYS_JSON);
-    await claimOwner(c.env.ROUTES_DB, session.user.id, ownerId);
-    copySessionHeaders(session.headers, c.res.headers);
-    return c.json({ ownerId });
   });
   app.route('/', browserRoutes());
   app.get('/api/auth/error', (c) =>

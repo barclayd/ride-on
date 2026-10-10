@@ -1,4 +1,4 @@
-/** Explicit live check: run with bun --env-file=.dev.vars scripts/evaluate-local.ts GPX_DIRECTORY YYYY-MM-DD REPORT_PATH [--reuse]. */
+/** Explicit live check: run with bun scripts/evaluate-local.ts GPX_DIRECTORY YYYY-MM-DD REPORT_PATH [--reuse]. */
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -6,11 +6,16 @@ import { z } from 'zod';
 const [directory, date, output, reuse] = Bun.argv.slice(2);
 if (!directory || !date || !output || !z.iso.date().safeParse(date).success)
   throw new Error('Supply GPX directory, YYYY-MM-DD and report path.');
-const keys = z
-  .array(z.object({ token: z.string().min(32) }))
-  .min(1)
-  .parse(JSON.parse(process.env.API_KEYS_JSON ?? '[]'));
-const headers = { Authorization: `Bearer ${keys[0]?.token}` };
+const session = z
+  .object({ token: z.string().min(32), expiresAt: z.iso.datetime() })
+  .parse(
+    JSON.parse(
+      await Bun.file(new URL('../.local-session.json', import.meta.url)).text(),
+    ),
+  );
+if (Date.parse(session.expiresAt) <= Date.now())
+  throw new Error('Local session expired. Run bun run dev:session again.');
+const headers = { Authorization: `Bearer ${session.token}` };
 const baseUrl = 'http://localhost:8787';
 const jsonResponse = async (response: Response) => {
   if (!response.ok)

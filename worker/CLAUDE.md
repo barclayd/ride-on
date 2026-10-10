@@ -29,6 +29,7 @@ Read `../docs/weather-providers.md` for verified weather mappings and provider r
 ```sh
 bun install --frozen-lockfile
 bun run migrate:local   # initialize/update local D1
+bun run dev:session     # create a 24-hour local D1 session (never production)
 bun run dev             # local Workers runtime
 bun run check           # types + lint + unit + MSW 3 Workers integration tests
 bun run test:unit       # Bun unit tests
@@ -41,7 +42,7 @@ bun run lint:fix
 ## Structure
 
 - `src/index.ts`: Hono routes and dependency composition; `createApp` accepts test dependencies.
-- `src/auth.ts`: legacy private API bearer keys. `src/identity/`: Better Auth Google/Apple/passkeys, sessions, stable owner bindings and PKCE browser handoff. See `../docs/authentication.md`.
+- `src/identity/`: Better Auth Google/Apple/passkeys, session-only access, stable owner bindings and PKCE browser handoff. See `../docs/authentication.md`.
 - `src/body.ts`, `request.ts`, `errors.ts`: bounded input and errors.
 - `src/routes/`: GPX normalization, replaceable source adapters, versioned source imports, paginated owner-scoped D1 persistence and saved shortlists. Imports never select rides; recommendations always take explicit route IDs.
 - `src/recommendations/`: strict preference resolution, daylight/time-window planning and pure scoring.
@@ -55,14 +56,18 @@ bun run lint:fix
 ## Deployment
 
 The API is deployed at `https://ride-on-api.barclaysd.workers.dev`; `/health` reports its version. Production D1
-and its weather/private-key secrets are configured. Social provider activation uses `AUTH_CONFIG_JSON`; see the authentication guide. See `../docs/api.md` for the
+and its weather/authentication secrets are configured. Apple and Google use `AUTH_CONFIG_JSON`; see the authentication guide. See `../docs/api.md` for the
 verified deployment state and commands. Local development stays on the original
 local database through `preview_database_id: "ROUTES_DB"`.
 
 Automatic deployment remains gated by `API_MVP_DEPLOYMENT_READY=true`; it is
 currently unset. Verify the GitHub deployment token's Workers and D1 permissions
 before enabling it. Use `bun run deploy` only when deployment is in scope. Required
-secrets are `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY`, `API_KEYS_JSON` and `AUTH_CONFIG_JSON`; no
+secrets are `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY` and `AUTH_CONFIG_JSON`; no
 Strava secrets are used. The configured CPU ceiling is 5 seconds; full collection
 workloads require Workers Paid limits. Do not infer production load capacity from
 local timings or the small production verification route.
+
+Dan’s Apple login is already bound to the existing `dan` profile. Do not add a
+claim step or hardcoded owner ID to clients. Legacy API keys and the claim endpoint
+were removed in v0.6.0; preserve the `auth_user_owners` table and its existing rows.

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HttpResponse, http } from 'msw';
 import { upload } from './client.ts';
-import { ALICE_TOKEN, BOB_TOKEN } from './harness.ts';
+import { ALICE_TOKEN } from './harness.ts';
 import {
   AUTH_ORIGIN,
   CLIENT_ORIGIN,
@@ -27,12 +27,32 @@ const integration = (
   });
 
 integration(
-  'Google code exchange creates a durable session; profile migration preserves routes, preferences and selection',
+  'returning login retains an existing owner binding, routes, preferences and selection without claiming',
   async ({ h, login }) => {
-    const route = await upload(h);
+    const first = await login();
+    const me = await h.send('/auth/me', { token: first.token });
+    const identity = (await me.json()) as {
+      ownerId: string | null;
+      user: { id: string };
+    };
+    assert.equal(identity.ownerId, null);
+    const db = await h.runtime.getD1Database('ROUTES_DB');
+    // This is the persisted state left by the completed, one-time migration.
+    await db
+      .prepare(
+        'INSERT INTO auth_user_owners (auth_user_id, owner_id) VALUES (?, ?)',
+      )
+      .bind(identity.user.id, 'existing-rider')
+      .run();
+    const rider = {
+      ...h,
+      send: (path: string, init: Parameters<typeof h.send>[1] = {}) =>
+        h.send(path, { token: first.token, ...init }),
+    };
+    const route = await upload(rider);
     assert.equal(
       (
-        await h.send('/users', {
+        await rider.send('/users', {
           body: JSON.stringify({
             displayName: 'Existing rider',
             settings: { riding: { averageSpeedKph: 24 } },
@@ -43,59 +63,54 @@ integration(
     );
     assert.equal(
       (
-        await h.send('/route-selection', {
+        await rider.send('/route-selection', {
           method: 'PUT',
           body: JSON.stringify({ expectedVersion: 0, routeIds: [route.id] }),
         })
       ).status,
       200,
     );
-    const session = await login();
-    const me = await h.send('/auth/me', { token: session.token });
-    assert.equal(
-      ((await me.json()) as { ownerId: string | null }).ownerId,
-      null,
-    );
-    const claim = await h.send('/auth/claim-profile', {
-      token: session.token,
-      body: JSON.stringify({ apiKey: ALICE_TOKEN }),
-    });
-    assert.equal(claim.status, 200, await claim.clone().text());
-    assert.equal(
-      (
-        await h.send('/auth/claim-profile', {
-          token: session.token,
-          body: JSON.stringify({ apiKey: ALICE_TOKEN }),
-        })
-      ).status,
-      200,
-    );
     await h.restart();
-    const profile = await h.send('/users/me', { token: session.token });
-    assert.equal(profile.status, 200);
+    const returning = await login();
+    const owner = await h.send('/auth/me', { token: returning.token });
     assert.equal(
-      ((await profile.json()) as { user: { displayName: string } }).user
-        .displayName,
-      'Existing rider',
+      ((await owner.json()) as { ownerId: string }).ownerId,
+      'existing-rider',
     );
+    const profile = await h.send('/users/me', { token: returning.token });
+    assert.equal(profile.status, 200);
+    const saved = (await profile.json()) as {
+      user: {
+        id: string;
+        displayName: string;
+        settings: { riding: { averageSpeedKph: number } };
+      };
+    };
+    assert.equal(saved.user.id, 'existing-rider');
+    assert.equal(saved.user.displayName, 'Existing rider');
+    assert.equal(saved.user.settings.riding.averageSpeedKph, 24);
     assert.equal(
-      (await h.send(`/routes/${route.id}`, { token: session.token })).status,
+      (await h.send(`/routes/${route.id}`, { token: returning.token })).status,
       200,
     );
+    const other = await login('google', {
+      subject: 'other',
+      email: 'other@example.test',
+    });
     assert.equal(
-      (await h.send(`/routes/${route.id}`, { token: BOB_TOKEN })).status,
+      (await h.send(`/routes/${route.id}`, { token: other.token })).status,
       404,
     );
     assert.deepEqual(
       (
         (await (
-          await h.send('/route-selection', { token: session.token })
+          await h.send('/route-selection', { token: returning.token })
         ).json()) as { selection: { routeIds: string[] } }
       ).selection.routeIds,
       [route.id],
     );
-    const db = await h.runtime.getD1Database('ROUTES_DB');
-    const account = await db
+    const restoredDb = await h.runtime.getD1Database('ROUTES_DB');
+    const account = await restoredDb
       .prepare('SELECT accessToken, refreshToken FROM auth_account')
       .first<{ accessToken: string; refreshToken: string }>();
     assert.ok(account?.accessToken && account.refreshToken);
@@ -387,60 +402,91 @@ integration(
 );
 
 integration(
-  'profile claims are immutable and exclusive, including simultaneous claims',
+  'retired API keys and profile claims cannot grant access even if an obsolete secret remains',
+  async ({ h, login, config }) => {
+    const obsolete = {
+      API_KEYS_JSON: JSON.stringify([
+        { ownerId: 'existing-rider', token: ALICE_TOKEN },
+      ]),
+    };
+    await h.restart({ AUTH_CONFIG_JSON: JSON.stringify(config), ...obsolete });
+    for (const [path, body] of [
+      ['/routes', undefined],
+      ['/users/me', undefined],
+      ['/route-selection', undefined],
+      ['/route-sources', undefined],
+      ['/recommendations', '{}'],
+      ['/route-imports', '{}'],
+      ['/users', '{}'],
+    ] as const)
+      assert.equal(
+        (await h.send(path ?? '', { token: ALICE_TOKEN, body })).status,
+        401,
+        path,
+      );
+    const session = await login();
+    for (const token of [null, ALICE_TOKEN, session.token]) {
+      assert.equal(
+        (
+          await h.send('/auth/claim-profile', {
+            token,
+            body: JSON.stringify({ apiKey: ALICE_TOKEN }),
+          })
+        ).status,
+        404,
+      );
+    }
+    const me = await h.send('/auth/me', { token: session.token });
+    assert.equal(
+      ((await me.json()) as { ownerId: string | null }).ownerId,
+      null,
+    );
+  },
+);
+
+integration(
+  'concurrent first product requests assign one durable owner and clients cannot select another',
   async ({ h, login }) => {
-    const one = await login();
-    const two = await login('google', {
-      subject: 'other',
-      email: 'other@example.test',
-    });
-    const results = await Promise.all(
-      [one, two].map((session) =>
-        h.send('/auth/claim-profile', {
-          token: session.token,
-          body: JSON.stringify({ apiKey: ALICE_TOKEN }),
-        }),
+    const session = await login();
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        h.send('/routes', { token: session.token }),
       ),
     );
-    assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
-    const winner = results[0]?.status === 200 ? one : two;
-    assert.equal(
-      (
-        await h.send('/auth/claim-profile', {
-          token: winner.token,
-          body: JSON.stringify({ apiKey: BOB_TOKEN }),
-        })
-      ).status,
-      409,
-    );
-    const fresh = await login('google', {
-      subject: 'fresh',
-      email: 'fresh@example.test',
-    });
-    assert.equal((await h.send('/routes', { token: fresh.token })).status, 200);
-    assert.equal(
-      (
-        await h.send('/auth/claim-profile', {
-          token: fresh.token,
-          body: JSON.stringify({ apiKey: BOB_TOKEN }),
-        })
-      ).status,
-      409,
-    );
+    assert.ok(responses.every((response) => response.status === 200));
+    const me = (await (
+      await h.send('/auth/me', { token: session.token })
+    ).json()) as { ownerId: string; user: { id: string } };
+    assert.match(me.ownerId, /^user_/);
     const db = await h.runtime.getD1Database('ROUTES_DB');
-    await db
-      .prepare('UPDATE auth_session SET createdAt = ?')
-      .bind(new Date(Date.now() - 700_000).toISOString())
-      .run();
     assert.equal(
       (
-        await h.send('/auth/claim-profile', {
-          token: winner.token,
-          body: JSON.stringify({ apiKey: ALICE_TOKEN }),
+        await db
+          .prepare(
+            'SELECT COUNT(*) AS count FROM auth_user_owners WHERE auth_user_id = ?',
+          )
+          .bind(me.user.id)
+          .first<{ count: number }>()
+      )?.count,
+      1,
+    );
+    assert.equal(
+      (
+        await h.send('/users', {
+          token: session.token,
+          body: JSON.stringify({
+            id: 'existing-rider',
+            displayName: 'Impersonate',
+          }),
         })
       ).status,
-      403,
+      400,
     );
+    await h.restart();
+    const after = (await (
+      await h.send('/auth/me', { token: session.token })
+    ).json()) as { ownerId: string };
+    assert.equal(after.ownerId, me.ownerId);
   },
 );
 
@@ -531,7 +577,8 @@ integration(
 
 integration(
   'disabled providers, unregistered redirects, oversized auth and unused auth features are rejected',
-  async ({ h, config }) => {
+  async ({ h, config, login }) => {
+    const session = await login();
     await h.restart({
       AUTH_CONFIG_JSON: JSON.stringify({ ...config, google: undefined }),
     });
@@ -579,7 +626,10 @@ integration(
         .status,
       404,
     );
-    assert.equal((await h.send('/routes')).status, 200);
+    assert.equal(
+      (await h.send('/routes', { token: session.token })).status,
+      200,
+    );
   },
 );
 

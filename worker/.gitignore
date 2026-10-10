@@ -2,5 +2,6 @@ node_modules
 .wrangler
 .dev.vars
 .auth-config.json
+.local-session.json
 dist
 *.log

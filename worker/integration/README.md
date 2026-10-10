@@ -9,7 +9,7 @@ migration files, split with Wrangler's SQL parser and applied as D1 statements.
 Worker restarts retain those bindings, testing storage independently of JS memory.
 
 The test entry point calls the production application factory, overriding only
-the clock and request logging. The real authentication, GPX parser, route store,
+the clock and request logging. The real session authentication, GPX parser, route store,
 Met Office HTTP adapter, source selection, cache and recommendation engine run.
 MSW 3.0.2 `http` handlers receive the actual outbound requests and return realistic
 Global Spot and BPF v2 CoverageJSON payloads. This covers serialization and provider normalization instead
@@ -28,7 +28,9 @@ not fully compatible with Bun's Undici shim. Bun still runs the existing fast un
 tests. Miniflare and esbuild are pinned to Wrangler's own versions to avoid a
 second runtime version; update them together when upgrading Wrangler.
 
-Authentication scenarios use ephemeral RSA provider keys and an ES256 Apple client
+Product scenarios seed expiring users/sessions and owner bindings into local D1;
+there is no private-key bypass. Authentication scenarios start with empty identity
+tables and use ephemeral RSA provider keys and an ES256 Apple client
 key. MSW receives real token-exchange bodies and verifies PKCE and Apple client JWTs.
 Passkey tests construct CBOR attestations and signed ES256 WebAuthn assertions;
 SimpleWebAuthn performs the actual verification in workerd. The OAuth/session clock
@@ -38,7 +40,7 @@ Covered scenarios include:
 
 - Google and Apple callbacks, private relay, explicit linking and encrypted provider credentials.
 - Session persistence, immediate revocation, expiry, CSRF and invalid bearer/cookie precedence.
-- Existing profile claims, ownership races, exact redirect allowlists and one-use PKCE handoff.
+- Preservation of existing owner bindings, retired-key/claim rejection, concurrent first access, exact redirect allowlists and one-use PKCE handoff.
 - Real passkey enrollment/login/rename/removal, identity binding and recent-session checks.
 - Signature, origin, RP ID, challenge, counter, user verification, expiry and replay rejection.
 

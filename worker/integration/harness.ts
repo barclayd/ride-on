@@ -34,20 +34,21 @@ const bundleWorker = () =>
     return output.text;
   }));
 
-export const createHarness = async (authConfig = '') => {
+export const createHarness = async (authConfig?: string) => {
   let handlers: RequestHandler[] = [];
   const unexpected: string[] = [];
   const handlerErrors: unknown[] = [];
   const requests: Request[] = [];
   const bindings = {
-    AUTH_CONFIG_JSON: authConfig,
+    AUTH_CONFIG_JSON:
+      authConfig ??
+      JSON.stringify({
+        secret: 'synthetic-session-secret-for-integration-tests-only',
+        baseUrl: 'https://api.ride-on.test',
+      }),
     TEST_NOW: FIXED_NOW,
     MET_OFFICE_API_KEY: WEATHER_KEY,
     MET_OFFICE_BPF_API_KEY: 'integration-bpf-key-not-a-real-secret',
-    API_KEYS_JSON: JSON.stringify([
-      { ownerId: 'alice', token: ALICE_TOKEN },
-      { ownerId: 'bob', token: BOB_TOKEN },
-    ]),
   };
   const options: V4MiniflareOptions = {
     name: 'ride-on-integration',
@@ -106,6 +107,34 @@ export const createHarness = async (authConfig = '') => {
       );
       await db.batch(statements.map((sql) => db.prepare(sql)));
     }
+    // Product scenarios use real, expiring D1 sessions. OAuth scenarios start
+    // empty and create their identities through the mocked provider boundary.
+    if (authConfig === undefined) {
+      const now = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + 86400000).toISOString();
+      for (const [ownerId, token] of [
+        ['alice', ALICE_TOKEN],
+        ['bob', BOB_TOKEN],
+      ]) {
+        await db.batch([
+          db
+            .prepare(
+              'INSERT INTO auth_user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)',
+            )
+            .bind(ownerId, ownerId, `${ownerId}@example.test`, now, now),
+          db
+            .prepare(
+              'INSERT INTO auth_session (id, userId, token, expiresAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
+            )
+            .bind(`session-${ownerId}`, ownerId, token, expiresAt, now, now),
+          db
+            .prepare(
+              'INSERT INTO auth_user_owners (auth_user_id, owner_id) VALUES (?, ?)',
+            )
+            .bind(ownerId, ownerId),
+        ]);
+      }
+    }
   } catch (error) {
     await runtime.dispose();
     throw error;
@@ -134,24 +163,18 @@ export const createHarness = async (authConfig = '') => {
         headers?: Record<string, string>;
       } = {},
     ) =>
-      runtime.dispatchFetch(
-        new URL(
-          path,
-          authConfig ? 'https://api.ride-on.test' : await runtime.ready,
-        ).href,
-        {
-          method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
-          headers: {
-            ...(init.token === null
-              ? {}
-              : { Authorization: `Bearer ${init.token ?? ALICE_TOKEN}` }),
-            'Content-Type': init.contentType ?? 'application/json',
-            ...init.headers,
-          },
-          body: init.body,
-          redirect: 'manual',
+      runtime.dispatchFetch(new URL(path, 'https://api.ride-on.test').href, {
+        method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
+        headers: {
+          ...(init.token === null
+            ? {}
+            : { Authorization: `Bearer ${init.token ?? ALICE_TOKEN}` }),
+          'Content-Type': init.contentType ?? 'application/json',
+          ...init.headers,
         },
-      ),
+        body: init.body,
+        redirect: 'manual',
+      }),
     dispose: () => runtime.dispose(),
   };
 };

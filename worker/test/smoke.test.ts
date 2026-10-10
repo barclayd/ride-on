@@ -7,7 +7,7 @@ liveTest('deployed API identifies the recommendation build', async () => {
   expect(response.status).toBe(200);
   expect((await response.json()) as { ok: boolean; version: string }).toEqual({
     ok: true,
-    version: '0.5.0',
+    version: '0.6.0',
   });
 });
 liveTest('deployed private route list requires authentication', async () => {

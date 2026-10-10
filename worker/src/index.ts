@@ -60,6 +60,7 @@ const quality = {
 };
 export const createApp = (
   dependencies: {
+    resolveAccess?: typeof resolveAccess;
     routeStore?: RouteStore;
     routeSelectionStore?: RouteSelectionStore;
     routeSources?: ReadonlyMap<string, RouteSourceProvider>;
@@ -109,7 +110,7 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.5.0' }));
+  app.get('/health', (c) => c.json({ ok: true, version: '0.6.0' }));
   app.route('/', identityRoutes());
   for (const path of [
     '/routes',
@@ -122,7 +123,10 @@ export const createApp = (
     '/users/*',
   ])
     app.use(path, async (c, next) => {
-      const access = await resolveAccess(c.req.raw, c.env);
+      const access = await (dependencies.resolveAccess ?? resolveAccess)(
+        c.req.raw,
+        c.env,
+      );
       c.set('ownerId', access.ownerId);
       copySessionHeaders(access.headers, c.res.headers);
       await next();
