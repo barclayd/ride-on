@@ -6,7 +6,6 @@ import { AppError } from './errors.ts';
 import { resolveAccess } from './identity/access.ts';
 import { authConfig } from './identity/config.ts';
 import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
-import { assessClimbing } from './recommendations/climbing.ts';
 import { planDepartures } from './recommendations/daylight.ts';
 import {
   recommendRides,
@@ -15,12 +14,20 @@ import {
 import {
   defaultSettings,
   mergeSettings,
-  recommendationRequestSchema,
+  recommendationApiRequestSchema,
   recommendationWithSettings,
   resolvedRecommendationSchema,
   resolveMinimumTemperature,
   settingsSchema,
 } from './recommendations/input.ts';
+import { preferenceLevels } from './recommendations/levels.ts';
+import { daySummary, mergeDays } from './recommendations/multi-day.ts';
+import {
+  datesBetween,
+  localDate,
+  resolvePlanningDays,
+} from './recommendations/planning.ts';
+import { presentRoute } from './recommendations/presentation.ts';
 import { readJsonBody, validateInput } from './request.ts';
 import { importGpx } from './routes/gpx.ts';
 import { importSourceRoute } from './routes/import.ts';
@@ -50,9 +57,11 @@ import {
 } from './users/model.ts';
 import { type ForecastCache, withForecastCache } from './weather/cache.ts';
 import type { ForecastProvider, ForecastRequest } from './weather/contracts.ts';
+import { summarizeProvenance } from './weather/coverage.ts';
 import {
   createWeatherProviders,
   describeWeatherProviders,
+  forecastHorizonHours,
 } from './weather/providers.ts';
 import { getForecastForPolicy } from './weather/source-policy.ts';
 
@@ -114,7 +123,7 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.9.0' }));
+  app.get('/health', (c) => c.json({ ok: true, version: '0.10.0' }));
   app.route('/', identityRoutes());
   for (const path of [
     '/routes',
@@ -164,7 +173,15 @@ export const createApp = (
         'Your user profile already exists. Use PATCH /users/me to update it.',
       );
     c.header('Location', '/users/me');
-    return c.json({ user }, 201);
+    return c.json(
+      {
+        user: {
+          ...user,
+          preferenceLevels: preferenceLevels(user.settings.preferences.weights),
+        },
+      },
+      201,
+    );
   });
   app.get('/users/me', async (c) => {
     const user = await users(c.env).get(c.get('ownerId'));
@@ -174,7 +191,12 @@ export const createApp = (
         'USER_NOT_FOUND',
         'Create your user profile with POST /users.',
       );
-    return c.json({ user });
+    return c.json({
+      user: {
+        ...user,
+        preferenceLevels: preferenceLevels(user.settings.preferences.weights),
+      },
+    });
   });
   app.patch('/users/me', async (c) => {
     const input = await readJsonBody(c, updateUserSchema);
@@ -204,7 +226,12 @@ export const createApp = (
     };
     if (!(await users(c.env).update(user, input.expectedVersion)))
       throw conflict();
-    return c.json({ user });
+    return c.json({
+      user: {
+        ...user,
+        preferenceLevels: preferenceLevels(user.settings.preferences.weights),
+      },
+    });
   });
   app.get('/route-sources', (c) =>
     c.json({
@@ -349,33 +376,74 @@ export const createApp = (
     );
   });
   app.post('/recommendations', async (c) => {
-    const raw = await readJsonBody(c, recommendationRequestSchema);
+    const raw = await readJsonBody(c, recommendationApiRequestSchema);
     const [user, routes] = await Promise.all([
       users(c.env).get(c.get('ownerId')),
       store(c.env).getMany(c.get('ownerId'), raw.routeIds),
     ]);
-    const input = validateInput(
-      resolvedRecommendationSchema,
-      recommendationWithSettings(raw, user?.settings),
+    const startedAt = now();
+    const { window, ...riding } = raw.riding ?? {};
+    const settings = validateInput(
+      settingsSchema,
+      mergeSettings({ ...raw, riding }, user?.settings),
     );
-    if (routes.length !== input.routeIds.length)
+    const today = localDate(startedAt, settings.timeZone);
+    const selection = raw.days
+      ? resolvePlanningDays(raw.days, settings.timeZone, startedAt)
+      : {
+          dates: raw.date ? [raw.date] : [],
+          expired: false,
+          range: raw.date
+            ? { start: raw.date, end: raw.date, preset: null, fallback: false }
+            : null,
+        };
+    const previewDates =
+      raw.previewDays && !selection.expired
+        ? datesBetween(
+            today.toString(),
+            today.add({ days: raw.previewDays - 1 }).toString(),
+          )
+        : [];
+    const dates = [...new Set([...selection.dates, ...previewDates])].sort();
+    const makeInput = (date: string, evaluate = true) =>
+      validateInput(
+        resolvedRecommendationSchema,
+        recommendationWithSettings(
+          {
+            ...raw,
+            date,
+            riding: {
+              ...riding,
+              window: evaluate
+                ? (window ?? (raw.days ? settings.planning.window : 'daylight'))
+                : 'daylight',
+            },
+          },
+          settings,
+        ),
+      );
+    const inputs = dates.map((date) => makeInput(date));
+    const input = inputs[0] ?? makeInput(today.toString(), false);
+    if (routes.length !== raw.routeIds.length)
       throw new AppError(
         404,
         'ROUTE_NOT_FOUND',
         'One or more routes were not found.',
       );
-    const startedAt = now();
-    const plans = routes.map((route) => ({
-      route,
-      plan: planDepartures(route, input, startedAt.getTime()),
-    }));
-    const feasible = plans.filter(
-      ({ route, plan }) =>
-        plan.departures.length > 0 &&
-        assessClimbing(route, input.preferences.climbing.preference).status !==
-          'unknown',
+    const plans = inputs.flatMap((dayInput) =>
+      routes.map((route) => ({
+        route,
+        plan: planDepartures(route, dayInput, startedAt.getTime()),
+      })),
     );
-    const locations = feasible.flatMap(({ route }) => route.weatherLocations);
+    const feasible = plans.filter(({ plan }) => plan.departures.length > 0);
+    const locations = [
+      ...new Map(
+        feasible
+          .flatMap(({ route }) => route.weatherLocations)
+          .map((l) => [l.id, l]),
+      ).values(),
+    ];
     if (locations.length > 256)
       throw new AppError(
         422,
@@ -395,6 +463,7 @@ export const createApp = (
         id,
         withForecastCache(provider, cache, {
           now,
+          forecastHorizonHours: forecastHorizonHours(id),
           onRead: (hit) => {
             if (hit) cacheReads.hits++;
             else cacheReads.misses++;
@@ -402,7 +471,7 @@ export const createApp = (
         }),
       ]),
     );
-    // Canonical day range keeps preference / speed experiments on the same cached snapshot.
+    // Requested comparison range; registered providers cache their independent full horizon.
     const range = feasible.length
       ? {
           start: new Date(
@@ -443,19 +512,101 @@ export const createApp = (
         )
       : null;
     const results = selected?.results ?? [];
-    return c.json({
-      ...recommendRides(
+    const daily = new Map(
+      inputs.map((dayInput) => [
+        dayInput.date,
+        recommendRides(
+          routes,
+          dayInput,
+          results,
+          startedAt.getTime(),
+          quality.maxLocationDistanceM,
+        ),
+      ]),
+    );
+    const summaries = inputs.map((dayInput) => {
+      const evaluated = daily.get(dayInput.date);
+      if (!evaluated) throw new Error('Missing daily evaluation.');
+      return daySummary(
         routes,
-        input,
+        dayInput,
+        evaluated,
         results,
+        requiredWeatherFor(dayInput),
         startedAt.getTime(),
         quality.maxLocationDistanceM,
+      );
+    });
+    const selectedDates = selection.dates.filter(
+      (date) =>
+        !raw.days ||
+        summaries.find((d) => d.date === date)?.availabilityReason !==
+          'outside_forecast_horizon',
+    );
+    const resolvedRange = raw.days
+      ? selectedDates.length
+        ? {
+            ...selection.range,
+            start: selectedDates[0],
+            end: selectedDates.at(-1),
+          }
+        : null
+      : selection.range;
+    const evaluated = mergeDays(
+      selectedDates.flatMap((date) => {
+        const day = daily.get(date);
+        return day ? [day] : [];
+      }),
+      Object.keys(input.preferences.minimumStandards).length > 0,
+    );
+    const evaluation = raw.date
+      ? (daily.get(raw.date) ?? evaluated)
+      : evaluated;
+    return c.json({
+      ...evaluation,
+      rankings: evaluation.rankings.map((r) => ({
+        ...presentRoute(r, input.riding.departureStepMinutes),
+        rank: r.rank,
+      })),
+      unranked: evaluation.unranked.map((r) =>
+        presentRoute(r, input.riding.departureStepMinutes),
       ),
+      recommendation: evaluation.recommendedRouteId
+        ? {
+            routeId: evaluation.recommendedRouteId,
+            kind:
+              evaluation.minimumStandardsStatus === 'match_found' ||
+              evaluation.minimumStandardsStatus === 'not_configured'
+                ? 'best_pick'
+                : 'best_available',
+          }
+        : null,
+      range: resolvedRange,
+      expired: selection.expired,
+      ...(selection.expired
+        ? { message: 'These dates have passed. Choose available dates.' }
+        : raw.days && !selectedDates.length
+          ? {
+              message:
+                'Forecasts for the selected dates are not available yet.',
+            }
+          : {}),
+      previewRange: previewDates.length
+        ? { start: previewDates[0], end: previewDates.at(-1) }
+        : null,
+      days: summaries.map((d) => ({
+        ...d,
+        selected: selectedDates.includes(d.date),
+      })),
       generatedAt: startedAt.toISOString(),
-      date: input.date,
+      date: raw.date ?? null,
       timeZone: input.timeZone,
       savedUser: user ? { id: user.id, version: user.version } : null,
       resolvedPreferences: input.preferences,
+      preferenceLevels: preferenceLevels(input.preferences.weights),
+      resolvedMinimumTemperatures: Object.fromEntries(
+        inputs.map((i) => [i.date, resolveMinimumTemperature(i)]),
+      ),
       resolvedMinimumTemperature: resolveMinimumTemperature(input),
       riding: input.riding,
       forecast: input.forecast,
@@ -499,6 +650,8 @@ export const createApp = (
         'Precipitation includes rain, snow and other forms. The highest local hourly probability is not the probability of precipitation anywhere on the whole ride.',
       ],
       weather: {
+        ...summarizeProvenance(results),
+        snapshotPolicy: 'provider-horizon',
         requestedPolicy: input.weather,
         selectedSource: selected?.source ?? null,
         attempts: selected?.attempts ?? [],

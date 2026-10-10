@@ -6,6 +6,9 @@ scoring, weather minimums and cache as Met Office. There is no Apple-specific
 ranking algorithm. `comfort-v0.7` adds generic handling for full-hour averages;
 existing Met Office samples and the reviewed calibration are unchanged.
 
+From v0.10.0, [multi-day planning](planning-api.md) reuses horizon snapshots across
+selected dates/windows and returns deduplicated attribution and retrieval bounds.
+
 ## Defaults and selection
 
 New profiles, and requests without a saved profile, use strict Apple Weather with
@@ -92,8 +95,8 @@ the `notice` explaining that Ride On's derived assessments modify Apple data.
 Forecast location provenance retains this metadata through cache reads. The API
 does not proxy raw WeatherKit forecasts or disclose signing tokens to clients.
 
-The extension still needs to render the supplied attribution and provider picker;
-those UI changes are described in [the design handoff](extension-design-handoff.md).
+The design-3 extension renders provider selection and attribution. Its next API
+integration should follow [planning and preference presets](planning-api.md).
 
 ## Server configuration
 

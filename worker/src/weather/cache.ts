@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import type { ForecastProvider, LocationForecastResult } from './contracts.ts';
+import type {
+  ForecastProvider,
+  ForecastRequest,
+  LocationForecastResult,
+} from './contracts.ts';
 import { descriptorKey } from './descriptors.ts';
 import {
   coordinateSchema,
@@ -85,19 +89,69 @@ export const cachedForecastSchema = z.object({
   ),
 });
 
+/** Source fallback must assess the requested comparison, not unused prefetched hours. */
+const forRequestedRange = (
+  result: LocationForecastResult,
+  request: ForecastRequest,
+): LocationForecastResult => {
+  if (result.status === 'unavailable') return result;
+  const first =
+    Math.floor(Date.parse(request.range.start) / 3_600_000) * 3_600_000;
+  const last =
+    Math.ceil(Date.parse(request.range.end) / 3_600_000) * 3_600_000 -
+    3_600_000;
+  const covers = request.required.every((descriptor) => {
+    const samples =
+      result.series.find(
+        (s) => descriptorKey(s.descriptor) === descriptorKey(descriptor),
+      )?.samples ?? [];
+    const times = samples.map((s) => Date.parse(s.validAt));
+    return (
+      Math.min(Infinity, ...times) <= first &&
+      Math.max(-Infinity, ...times) >= last
+    );
+  });
+  const issues = result.issues.filter(
+    (i) => i.code !== 'outside-forecast-horizon',
+  );
+  if (!covers)
+    issues.push({
+      code: 'outside-forecast-horizon',
+      message:
+        'The available snapshot does not cover the full requested range.',
+    });
+  return { ...result, status: issues.length ? 'partial' : 'complete', issues };
+};
+
 export const withForecastCache = (
   provider: ForecastProvider,
   cache: ForecastCache,
   options: {
     now?: () => Date;
     ttlSeconds?: number;
+    forecastHorizonHours?: number;
     onRead?: (hit: boolean) => void;
   } = {},
 ): ForecastProvider => ({
   ...provider,
   getForecast: async (request, signal) => {
+    const originalRequest = request;
     const now = (options.now ?? (() => new Date()))().getTime();
     const ttl = options.ttlSeconds ?? 1200;
+    // A rolling hourly anchor is independent of selected dates/windows and stable for
+    // the cache lifetime. Keep a preceding hour for nearest-instant arrival sampling.
+    if (options.forecastHorizonHours !== undefined) {
+      const start = Math.floor(now / 3_600_000) * 3_600_000 - 3_600_000;
+      request = {
+        ...request,
+        range: {
+          start: new Date(start).toISOString(),
+          end: new Date(
+            start + options.forecastHorizonHours * 3_600_000,
+          ).toISOString(),
+        },
+      };
+    }
     const keys = await Promise.all(
       request.locations.map(async (location) => {
         const encoded = new TextEncoder().encode(
@@ -197,21 +251,24 @@ export const withForecastCache = (
       }),
     );
     // The provider contract guarantees one result per location; preserve a failure if broken.
-    return results.map(
-      (result, index) =>
-        result ?? {
-          status: 'unavailable',
-          requested: request.locations[index] as NonNullable<
-            (typeof request.locations)[number]
-          >,
-          source: provider.source,
-          issues: [
-            {
-              code: 'missing-data',
-              message: 'No forecast result was returned.',
-            },
-          ],
-        },
+    return results.map((result, index) =>
+      result
+        ? options.forecastHorizonHours === undefined
+          ? result
+          : forRequestedRange(result, originalRequest)
+        : {
+            status: 'unavailable',
+            requested: request.locations[index] as NonNullable<
+              (typeof request.locations)[number]
+            >,
+            source: provider.source,
+            issues: [
+              {
+                code: 'missing-data',
+                message: 'No forecast result was returned.',
+              },
+            ],
+          },
     );
   },
 });

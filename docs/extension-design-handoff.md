@@ -6,7 +6,7 @@ Please adapt the existing Cycle.travel extension design to the behaviours below.
 
 This handoff follows a review of the [extension API brief in PR #86](https://github.com/barclayd/ride-on/pull/86). The review was based on that brief, not the actual design screens. These are proposed design requirements for the next iteration, not a claim that every supporting API feature already exists. Where they differ from the original brief, flag the difference when updating it.
 
-The API should own scoring, preference interpretation, feasibility and result ordering. The extension should own presentation and interaction. Multi-day recommendations, saved planning defaults and guided preference mappings require API work alongside the design.
+The API should own scoring, preference interpretation, feasibility and result ordering. The extension should own presentation and interaction. Multi-day recommendations, saved planning defaults and guided preference mappings are supported in v0.10.0. Use [the implemented contract](planning-api.md) and [the v2 decisions](extension-api-v2-decisions.md).
 
 ## Changes to controls
 

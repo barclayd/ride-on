@@ -94,7 +94,7 @@ export const forecastRequestSchema = z
       Date.parse(request.range.end) - Date.parse(request.range.start);
     return (
       duration > 0 &&
-      duration <= 7 * 24 * 60 * 60 * 1000 &&
+      duration <= 10 * 24 * 60 * 60 * 1000 &&
       new Set(request.locations.map((location) => location.id)).size ===
         request.locations.length
     );

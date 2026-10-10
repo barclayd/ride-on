@@ -48,7 +48,7 @@ const upload = async (h: Harness, ascentM: number | null, longitude = -1) => {
   return route;
 };
 const readUser = async (response: { json: () => Promise<unknown> }) =>
-  z.object({ user: userSchema }).parse(await response.json()).user;
+  z.object({ user: userSchema.strip() }).parse(await response.json()).user;
 const createUser = async (h: Harness, preference = 'neutral') => {
   const response = await h.send('/users', {
     body: JSON.stringify({
@@ -184,7 +184,7 @@ integration(
 );
 
 integration(
-  'partial GPX elevation stays unknown, avoids wasted weather calls and never becomes zero ascent',
+  'partial GPX elevation stays unranked while available weather can be assessed and never becomes zero ascent',
   async (h) => {
     h.use(metOffice());
     const missing = await upload(h, null, 0);
@@ -192,7 +192,7 @@ integration(
     assert.equal(unknown.recommendedRouteId, null);
     assert.equal(first(unknown.unranked).status, 'unassessable');
     assert.ok(first(unknown.unranked).issues.includes('missing-elevation'));
-    assert.equal(h.requests.length, 0);
+    assert.ok(h.requests.length > 0);
     const flat = await upload(h, 0);
     const mixed = await recommend(
       h,
@@ -205,8 +205,10 @@ integration(
     );
     assert.ok(h.requests.length > 0);
     assert.ok(
-      h.requests.every(
-        (r) => new URL(r.url).searchParams.get('longitude') === '-1',
+      h.requests.every((r) =>
+        ['-1', '0'].includes(
+          new URL(r.url).searchParams.get('longitude') ?? '',
+        ),
       ),
     );
     const neutral = await recommend(h, [missing.id, flat.id]);

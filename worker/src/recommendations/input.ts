@@ -1,5 +1,14 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { z } from 'zod';
+import { levelWeights, preferenceLevelsSchema } from './levels.ts';
+import {
+  defaultPlanning,
+  planningDaysSchema,
+  planningSchema,
+  ridingWindowSchema,
+} from './planning.ts';
+
+export { ridingWindowSchema } from './planning.ts';
 
 const temperatureFloor = z.discriminatedUnion('kind', [
   z.strictObject({
@@ -140,9 +149,15 @@ export const settingsSchema = z.strictObject({
   preferences: preferencesSchema,
   forecast,
   weather,
+  planning: planningSchema.default(defaultPlanning),
+  display: z
+    .strictObject({ unit: z.enum(['km', 'mi']) })
+    .default({ unit: 'km' }),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 export const defaultSettings: Settings = {
+  planning: defaultPlanning,
+  display: { unit: 'km' },
   timeZone: 'Europe/London',
   riding: { averageSpeedKph: 20, departureStepMinutes: 30 },
   preferences: {
@@ -171,14 +186,42 @@ export const defaultSettings: Settings = {
   },
   weather: { mode: 'strict', providerId: 'apple-weather' },
 };
+const checkLevelConflicts = (
+  patch: {
+    preferenceLevels?: z.infer<typeof preferenceLevelsSchema>;
+    preferences?: z.infer<typeof preferenceOverrides>;
+  },
+  context: z.RefinementCtx,
+) => {
+  for (const [level, field] of [
+    ['sunshine', 'sunshine'],
+    ['rain', 'dryness'],
+  ] as const) {
+    if (
+      patch.preferenceLevels?.[level] !== undefined &&
+      patch.preferences?.weights?.[field] !== undefined
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['preferenceLevels', level],
+        message:
+          'Do not combine a preference level with its raw weight in the same request.',
+      });
+  }
+};
 // No defaults on the patch: omitted values must inherit the saved profile.
-export const settingsPatchSchema = z.strictObject({
-  timeZone: timeZone.optional(),
-  riding: ridingDefaults.partial().optional(),
-  preferences: preferenceOverrides.optional(),
-  forecast: forecast.partial().optional(),
-  weather: weather.optional(),
-});
+export const settingsPatchSchema = z
+  .strictObject({
+    timeZone: timeZone.optional(),
+    riding: ridingDefaults.partial().optional(),
+    preferences: preferenceOverrides.optional(),
+    forecast: forecast.partial().optional(),
+    weather: weather.optional(),
+    planning: planningSchema.partial().optional(),
+    display: settingsSchema.shape.display.unwrap().partial().optional(),
+    preferenceLevels: preferenceLevelsSchema.optional(),
+  })
+  .superRefine(checkLevelConflicts);
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 export const mergeSettings = (
   patch: SettingsPatch,
@@ -186,6 +229,8 @@ export const mergeSettings = (
 ): z.input<typeof settingsSchema> => {
   const preferences = patch.preferences;
   return {
+    planning: { ...(base.planning ?? defaultPlanning), ...patch.planning },
+    display: { ...(base.display ?? { unit: 'km' as const }), ...patch.display },
     timeZone: patch.timeZone ?? base.timeZone,
     riding: { ...base.riding, ...patch.riding },
     forecast: { ...base.forecast, ...patch.forecast },
@@ -202,7 +247,11 @@ export const mergeSettings = (
         preferences?.distance === undefined
           ? base.preferences.distance
           : preferences.distance,
-      weights: { ...base.preferences.weights, ...preferences?.weights },
+      weights: {
+        ...base.preferences.weights,
+        ...preferences?.weights,
+        ...levelWeights(patch.preferenceLevels),
+      },
       // A policy is replaced as a whole. Null explicitly removes a saved limit.
       minimumStandards: Object.fromEntries(
         Object.entries({
@@ -213,18 +262,7 @@ export const mergeSettings = (
     },
   };
 };
-const clockTime = z
-  .string()
-  .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm (00:00–23:59).');
-export const ridingWindowSchema = z.union([
-  z.literal('daylight'),
-  z
-    .strictObject({ start: clockTime, end: clockTime })
-    .refine((window) => window.start < window.end, {
-      message: 'Window end must be after its start on the same day.',
-    }),
-]);
-export const recommendationRequestSchema = settingsPatchSchema.extend({
+export const recommendationRequestSchema = settingsPatchSchema.safeExtend({
   routeIds: z
     .array(z.uuid())
     .min(1)
@@ -236,6 +274,20 @@ export const recommendationRequestSchema = settingsPatchSchema.extend({
     .extend({ window: ridingWindowSchema.optional() })
     .optional(),
 });
+export const recommendationApiRequestSchema = z
+  .strictObject({
+    ...recommendationRequestSchema.shape,
+    date: z.iso.date().optional(),
+    days: planningDaysSchema.optional(),
+    previewDays: z.number().int().min(1).max(7).optional(),
+  })
+  .superRefine(checkLevelConflicts)
+  .refine(
+    (input) => (input.date === undefined) !== (input.days === undefined),
+    {
+      message: 'Supply exactly one of date or days.',
+    },
+  );
 const resolvedRecommendationSchema = settingsSchema
   .extend({
     routeIds: recommendationRequestSchema.shape.routeIds,
