@@ -7,7 +7,6 @@ import { fetchJourney, fetchJourneyGpx } from '../../lib/cycletravel';
 import { send } from '../../lib/state';
 import { MAX_TRACKED, type RouteSummary } from '../../lib/types';
 import {
-  Attribution,
   Banners,
   CoverageWarn,
   chooseAvailableDates,
@@ -190,7 +189,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
         </div>
       )}
       <CoverageWarn view={view} />
-      <Attribution view={view} />
+      {/* ponytail: weather attribution is popup-only by choice, though the cards show weather. */}
       {rows.map((row) => {
         const routeId = tracked.get(row.id);
         const card = routeId && cardByRoute.get(routeId);
