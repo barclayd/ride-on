@@ -45,10 +45,13 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
 
 | Asset | Size | Required | Source |
 | --- | --- | --- | --- |
-| Store icon | 128×128 | yes | `public/icon/128.png` |
+| Store icon | 128×128 (96×96 artwork, 16px transparent padding) | yes | `store/icon-128.png` |
 | Screenshots | 1280×800 (1–5) | at least 1 | Popup over the Journeys page, synthetic routes only |
-| Small promo tile | 440×280 | yes | To make |
-| Marquee promo tile | 1400×560 | no | — |
+| Small promo tile | 440×280 | yes | `store/promo-small-440x280.png` |
+| Marquee promo tile | 1400×560 | no | `store/promo-marquee-1400x560.png` |
+
+The icon and tiles are made from the app logo (`app/RideOn.icon`) with the extension's fonts and
+colours.
 
 `bun run test:e2e` saves popup and page screenshots with synthetic data to `test-results/`, a
 starting point for the screenshots. Don't use real journey names.

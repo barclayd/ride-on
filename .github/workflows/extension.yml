@@ -51,10 +51,10 @@ jobs:
       - run: bun run test:e2e
 
       # Next version = last extension-v* tag + 1 patch, or package.json's if that's higher
-      # (bump it there for minor/major). Tests and docs alone don't count as a change.
+      # (bump it there for minor/major). Tests, docs and store images alone don't count as a change.
       - id: version
         run: |
-          src=(. ':!e2e' ':!unit' ':!*.md' ':!playwright.config.ts')
+          src=(. ':!e2e' ':!unit' ':!store' ':!*.md' ':!playwright.config.ts')
           last=$(git tag -l 'extension-v*' --sort=-v:refname | head -1)
           pkg=$(jq -r .version package.json)
           if [ -z "$last" ]; then
