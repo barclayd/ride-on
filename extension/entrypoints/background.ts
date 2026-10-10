@@ -3,6 +3,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 import { ApiError, api, getToken, setToken } from '../lib/api';
 import { SignInCancelled, signIn } from '../lib/auth';
 import {
+  DEFAULT_PLANNING,
   initialState,
   type JourneyGpx,
   type Message,
@@ -10,15 +11,16 @@ import {
   type State,
 } from '../lib/state';
 import {
-  DEFAULT_PLANNING,
   MAX_TRACKED,
-  type Planning,
   type PreferencesPatch,
   type Recommendations,
   type RouteSummary,
   type Selection,
+  type SettingsPatch,
   type User,
+  type WeatherProvider,
 } from '../lib/types';
+import { applyPatch, availability, localDate, searchPatch } from '../ui/format';
 
 // Serialise read-modify-write so concurrent handlers never drop each other's changes.
 let writes = Promise.resolve();
@@ -44,14 +46,16 @@ const isConflict = (error: unknown) =>
 
 const loadUser = async () => {
   try {
-    return await api<User>('/users/me');
+    return (await api<{ user: User }>('/users/me')).user;
   } catch (error) {
     if (!(error instanceof ApiError && error.code === 'USER_NOT_FOUND'))
       throw error;
     const me = await api<{ user: { name?: string | null } }>('/auth/me');
-    return api<User>('/users', {
-      body: { displayName: me.user.name?.trim() || 'Rider' },
-    });
+    return (
+      await api<{ user: User }>('/users', {
+        body: { displayName: me.user.name?.trim() || 'Rider' },
+      })
+    ).user;
   }
 };
 
@@ -72,62 +76,119 @@ const loadRoutes = async () => {
 const loadSelection = async () =>
   (await api<{ selection: Selection }>('/route-selection')).selection;
 
-// The profile in storage carries the rider's latest planning pick, even while a PATCH is in flight.
-const keepLocalPlanning = (fresh: User, state: State): User => ({
-  ...fresh,
-  settings: {
-    ...fresh.settings,
-    planning: state.user?.settings.planning ?? fresh.settings.planning,
-  },
-});
+const withPreferences = (user: User, patch: PreferencesPatch | null): User =>
+  patch
+    ? {
+        ...user,
+        settings: {
+          ...user.settings,
+          preferences: applyPatch(user.settings.preferences, patch),
+        },
+      }
+    : user;
 
-const patchUser = async (settings: Record<string, unknown>) => {
+// Edits not yet sent; the profile in storage shows them before the PATCH lands.
+let pendingPatch: PreferencesPatch | null = null;
+
+const patchUser = async (settings: SettingsPatch) => {
   const send = (expectedVersion: number) =>
-    api<User>('/users/me', {
+    api<{ user: User }>('/users/me', {
       method: 'PATCH',
       body: { expectedVersion, settings },
     });
   const { user } = await readState();
-  let fresh: User;
+  let fresh: { user: User };
   try {
     fresh = await send(user?.version ?? 1);
   } catch (error) {
     if (!isConflict(error)) throw error;
-    fresh = await send((await api<User>('/users/me')).version);
+    // ponytail: last write wins; the Preferences tab always sends the full set it owns.
+    fresh = await send((await api<{ user: User }>('/users/me')).user.version);
   }
-  await update((state) => ({ user: keepLocalPlanning(fresh, state) }));
+  await update(() => ({
+    user: withPreferences(fresh.user, pendingPatch),
+    syncedAt: new Date().toISOString(),
+  }));
 };
 
+// One request per forecast day; the selected days are merged in the view (ui/format.ts).
 let recommendation = 0;
-const recommend = async () => {
+const recommend = async (force = false) => {
   const id = ++recommendation;
-  const { user, selection } = await readState();
+  const state = await readState();
+  const { user, selection } = state;
   if (!user || !selection?.routeIds.length)
-    return update(() => ({ recs: null, loading: false }));
-  const planning = user.settings.planning ?? DEFAULT_PLANNING;
+    return update(() => ({ days: {}, recsKey: null, loading: false }));
+  const { time } = state.planning;
+  const window =
+    time.mode === 'daylight'
+      ? 'daylight'
+      : { start: time.start, end: time.end };
+  const preferences = state.search
+    ? searchPatch(state.search, state.unit)
+    : undefined;
+  const key = JSON.stringify([
+    selection.routeIds,
+    window,
+    preferences,
+    user.version,
+  ]);
+  const today = localDate(new Date(), user.settings.timeZone);
+  const kept =
+    force || key !== state.recsKey
+      ? {}
+      : Object.fromEntries(
+          Object.entries(state.days).filter(([date]) => date >= today),
+        );
+  const dates = availability(
+    new Date(),
+    user.settings.timeZone,
+    user.settings.weather,
+  )
+    .filter((day) => day.kind !== 'none' && !kept[day.date])
+    .map((day) => day.date);
+  if (!dates.length)
+    return update(() => ({ days: kept, recsKey: key, loading: false }));
   await update(() => ({ loading: true }));
-  try {
-    const recs = await api<Recommendations>('/recommendations', {
-      body: {
-        routeIds: selection.routeIds,
-        days: planning.days,
-        riding: { window: planning.window },
-      },
-    });
-    if (id === recommendation)
-      await update(() => ({
-        recs,
-        recsAt: new Date().toISOString(),
-        loading: false,
-        error: null,
-      }));
-  } catch (error) {
+  const settled = await Promise.allSettled(
+    dates.map((date) =>
+      api<Recommendations>('/recommendations', {
+        body: {
+          routeIds: selection.routeIds,
+          date,
+          riding: { window },
+          ...(preferences && { preferences }),
+        },
+      }),
+    ),
+  );
+  if (id !== recommendation) return;
+  const fetched = settled.flatMap((r) =>
+    r.status === 'fulfilled' ? [r.value] : [],
+  );
+  const failed = settled.find((r) => r.status === 'rejected')?.reason;
+  if (!fetched.length) {
     // Keep the last results on screen; the error chip says what failed.
-    if (id === recommendation)
-      await update(() => ({ loading: false, error: errorMessage(error) }));
-    throw error;
+    await update(() => ({ loading: false, error: errorMessage(failed) }));
+    throw failed;
   }
+  await update(() => ({
+    days: {
+      ...kept,
+      ...Object.fromEntries(fetched.map((recs) => [recs.date, recs])),
+    },
+    recsKey: key,
+    recsAt: new Date().toISOString(),
+    loading: false,
+    error: failed ? errorMessage(failed) : null,
+  }));
 };
+
+// Optional: without it the picker shows only the saved source.
+const loadProviders = () =>
+  api<{ providers: WeatherProvider[] }>('/weather-providers')
+    .then((r) => r.providers)
+    .catch(() => []);
 
 const refresh = async () => {
   if (!(await getToken())) {
@@ -135,48 +196,57 @@ const refresh = async () => {
     if ((await readState()).auth === 'signed-in') await signOutLocally();
     return;
   }
-  const [user, selection, routes] = await Promise.all([
+  const [user, selection, routes, providers] = await Promise.all([
     loadUser(),
     loadSelection(),
     loadRoutes(),
+    loadProviders(),
   ]);
   await update((state) => ({
     auth: 'signed-in',
-    user: keepLocalPlanning(user, state),
+    // An unsent edit outranks the stored profile until its PATCH lands.
+    user: withPreferences(user, pendingPatch),
     selection,
     routes,
+    providers,
     error: null,
+    syncedAt: pendingPatch ? state.syncedAt : new Date().toISOString(),
   }));
-  await recommend();
+  await recommend(true);
 };
 
-let planningTimer: ReturnType<typeof setTimeout> | undefined;
-const setPlanning = async (planning: Planning) => {
-  await update((state) =>
-    state.user
-      ? {
-          user: {
-            ...state.user,
-            settings: { ...state.user.settings, planning },
-          },
-        }
-      : {},
-  );
-  clearTimeout(planningTimer);
-  // ponytail: in-memory debounce; the worker lives 30s past the last event, ample for 600ms.
-  planningTimer = setTimeout(
-    () =>
-      patchUser({ planning }).catch((error) =>
-        update(() => ({ error: errorMessage(error) })),
-      ),
-    600,
-  );
-  await recommend();
+let syncTimer: ReturnType<typeof setTimeout> | undefined;
+const flush = async () => {
+  const preferences = pendingPatch;
+  if (!preferences) return;
+  pendingPatch = null;
+  try {
+    await patchUser({ preferences });
+  } catch (error) {
+    // Newer edits made while this PATCH was in flight win.
+    pendingPatch = {
+      ...preferences,
+      ...(pendingPatch as PreferencesPatch | null),
+    };
+    if (error instanceof ApiError && error.status === 401)
+      return signOutLocally();
+    return update(() => ({ syncing: false, syncError: errorMessage(error) }));
+  }
+  await update(() => ({ syncing: pendingPatch !== null }));
+  await recommend().catch(() => {}); // recommend records its own error
 };
 
 const savePreferences = async (patch: PreferencesPatch) => {
-  await patchUser(patch);
-  await recommend();
+  // Shallow merge is enough: each sender includes every field of the sections it touches.
+  pendingPatch = { ...pendingPatch, ...patch };
+  await update((state) => ({
+    syncing: true,
+    syncError: null,
+    user: state.user && withPreferences(state.user, patch),
+  }));
+  clearTimeout(syncTimer);
+  // ponytail: in-memory debounce; the worker lives 30s past the last event, ample for 900ms.
+  syncTimer = setTimeout(flush, 900);
 };
 
 const putSelection = async (change: (routeIds: string[]) => string[]) => {
@@ -267,9 +337,44 @@ const handle = async (message: Message) => {
     case 'refresh':
       return refresh();
     case 'setPlanning':
-      return setPlanning(message.planning);
+      await update(() => ({ planning: message.planning }));
+      return recommend();
+    case 'saveDefaultPlanning':
+      return update((state) => ({ defaultPlanning: state.planning }));
+    case 'setSearch':
+      await update(() => ({ search: message.search }));
+      return recommend();
+    case 'saveUsual': {
+      const { unit } = await readState();
+      await update(() => ({ search: null }));
+      return savePreferences(searchPatch(message.search, unit));
+    }
+    case 'setUnit':
+      return update(() => ({ unit: message.unit }));
+    case 'setLocal':
+      return update((state) => ({
+        local: { ...state.local, ...message.local },
+      }));
     case 'savePreferences':
-      return savePreferences(message.patch);
+      return savePreferences(message.preferences);
+    case 'setWeather': {
+      const provider = (await readState()).providers.find(
+        (p) => p.id === message.providerId,
+      );
+      if (!provider) return;
+      await update(() => ({ syncing: true, syncError: null }));
+      try {
+        // ponytail: always saved to the profile; a for-this-search choice waits on the brief.
+        await patchUser(provider.recommendedSettings);
+      } catch (error) {
+        return update(() => ({
+          syncing: false,
+          syncError: errorMessage(error),
+        }));
+      }
+      await update(() => ({ syncing: pendingPatch !== null }));
+      return recommend();
+    }
     case 'import': {
       const route = await importJourney(message.journey);
       if (!message.track) return;
@@ -293,11 +398,21 @@ const handle = async (message: Message) => {
 };
 
 export default defineBackground(() => {
-  // A worker restart abandons any sign-in window; don't leave the popup spinning.
-  update((state) =>
-    state.auth === 'signing-in'
-      ? { auth: 'signed-out', signingInWith: null }
-      : {},
+  // A worker restart abandons any sign-in window or unsent edit; don't leave either spinning.
+  update((state) => ({
+    syncing: false,
+    ...(state.auth === 'signing-in' && {
+      auth: 'signed-out',
+      signingInWith: null,
+    }),
+  }));
+  // ponytail: a browser restart starts from the saved default window and the usual
+  // preferences, until the API can store planning (docs/extension-api-brief-v2.md).
+  browser.runtime.onStartup.addListener(() =>
+    update((state) => ({
+      planning: state.defaultPlanning ?? DEFAULT_PLANNING,
+      search: null,
+    })),
   );
   browser.runtime.onMessage.addListener(
     (message: Message, _sender, sendResponse) => {

@@ -1,11 +1,14 @@
 # Ride On for cycle.travel (Chrome)
 
 MV3 extension (WXT + Preact) that ranks your cycle.travel journeys by the best time to ride them,
-using the Ride On API. Design: handoff sections 2a (page + popup) and 4a (signed out).
+using the Ride On API (v0.9.0). Design: handoff 3 (`design_handoff_ride_on_v2`), plus 4a (signed out).
 
-- **Popup** — When (days, time window, best in window), Rides (tracked routes), Preferences.
-- **cycle.travel `/user/journeys`** — "Under consideration" module, per-row chips and the picker.
+- **Popup** — Rides (opens first), When (days, time window, default window), Preferences
+  (distance and climbing for this search or as usual, auto-synced profile, forecast provider).
+- **cycle.travel `/user/journeys`** — "Tracked routes" module, date · time button, per-row chips.
   Journeys are imported as GPX (with elevation) when tracked, and re-imported when edited on cycle.travel.
+- **Weather attribution** from the results (Apple Weather logo, legal link and notice; "Powered by
+  Met Office data") shows under the rides, in Preferences and on the page.
 
 ## Run it
 
@@ -33,6 +36,8 @@ serves a minimal Journeys page fixture. Screenshots land in `test-results/`.
 
 ## API
 
-Contracts: `docs/api.md` plus `docs/extension-api-brief.md` (planning days, day summaries,
-verdicts, confidence, preference levels). Only the background service worker calls the API;
-the popup and content script message it and render the shared state in `storage.local`.
+Contracts: `docs/api.md`. What the extension still works around is in
+`docs/extension-api-brief-v2.md`: one request per forecast day merged client-side, hard-coded
+provider horizons, and the default window, sunshine, rain, favour tailwinds and km/mi stored only in
+this browser. Only the background service worker calls the API; the popup and content script
+message it and render the shared state in `storage.local`.

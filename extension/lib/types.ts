@@ -1,12 +1,8 @@
-// API contracts: docs/api.md plus docs/extension-api-brief.md (fields marked "brief").
+// Live API contracts (v0.9.0): worker/src/recommendations/input.ts and docs/api.md.
+// Fields the extension needs but the API lacks are in docs/extension-api-brief-v2.md.
 
-export type ClockWindow = { start: string; end: string };
-export type Preset = 'today' | 'tomorrow' | 'weekend' | 'next';
-export type PlanningDays =
-  | { kind: 'preset'; preset: Preset }
-  | { kind: 'range'; start: string; end: string };
-export type Planning = { days: PlanningDays; window: ClockWindow };
-
+export type Climbing = 'flatter' | 'neutral' | 'hillier';
+export type Distance = { minKm: number; maxKm: number };
 export type TemperatureFloor =
   | { kind: 'fixed'; valueC: number }
   | {
@@ -18,17 +14,36 @@ export type MinimumStandards = {
   minimumTemperature?: TemperatureFloor;
   maximumGustKph?: number;
   maximumPrecipitationProbability?: number;
+  maximumPrecipitationRateMmH?: number;
 };
-export type Temperature = { comfortMinC: number; comfortMaxC: number };
-
-export type Sunshine = 'dont-mind' | 'nice' | 'important';
-export type Rain = 'avoid' | 'light-ok' | 'dont-mind';
-export type Climbing = 'flatter' | 'neutral' | 'hillier';
-export type PreferenceLevels = {
-  sunshine: Sunshine | 'custom';
-  rain: Rain | 'custom';
-  climbing: Climbing;
-  comfortableWindKph: number;
+export type Preferences = {
+  temperature: { comfortMinC: number; comfortMaxC: number };
+  wind: { comfortableHeadwindKph: number; comfortableCrosswindKph: number };
+  climbing: { preference: Climbing };
+  distance: Distance | null;
+  minimumStandards: MinimumStandards;
+};
+export type WeatherSource =
+  | { mode: 'strict'; providerId: string }
+  | { mode: 'ordered-fallback'; providerIds: string[] };
+export type ForecastPolicy = {
+  representation: 'deterministic' | 'ensemble-summary';
+  freshnessBasis: 'model-run' | 'retrieval-time';
+};
+// Shown wherever a provider's data is (Apple requires the logo and legal link).
+export type Attribution = {
+  text: string;
+  url: string;
+  logo?: { lightUrl: string; darkUrl: string };
+  notice?: string;
+};
+// GET /weather-providers
+export type WeatherProvider = {
+  id: string;
+  name: string;
+  configured: boolean;
+  recommendedSettings: { weather: WeatherSource; forecast: ForecastPolicy };
+  attribution: Attribution[];
 };
 
 export type User = {
@@ -37,25 +52,26 @@ export type User = {
   displayName: string;
   settings: {
     timeZone: string;
-    planning?: Planning; // brief §2
-    preferences: {
-      temperature: Temperature;
-      wind: { comfortableHeadwindKph: number };
-      minimumStandards: MinimumStandards;
-    };
+    preferences: Preferences;
+    weather: WeatherSource;
+    forecast?: ForecastPolicy;
   };
-  preferenceLevels?: PreferenceLevels; // brief §4
 };
 
+// PATCH /users/me settings and the per-request override: null removes distance or one minimum.
 export type PreferencesPatch = {
-  preferenceLevels?: Partial<Omit<PreferenceLevels, 'sunshine' | 'rain'>> & {
-    sunshine?: Sunshine;
-    rain?: Rain;
+  temperature?: Partial<Preferences['temperature']>;
+  wind?: Partial<Preferences['wind']>;
+  climbing?: { preference: Climbing };
+  distance?: Distance | null;
+  minimumStandards?: {
+    [K in keyof MinimumStandards]?: MinimumStandards[K] | null;
   };
-  preferences?: {
-    temperature?: Partial<Temperature>;
-    minimumStandards?: MinimumStandards;
-  };
+};
+export type SettingsPatch = {
+  preferences?: PreferencesPatch;
+  weather?: WeatherSource;
+  forecast?: ForecastPolicy;
 };
 
 export type RouteSummary = {
@@ -72,6 +88,17 @@ export type Selection = {
   updatedAt: string | null;
 };
 
+export type Standard =
+  | 'minimumTemperatureC'
+  | 'maximumGustKph'
+  | 'maximumPrecipitationProbability'
+  | 'maximumPrecipitationRateMmH';
+export type Failure = {
+  standard: Standard;
+  limit: number;
+  actual: number;
+  sections: { fromKm: number; toKm: number; observedAt: string }[];
+};
 export type Conditions = {
   temperatureC: { minimum: number; maximum: number };
   averageWindSpeedKph: number;
@@ -81,47 +108,51 @@ export type Conditions = {
   maximumPrecipitationProbability: number;
 };
 export type Departure = {
-  date?: string; // brief §3
   departureAt: string;
   finishAt: string;
   score: number;
+  standards: {
+    status: 'meets' | 'below' | 'unknown' | 'not_configured';
+    failures: Failure[];
+  };
   conditions: Conditions;
-  drawbacks: string[];
 };
-export type Verdict = {
-  status: 'ride' | 'no_ride' | 'unknown';
-  reason: string | null;
-};
-export type RankedRoute = {
+export type Window = { start: string; end: string };
+export type RouteResult = {
   routeId: string;
   routeName: string;
   distanceKm: number;
+  distanceFit: {
+    status: 'within_range' | 'below_range' | 'above_range';
+    deviationKm: number;
+  } | null;
+  estimatedDurationMinutes: number;
+  daylight: Window | null;
+  effectiveWindow: Window | null;
+  status: 'assessed' | 'unassessable' | 'no_feasible_departure';
+  departuresUnknown: number;
+  departuresStandardsUnknown: number;
   best: Departure | null;
   issues: string[];
-  confidence?: 1 | 2 | 3; // brief §3
-  verdict?: Verdict; // brief §3
+  warnings: string[];
 };
-export type DaySummary = {
-  date: string;
-  daylight: { sunrise: string; sunset: string } | null;
-  temperatureMaxC: number | null;
-  quality: number | null;
-};
+export type StandardsStatus =
+  | 'not_configured'
+  | 'match_found'
+  | 'unknown'
+  | 'none_meet'
+  | 'no_feasible_departure';
 export type Recommendations = {
-  message: string;
-  rankings: RankedRoute[];
-  unranked: RankedRoute[];
-  range?: {
-    start: string;
-    end: string;
-    preset: Preset | null;
-    fallback: boolean;
-  } | null; // brief §3
-  days?: DaySummary[]; // brief §3
+  date: string;
+  recommendedRouteId: string | null;
+  minimumStandardsStatus: StandardsStatus;
+  rankings: RouteResult[];
+  unranked: RouteResult[];
+  weather: {
+    locations: {
+      provenance?: { retrievedAt: string; attribution?: Attribution[] } | null;
+    }[];
+  };
 };
 
-export const DEFAULT_PLANNING: Planning = {
-  days: { kind: 'preset', preset: 'next' },
-  window: { start: '06:00', end: '20:00' },
-};
 export const MAX_TRACKED = 12;
