@@ -1,0 +1,16 @@
+{
+  "status": "provisional-calibration",
+  "basis": "Dan wants sustained crosswind discomfort to outweigh East Anglia's sunshine advantage, while retaining Braintree's useful tailwind, comfortable light-wind loops and a strong preference for visible sunshine. The exact settings below are fitted hypotheses for another human grading pass, not confirmed minimum standards or universal defaults.",
+  "supersedes": "sunshine-profile-v3.json",
+  "request": {
+    "weather": { "mode": "strict", "providerId": "met-office-bpf" },
+    "forecast": { "representation": "ensemble-summary", "freshnessBasis": "retrieval-time" },
+    "preferences": {
+      "temperature": { "comfortMinC": 16, "comfortMaxC": 24 },
+      "wind": { "comfortableHeadwindKph": 5, "comfortableCrosswindKph": 5, "comfortableGustKph": 25, "crosswindSensitivity": 5 },
+      "sunshine": { "sunnyIntervalsComfort": 0.7 },
+      "weights": { "temperature": 0.15, "wind": 0.4, "dryness": 0.2, "clearSkies": 0, "sunshine": 0.25 },
+      "minimumStandards": {}
+    }
+  }
+}

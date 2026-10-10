@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HttpResponse } from 'msw/http';
 import { z } from 'zod';
+import windProfile from '../../evaluation/sunshine-profile-v4.json' with {
+  type: 'json',
+};
 import { first, recommend, upload } from './client.ts';
 import {
   hourlyForecast,
@@ -31,6 +34,76 @@ const integration = (name: string, run: (harness: Harness) => Promise<void>) =>
       assert.deepEqual(harness.handlerErrors, []);
     }
   });
+
+integration(
+  'personal crosswind sensitivity reverses the sunshine trade-off across Worker restart without refetching weather',
+  async (h) => {
+    h.use(
+      metOffice(({ request }) => {
+        const longitude = Number(
+          new URL(request.url).searchParams.get('longitude'),
+        );
+        const calm = longitude > 0.5;
+        return HttpResponse.json(
+          hourlyForecast(request, {
+            values: () => ({
+              screenTemperature: calm ? 17 : 14,
+              significantWeatherCode: calm ? 8 : 1,
+              windSpeed10m: ((calm ? 3 : 8) * 1.609344) / 3.6,
+              max10mWindGust: (8 * 1.609344) / 3.6,
+              windDirectionFrom10m: longitude === 0 ? 180 : 90,
+            }),
+          }),
+        );
+      }),
+    );
+    const cross = await upload(h, 'Sunny crosswind', -1);
+    const tail = await upload(h, 'Sunny tailwind', 0);
+    const calm = await upload(h, 'Overcast calm', 1);
+    const ids = [cross.id, tail.id, calm.id];
+    const preferences = windProfile.request.preferences;
+    const result = await recommend(h, ids, { preferences });
+    assert.deepEqual(
+      result.rankings.map((r) => r.routeId),
+      [tail.id, calm.id, cross.id],
+    );
+    assert.equal(result.minimumStandardsStatus, 'not_configured');
+    assert.equal(
+      result.rankings.find((r) => r.routeId === cross.id)?.best.conditions
+        .assistedDistanceFraction,
+      0,
+    );
+    assert.equal(
+      first(result.rankings).best.conditions.assistedDistanceFraction,
+      1,
+    );
+    const calls = h.requests.length;
+    await h.restart();
+    const tolerant = await recommend(h, ids, {
+      preferences: {
+        ...preferences,
+        wind: { ...preferences.wind, crosswindSensitivity: 1 },
+      },
+    });
+    assert.deepEqual(
+      tolerant.rankings.map((r) => r.routeId),
+      [tail.id, cross.id, calm.id],
+    );
+    assert.equal(h.requests.length, calls);
+    assert.equal(tolerant.weather.cache.misses, 0);
+    for (const value of [-1, 11, 'high']) {
+      const invalid = await h.send('/recommendations', {
+        body: JSON.stringify({
+          routeIds: ids,
+          date: RIDE_DATE,
+          preferences: { wind: { crosswindSensitivity: value } },
+        }),
+      });
+      assert.equal(invalid.status, 400);
+    }
+    assert.equal(h.requests.length, calls);
+  },
+);
 
 integration(
   'sunshine-aware ranking can favour a cooler sunny ride and reverses with personal weights',

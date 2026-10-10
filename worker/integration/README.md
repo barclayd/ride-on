@@ -52,3 +52,7 @@ synthetic, the clock is fixed, and credentials are test-only constants.
 This suite tests local runtime behavior, not Cloudflare's distributed KV propagation,
 production latency, real Met Office availability, or forecast accuracy. Unit tests
 cover transport cancellation/timeouts and the remaining scalar/interval edge cases.
+
+The wind calibration scenario changes only personal crosswind sensitivity, reverses
+the sunshine-versus-crosswind ordering, preserves the helpful-tailwind winner and
+reuses KV after a Worker restart. Out-of-range sensitivity fails before weather I/O.

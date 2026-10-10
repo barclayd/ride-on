@@ -17,7 +17,7 @@ import {
   resolveMinimumTemperature,
 } from './input.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.3';
+export const ALGORITHM_VERSION = 'comfort-v0.4';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -291,6 +291,7 @@ const assessCandidate = (
         0.45 *
           clamp((headwindKph - preferences.wind.comfortableHeadwindKph) / 20) +
           0.35 *
+            preferences.wind.crosswindSensitivity *
             clamp(
               (crosswindKph - preferences.wind.comfortableCrosswindKph) / 20,
             ) +

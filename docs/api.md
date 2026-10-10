@@ -92,7 +92,8 @@ Defaults and optional settings are shown below. These comfort values are
     "wind": {
       "comfortableHeadwindKph": 10,
       "comfortableCrosswindKph": 15,
-      "comfortableGustKph": 25
+      "comfortableGustKph": 25,
+      "crosswindSensitivity": 1
     },
     "weights": { "temperature": 0.3, "wind": 0.2, "dryness": 0.5, "clearSkies": 0, "sunshine": 0 },
     "minimumStandards": {}
@@ -149,8 +150,8 @@ return unassessable weather without spending forecast quota.
 
 Dan's follow-up clarifies that **visible sunshine matters most**, even through
 thin high cloud. The current experimental profile is
-`evaluation/sunshine-profile-v3.json`: weights 0.15 temperature / 0.20 wind /
-0.20 dryness / 0.45 sunshine / 0 clear skies. The older cloud-only profile is
+`evaluation/sunshine-profile-v4.json`: weights 0.15 temperature / 0.40 wind /
+0.20 dryness / 0.25 sunshine / 0 clear skies. The older cloud-only profile is
 retained as an experiment, not Dan's active profile. Other riders can choose either
 or both sky preferences; the default weights for both remain zero.
 
@@ -172,6 +173,27 @@ This makes a route with visible sunshine through substantial cloud eligible for
 a high sunshine score, while another profile can explicitly prefer lower cloud.
 A missing weather symbol never becomes sunny, even if temperature and wind look
 comfortable. No cloud percentage is inferred from a weather symbol.
+
+### Personal crosswind sensitivity
+
+`preferences.wind.crosswindSensitivity` scales the crosswind discomfort term
+above `comfortableCrosswindKph`. It is a number from 0 to 10, default 1; 0 ignores
+this scoring penalty, while 1 preserves the previous wind calculation. Headwind,
+gust and useful-assistance calculations remain separate. The combined wind
+discomfort is clamped to 0–1, so scores remain bounded. This is a comfort setting,
+not a safety limit or an automatically inferred minimum standard.
+
+The provisional v4 profile uses sensitivity 5 and a comfortable crosswind of
+5 km/h (about 3.1 mph), with the weights above. Light winds below this threshold
+remain comfortable whatever the route direction. Sustained crosswinds beyond it
+carry more weight relative to sunshine. Other riders retain their own settings;
+route names, locations and ranks never enter the scoring formula.
+
+This calibration replays the same forecasts as v3. Braintree stays first and East
+Anglia moves from second to sixth after all 86 departures are re-evaluated. These
+are fitted results on one reviewed day, not validation on unseen weather. The
+middle ordering and exact settings still require human grading. Earlier profiles
+remain available for comparison; no seasonal minimum temperatures were invented.
 
 ### Personal minimum standards
 
@@ -220,7 +242,7 @@ change that conclusion. If another route/departure lacks evidence, or a month
 rule is unresolved, return `unknown` instead. No feasible departure is distinct
 from bad weather. Missing data never becomes zero rain or zero wind.
 
-## Algorithm v0.3
+## Algorithm v0.4
 
 The duration model is distance / constant moving speed. Weather is matched to the
 estimated arrival at each section midpoint; wind uses that section's heading.
@@ -234,7 +256,7 @@ penalties where relevant.
 
 Each factor is a 0–1 comfort value. Temperature is 1 within the comfort band,
 then decreases linearly to 0 at 10°C outside it. Wind discomfort is the sum of
-45% headwind excess (over a 20 km/h span), 35% crosswind excess (20 km/h span),
+45% headwind excess (over a 20 km/h span), 35% × `crosswindSensitivity` × crosswind excess (20 km/h span),
 and 20% gust excess (30 km/h span), with each excess clamped to 0–1. Dryness is
 `1 − (0.8 × precipitationProbability + 0.2 × clamp(rateMmH / 2))`.
 Clear-sky comfort is `1 − totalCloudCoverFraction`. Per-section comfort is the
@@ -314,7 +336,7 @@ p95 of 37 ms, all with 55 hits and zero misses. Small local samples are not depl
 latency or load guarantees. Full original forecast snapshots are not archived in
 the report; deterministic reproduction uses the synthetic test fixtures.
 
-The 10 October sunshine iteration assessed all six routes, 55 locations and 86
+The initial 10 October sunshine iteration assessed all six routes, 55 locations and 86
 fully covered departures for Sunday 11 October. The explicit six-route comparison
 used Global Spot weather symbols (BPF's 55-call allowance cannot cover all sites).
 BPF was independently exercised on London Loop, Braintree and East Anglia using
@@ -323,6 +345,24 @@ success claims: Braintree ranks first with the sunshine profile, while East Angl
 still ranks too highly compared with Dan's initial feedback. Forecasts also changed
 between checks. The original assessment, newer results and normalized replay
 snapshots are kept locally under ignored `evaluation/*-live-check.json` paths.
+
+For the wind follow-up, replay that saved snapshot without an API key or network:
+
+```sh
+bun scripts/replay-calibration.ts /path/to/GPX \
+  ../evaluation/2026-10-11-sunshine-live-check.json \
+  ../evaluation/2026-10-11-sunshine-snapshot-live-check.json \
+  ../evaluation/sunshine-profile-v4.json \
+  ../evaluation/2026-10-11-wind-calibration-live-check.json
+```
+
+The tool validates route hashes and snapshot structure, reproduces the baseline
+ranking and saved candidate scores, then changes only the profile's preferences.
+It retains the original provider, statistics, day, speed and evaluation clock;
+the profile's weather selection is deliberately not used to relabel a captured
+forecast. It records all candidate departures and before/after results in an
+ignored report. It refuses missing routes, unmatched evidence or baseline drift.
+This is an offline algorithm comparison, not a fresh forecast or new HTTP test.
 
 ## Deployment status
 

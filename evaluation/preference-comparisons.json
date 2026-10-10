@@ -27,7 +27,25 @@
         "tailwind": "Useful wind assistance across most of the route should compare favourably with headwind or crosswind. The exact benefit curve and any independent tailwind bonus remain unresolved.",
         "crosswind": "Sustained crosswinds around 8 mph should lower this rider's score meaningfully; a small positive tailwind component must not imply that the wind is predominantly helpful.",
         "calm_circular_routes": "A circular ride in winds around 3 mph can be highly comfortable even when only part of its distance has tailwind.",
-        "scope": "Qualitative personal feedback; exact benefit, penalty curves and gust limits remain uncalibrated."
+        "scope": "Qualitative personal feedback; exact benefit, penalty curves and gust limits remain uncalibrated.",
+        "implemented_experiment": {
+          "profile": "sunshine-profile-v4.json",
+          "status": "provisional; fitted to feedback and awaiting another grading pass",
+          "crosswind_comfort_kph": 5,
+          "crosswind_sensitivity": 5,
+          "weight_changes": {
+            "wind": [
+              0.2,
+              0.4
+            ],
+            "sunshine": [
+              0.45,
+              0.25
+            ]
+          },
+          "minimum_standards_changed": false,
+          "validation": "Same saved six-route forecast and all 86 departures, plus independent synthetic directional, light-wind, sunshine and rain scenarios. No new weather calls and no evidence from an unseen day."
+        }
       }
     },
     "sky_preference": {
@@ -216,6 +234,18 @@
       "question": "At the same comfortable temperature with no rain forecast, would you prefer a route with moderate wind helping for most of the distance but a headwind near the end, or a route with light wind throughout?",
       "user_response_verbatim": null,
       "unconditional_choice": null
+    },
+    {
+      "id": "wind-sunshine-001",
+      "recorded_on": "2026-10-10",
+      "status": "qualitative_route_feedback_recorded",
+      "weather_source": "human comparison with Met Office website, later replayed against a saved Global Spot snapshot",
+      "user_response_verbatim": "I'd penalise East Anglia a lower score for wind - 8mph average for the entire route, The route itself is south to north but the wind is blowing from west to east. So it has very small percentage of actually helping the route. I would score this bottom.",
+      "interpretation": "Sustained crosswinds should meaningfully outweigh sunshine in this reviewed comparison. Braintree should remain first with useful tailwinds. The feedback does not assign a complete order to the other four routes or define universal scoring weights.",
+      "unresolved": [
+        "Exact sensitivity and wind-versus-sunshine weights on other days.",
+        "Whether departures chosen after this adjustment match the rider's preference."
+      ]
     }
   ]
 }

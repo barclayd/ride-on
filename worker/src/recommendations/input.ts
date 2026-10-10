@@ -28,11 +28,13 @@ const preferencesSchema = z
         comfortableHeadwindKph: z.number().min(0).max(100).default(10),
         comfortableCrosswindKph: z.number().min(0).max(100).default(15),
         comfortableGustKph: z.number().min(0).max(150).default(25),
+        crosswindSensitivity: z.number().min(0).max(10).default(1),
       })
       .default({
         comfortableHeadwindKph: 10,
         comfortableCrosswindKph: 15,
         comfortableGustKph: 25,
+        crosswindSensitivity: 1,
       }),
     sunshine: z
       .strictObject({
@@ -105,6 +107,7 @@ export const recommendationSchema = z.strictObject({
       comfortableHeadwindKph: 10,
       comfortableCrosswindKph: 15,
       comfortableGustKph: 25,
+      crosswindSensitivity: 1,
     },
     weights: {
       temperature: 0.3,
