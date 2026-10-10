@@ -54,6 +54,8 @@ Covered scenarios include:
 - Saved settings versus temporary nested overrides, explicit limit removal and validation after merging.
 - Climbing preferences persisted through user endpoints, temporary overrides, neutral backfill for old profiles, weather-cache reuse and minimum-condition precedence.
 - Complete versus partial GPX elevation, known zero ascent and no weather calls for routes unassessable under an active climbing preference.
+- Preferred distance persisted per owner and across restarts, temporary range replacement, explicit null clearing, omitted-field preservation and old-profile defaults.
+- Shorter/flatter combined ranking, weather and minimum-condition precedence, visible out-of-range alternatives, cache reuse and invalid ranges rejected before writes or weather calls.
 - Whole-ride windows, time zones, DST rejection and no weather calls for routes that cannot fit.
 - Preference changes and speed overrides reusing cached forecasts.
 - Hourly departure selection and route-relative wind direction.
