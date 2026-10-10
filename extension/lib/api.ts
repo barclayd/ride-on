@@ -1,5 +1,3 @@
-import { browser } from 'wxt/browser';
-
 declare const __API_URL__: string;
 export const API_URL = __API_URL__;
 
@@ -13,14 +11,31 @@ export class ApiError extends Error {
   }
 }
 
-// ponytail: storage.local is also readable by our content script (isolated from the page itself);
-// move the token behind the background with storage.session if this ships beyond a personal install.
+// The token lives in the extension's own IndexedDB, not storage.local: it persists the same, but
+// content scripts get the page's IndexedDB, so only the background (the API caller) can read it.
+const auth = (
+  mode: IDBTransactionMode,
+  op: (store: IDBObjectStore) => IDBRequest,
+) =>
+  new Promise<unknown>((resolve, reject) => {
+    const open = indexedDB.open('ride-on');
+    open.onupgradeneeded = () => open.result.createObjectStore('auth');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const request = op(
+        open.result.transaction('auth', mode).objectStore('auth'),
+      );
+      open.result.close(); // closes once the transaction finishes
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    };
+  });
 export const getToken = async () =>
-  (await browser.storage.local.get('token')).token as string | undefined;
+  (await auth('readonly', (store) => store.get('token'))) as string | undefined;
 export const setToken = (token: string | null) =>
-  token
-    ? browser.storage.local.set({ token })
-    : browser.storage.local.remove('token');
+  auth('readwrite', (store) =>
+    token ? store.put(token, 'token') : store.delete('token'),
+  );
 
 // Background only: content scripts and the popup never call the API directly.
 export const api = async <T>(
