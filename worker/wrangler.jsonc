@@ -2,13 +2,16 @@
   "name": "ride-on-api",
   "account_id": "3343118697a4beccae42090c4520cd29",
   "main": "src/index.ts",
+  "workers_dev": true,
+  "routes": [{ "pattern": "api.ride-on.cc", "custom_domain": true }],
   "compatibility_date": "2026-10-09",
   "compatibility_flags": ["nodejs_compat"],
   "secrets": {
     "required": [
       "MET_OFFICE_API_KEY",
       "MET_OFFICE_BPF_API_KEY",
-      "API_KEYS_JSON"
+      "API_KEYS_JSON",
+      "AUTH_CONFIG_JSON"
     ]
   },
   "observability": {
