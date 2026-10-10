@@ -207,7 +207,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
                     ? card.state
                     : 'meets'
               }
-              title="Stop considering"
+              title="Stop tracking"
               disabled={working}
               onClick={() => toggle(row.id)}
             >
@@ -220,11 +220,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
               disabled={working || full}
               onClick={() => toggle(row.id)}
             >
-              {working
-                ? 'Adding…'
-                : full
-                  ? `Limit ${MAX_TRACKED}`
-                  : '+ Consider'}
+              {working ? 'Adding…' : full ? `Limit ${MAX_TRACKED}` : '+ Track'}
             </button>
           ),
           row.mount,

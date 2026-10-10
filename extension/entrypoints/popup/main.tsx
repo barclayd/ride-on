@@ -332,7 +332,7 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
       <Banners view={view} />
       {view.range && view.cards.length === 0 && (
         <span class="ro-empty">
-          No rides under consideration. Add some from your cycle.travel Journeys
+          No tracked routes yet. Track some from your cycle.travel Journeys
           page.
         </span>
       )}
