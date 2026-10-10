@@ -22,20 +22,20 @@ Use distinct, securely generated tokens per owner. The current local checkout is
 already configured; do not overwrite its secrets. Secrets and local database
 state are ignored by Git. Route IDs in the live report refer to this local database.
 
-All endpoints except `GET /health` require `Authorization: Bearer <token>`.
-The server resolves the owner from that token; callers cannot choose another
-owner in a request. Responses use `Cache-Control: no-store`. Browser clients will
-need an explicit origin/authentication design when they are introduced; no broad
-CORS policy is enabled. Current tokens are for development/private API use.
+Product endpoints require a session cookie, a session bearer token, or an existing
+private API key. `/health`, provider discovery and login entrypoints are public.
+Responses use `Cache-Control: no-store`. Cookie writes and browser CORS use exact
+trusted origins. See [authentication](authentication.md) for Apple, Google,
+passkeys, extension handoff, account linking and migration of existing profiles.
 
 ## Users and saved preferences
 
-The private API uses the existing token-to-owner identity. `POST /users` creates
-that authenticated user's profile; it does not issue a token. To add another
-person during this MVP, provision a distinct owner/token in `API_KEYS_JSON`, then
-create their profile using that token. Existing route ownership is unchanged.
-Clients cannot choose another user ID or read/update somebody else's profile.
-Public signup, login and account recovery remain separate work.
+`POST /users` creates the authenticated rider's cycling profile; it does not issue
+a login token. New social logins receive server-assigned owner IDs on first product
+API access. Existing private-key users can claim their previous profile **before**
+that first access, preserving route ownership. Clients cannot choose another user
+ID or read/update somebody else's profile. Saved settings stay independent of the
+login provider.
 
 ```http
 POST /users
@@ -615,16 +615,16 @@ This is an offline algorithm comparison, not a fresh forecast or new HTTP test.
 ## Production deployment
 
 The API is hosted at **https://ride-on-api.barclaysd.workers.dev**; its first production
-release was v0.3.0 on 10 October 2026. The importer/shortlist release is v0.4.0;
-`GET /health` reports the running version. `/health` is public; all other endpoints require
-the existing per-user bearer token. Both Met Office credentials and
-`API_KEYS_JSON` are Worker secrets. Never commit their values or put Met Office
+release was v0.3.0 on 10 October 2026. The importer/shortlist release was v0.4.0. The authentication release is v0.5.0;
+`GET /health` reports the running version. The canonical custom domain is
+`https://api.ride-on.cc`. Both Met Office credentials, `API_KEYS_JSON` and
+`AUTH_CONFIG_JSON` are Worker secrets. Provider activation is described in
+[authentication](authentication.md). Never commit their values or put Met Office
 credentials in a client.
 
 The production `ride-on-routes` D1 database is in Western Europe. Its ID is recorded
-in `wrangler.jsonc`. Apply `0003_route_imports_selection.sql` before publishing
-v0.4.0: it extends existing routes and adds shortlists without replacing route facts
-or user profiles. Earlier Worker versions remain compatible with the added columns.
+in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before publishing v0.5.0.
+The additive authentication migration preserves route facts, shortlists and user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used
 by `wrangler dev --local`; production data and local data are separate. The
 existing KV namespace is bound as `WEATHER_CACHE`, with the new weather key

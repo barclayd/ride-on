@@ -28,7 +28,19 @@ not fully compatible with Bun's Undici shim. Bun still runs the existing fast un
 tests. Miniflare and esbuild are pinned to Wrangler's own versions to avoid a
 second runtime version; update them together when upgrading Wrangler.
 
+Authentication scenarios use ephemeral RSA provider keys and an ES256 Apple client
+key. MSW receives real token-exchange bodies and verifies PKCE and Apple client JWTs.
+Passkey tests construct CBOR attestations and signed ES256 WebAuthn assertions;
+SimpleWebAuthn performs the actual verification in workerd. The OAuth/session clock
+is real time; only weather/recommendation time is fixed.
+
 Covered scenarios include:
+
+- Google and Apple callbacks, private relay, explicit linking and encrypted provider credentials.
+- Session persistence, immediate revocation, expiry, CSRF and invalid bearer/cookie precedence.
+- Existing profile claims, ownership races, exact redirect allowlists and one-use PKCE handoff.
+- Real passkey enrollment/login/rename/removal, identity binding and recent-session checks.
+- Signature, origin, RP ID, challenge, counter, user verification, expiry and replay rejection.
 
 - Upload, migration-backed persistence, restart, daylight and pace defaults.
 - Cycle.travel/Garmin/Strava GPX import identities, large string IDs, repeat/concurrent imports and atomic refresh conflicts.

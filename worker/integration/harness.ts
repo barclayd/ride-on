@@ -34,12 +34,13 @@ const bundleWorker = () =>
     return output.text;
   }));
 
-export const createHarness = async () => {
+export const createHarness = async (authConfig = '') => {
   let handlers: RequestHandler[] = [];
   const unexpected: string[] = [];
   const handlerErrors: unknown[] = [];
   const requests: Request[] = [];
   const bindings = {
+    AUTH_CONFIG_JSON: authConfig,
     TEST_NOW: FIXED_NOW,
     MET_OFFICE_API_KEY: WEATHER_KEY,
     MET_OFFICE_BPF_API_KEY: 'integration-bpf-key-not-a-real-secret',
@@ -65,6 +66,9 @@ export const createHarness = async () => {
         method: outgoing.method,
         headers: [...outgoing.headers],
         redirect: outgoing.redirect,
+        ...(!['GET', 'HEAD'].includes(outgoing.method)
+          ? { body: await outgoing.arrayBuffer() }
+          : {}),
       });
       requests.push(request.clone());
       try {
@@ -127,18 +131,27 @@ export const createHarness = async () => {
         body?: string;
         contentType?: string;
         token?: string | null;
+        headers?: Record<string, string>;
       } = {},
     ) =>
-      runtime.dispatchFetch(new URL(path, await runtime.ready).href, {
-        method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
-        headers: {
-          ...(init.token === null
-            ? {}
-            : { Authorization: `Bearer ${init.token ?? ALICE_TOKEN}` }),
-          'Content-Type': init.contentType ?? 'application/json',
+      runtime.dispatchFetch(
+        new URL(
+          path,
+          authConfig ? 'https://api.ride-on.test' : await runtime.ready,
+        ).href,
+        {
+          method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
+          headers: {
+            ...(init.token === null
+              ? {}
+              : { Authorization: `Bearer ${init.token ?? ALICE_TOKEN}` }),
+            'Content-Type': init.contentType ?? 'application/json',
+            ...init.headers,
+          },
+          body: init.body,
+          redirect: 'manual',
         },
-        body: init.body,
-      }),
+      ),
     dispose: () => runtime.dispose(),
   };
 };

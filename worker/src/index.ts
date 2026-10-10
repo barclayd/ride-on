@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
-import { authenticate } from './auth.ts';
 import { readBoundedBody } from './body.ts';
 import { AppError } from './errors.ts';
+import { resolveAccess } from './identity/access.ts';
+import { authConfig } from './identity/config.ts';
+import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
 import { planDepartures } from './recommendations/daylight.ts';
 import {
   recommendRides,
@@ -87,7 +89,28 @@ export const createApp = (
         `${c.req.method} ${new URL(c.req.url).pathname} ${c.res.status} ${Date.now() - start}ms`,
       );
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.4.0' }));
+  app.use('*', async (c, next) => {
+    const origin = c.req.header('Origin');
+    if (origin && c.env.AUTH_CONFIG_JSON) {
+      const config = authConfig(c.env);
+      if ([config.baseUrl, ...config.trustedOrigins].includes(origin)) {
+        c.header('Access-Control-Allow-Origin', origin);
+        c.header('Access-Control-Allow-Credentials', 'true');
+        c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        c.header(
+          'Access-Control-Allow-Methods',
+          'GET, POST, PATCH, PUT, OPTIONS',
+        );
+        c.header('Access-Control-Expose-Headers', 'set-auth-token');
+        c.header('Vary', 'Origin');
+        if (c.req.method === 'OPTIONS') return c.body(null, 204);
+      }
+    }
+    if (c.req.method === 'OPTIONS') return c.body(null, 403);
+    await next();
+  });
+  app.get('/health', (c) => c.json({ ok: true, version: '0.5.0' }));
+  app.route('/', identityRoutes());
   for (const path of [
     '/routes',
     '/routes/*',
@@ -99,10 +122,9 @@ export const createApp = (
     '/users/*',
   ])
     app.use(path, async (c, next) => {
-      c.set(
-        'ownerId',
-        await authenticate(c.req.header('Authorization'), c.env.API_KEYS_JSON),
-      );
+      const access = await resolveAccess(c.req.raw, c.env);
+      c.set('ownerId', access.ownerId);
+      copySessionHeaders(access.headers, c.res.headers);
       await next();
     });
   app.post('/users', async (c) => {
