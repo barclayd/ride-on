@@ -1,10 +1,10 @@
 # Weather providers for the API MVP
 
-Researched and live-checked 9–10 October 2026. Global Spot hourly and BPF v2 UK
-adapters and the source-selection service are implemented and tested locally. A supplied key is
-stored in the ignored local secrets file. GPX ingestion, D1 persistence, shared
-forecast caching and the recommendation endpoint are now implemented and verified
-in the local Workers runtime. No remote secret or deployment has been added.
+Researched and live-checked 9–10 October 2026. Apple Weather, Global Spot hourly and
+BPF v2 UK adapters implement the same provider contract. GPX ingestion, D1 storage,
+forecast caching and recommendation evaluation are verified in the Workers runtime.
+See [Apple Weather](apple-weather.md) for its mapping, setup and attribution, and
+the API guide for deployment state.
 See [the API contract](api.md) for the current request/response and scoring policy.
 
 ## Decision
@@ -12,10 +12,12 @@ See [the API contract](api.md) for the current request/response and scoring poli
 Keep TypeScript, Hono and Cloudflare Workers. The recommendation engine consumes
 our own weather contract through an injected provider. Provider response formats,
 credentials and HTTP calls stay inside adapters. Dan's UK policy is Met Office
-only; preferences outside the UK remain unspecified. Other riders can select a
+only. Other riders can select a
 provider or explicitly allow an ordered fallback list.
 
-The default remains **Global Spot hourly** (`met-office`). Cloud-aware profiles can
+From v0.9.0, new profiles and requests without saved settings default to **Apple
+Weather** (`apple-weather`), deterministic values and retrieval-time freshness.
+Existing saved source selections are preserved. Cloud-aware Met Office profiles can
 explicitly select **BPF v2 UK** (`met-office-bpf`) with `ensemble-summary` assessment
 and `retrieval-time` freshness. Both keys have been authenticated locally. Neither
 feed has been established to match the Met Office consumer app exactly. Providers
@@ -217,7 +219,7 @@ terms when finalising any public forecast display or data export.
 ## Internal contracts
 
 The types are in [`worker/src/weather/contracts.ts`](../worker/src/weather/contracts.ts).
-Runtime request validation, both adapters’ response validation and source selection
+Runtime request validation, adapter response validation and source selection
 are now implemented beside them. Only the required envelope, units and selected
 values are checked; unrelated new upstream fields are tolerated.
 
@@ -274,7 +276,8 @@ and hourly rain probabilities cannot simply be added into a whole-ride risk.
 ## Source preferences and failures
 
 Dan's cloud-aware profile uses `{ mode: 'strict', providerId: 'met-office-bpf' }`;
-the original API default remains `met-office`. If that
+the new-user default is `apple-weather`; existing stored Met Office policies are
+not rewritten. If a selected
 source is unavailable, report unavailable evidence. Do not silently substitute
 another provider. In particular, a forecast failure must not produce a claim that
 all routes fail the rider's minimum standards.
@@ -342,8 +345,8 @@ owner-scoped HTTP access, caching, daylight, arrival timing, route-relative wind
 personal standards and unknown outcomes. A second synthetic provider exercises
 substitution without changes to the evaluator.
 
-Next work is personal calibration with Dan. BPF v2, climate-normal ingestion and
-other providers remain optional future adapters. Global Spot hourly still reports
+Next work includes comparative forecast calibration and climate-normal ingestion.
+Global Spot hourly still reports
 missing coverage beyond its horizon; no lower-resolution feed is substituted.
 
 For an explicit live diagnostic, supply a JSON `ForecastRequest` and run from

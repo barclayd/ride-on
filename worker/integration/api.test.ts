@@ -5,7 +5,7 @@ import { z } from 'zod';
 import windProfile from '../../evaluation/sunshine-profile-v4.json' with {
   type: 'json',
 };
-import { first, recommend, upload } from './client.ts';
+import { first, recommendMetOffice as recommend, upload } from './client.ts';
 import {
   hourlyForecast,
   MET_OFFICE_HOURLY,

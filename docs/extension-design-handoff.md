@@ -22,6 +22,7 @@ The API should own scoring, preference interpretation, feasibility and result or
 | Expired selections | Show **These dates have passed**, with an action to choose available dates. Do not silently replace an expired search with a different date range. |
 | Climbing preference | Use **Flatter**, **No preference** and **Hillier**. Dan has chosen climbing per kilometre, contributing 10% when active. No preference removes its influence. No maximum-ascent control is included yet. |
 | Preferred distance | Offer **No preference** or a range with **From** and **To** distances and explicit units. All distances inside the band are equally suitable; nearby distances outside it remain options. Default to No preference. The range contributes 10% when active; with climbing too, the score is 80% weather, 10% distance and 10% climbing. Both controls are supported by API v0.8.0. |
+| Weather source | Offer the configured providers returned by `GET /weather-providers`. New profiles default to **Apple Weather**; show the user's actual saved choice, preserving existing Met Office users. Applying a choice sends the provider's whole `recommendedSettings` preset so the source and forecast statistics stay compatible. Support temporary versus explicitly saved choices as with other preferences. |
 
 Simple controls must also handle an existing **Custom** preference. Display that state clearly and preserve its saved values until the rider deliberately chooses a replacement. Opening or saving an unrelated setting must not reset custom preferences.
 
@@ -72,6 +73,7 @@ falls outside the preferred range. No preference means no distance-fit label.
 - For multi-day results, always show the recommended **date as well as departure time**, together with the estimated finish.
 - Tie weather summaries to the recommended ride and its timing. Do not present the warmest temperature anywhere across all saved routes as the expected temperature for the recommendation.
 - Label retrieval time as **Forecast retrieved**, not **Forecast updated**, unless the API actually provides the upstream publication time.
+- When Apple data supplies a result, display the official Apple Weather trademark using the supplied light/dark logo, the legal data-source link, and the notice for derived Ride On assessments. Read these from provenance attribution; do not replace them with a plain generic provider label. See [the Apple provider guide](apple-weather.md). Show the actual selected source when an explicit fallback was used.
 
 ## What can stay
 

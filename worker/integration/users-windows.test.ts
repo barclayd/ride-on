@@ -6,7 +6,7 @@ import profile from '../../evaluation/sunshine-profile-v4.json' with {
   type: 'json',
 };
 import { userSchema } from '../src/users/model.ts';
-import { first, recommend, upload } from './client.ts';
+import { first, recommend, recommendMetOffice, upload } from './client.ts';
 import { hourlyForecast, metOffice } from './fixtures.ts';
 import {
   ALICE_TOKEN,
@@ -298,6 +298,11 @@ integration(
     );
     const route = await upload(h);
     await createUser(h, {
+      weather: { mode: 'strict', providerId: 'met-office' },
+      forecast: {
+        representation: 'deterministic',
+        freshnessBasis: 'model-run',
+      },
       preferences: {
         minimumStandards: {
           minimumTemperature: { kind: 'fixed', valueC: 25 },
@@ -345,7 +350,7 @@ integration(
     const longId = z
       .object({ route: z.object({ id: z.string() }) })
       .parse(await longUpload.json()).route.id;
-    const result = await recommend(h, [route.id, longId], {
+    const result = await recommendMetOffice(h, [route.id, longId], {
       riding: { window: { start: '09:00', end: '13:00' } },
     });
     assert.equal(result.recommendedRouteId, route.id);

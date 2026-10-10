@@ -38,6 +38,8 @@ is real time; only weather/recommendation time is fixed.
 
 Covered scenarios include:
 
+- WeatherKit JWT signatures in the real Worker, new-user Apple defaults, preserved Met Office profiles and selectable provider presets.
+- Apple hourly periods, route-relative wind, missing evidence, strict versus explicit fallback, no redirect credential forwarding, cache expiry and retained attribution.
 - Google and Apple callbacks, private relay, explicit linking and encrypted provider credentials.
 - Session persistence, immediate revocation, expiry, CSRF and invalid bearer/cookie precedence.
 - Preservation of existing owner bindings, retired-key/claim rejection, concurrent first access, exact redirect allowlists and one-use PKCE handoff.

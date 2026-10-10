@@ -138,8 +138,16 @@ const responseSchema = z.object({
             dataVersion: z.string().nullable(),
             forecastRunAt: z.string().optional(),
             retrievedAt: z.iso.datetime(),
+            expiresAt: z.iso.datetime().optional(),
             attribution: z.array(
-              z.object({ text: z.string(), url: z.string() }),
+              z.object({
+                text: z.string(),
+                url: z.string(),
+                logo: z
+                  .object({ lightUrl: z.string(), darkUrl: z.string() })
+                  .optional(),
+                notice: z.string().optional(),
+              }),
             ),
           })
           .optional(),
@@ -188,3 +196,15 @@ export const first = <T>(items: readonly T[]): T => {
   if (value === undefined) throw new Error('Expected at least one result.');
   return value;
 };
+
+/** Existing Met Office scenarios choose their source explicitly, independently of new-user defaults. */
+export const recommendMetOffice = (
+  harness: Harness,
+  routeIds: string[],
+  overrides: Record<string, unknown> = {},
+) =>
+  recommend(harness, routeIds, {
+    weather: { mode: 'strict', providerId: 'met-office' },
+    forecast: { representation: 'deterministic', freshnessBasis: 'model-run' },
+    ...overrides,
+  });

@@ -19,7 +19,7 @@ import {
   resolveMinimumTemperature,
 } from './input.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.6';
+export const ALGORITHM_VERSION = 'comfort-v0.7';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -58,7 +58,11 @@ const compileSeries = (samples: readonly ForecastSample[]) => {
     validAt: Date.parse(sample.validAt),
     value: sample.value,
     period:
-      sample.time.kind === 'period' && sample.time.aggregation !== 'mean'
+      sample.time.kind === 'period' &&
+      (sample.time.aggregation !== 'mean' ||
+        Date.parse(sample.time.range.end) -
+          Date.parse(sample.time.range.start) >=
+          HOUR)
         ? {
             start: Date.parse(sample.time.range.start),
             end: Date.parse(sample.time.range.end),
@@ -95,7 +99,7 @@ const compileSeries = (samples: readonly ForecastSample[]) => {
       : null;
   };
 };
-/** Native period bounds for events / maxima; nearest hourly validity for instants / short wind means. */
+/** Native period bounds for events, maxima and full-hour means; nearest validity for instants / short wind means. */
 export const sampleAt = (
   samples: readonly ForecastSample[],
   at: number,

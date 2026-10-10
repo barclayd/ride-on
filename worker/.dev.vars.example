@@ -1,4 +1,6 @@
 MET_OFFICE_API_KEY=your-global-spot-api-key
 MET_OFFICE_BPF_API_KEY=your-bpf-v2-api-key
+# JSON object: teamId, keyId, serviceId, privateKey (PKCS#8 PEM with escaped newlines).
+APPLE_WEATHER_CONFIG_JSON=''
 # bun run dev:session fills this with a separate local auth configuration.
 AUTH_CONFIG_JSON=''

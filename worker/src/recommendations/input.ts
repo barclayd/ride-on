@@ -165,8 +165,11 @@ export const defaultSettings: Settings = {
     },
     minimumStandards: {},
   },
-  forecast: { representation: 'deterministic', freshnessBasis: 'model-run' },
-  weather: { mode: 'strict', providerId: 'met-office' },
+  forecast: {
+    representation: 'deterministic',
+    freshnessBasis: 'retrieval-time',
+  },
+  weather: { mode: 'strict', providerId: 'apple-weather' },
 };
 // No defaults on the patch: omitted values must inherit the saved profile.
 export const settingsPatchSchema = z.strictObject({
