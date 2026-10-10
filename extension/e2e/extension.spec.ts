@@ -531,7 +531,7 @@ const fakeCycleTravel = (context: BrowserContext) =>
     ),
   ]);
 
-test('Journeys page: Tracked routes, window button, row chips and + Consider', async ({
+test('Journeys page: Tracked routes, window button, row chips and + Track', async ({
   context,
   worker,
 }) => {
@@ -557,7 +557,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Consider', a
     'data-ride-on-tracked',
     '',
   );
-  await expect(page.locator('#jr_102 .ro-chip')).toHaveText('+ Consider');
+  await expect(page.locator('#jr_102 .ro-chip')).toHaveText('+ Track');
   await expect(module.locator('.ro-grid')).toHaveAttribute(
     'data-loading',
     'false',

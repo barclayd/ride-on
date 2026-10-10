@@ -175,7 +175,7 @@ export const RideCard = (props: {
           <span class={`ro-pill ro-${card.state}`}>{STATES[card.state]}</span>
         </div>
         <CloseButton
-          title="Stop considering"
+          title="Stop tracking"
           onClick={() => send({ type: 'untrack', routeId: card.routeId })}
         />
       </div>
