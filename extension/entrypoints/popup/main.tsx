@@ -742,7 +742,6 @@ const PrefsTab = ({ view }: { view: View }) => {
             options={[
               { value: "Don't mind", label: "Don't mind" },
               { value: 'Prefer dry', label: 'Prefer dry' },
-              { value: 'Strongly prefer dry', label: 'Strongly prefer dry' },
             ]}
           />
         </div>
