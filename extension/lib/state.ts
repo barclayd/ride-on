@@ -37,7 +37,7 @@ export type Search = {
 // ponytail: the API can't store these yet (docs/extension-api-brief-v2.md), so they live in this browser.
 export type LocalPrefs = {
   sunshine: "Don't mind" | 'Nice to have' | 'Important';
-  rain: "Don't mind" | 'Prefer dry' | 'Strongly prefer dry';
+  rain: "Don't mind" | 'Prefer dry';
   // Last values of each limit, so switching one off and on again loses nothing.
   floorMode: 'fixed' | 'monthly';
   floorFixedC: number;
@@ -104,11 +104,12 @@ export const initialState: State = {
   popupTab: null,
 };
 
-const withDefaults = (state: Partial<State> | undefined): State => ({
-  ...initialState,
-  ...state,
-  local: { ...DEFAULT_LOCAL, ...state?.local },
-});
+const withDefaults = (state: Partial<State> | undefined): State => {
+  const local = { ...DEFAULT_LOCAL, ...state?.local };
+  // ponytail: 'Strongly prefer dry' was dropped; older saves show as 'Prefer dry'. Delete once no such install remains.
+  if (local.rain !== "Don't mind") local.rain = 'Prefer dry';
+  return { ...initialState, ...state, local };
+};
 
 export const readState = async (): Promise<State> =>
   withDefaults(
