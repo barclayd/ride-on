@@ -67,6 +67,7 @@ jobs:
           mkdir -p .output
           # GitHub's "Source code" archive is named ride-on-extension-v<version>.zip; point at the right one.
           { echo "Chrome Web Store upload: \`ride-on-extension-$next-chrome.zip\` (not the Source code archives)."
+            echo "Safari (TestFlight / App Store): run \`extension/safari/archive.sh\` on this tag."
             echo
             git log --no-merges --format='- %s' ${last:+"$last.."}HEAD -- "${src[@]}"; } > .output/notes.md
           echo "version=$next" >> "$GITHUB_OUTPUT"
@@ -98,8 +99,32 @@ jobs:
           path: extension/test-results
           if-no-files-found: ignore
 
+  # Safari: the same WXT source built into its Xcode container, unsigned (archive.sh signs and uploads).
+  safari:
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec safari/project.yml
+      - run: |
+          for destination in 'platform=macOS' 'generic/platform=iOS Simulator'; do
+            xcodebuild -project safari/RideOn.xcodeproj -scheme RideOn \
+              -destination "$destination" CODE_SIGNING_ALLOWED=NO build
+          done
+
   release:
-    needs: build
+    needs: [build, safari]
     if: github.ref == 'refs/heads/main' && needs.build.outputs.changed == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -111,7 +136,7 @@ jobs:
       - run: >
           gh release create "extension-v$VERSION" ./*-chrome.zip
           --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
-          --title "Chrome extension $VERSION" --notes-file notes.md
+          --title "Extension $VERSION" --notes-file notes.md
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}

@@ -194,6 +194,24 @@ export const browserRoutes = () => {
     );
     return c.redirect(destination.href, 302);
   });
+  // Safari extensions have no identity API: their sign-in tab lands here, where the extension's
+  // content script reads the code and state. Register it in clientRedirects to enable it.
+  app.get('/auth/browser/done', (c) => {
+    c.header(
+      'Content-Security-Policy',
+      "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+    );
+    c.header('Referrer-Policy', 'no-referrer');
+    return c.html(`<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ride On</title>
+<style>body{font:17px/1.5 system-ui,sans-serif;margin:20vh auto;max-width:28em;padding:0 1.5em;text-align:center}</style>
+<h1>Signed in to Ride On</h1>
+<p>You can close this tab and go back to the extension.</p>
+</html>`);
+  });
   app.post('/auth/browser/exchange', async (c) => {
     const identity = createIdentity(c.env);
     await throttle(c.env.ROUTES_DB, c.req.raw, 'exchange');

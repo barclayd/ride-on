@@ -26,9 +26,16 @@ app/
 │   └─ Features/               SPM package, one manifest, multiple static-library products: RideUI (day selector, card stack, context capsule, breakdown sheet), RoutesUI (library list, import, Route Detail), YouUI (preference rows, weights, saved places, ride log), OnboardingUI (9-step first-run flow — welcome, four reactive dial steps, Strava connect, speed prefill, finish), SharedUI (the closed 8-component DESIGN-SYSTEM.md §6 inventory: RideCard, ConditionChip, FactorRow, ElevationProfile, SurfaceBar, DialScreen, BestDayBadge, ScoreRing — plus the non-inventory `PermissionPrimingSheet` helper). Each depends on Models/Services/DesignSystem as needed
 ├─ RideOnTests/                app-layer XCTest integration tests (import pipeline, live-classify smoke check, AppServices wiring)
 └─ RideOnUITests/              XCUITest E2E tests (launch with --fixture-world)
-extension/                    Chrome MV3 extension (WXT + Preact) for cycle.travel — see extension/README.md
+extension/                    Browser extension (WXT + Preact) for cycle.travel: Chrome MV3, and Safari (macOS + iOS) via the XcodeGen container in extension/safari/ — see extension/README.md
 worker/                       Cloudflare Worker (Hono): GPX upload, route storage and weather-aligned ride recommendations — see worker/CLAUDE.md and docs/api.md
 ```
+
+## Browser extensions
+
+One WXT source ships to Chrome and Safari. **Every extension change goes into both unless told
+otherwise**: keep browser differences behind `import.meta.env.SAFARI` and the per-browser manifest in
+`extension/wxt.config.ts`, and check `bun run build:safari` (or `bun run safari` for the Xcode build)
+alongside `bun run check` and `bun run test:e2e`.
 
 ## Build & test commands
 

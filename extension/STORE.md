@@ -103,3 +103,31 @@ check-in and next windows, History, Preferences and Rides.
 Skipped for now. Once the item exists, CI can upload each release with `wxt submit`. That needs the
 Chrome Web Store API credentials as repo secrets (`CHROME_EXTENSION_ID`, `CHROME_CLIENT_ID`,
 `CHROME_CLIENT_SECRET`, `CHROME_REFRESH_TOKEN`) and a step in the `release` job.
+
+# App Store (Safari)
+
+The Safari extension ships in the `Ride On` app (`safari/`), for macOS, iPhone and iPad. It uses
+the main app's bundle ID, `com.danbarclay.rideon`, so the full app can later ship as an update to
+the same record.
+
+## First upload (manual, once)
+
+1. App Store Connect → Apps → **+ New App**: platforms iOS and macOS, name **Ride On**, bundle ID
+   `com.danbarclay.rideon` (register it under Certificates, Identifiers & Profiles first if it isn't
+   listed), SKU `rideon`.
+2. From a checkout of the latest `extension-v*` tag, signed in to Xcode with the team account:
+   `cd extension && bun install && bun run safari:archive`. Automatic signing registers
+   `com.danbarclay.rideon.Extension` on first use.
+3. Once processed, both builds appear in TestFlight. Add yourself as an internal tester.
+
+## Listing
+
+- **Category:** Health & Fitness. **Price:** free.
+- **Description:** reuse the Chrome listing, and say it needs a free cycle.travel account and works
+  in Safari. Review notes: "Safari extension. Open Settings → Apps → Safari → Extensions (iOS) or
+  Safari → Settings → Extensions (macOS), turn on Ride On, then sign in from its toolbar button on
+  cycle.travel." Add a demo account if review asks.
+- **Privacy:** the same data as the Chrome answers above (contact info and identifiers from sign-in,
+  location from routes, user content from cycle.travel journeys). None is used for tracking.
+  Privacy policy: [PRIVACY.md](PRIVACY.md).
+- **Encryption:** `ITSAppUsesNonExemptEncryption` is `NO` (HTTPS only).

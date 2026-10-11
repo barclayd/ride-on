@@ -179,6 +179,7 @@ export const onStateChange = (listener: (state: State) => void) => {
 
 export type Message =
   | { type: 'signIn'; provider: Provider }
+  | { type: 'signInRedirect'; url: string }
   | { type: 'signOut' }
   | { type: 'refresh' }
   | { type: 'setPlanning'; planning: Planning }

@@ -268,6 +268,14 @@ fieldset {
   background: var(--ro-page);
   overflow: hidden;
 }
+/* iPhone and iPad Safari show the popup as a sheet; fill it. */
+@media (hover: none) and (pointer: coarse) {
+  .ro-panel {
+    width: auto;
+    max-height: none;
+    height: 100dvh;
+  }
+}
 .ro-panel-head {
   flex: none;
   background: #fff;
