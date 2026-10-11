@@ -1008,7 +1008,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     'href',
     '/map/journey/101',
   );
-  await expect(module.locator('.ro-window')).toHaveText(/ · /);
+  await expect(module.locator('.ro-window')).toHaveText(/ · Daylight hours$/);
   const chip = page.locator('#jr_101 .ro-chip');
   await expect(chip).toHaveText(/^\w{3} \d{1,2} · \d\d:\d\d$/);
   await expect(chip).toHaveAttribute('data-state', 'meets');
