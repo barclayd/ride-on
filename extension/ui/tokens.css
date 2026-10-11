@@ -644,10 +644,6 @@ fieldset {
   padding: 2px 8px;
   white-space: nowrap;
 }
-.ro-pill.ro-meets {
-  background: var(--ro-tint);
-  color: var(--ro-olive-ink);
-}
 .ro-pill.ro-below {
   background: var(--ro-warn-bg);
   color: var(--ro-warn-fg);
@@ -667,6 +663,11 @@ fieldset {
 .ro-pill.ro-flag {
   background: var(--ro-lime);
   color: var(--ro-ink);
+}
+/* Best pick's opposite: a solid pill for a Conditions score under 50. */
+.ro-pill.ro-not-recommended {
+  background: var(--ro-warn-fg);
+  color: #fff;
 }
 .ro-flag-available .ro-pill.ro-flag {
   background: var(--ro-olive-900);
@@ -783,7 +784,7 @@ a.ro-name:hover {
   font: 600 12px var(--ro-sans);
   padding: 3px 9px;
 }
-.ro-module .ro-pill.ro-flag {
+.ro-module .ro-pill:is(.ro-flag, .ro-not-recommended) {
   font-weight: 700;
 }
 .ro-module .ro-ride .ro-name {

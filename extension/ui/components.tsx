@@ -106,8 +106,8 @@ export const Tags = ({ view, routeId }: { view: View; routeId: string }) => {
   );
 };
 
-const STATES: Record<CardState, string> = {
-  meets: 'Meets your preferences',
+// No pill for a ride that meets the preferences: the score says it.
+const STATES: Record<Exclude<CardState, 'meets'>, string> = {
   below: 'Below your minimums',
   nofit: "Doesn't fit your window",
   incomplete: 'Forecast incomplete',
@@ -208,7 +208,12 @@ export const RideCard = (props: {
             </span>
           )}
           {card.flag && <span class="ro-pill ro-flag">{card.flag}</span>}
-          <span class={`ro-pill ro-${card.state}`}>{STATES[card.state]}</span>
+          {card.score !== null && card.score < 50 && (
+            <span class="ro-pill ro-not-recommended">Not recommended</span>
+          )}
+          {card.state !== 'meets' && (
+            <span class={`ro-pill ro-${card.state}`}>{STATES[card.state]}</span>
+          )}
         </div>
         <CloseButton
           title={`Stop tracking ${card.name}`}
