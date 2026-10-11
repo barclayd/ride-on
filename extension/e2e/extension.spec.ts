@@ -477,6 +477,8 @@ const test = base.extend<{
   context: async ({}, use) => {
     const context = await chromium.launchPersistentContext('', {
       channel: 'chromium',
+      // An English, metric region: the units default to °C and km/h (en-US would pick °F and mph).
+      locale: 'en-IE',
       args: [
         `--disable-extensions-except=${EXTENSION}`,
         `--load-extension=${EXTENSION}`,
@@ -1105,6 +1107,48 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   });
   expect(imported?.body.gpx).toContain('<ele>20</ele>');
   expect(selection.routeIds).toEqual(['r101', 'r102']);
+});
+
+test('Preferences: Units switch temperature and wind everywhere, locally', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+  const ideal = page
+    .locator('.ro-card', { hasText: 'Ideal temperature' })
+    .locator('.ro-card-head .ro-value');
+  await expect(ideal).toHaveText('10° – 22°C');
+  const temperature = page.getByRole('radiogroup', {
+    name: 'Temperature unit',
+  });
+  const wind = page.getByRole('radiogroup', { name: 'Wind speed unit' });
+  await expect(temperature.getByRole('radio', { name: '°C' })).toBeChecked();
+  await expect(wind.getByRole('radio', { name: 'km/h' })).toBeChecked();
+  await page.locator('.ro-units').screenshot({
+    path: test.info().outputPath('units.png'),
+  });
+
+  await temperature.getByRole('radio', { name: '°F' }).check();
+  await expect(ideal).toHaveText('50° – 72°F');
+  await expect(
+    page.getByRole('slider', { name: 'Ideal temperature from' }),
+  ).toHaveAttribute('aria-valuetext', '50°F');
+  // The switches are independent.
+  await expect(wind.getByRole('radio', { name: 'km/h' })).toBeChecked();
+  await wind.getByRole('radio', { name: 'mph' }).check();
+  await expect(page.locator('.ro-expander .ro-hint')).toContainText(' mph');
+  // Units stay on this device until the API stores them.
+  expect(patches()).toEqual([]);
+
+  await fakeCycleTravel(context);
+  const journeys = await context.newPage();
+  await journeys.goto('https://cycle.travel/user/journeys');
+  const chips = journeys.locator('ride-on-module .ro-chips li');
+  await expect(chips).toHaveText(['48–57°F', '9 mph tailwind', 'Dry']);
+  await expect(chips.nth(1)).toHaveAttribute('aria-label', 'Tailwind 9 mph');
 });
 
 test('Journeys page: a passed window asks for new dates, then rescores', async ({

@@ -249,6 +249,7 @@ export const RideCard = (props: {
                 {conditionChips(
                   card.best.conditions,
                   props.view.state.user?.settings.preferences.temperature,
+                  props.view.state.units,
                 ).map((chip) => (
                   <li
                     key={chip.icon}

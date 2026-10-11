@@ -179,8 +179,29 @@ const NONE: Record<string, [string, string]> = {
   no_remaining_window: ['Passed', 'Your window has passed'],
   provider_unavailable: ['No data', 'Your forecast provider returned no data'],
 };
+// Display units; the API and stored preferences stay in °C and km/h.
+export type Units = { temperature: '°C' | '°F'; wind: 'km/h' | 'mph' };
+export const METRIC: Units = { temperature: '°C', wind: 'km/h' };
+// ponytail: the US reads °F and mph, the UK °C and mph, everywhere else metric. Add regions as riders ask.
+export const regionUnits = (locale: string): Units => {
+  const region = new Intl.Locale(locale).maximize().region;
+  return {
+    temperature: region === 'US' ? '°F' : '°C',
+    wind: region === 'US' || region === 'GB' ? 'mph' : 'km/h',
+  };
+};
+// From the whole °C, so °F always matches what °C would show (10–11°C reads 50–52°F).
+export const degrees = (c: number, u: Units) =>
+  Math.round(u.temperature === '°F' ? Math.round(c) * 1.8 + 32 : c);
+export const speed = (kph: number, u: Units) =>
+  `${Math.round(u.wind === 'mph' ? kph * 0.621371 : kph)} ${u.wind}`;
+
 // A day strip tile from the API's summary of that day; '–' until it arrives.
-export const tile = (d: DaySummary | undefined, timeZone: string) => {
+export const tile = (
+  d: DaySummary | undefined,
+  timeZone: string,
+  u: Units = METRIC,
+) => {
   const blank = { kind: 'full', label: '–', title: undefined, quality: null };
   if (!d) return blank;
   if (d.availability === 'none') {
@@ -205,28 +226,26 @@ export const tile = (d: DaySummary | undefined, timeZone: string) => {
         label:
           d.temperatureMaxC === null
             ? '–'
-            : `${Math.round(d.temperatureMaxC)}°`,
+            : `${degrees(d.temperatureMaxC, u)}°`,
         quality: d.quality,
       };
 };
 
-export const conditionsText = (c: Conditions) => {
-  const low = Math.round(c.temperatureC.minimum);
-  const high = Math.round(c.temperatureC.maximum);
+export const conditionsText = (c: Conditions, u: Units = METRIC) => {
+  const low = degrees(c.temperatureC.minimum, u);
+  const high = degrees(c.temperatureC.maximum, u);
   const winds: [string, number][] = [
     ['tailwind', c.averageTailwindKph],
     ['headwind', c.averageHeadwindKph],
     ['crosswind', c.averageCrosswindKph],
   ];
-  const [kind, speed] = winds.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const [kind, kph] = winds.reduce((a, b) => (b[1] > a[1] ? b : a));
   const wind =
-    c.averageWindSpeedKph < 5
-      ? 'light wind'
-      : `${kind} ${Math.round(speed)} km/h`;
+    c.averageWindSpeedKph < 5 ? 'light wind' : `${kind} ${speed(kph, u)}`;
   return `${low === high ? high : `${low}–${high}`}° · ${wind} · ${rainText(c)}`;
 };
-export const tempText = (c: Conditions) =>
-  `${Math.round(c.temperatureC.maximum)}°`;
+export const tempText = (c: Conditions, u: Units = METRIC) =>
+  `${degrees(c.temperatureC.maximum, u)}°`;
 // ponytail: under 10% reads as dry; the card is a summary, the API keeps the detail.
 export const rainText = (c: Conditions) => {
   const rain = Math.round(c.maximumPrecipitationProbability * 100);
@@ -234,7 +253,7 @@ export const rainText = (c: Conditions) => {
 };
 
 // Journeys tile chips, always temperature · wind · rain; amber where that condition lowers the score.
-export const NAMED_WIND_KPH = 10; // below this, the wind's direction isn't worth naming
+export const NAMED_WIND_KPH = 10; // below this, the wind's direction isn't worth naming, whatever the unit
 const WET: Record<string, string> = {
   drizzle: 'Drizzle',
   light_showers: 'Light showers',
@@ -257,14 +276,16 @@ export type Chip = {
 export const conditionChips = (
   c: Conditions,
   comfort?: Preferences['temperature'],
+  u: Units = METRIC,
 ): Chip[] => {
   const low = Math.round(c.temperatureC.minimum);
   const high = Math.round(c.temperatureC.maximum);
-  const temp = `${low === high ? high : `${low}–${high}`}°C`;
-  const speed = `${Math.round(c.averageWindSpeedKph)} km/h`;
+  const [from, to] = [degrees(low, u), degrees(high, u)];
+  const temp = `${from === to ? to : `${from}–${to}`}${u.temperature}`;
+  const shown = speed(c.averageWindSpeedKph, u);
   const f = c.windDistanceFractions;
   // Named only when one direction covers most of the route.
-  const wind =
+  const kind =
     f && c.averageWindSpeedKph >= NAMED_WIND_KPH
       ? (['tailwind', 'crosswind', 'headwind'] as const).find((k) => f[k] > 0.5)
       : undefined;
@@ -287,11 +308,11 @@ export const conditionChips = (
     },
     {
       icon: 'wind',
-      text: wind ? `${speed} ${wind}` : speed,
-      label: wind
-        ? `${wind[0].toUpperCase()}${wind.slice(1)} ${speed}`
-        : `Wind ${speed}`,
-      warn: !!wind && wind !== 'tailwind',
+      text: kind ? `${shown} ${kind}` : shown,
+      label: kind
+        ? `${kind[0].toUpperCase()}${kind.slice(1)} ${shown}`
+        : `Wind ${shown}`,
+      warn: !!kind && kind !== 'tailwind',
     },
     rain
       ? {
@@ -304,14 +325,17 @@ export const conditionChips = (
   ];
 };
 
-const FAILURES: Record<Standard, (f: Failure, timeZone: string) => string> = {
-  maximumGustKph: (f) =>
-    `Gusts reach ${Math.round(f.actual)} km/h (your limit ${f.limit} km/h)`,
+const FAILURES: Record<
+  Standard,
+  (f: Failure, timeZone: string, u: Units) => string
+> = {
+  maximumGustKph: (f, _, u) =>
+    `Gusts reach ${speed(f.actual, u)} (your limit ${speed(f.limit, u)})`,
   maximumPrecipitationProbability: (f) =>
     `${Math.round(f.actual * 100)}% chance of rain (your limit ${Math.round(f.limit * 100)}%)`,
   // ponytail: the first failing section's time; the API doesn't say when the minimum occurs.
-  minimumTemperatureC: (f, timeZone) =>
-    `${Math.round(f.actual)}° at ${clock(f.sections[0].observedAt, timeZone)} (your limit ${f.limit}°)`,
+  minimumTemperatureC: (f, timeZone, u) =>
+    `${degrees(f.actual, u)}° at ${clock(f.sections[0].observedAt, timeZone)} (your limit ${degrees(f.limit, u)}°)`,
   maximumPrecipitationRateMmH: (f) =>
     `Rain reaches ${f.actual} mm/h (your limit ${f.limit} mm/h)`,
 };
@@ -358,6 +382,7 @@ export const buildResults = (
   recs: Recommendations | null,
   selected: DaySummary[],
   timeZone: string,
+  u: Units = METRIC,
 ): Results => {
   const list = recs ? [...recs.rankings, ...recs.unranked] : [];
   const byRoute = new Map(list.map((r) => [r.routeId, r]));
@@ -426,9 +451,9 @@ export const buildResults = (
               ? 'Below minimums'
               : 'Forecast incomplete',
         when: `${shortDate(b.date)} · depart ${clock(b.departureAt, timeZone)} · finish ~${clock(b.finishAt, timeZone)}`,
-        weather: `At ride time: ${conditionsText(b.conditions)}`,
+        weather: `At ride time: ${conditionsText(b.conditions, u)}`,
         drawbacks: b.standards.failures.map((f) =>
-          FAILURES[f.standard](f, timeZone),
+          FAILURES[f.standard](f, timeZone, u),
         ),
         coverage:
           [
@@ -707,6 +732,7 @@ export const viewOf = (state: State, now: Date) => {
     recs,
     selected,
     timeZone,
+    state.units,
   );
   const weather = expired ? state.next?.weather : recs?.weather;
   const at = weather?.retrieval.latestAt;
@@ -725,6 +751,7 @@ export const viewOf = (state: State, now: Date) => {
         ...tile(
           recs?.days.find((d) => d.date === date),
           timeZone,
+          state.units,
         ),
       };
     }),
@@ -915,13 +942,17 @@ export const windowWhen = (
 };
 
 // Line 3: the top route, its departure and the weather.
-export const windowBest = (w: NextWindow, timeZone: string) => {
+export const windowBest = (
+  w: NextWindow,
+  timeZone: string,
+  u: Units = METRIC,
+) => {
   const { departureAt, conditions, routeName } = w.best;
   const leave =
     w.kind === 'best_next_days'
       ? `${shortDate(w.date)} ${clock(departureAt, timeZone)}`
       : `leave ${clock(departureAt, timeZone)}`;
-  return `${routeName}, ${leave} · ${tempText(conditions)} ${rainText(conditions)}`;
+  return `${routeName}, ${leave} · ${tempText(conditions, u)} ${rainText(conditions)}`;
 };
 
 // Matches GET /rides: newest day first.

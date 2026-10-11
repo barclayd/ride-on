@@ -242,7 +242,8 @@ const Page = ({ rows }: { rows: Row[] }) => {
   const routeIds = view.state.selection?.routeIds ?? [];
   // Blank tiles in tracked order; after new dates, scores fill in place before the ranked move.
   const cards = blank
-    ? buildResults(routeIds, routes, null, [], view.timeZone).cards
+    ? buildResults(routeIds, routes, null, [], view.timeZone, view.state.units)
+        .cards
     : phase === 'confirmed' && !ranked && !reduce
       ? routeIds.flatMap((id) => cardByRoute.get(id) ?? [])
       : view.cards;

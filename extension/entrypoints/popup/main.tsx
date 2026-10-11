@@ -37,6 +37,7 @@ import {
   coverageText,
   type Draft,
   dayOfMonth,
+  degrees,
   draftFrom,
   draftLocal,
   draftPatch,
@@ -54,7 +55,9 @@ import {
   scaleMaxKm,
   searchDiffers,
   shortDate,
+  speed,
   tempText,
+  type Units,
   unitLabel,
   usualSearch,
   validateRange,
@@ -516,7 +519,7 @@ const CheckIn = ({ view }: { view: View }) => {
             {conflict
               ? `${name(conflict)} has changed since this plan.`
               : routeId === top.routeId
-                ? `It was ${rankText(top.rank)}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c)} and ${rainText(c)}.`
+                ? `It was ${rankText(top.rank)}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c, view.state.units)} and ${rainText(c)}.`
                 : `${km(routes[routeId]?.distanceM ?? 0)} km · instead of ${name(top.routeId)}, ${rankText(top.rank)}`}
           </p>
           <div class="ro-checkin-actions">
@@ -661,7 +664,9 @@ const NextWindows = ({ view }: { view: View }) => {
             <span class="ro-next-when">
               {windowWhen(w, expired.dates[1], view.today, view.timeZone)}
             </span>
-            <span class="ro-next-best">{windowBest(w, view.timeZone)}</span>
+            <span class="ro-next-best">
+              {windowBest(w, view.timeZone, view.state.units)}
+            </span>
             {w.warnings[0] && <span class="ro-next-when">{w.warnings[0]}</span>}
           </button>
         );
@@ -951,8 +956,39 @@ const MONTHS = [
   'Dec',
 ];
 
+// Native radios like the Days control: arrow keys move between the two units.
+const UnitSwitch = <K extends keyof Units>(props: {
+  label: string;
+  name: K;
+  value: Units[K];
+  options: Units[K][];
+}) => (
+  <div class="ro-unit-row">
+    {props.label}
+    <div
+      class="ro-unit-switch"
+      role="radiogroup"
+      aria-label={`${props.label} unit`}
+    >
+      {props.options.map((option) => (
+        <label key={option}>
+          <input
+            type="radio"
+            name={`ro-unit-${props.name}`}
+            checked={option === props.value}
+            onChange={() =>
+              send({ type: 'setUnits', units: { [props.name]: option } })
+            }
+          />
+          {option}
+        </label>
+      ))}
+    </div>
+  </div>
+);
+
 const PrefsTab = ({ view }: { view: View }) => {
-  const { user, local } = view.state;
+  const { user, local, units: u } = view.state;
   // Edits sit on top of the synced profile until the background echoes them back.
   const [edits, setEdits] = useState<Partial<Draft>>({});
   const [windOpen, setWindOpen] = useState(false);
@@ -974,6 +1010,7 @@ const PrefsTab = ({ view }: { view: View }) => {
     send({ type: 'savePreferences', preferences: draftPatch(next) });
     send({ type: 'setLocal', local: draftLocal(next) });
   };
+  const temp = (c: number) => `${degrees(c, u)}${u.temperature}`;
   const month = new Date().getMonth();
   const monthly = draft.floorMode === 'monthly';
   const limits = [
@@ -981,11 +1018,11 @@ const PrefsTab = ({ view }: { view: View }) => {
       label: 'Colder than',
       on: draft.floorOn,
       toggle: () => edit({ floorOn: !draft.floorOn }),
-      text: monthly ? 'Varies by month' : `${draft.floorFixedC}°C`,
+      text: monthly ? 'Varies by month' : temp(draft.floorFixedC),
       stepper: !monthly && (
         <Stepper
           label="colder than"
-          text={`${draft.floorFixedC}°C`}
+          text={temp(draft.floorFixedC)}
           value={draft.floorFixedC}
           min={-10}
           max={20}
@@ -1015,11 +1052,11 @@ const PrefsTab = ({ view }: { view: View }) => {
       label: 'Gusts above',
       on: draft.gustOn,
       toggle: () => edit({ gustOn: !draft.gustOn }),
-      text: `${draft.gustKph} km/h`,
+      text: speed(draft.gustKph, u),
       stepper: (
         <Stepper
           label="gusts above"
-          text={`${draft.gustKph} km/h`}
+          text={speed(draft.gustKph, u)}
           value={draft.gustKph}
           min={10}
           max={80}
@@ -1040,7 +1077,7 @@ const PrefsTab = ({ view }: { view: View }) => {
         <div class="ro-card-head">
           <span class="ro-label">Ideal temperature</span>
           <span class="ro-value" style={{ fontSize: '14px' }}>
-            {draft.comfortMinC}° – {draft.comfortMaxC}°C
+            {degrees(draft.comfortMinC, u)}° – {temp(draft.comfortMaxC)}
           </span>
         </div>
         <div class="ro-temp-sliders">
@@ -1052,6 +1089,7 @@ const PrefsTab = ({ view }: { view: View }) => {
             max={30}
             value={draft.comfortMinC}
             aria-label="Ideal temperature from"
+            aria-valuetext={temp(draft.comfortMinC)}
             onInput={(e) => {
               const v = Number(e.currentTarget.value);
               edit({
@@ -1068,6 +1106,7 @@ const PrefsTab = ({ view }: { view: View }) => {
             max={35}
             value={draft.comfortMaxC}
             aria-label="Ideal temperature to"
+            aria-valuetext={temp(draft.comfortMaxC)}
             onInput={(e) => {
               const v = Number(e.currentTarget.value);
               edit({
@@ -1117,8 +1156,8 @@ const PrefsTab = ({ view }: { view: View }) => {
           <span class="ro-col">
             <span class="ro-label">Wind preferences</span>
             <span class="ro-hint">
-              Headwind up to {draft.headKph} · crosswind up to {draft.crossKph}{' '}
-              km/h
+              Headwind up to {speed(draft.headKph, u)} · crosswind up to{' '}
+              {speed(draft.crossKph, u)}
             </span>
           </span>
           <span aria-hidden="true">›</span>
@@ -1134,7 +1173,7 @@ const PrefsTab = ({ view }: { view: View }) => {
               <div key={key} class="ro-pref-group">
                 <div class="ro-card-head">
                   <span class="ro-sublabel">{label}</span>
-                  <span class="ro-value">up to {draft[key]} km/h</span>
+                  <span class="ro-value">up to {speed(draft[key], u)}</span>
                 </div>
                 <input
                   class="ro-range"
@@ -1143,6 +1182,7 @@ const PrefsTab = ({ view }: { view: View }) => {
                   max={50}
                   value={draft[key]}
                   aria-label={label}
+                  aria-valuetext={speed(draft[key], u)}
                   onInput={(e) =>
                     edit({ [key]: Number(e.currentTarget.value) })
                   }
@@ -1185,7 +1225,7 @@ const PrefsTab = ({ view }: { view: View }) => {
                   {months.map((v, m) => (
                     <div
                       key={MONTHS[m]}
-                      title={`${MONTHS[m]}: ${v}°`}
+                      title={`${MONTHS[m]}: ${degrees(v, u)}°`}
                       data-now={m === month}
                     >
                       <span style={{ height: `${8 + (v + 5) * 1.6}px` }} />
@@ -1195,8 +1235,9 @@ const PrefsTab = ({ view }: { view: View }) => {
                 </div>
                 <div class="ro-card-head">
                   <span class="ro-hint">
-                    {MONTHS[month]} {months[month]}° · {Math.min(...months)}° to{' '}
-                    {Math.max(...months)}° across the year
+                    {MONTHS[month]} {degrees(months[month], u)}° ·{' '}
+                    {degrees(Math.min(...months), u)}° to{' '}
+                    {degrees(Math.max(...months), u)}° across the year
                   </span>
                   <button
                     type="button"
@@ -1213,7 +1254,7 @@ const PrefsTab = ({ view }: { view: View }) => {
                         {MONTHS[m]}
                         <Stepper
                           label={MONTHS[m]}
-                          text={`${v}°`}
+                          text={`${degrees(v, u)}°`}
                           value={v}
                           min={-10}
                           max={20}
@@ -1254,6 +1295,21 @@ const PrefsTab = ({ view }: { view: View }) => {
           <span>{view.retrieved ? `${view.retrieved} today` : '—'}</span>
         </div>
         <Attribution view={view} />
+      </section>
+      <section class="ro-card ro-units">
+        <span class="ro-label">Units</span>
+        <UnitSwitch
+          label="Temperature"
+          name="temperature"
+          value={u.temperature}
+          options={['°C', '°F']}
+        />
+        <UnitSwitch
+          label="Wind speed"
+          name="wind"
+          value={u.wind}
+          options={['km/h', 'mph']}
+        />
       </section>
       <button
         type="button"

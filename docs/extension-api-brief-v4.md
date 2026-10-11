@@ -99,8 +99,8 @@ The client shows `possible` as `N% chance of rain`, using
 - **Temperature colour.** The client compares the rounded `temperatureC` range
   with `preferences.temperature.comfortMinC` / `comfortMaxC`.
 - **Wind colour.** The client applies amber to crosswind and headwind.
-- **°F / mph.** There is no temperature-unit setting yet. The extension shows °C
-  and km/h, and would convert on display if one is added.
+- **°F / mph conversion.** The client converts on display (see section 7). Keep
+  every API value in °C and km/h.
 
 ## 5. Client behaviour until this ships
 
@@ -121,9 +121,33 @@ So deploying in either order is safe.
 - `POST /rides`: a plan without the new fields is still accepted, and a plan
   with them round-trips unchanged.
 
-## Open questions
+## 7. `settings.units` (design 12a)
 
-- Is 10 km/h the right threshold for naming the wind direction? It's the
-  client's `NAMED_WIND_KPH` constant in `extension/ui/format.ts`.
-- Should wind switch to mph when a °F setting exists? The design keeps km/h for now.
-- The rain thresholds and severity order (section 2).
+The Preferences tab now has a **Units** card: temperature `°C | °F` and wind
+speed `km/h | mph`, two independent switches. Riders set them once, so they
+should follow the rider to every device and the iOS app.
+
+```ts
+settings.units?: { temperature: 'C' | 'F'; windSpeed: 'kmh' | 'mph' }
+```
+
+- Optional on `GET /users/me` and accepted by the existing settings `PATCH`
+  (same `expectedVersion` rule). Absent means the client picks a default.
+- Display only: no scoring, preference or response values change. Keep every
+  `*C` and `*Kph` field in °C and km/h.
+- Consider adding the distance unit here too (`distance: 'km' | 'mi'`). The
+  extension also keeps that one locally today.
+
+**Client behaviour until this ships:** the extension stores units in
+`browser.storage.local`. The default comes from the browser region: °F and mph
+for the US, °C and mph for the UK, °C and km/h elsewhere. Once the rider picks,
+their choice is kept. When `settings.units` appears, the client will read it
+and send changes through the settings `PATCH`.
+
+## Decisions
+
+- **Wind-direction threshold:** 10 km/h confirmed. It stays in km/h internally
+  whatever the display unit.
+- **Wind unit:** follows the rider's wind-speed setting (section 7), e.g.
+  `9 mph crosswind`.
+- **Rain thresholds and severity order:** accepted as written in section 2.
