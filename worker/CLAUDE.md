@@ -10,6 +10,7 @@ Read `../docs/ride-history.md` for ride logging, geometry enrichment and repetit
 Read `../docs/planning-api.md` for multi-day searches, presets and coverage.
 Read `../docs/extension-api-brief-v3.md` for planned snapshots, next-window suggestions and route-history summaries.
 Read `../docs/weather-providers.md` for verified weather mappings and provider rules.
+Read `../docs/weather-provider-choices.md` for the public Apple Weather / Met Office choice; product IDs remain internal presets and legacy API inputs.
 
 ## Conventions
 

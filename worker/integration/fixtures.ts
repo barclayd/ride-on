@@ -1,4 +1,5 @@
 import { HttpResponse, type HttpResponseResolver, http } from 'msw/http';
+import { bpfFixture, bpfSites } from '../test/fixtures/bpf.ts';
 import { globalSpotFixture } from '../test/fixtures/global-spot.ts';
 import { FIXED_NOW } from './harness.ts';
 
@@ -70,3 +71,28 @@ export const metOffice = (
   resolver: HttpResponseResolver = ({ request }) =>
     HttpResponse.json(hourlyForecast(request)),
 ) => http.get(MET_OFFICE_HOURLY, resolver);
+
+export const blendedForecast = () =>
+  http.get(
+    'https://data.hub.api.metoffice.gov.uk/mo-blended-prob-forecast-feature-svc/2.0.0/collections/*',
+    ({ request }) => {
+      const site = new URL(request.url).pathname.split('/locations/')[1];
+      if (!site)
+        return HttpResponse.json(
+          bpfSites(
+            Array.from({ length: 13 }, (_, i) => ({
+              latitude: 51.2 + i * 0.03,
+              longitude: -1,
+            })),
+          ),
+        );
+      const [, latitude, longitude] = decodeURIComponent(site).split(':');
+      return HttpResponse.json(
+        bpfFixture({
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+          probabilities: request.url.includes('uk-spot-probabilities'),
+        }),
+      );
+    },
+  );

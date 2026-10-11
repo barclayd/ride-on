@@ -12,7 +12,7 @@ import {
   appleWeatherFixture,
 } from '../test/fixtures/apple-weather.ts';
 import { first, recommend, upload } from './client.ts';
-import { metOffice } from './fixtures.ts';
+import { blendedForecast, metOffice } from './fixtures.ts';
 import { BOB_TOKEN, createHarness, type Harness } from './harness.ts';
 
 const keys = await generateKeyPair('ES256', { extractable: true });
@@ -184,7 +184,7 @@ integration(
 integration(
   'provider discovery offers compatible presets and selecting one swaps the real weather adapter',
   async (h) => {
-    h.use(apple(), metOffice());
+    h.use(apple(), blendedForecast());
     assert.equal(
       (await h.send('/weather-providers', { token: null })).status,
       401,
@@ -218,7 +218,7 @@ integration(
     assert.equal(catalogue.defaultPolicy.providerId, 'apple-weather');
     assert.deepEqual(
       catalogue.providers.map((p) => p.id),
-      ['apple-weather', 'met-office', 'met-office-bpf'],
+      ['apple-weather', 'met-office'],
     );
     assert.ok(catalogue.providers.every((p) => p.configured));
     await createUser(h);
@@ -237,7 +237,7 @@ integration(
     assert.equal(patch.status, 200);
     await h.restart();
     const result = await recommend(h, [route.id]);
-    assert.equal(result.weather.selectedSource?.providerId, 'met-office');
+    assert.equal(result.weather.selectedSource?.providerId, 'met-office-bpf');
     assert.equal(result.recommendedRouteId, route.id);
     assert.ok(
       h.requests.some(

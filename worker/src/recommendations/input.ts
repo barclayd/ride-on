@@ -1,5 +1,9 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { z } from 'zod';
+import {
+  weatherProviderChoices,
+  weatherProviderIds,
+} from '../weather/choices.ts';
 import { levelWeights, preferenceLevelsSchema } from './levels.ts';
 import {
   defaultPlanning,
@@ -193,13 +197,26 @@ export const defaultSettings: Settings = {
   },
   weather: { mode: 'strict', providerId: 'apple-weather' },
 };
-const checkLevelConflicts = (
+const checkSettingsConflicts = (
   patch: {
+    weatherProviderId?: string;
+    weather?: unknown;
+    forecast?: unknown;
     preferenceLevels?: z.infer<typeof preferenceLevelsSchema>;
     preferences?: z.infer<typeof preferenceOverrides>;
   },
   context: z.RefinementCtx,
 ) => {
+  if (
+    patch.weatherProviderId !== undefined &&
+    (patch.weather !== undefined || patch.forecast !== undefined)
+  )
+    context.addIssue({
+      code: 'custom',
+      path: ['weatherProviderId'],
+      message:
+        'Choose weatherProviderId or advanced weather/forecast settings, not both.',
+    });
   for (const [level, field] of [
     ['sunshine', 'sunshine'],
     ['rain', 'dryness'],
@@ -219,6 +236,7 @@ const checkLevelConflicts = (
 // No defaults on the patch: omitted values must inherit the saved profile.
 export const settingsPatchSchema = z
   .strictObject({
+    weatherProviderId: z.enum(weatherProviderIds).optional(),
     timeZone: timeZone.optional(),
     riding: ridingDefaults.partial().optional(),
     preferences: preferenceOverrides.optional(),
@@ -228,20 +246,24 @@ export const settingsPatchSchema = z
     display: settingsSchema.shape.display.unwrap().partial().optional(),
     preferenceLevels: preferenceLevelsSchema.optional(),
   })
-  .superRefine(checkLevelConflicts);
+  .superRefine(checkSettingsConflicts);
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 export const mergeSettings = (
   patch: SettingsPatch,
   base: Settings = defaultSettings,
 ): z.input<typeof settingsSchema> => {
   const preferences = patch.preferences;
+  const provider =
+    patch.weatherProviderId === undefined
+      ? undefined
+      : weatherProviderChoices[patch.weatherProviderId].settings;
   return {
     planning: { ...(base.planning ?? defaultPlanning), ...patch.planning },
     display: { ...(base.display ?? { unit: 'km' as const }), ...patch.display },
     timeZone: patch.timeZone ?? base.timeZone,
     riding: { ...base.riding, ...patch.riding },
-    forecast: { ...base.forecast, ...patch.forecast },
-    weather: patch.weather ?? base.weather,
+    forecast: { ...base.forecast, ...provider?.forecast, ...patch.forecast },
+    weather: provider?.weather ?? patch.weather ?? base.weather,
     preferences: {
       temperature: {
         ...base.preferences.temperature,
@@ -295,7 +317,7 @@ export const recommendationApiRequestSchema = z
     days: planningDaysSchema.optional(),
     previewDays: z.number().int().min(1).max(7).optional(),
   })
-  .superRefine(checkLevelConflicts)
+  .superRefine(checkSettingsConflicts)
   .refine(
     (input) => (input.date === undefined) !== (input.days === undefined),
     {

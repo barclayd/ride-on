@@ -1,4 +1,3 @@
-import type { Settings } from '../recommendations/input.ts';
 import type { Env } from '../types.ts';
 import {
   appleWeatherAttribution,
@@ -6,33 +5,24 @@ import {
   parseAppleWeatherConfig,
 } from './apple-weather.ts';
 import type { ForecastCache } from './cache.ts';
+import { weatherProviderChoices, weatherProviderIds } from './choices.ts';
 import type { ForecastProvider, Provenance } from './contracts.ts';
 import { createMetOfficeBpf } from './met-office-bpf.ts';
 import { createMetOfficeGlobalSpot } from './met-office-global-spot.ts';
 
 type Registration = {
   id: string;
-  name: string;
   forecastHorizonHours: number;
   attribution: Provenance['attribution'];
-  recommendedSettings: Pick<Settings, 'weather' | 'forecast'>;
   configured: (env: Env) => boolean;
   create: (env: Env, cache: ForecastCache, now: () => Date) => ForecastProvider;
 };
-/** Product presets keep provider and statistic selection together for every client. */
+/** Internal product registrations retain their stable source/cache identities. */
 const registrations: readonly Registration[] = [
   {
     id: 'apple-weather',
-    name: 'Apple Weather',
     forecastHorizonHours: 240,
     attribution: [appleWeatherAttribution],
-    recommendedSettings: {
-      weather: { mode: 'strict', providerId: 'apple-weather' },
-      forecast: {
-        representation: 'deterministic',
-        freshnessBasis: 'retrieval-time',
-      },
-    },
     configured: (env) =>
       parseAppleWeatherConfig(env.APPLE_WEATHER_CONFIG_JSON) !== null,
     create: (env, _cache, now) =>
@@ -40,7 +30,6 @@ const registrations: readonly Registration[] = [
   },
   {
     id: 'met-office',
-    name: 'Met Office Global Spot',
     forecastHorizonHours: 48,
     attribution: [
       {
@@ -48,20 +37,12 @@ const registrations: readonly Registration[] = [
         url: 'https://www.metoffice.gov.uk/',
       },
     ],
-    recommendedSettings: {
-      weather: { mode: 'strict', providerId: 'met-office' },
-      forecast: {
-        representation: 'deterministic',
-        freshnessBasis: 'model-run',
-      },
-    },
     configured: (env) => Boolean(env.MET_OFFICE_API_KEY?.trim()),
     create: (env, _cache, now) =>
       createMetOfficeGlobalSpot({ apiKey: env.MET_OFFICE_API_KEY ?? '', now }),
   },
   {
     id: 'met-office-bpf',
-    name: 'Met Office Blended Probabilistic',
     forecastHorizonHours: 120,
     attribution: [
       {
@@ -69,13 +50,6 @@ const registrations: readonly Registration[] = [
         url: 'https://www.metoffice.gov.uk/',
       },
     ],
-    recommendedSettings: {
-      weather: { mode: 'strict', providerId: 'met-office-bpf' },
-      forecast: {
-        representation: 'ensemble-summary',
-        freshnessBasis: 'retrieval-time',
-      },
-    },
     configured: (env) => Boolean(env.MET_OFFICE_BPF_API_KEY?.trim()),
     create: (env, cache, now) =>
       createMetOfficeBpf({
@@ -85,15 +59,24 @@ const registrations: readonly Registration[] = [
       }),
   },
 ];
+/** The discovery endpoint is a user choice catalogue, not an adapter inventory. */
 export const describeWeatherProviders = (env: Env) =>
-  registrations.map((r) => ({
-    id: r.id,
-    name: r.name,
-    forecastHorizonHours: r.forecastHorizonHours,
-    configured: r.configured(env),
-    recommendedSettings: r.recommendedSettings,
-    attribution: r.attribution,
-  }));
+  weatherProviderIds.map((id) => {
+    const choice = weatherProviderChoices[id];
+    const product = registrations.find(
+      (r) => r.id === choice.settings.weather.providerId,
+    );
+    if (!product) throw new Error('Weather choice has no registered product.');
+    return {
+      id,
+      name: choice.name,
+      forecastHorizonHours: product.forecastHorizonHours,
+      configured: product.configured(env),
+      // Retain paired presets for existing clients; new clients need only the choice ID.
+      recommendedSettings: choice.settings,
+      attribution: product.attribution,
+    };
+  });
 export const createWeatherProviders = (
   env: Env,
   cache: ForecastCache,

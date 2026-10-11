@@ -5,6 +5,10 @@ import { readHistory } from '../rides/store.ts';
 import type { Route } from '../routes/model.ts';
 import type { Env } from '../types.ts';
 import { type ForecastCache, withForecastCache } from '../weather/cache.ts';
+import {
+  weatherProviderForSource,
+  weatherProviderIdForPolicy,
+} from '../weather/choices.ts';
 import type {
   ForecastProvider,
   ForecastRequest,
@@ -196,6 +200,8 @@ export const evaluateComparisons = async (
       ...summarizeProvenance(results),
       snapshotPolicy: 'provider-horizon',
       requestedPolicy: input.weather,
+      requestedProviderId: weatherProviderIdForPolicy(input.weather),
+      selectedProvider: weatherProviderForSource(selected?.source.providerId),
       selectedSource: selected?.source ?? null,
       attempts: selected?.attempts ?? [],
       quality: { ...quality, freshnessBasis: input.forecast.freshnessBasis },

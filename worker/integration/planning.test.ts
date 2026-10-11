@@ -156,6 +156,7 @@ const readUser = async (r: { json: () => Promise<unknown> }) =>
   z
     .object({
       user: userSchema.extend({
+        weatherProviderId: z.string().nullable(),
         preferenceLevels: z.object({ sunshine: z.string(), rain: z.string() }),
       }),
     })
@@ -478,7 +479,7 @@ integration(
       Object.fromEntries(
         providers.providers.map((p) => [p.id, p.forecastHorizonHours]),
       ),
-      { 'apple-weather': 240, 'met-office': 48, 'met-office-bpf': 120 },
+      { 'apple-weather': 240, 'met-office': 120 },
     );
     const unknown = await recommend(h, [route.id], {
       weather: { mode: 'strict', providerId: 'unregistered' },

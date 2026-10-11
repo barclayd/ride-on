@@ -1,5 +1,11 @@
 # Weather providers for the API MVP
 
+From API v0.14.0, the public catalogue offers one **Met Office** option. New choices
+use BPF with its compatible settings; existing stored product selections remain
+valid. Clients use `weatherProviderId` and `user.weatherProviderId`, not technical
+product IDs. See the [provider-choice contract](weather-provider-choices.md).
+The product-level detail below documents the internal adapters and evidence.
+
 Researched and live-checked 9–10 October 2026. Apple Weather, Global Spot hourly and
 BPF v2 UK adapters implement the same provider contract. GPX ingestion, D1 storage,
 forecast caching and recommendation evaluation are verified in the Workers runtime.
