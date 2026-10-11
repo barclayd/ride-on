@@ -69,8 +69,13 @@ export const importSourceRoute = async (
   if (
     current.route.sourceHash === route.sourceHash &&
     current.route.name === route.name
-  )
-    return { outcome: 'unchanged', record: current };
+  ) {
+    if (current.route.geometry || !route.geometry)
+      return { outcome: 'unchanged', record: current };
+    // Even identical source bytes can enrich legacy geometry, but only with an
+    // explicit version to avoid changing a route behind another client's back.
+    if (input.expectedVersion === undefined) throw conflict();
+  }
   if (input.expectedVersion === undefined) throw conflict();
   const record: RouteRecord = {
     route: {

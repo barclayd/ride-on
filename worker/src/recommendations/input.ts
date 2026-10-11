@@ -37,6 +37,10 @@ const wind = z.strictObject({
 const sunshine = z.strictObject({
   sunnyIntervalsComfort: z.number().min(0).max(1),
 });
+const recentRides = z.strictObject({
+  mode: z.enum(['neutral', 'prefer-variety']),
+  lookbackDays: z.number().int().min(1).max(90),
+});
 const climbing = z.strictObject({
   preference: z.enum(['flatter', 'neutral', 'hillier']),
 });
@@ -67,6 +71,7 @@ export const preferencesSchema = z
     temperature,
     wind,
     sunshine,
+    recentRides: recentRides.default({ mode: 'neutral', lookbackDays: 28 }),
     climbing: climbing.default({ preference: 'neutral' }),
     distance: distance.nullable().default(null),
     weights,
@@ -87,6 +92,7 @@ const preferenceOverrides = z.strictObject({
   temperature: temperature.partial().optional(),
   wind: wind.partial().optional(),
   sunshine: sunshine.partial().optional(),
+  recentRides: recentRides.partial().optional(),
   climbing: climbing.partial().optional(),
   // Replace a range as a whole; null explicitly removes the preference.
   distance: distance.nullable().optional(),
@@ -169,6 +175,7 @@ export const defaultSettings: Settings = {
       crosswindSensitivity: 1,
     },
     sunshine: { sunnyIntervalsComfort: 0.7 },
+    recentRides: { mode: 'neutral', lookbackDays: 28 },
     climbing: { preference: 'neutral' },
     distance: null,
     weights: {
@@ -242,6 +249,13 @@ export const mergeSettings = (
       },
       wind: { ...base.preferences.wind, ...preferences?.wind },
       sunshine: { ...base.preferences.sunshine, ...preferences?.sunshine },
+      recentRides: {
+        ...(base.preferences.recentRides ?? {
+          mode: 'neutral' as const,
+          lookbackDays: 28,
+        }),
+        ...preferences?.recentRides,
+      },
       climbing: { ...base.preferences.climbing, ...preferences?.climbing },
       distance:
         preferences?.distance === undefined

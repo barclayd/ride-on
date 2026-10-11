@@ -1,3 +1,4 @@
+import { Temporal } from '@js-temporal/polyfill';
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
@@ -29,6 +30,9 @@ import {
 } from './recommendations/planning.ts';
 import { presentRoute } from './recommendations/presentation.ts';
 import { readJsonBody, validateInput } from './request.ts';
+import { prepareHistory } from './rides/overlap.ts';
+import { rideRoutes } from './rides/routes.ts';
+import { readHistory } from './rides/store.ts';
 import { importGpx } from './routes/gpx.ts';
 import { importSourceRoute } from './routes/import.ts';
 import {
@@ -110,10 +114,13 @@ export const createApp = (
       if ([config.baseUrl, ...config.trustedOrigins].includes(origin)) {
         c.header('Access-Control-Allow-Origin', origin);
         c.header('Access-Control-Allow-Credentials', 'true');
-        c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        c.header(
+          'Access-Control-Allow-Headers',
+          'Content-Type, Authorization, Idempotency-Key',
+        );
         c.header(
           'Access-Control-Allow-Methods',
-          'GET, POST, PATCH, PUT, OPTIONS',
+          'GET, POST, PATCH, PUT, DELETE, OPTIONS',
         );
         c.header('Access-Control-Expose-Headers', 'set-auth-token');
         c.header('Vary', 'Origin');
@@ -123,9 +130,11 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.10.0' }));
+  app.get('/health', (c) => c.json({ ok: true, version: '0.11.0' }));
   app.route('/', identityRoutes());
   for (const path of [
+    '/rides',
+    '/rides/*',
     '/routes',
     '/routes/*',
     '/route-sources',
@@ -145,6 +154,7 @@ export const createApp = (
       copySessionHeaders(access.headers, c.res.headers);
       await next();
     });
+  app.route('/', rideRoutes(now));
   app.get('/weather-providers', (c) =>
     c.json({
       defaultPolicy: defaultSettings.weather,
@@ -375,6 +385,63 @@ export const createApp = (
       201,
     );
   });
+  app.put('/routes/:id/geometry', async (c) => {
+    const id = validateInput(z.uuid(), c.req.param('id'));
+    const input = await readJsonBody(
+      c,
+      z.strictObject({
+        expectedVersion: z.number().int().positive(),
+        gpx: z.string().min(1),
+      }),
+      6_000_000,
+    );
+    const current = await store(c.env).get(c.get('ownerId'), id);
+    if (!current)
+      throw new AppError(404, 'ROUTE_NOT_FOUND', 'The route was not found.');
+    if (current.version !== input.expectedVersion)
+      throw new AppError(
+        409,
+        'ROUTE_VERSION_CONFLICT',
+        'Read the current route version before enriching geometry.',
+      );
+    const parsed = await importGpx(input.gpx);
+    if (parsed.sourceHash !== current.route.sourceHash)
+      throw new AppError(
+        409,
+        'ROUTE_CONTENT_MISMATCH',
+        'Upload the exact original GPX for this route version.',
+      );
+    if (!parsed.geometry)
+      throw new AppError(
+        422,
+        'GEOMETRY_UNAVAILABLE',
+        'This GPX is too sparse or large for overlap assessment.',
+      );
+    if (current.route.geometry)
+      return c.json({
+        outcome: 'unchanged',
+        route: storedRouteSummary(current),
+      });
+    const record = {
+      ...current,
+      route: { ...current.route, geometry: parsed.geometry },
+      version: current.version + 1,
+      updatedAt: now().toISOString(),
+    };
+    if (
+      !(await store(c.env).replaceImported(
+        c.get('ownerId'),
+        record,
+        input.expectedVersion,
+      ))
+    )
+      throw new AppError(
+        409,
+        'ROUTE_VERSION_CONFLICT',
+        'The route changed during enrichment.',
+      );
+    return c.json({ outcome: 'updated', route: storedRouteSummary(record) });
+  });
   app.post('/recommendations', async (c) => {
     const raw = await readJsonBody(c, recommendationApiRequestSchema);
     const [user, routes] = await Promise.all([
@@ -450,6 +517,37 @@ export const createApp = (
         'TOO_MANY_WEATHER_LOCATIONS',
         'Compare fewer routes; a request supports up to 256 weather locations.',
       );
+    const earliest = feasible.length
+      ? Math.min(...feasible.flatMap((p) => p.plan.departures))
+      : startedAt.getTime();
+    const latest = feasible.length
+      ? Math.max(...feasible.flatMap((p) => p.plan.departures))
+      : startedAt.getTime();
+    const recent = input.preferences.recentRides;
+    const historySnapshot =
+      recent.mode === 'prefer-variety' && feasible.length
+        ? await readHistory(
+            c.env.ROUTES_DB,
+            c.get('ownerId'),
+            Temporal.Instant.fromEpochMilliseconds(earliest)
+              .toZonedDateTimeISO('UTC')
+              .toPlainDate()
+              .subtract({ days: recent.lookbackDays + 2 })
+              .toString(),
+            Temporal.Instant.fromEpochMilliseconds(latest)
+              .toZonedDateTimeISO('UTC')
+              .toPlainDate()
+              .add({ days: 2 })
+              .toString(),
+          )
+        : null;
+    const history = prepareHistory(
+      [...new Map(feasible.map(({ route }) => [route.id, route])).values()],
+      recent,
+      historySnapshot,
+      new Date(earliest).toISOString(),
+      new Date(latest).toISOString(),
+    );
     const cacheReads = { hits: 0, misses: 0 };
     const cache = dependencies.cache ?? {
       get: (key: string) => c.env.WEATHER_CACHE.get(key),
@@ -521,6 +619,8 @@ export const createApp = (
           results,
           startedAt.getTime(),
           quality.maxLocationDistanceM,
+          3,
+          history,
         ),
       ]),
     );
@@ -598,6 +698,14 @@ export const createApp = (
         ...d,
         selected: selectedDates.includes(d.date),
       })),
+      history: {
+        revision: history.revision,
+        status: feasible.length ? history.status : 'not_evaluated',
+        matcherVersion: history.matcherVersion,
+        reasonCode: feasible.length ? history.reasonCode : null,
+        affectedRouteIds: history.affectedRouteIds,
+        affectedRideIds: history.affectedRideIds,
+      },
       generatedAt: startedAt.toISOString(),
       date: raw.date ?? null,
       timeZone: input.timeZone,
@@ -611,6 +719,11 @@ export const createApp = (
       riding: input.riding,
       forecast: input.forecast,
       assumptions: [
+        ...(recent.mode === 'prefer-variety'
+          ? [
+              'Recent rides assume the saved route was followed. Shared paths in either direction reduce the combined score by up to 10 points, fading over the configured period. Missing overlap evidence disables this adjustment for the whole comparison.',
+            ]
+          : []),
         ...(input.preferences.climbing.preference !== 'neutral'
           ? [
               'Climbing preference uses estimated ascent per kilometre, not slope steepness or total effort. It contributes 10% of the score; minimum conditions still take priority. Routes without complete elevation are unranked.',

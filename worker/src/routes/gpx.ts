@@ -1,6 +1,7 @@
 import { SaxesParser } from 'saxes';
 import { AppError } from '../errors.ts';
 import { haversineKm, isValidLatLon } from '../geo.ts';
+import { encodeGeometry } from '../rides/geometry.ts';
 import type { Coordinate } from '../weather/contracts.ts';
 import type { Route } from './model.ts';
 
@@ -224,6 +225,7 @@ export const importGpx = async (
   );
   return {
     schemaVersion: 1,
+    geometry: encodeGeometry(points),
     id,
     name: name || 'Imported route',
     createdAt,

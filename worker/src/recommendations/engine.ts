@@ -1,4 +1,5 @@
 import { haversineKm } from '../geo.ts';
+import { type HistoryAssessment, prepareHistory } from '../rides/overlap.ts';
 import type { Route } from '../routes/model.ts';
 import { skyConditions } from '../weather/conditions.ts';
 import type {
@@ -19,7 +20,7 @@ import {
   resolveMinimumTemperature,
 } from './input.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.8';
+export const ALGORITHM_VERSION = 'comfort-v0.9';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -207,6 +208,7 @@ const assessCandidate = (
   maxLocationDistanceM: number,
   climbing: ReturnType<typeof assessClimbing>,
   distance: ReturnType<typeof assessDistance>,
+  history: HistoryAssessment,
 ) => {
   const rows: Observation[] = [];
   const missing = new Set<string>();
@@ -452,7 +454,16 @@ const assessCandidate = (
       };
     },
   );
+  const recentRides = history.assess(route.id, iso(departure));
   const drawbacks: string[] = [];
+  if (recentRides.penaltyPoints > 0)
+    drawbacks.push(
+      `Recently ridden roads reduce this score by ${round(recentRides.penaltyPoints)} points.`,
+    );
+  if (recentRides.status === 'unavailable')
+    drawbacks.push(
+      'Recent ride overlap could not be assessed; no repetition adjustment was applied to this comparison.',
+    );
   if (distance.fit?.status === 'below_range')
     drawbacks.push('This ride is shorter than your preferred distance range.');
   if (distance.fit?.status === 'above_range')
@@ -483,7 +494,9 @@ const assessCandidate = (
     date: input.date,
     departureAt: iso(departure),
     finishAt: iso(departure + durationMs),
-    score: round(score),
+    baseScore: round(score),
+    score: round(Math.max(0, score - recentRides.penaltyPoints)),
+    recentRides,
     weatherScore: round(weatherScore),
     factors: {
       distance:
@@ -549,6 +562,13 @@ export const recommendRides = (
   maxLocationDistanceM = 10_000,
   // Offline calibration can retain more candidates; the HTTP API keeps three.
   alternativeLimit = 3,
+  history: HistoryAssessment = prepareHistory(
+    routes,
+    input.preferences.recentRides,
+    null,
+    new Date(nowMs).toISOString(),
+    new Date(nowMs).toISOString(),
+  ),
 ) => {
   const forecasts = new Map(
     results.map((result) => [
@@ -597,6 +617,7 @@ export const recommendRides = (
         maxLocationDistanceM,
         climbing,
         distance,
+        history,
       ),
     );
     const weatherAssessed = candidates
