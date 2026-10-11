@@ -24,7 +24,8 @@ import {
   iconUrl,
   injectFonts,
   ProviderDown,
-  RideCard,
+  Ranked,
+  RouteTile,
   reducedMotion,
   Segmented,
   useView,
@@ -59,10 +60,12 @@ import {
   tempText,
   type Units,
   unitLabel,
+  updatedText,
   usualSearch,
   validateRange,
   weekday,
   windowBest,
+  windowLabel,
   windowName,
   windowWhen,
 } from '../../ui/format';
@@ -675,8 +678,74 @@ const NextWindows = ({ view }: { view: View }) => {
   );
 };
 
+// The window, how fresh its forecast is, and a refresh button (15a).
+const WindowHeading = ({
+  view,
+  range,
+}: {
+  view: View;
+  range: [string, string];
+}) => {
+  const [asked, setAsked] = useState(false);
+  const busy = asked || view.state.loading;
+  // Two turns per loop; it stops at the end of a loop once the data is in.
+  const [spin, setSpin] = useState(false);
+  useEffect(() => {
+    if (busy && !reducedMotion()) setSpin(true);
+  }, [busy]);
+  const { recsAt } = view.state;
+  return (
+    <div class="ro-heading">
+      <div>
+        <span>{windowLabel(view.state.planning, range, view.today)}</span>
+        {/* ponytail: "Updated … ago" moves on at the next render, not on a timer. */}
+        <span>
+          {[
+            view.datesText,
+            view.timeText,
+            busy
+              ? 'Updating forecast…'
+              : recsAt && updatedText(recsAt, new Date()),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
+      </div>
+      <button
+        type="button"
+        class="ro-refresh"
+        aria-label="Refresh forecast"
+        title="Refresh forecast"
+        disabled={busy || spin}
+        onClick={() => {
+          setAsked(true);
+          send({ type: 'refresh' }).finally(() => setAsked(false));
+        }}
+      >
+        <svg
+          class={spin ? 'ro-spin' : undefined}
+          onAnimationIteration={() => !busy && setSpin(false)}
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M13.2 6.2A5.5 5.5 0 0 0 3 5" />
+          <path d="M2.8 9.8A5.5 5.5 0 0 0 13 11" />
+          <path d="M13.5 2.5v3.8H9.7" />
+          <path d="M2.5 13.5V9.7h3.8" />
+        </svg>
+      </button>
+    </div>
+  );
+};
+
 const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
-  let medal = 0;
   if (view.state.expired)
     return (
       <>
@@ -691,7 +760,11 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
   return (
     <>
       <CheckIn view={view} />
-      {!view.range && <Expired view={view} onChoose={onChoose} />}
+      {view.range ? (
+        <WindowHeading view={view} range={view.range} />
+      ) : (
+        <Expired view={view} onChoose={onChoose} />
+      )}
       <Banners view={view} onProvider={toPrefs} />
       {view.range && view.cards.length === 0 && (
         <span class="ro-empty">
@@ -699,14 +772,25 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
           page.
         </span>
       )}
-      {view.cards.map((card) => (
-        <RideCard
-          key={card.routeId}
-          view={view}
-          card={card}
-          medal={card.score !== null && medal < 3 ? medal++ : undefined}
+      {view.cards.length > 0 && (
+        <Ranked
+          cards={view.cards}
+          window={JSON.stringify([view.range, view.state.planning.time])}
+          class="ro-rides"
+          render={(card, _, medal, change) => (
+            <RouteTile
+              key={card.routeId}
+              view={view}
+              card={card}
+              href={null}
+              blank={false}
+              index={0}
+              medal={medal}
+              change={change}
+            />
+          )}
         />
-      ))}
+      )}
       <CoverageWarn view={view} />
       <Attribution view={view} />
     </>
@@ -1498,7 +1582,7 @@ const App = () => {
           <ErrorChip view={view} />
         </div>
       )}
-      <div class="ro-scroll ro-loading" data-loading={view.state.loading}>
+      <div class="ro-scroll">
         <div
           class="ro-stack"
           style={{ gap: tab === 'rides' ? '10px' : '12px' }}

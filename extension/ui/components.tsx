@@ -1,6 +1,6 @@
 // Pieces shared by the popup and the Journeys page.
 import type { ComponentChildren } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { onStateChange, readState, type State, send } from '../lib/state';
 import type { NextWindow } from '../lib/types';
@@ -241,75 +241,116 @@ const untrack = (card: Card) => (
   />
 );
 
-// Popup card; medals on its top three scored rides.
-export const RideCard = (props: { view: View; card: Card; medal?: number }) => {
-  const { card, medal } = props;
+// Counts from the old score to the new one: 800ms, ease-in-out cubic.
+const useCount = (to: number | null) => {
+  const [value, setValue] = useState(to);
+  const shown = useRef(value);
+  shown.current = value;
+  useEffect(() => {
+    const from = shown.current;
+    if (
+      from === null ||
+      to === null ||
+      from === to ||
+      reducedMotion() ||
+      document.hidden
+    ) {
+      setValue(to);
+      return;
+    }
+    const start = performance.now();
+    let frame = requestAnimationFrame(function step(now) {
+      const t = Math.min(1, (now - start) / 800);
+      const eased = t < 0.5 ? 4 * t ** 3 : 1 - (2 - 2 * t) ** 3 / 2;
+      setValue(Math.round(from + (to - from) * eased));
+      if (t < 1) frame = requestAnimationFrame(step);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [to]);
+  return value;
+};
+
+// How far a refresh moved a score; shown for 30 seconds (15a).
+export type Change = { by: number; at: number };
+
+const Meter = (props: {
+  score: number | null;
+  blank: boolean;
+  change?: Change;
+}) => {
+  const shown = useCount(props.score);
+  const { change } = props;
   return (
+    // biome-ignore lint/a11y/useSemanticElements: the design's label row and bar; a native <meter> can't hold or style them.
     <div
-      class={`ro-ride ${medal !== undefined ? `ro-${MEDALS[medal].toLowerCase()}` : tint(card)}`}
-      data-state={card.state}
-      data-route={card.routeId}
+      class="ro-meter"
+      role="meter"
+      aria-label="Conditions score"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={props.score ?? 0}
+      aria-hidden={props.blank || undefined}
     >
-      <div class="ro-ride-head">
-        <div class="ro-pills">
-          {medal !== undefined && (
-            <span class="ro-medal" title={MEDALS[medal]}>
-              {medal + 1}
-            </span>
-          )}
-          <Pills card={card} />
-        </div>
-        {untrack(card)}
-      </div>
-      <div class="ro-ride-title">
-        <span class="ro-name">{card.name}</span>
-        <Tags view={props.view} routeId={card.routeId} />
-        {card.recent && (
-          <span class="ro-tag ro-tag-last">Similar roads recently ridden</span>
+      <span>
+        <span>Conditions</span>
+        {change && (
+          <span key={change.at} class="ro-delta" data-down={change.by < 0}>
+            {change.by < 0 ? `▼ ${-change.by}` : `▲ ${change.by}`}
+          </span>
         )}
+        <span>
+          <strong>{shown ?? '–'}</strong>/100
+        </span>
+      </span>
+      <div>
+        <div style={{ width: `${props.blank ? 0 : (props.score ?? 0)}%` }} />
       </div>
-      {(card.when ?? card.duration) && (
-        <span class="ro-when">{card.when ?? card.duration}</span>
-      )}
-      {card.weather && <span class="ro-conditions">{card.weather}</span>}
-      {card.reason && <span class="ro-conditions">{card.reason}</span>}
-      <Notes card={card} />
-      {card.score !== null ? (
-        <div class="ro-score">
-          <span>Conditions {card.score}/100</span>
-          <div>
-            <div style={{ width: `${card.score}%` }} />
-          </div>
-        </div>
-      ) : (
-        card.state === 'incomplete' && <span class="ro-no-score">No score</span>
-      )}
     </div>
   );
 };
 
-// Journeys page tile (14a): name, distance and time, chips, then the score. Flags sit on the top border,
-// so every tile has the same layout. A blank tile keeps a scored tile's size: placeholders until scores arrive.
+// A ride: name, distance and time, chips, then the score. On the Journeys page (14a) flags sit on the
+// top border so every tile has the same layout, and a blank tile keeps a scored tile's size with
+// placeholders until scores arrive. On the Rides tab (15a) a medal marks the top three instead.
 export const RouteTile = (props: {
   view: View;
   card: Card;
   href: string | null; // the page links each ride to its journey
   blank: boolean;
   index: number; // staggers the fade-in
+  medal?: number | null; // the Rides tab: its place among the scored rides
+  change?: Change;
 }) => {
-  const { card, blank, view } = props;
+  const { card, blank, view, medal } = props;
+  const panel = medal !== undefined;
+  const rank = medal ?? 3;
+  // The Rides tab's heading has the date, unless the window spans days.
+  const dated = !panel || view.range?.[0] !== view.range?.[1];
+  const notRecommended = card.score !== null && card.score < 50;
   return (
     <div
-      class={`ro-ride ${tint(card)}`}
+      class={`ro-ride ${panel ? (rank < 3 ? `ro-${MEDALS[rank].toLowerCase()}` : '') : tint(card)}`}
       data-state={card.state}
       data-route={card.routeId}
       data-blank={blank}
       style={{ '--ro-i': props.index }}
     >
-      <div class="ro-flags">
-        <Pills card={card} star />
-      </div>
+      {!panel && (
+        <div class="ro-flags">
+          <Pills card={card} star />
+        </div>
+      )}
       <div class="ro-ride-head">
+        {panel && (
+          <span
+            class="ro-medal"
+            data-on={rank < 3}
+            title={rank < 3 ? `Rank ${rank + 1}` : undefined}
+            aria-hidden={rank >= 3 || undefined}
+          >
+            {rank < 3 && rank + 1}
+          </span>
+        )}
         <div class="ro-ride-title">
           {props.href ? (
             <a class="ro-name" href={props.href}>
@@ -327,6 +368,11 @@ export const RouteTile = (props: {
         </div>
         {untrack(card)}
       </div>
+      {panel && (notRecommended || card.state !== 'meets') && (
+        <div class="ro-pills">
+          <Pills card={{ ...card, flag: null }} />
+        </div>
+      )}
       <div class="ro-facts">
         <span>
           <Icon name="route" size={15} />
@@ -336,8 +382,12 @@ export const RouteTile = (props: {
           {card.best ? (
             <span>
               <Icon name="clock" size={15} />
-              {shortDate(card.best.date)}
-              <b aria-hidden="true">·</b>
+              {dated && (
+                <>
+                  {shortDate(card.best.date)}
+                  <b aria-hidden="true">·</b>
+                </>
+              )}
               {`${clock(card.best.departureAt, view.timeZone)} → ~${clock(card.best.finishAt, view.timeZone)}`}
             </span>
           ) : (
@@ -359,7 +409,8 @@ export const RouteTile = (props: {
               view.state.user?.settings.preferences.temperature,
               view.state.units,
             ).map((chip) => (
-              <li key={chip.icon} aria-label={chip.label} data-warn={chip.warn}>
+              // Keyed by text: a changed chip fades in afresh.
+              <li key={chip.text} aria-label={chip.label} data-warn={chip.warn}>
                 <Icon name={chip.icon} size={16} />
                 {chip.text}
               </li>
@@ -371,29 +422,149 @@ export const RouteTile = (props: {
       </Slot>
       {!blank && <Notes card={card} />}
       {blank || card.score !== null ? (
-        // biome-ignore lint/a11y/useSemanticElements: the design's label row and bar; a native <meter> can't hold or style them.
-        <div
-          class="ro-meter"
-          role="meter"
-          aria-label="Conditions score"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={card.score ?? 0}
-          aria-hidden={blank || undefined}
-        >
-          <span>
-            Conditions
-            <span>
-              <strong>{card.score ?? '–'}</strong>/100
-            </span>
-          </span>
-          <div>
-            <div style={{ width: `${blank ? 0 : card.score}%` }} />
-          </div>
-        </div>
+        <Meter score={card.score} blank={blank} change={props.change} />
       ) : (
         card.state === 'incomplete' && <span class="ro-no-score">No score</span>
       )}
+    </div>
+  );
+};
+
+// A forecast update (15a): scores, bars and chips change in place, then 700ms later the cards slide to
+// their new order (FLIP). The new DOM order is committed, so tab order and screen readers follow the screen.
+// Without motion (reduced, or a hidden tab) it all changes at once.
+export const Ranked = (props: {
+  cards: Card[];
+  window: string; // change badges compare forecasts for the same window only
+  class: string;
+  render: (
+    card: Card,
+    index: number,
+    medal: number | null,
+    change?: Change,
+  ) => ComponentChildren;
+}) => {
+  const { cards } = props;
+  const list = useRef<HTMLDivElement>(null);
+  const [order, setOrder] = useState(() => cards.map((c) => c.routeId));
+  const [changes, setChanges] = useState<Record<string, Change>>({});
+  const [said, setSaid] = useState('');
+  const last = useRef({ window: props.window, cards });
+  const before = useRef(new Map<string, DOMRect>());
+  const tiles = () =>
+    list.current?.querySelectorAll<HTMLElement>(':scope > [data-route]') ?? [];
+
+  useEffect(() => {
+    const was = last.current;
+    last.current = { window: props.window, cards };
+    const ids = cards.map((c) => c.routeId);
+    // A route tracked or dropped: no motion.
+    if (ids.length !== order.length || ids.some((id) => !order.includes(id))) {
+      setOrder(ids);
+      return;
+    }
+    const still = reducedMotion() || document.hidden;
+    const moved = ids.some((id, i) => id !== order[i]);
+    const old = new Map(was.cards.map((c) => [c.routeId, c.score]));
+    const at = Date.now();
+    const changed = Object.fromEntries(
+      cards.flatMap((c) => {
+        const from = old.get(c.routeId);
+        return from != null && c.score !== null && from !== c.score
+          ? [[c.routeId, { by: c.score - from, at }]]
+          : [];
+      }),
+    );
+    const any = Object.keys(changed).length > 0;
+    const stop = new AbortController();
+    // New dates or times aren't a forecast change; a refresh that changed nothing keeps the badges.
+    const badge = () =>
+      setChanges((current) =>
+        was.window !== props.window ? {} : any ? changed : current,
+      );
+    // A hidden tab's badges start their 30 seconds once it's back on screen.
+    if (document.hidden)
+      document.addEventListener('visibilitychange', badge, {
+        once: true,
+        signal: stop.signal,
+      });
+    else badge();
+    if (still && (moved || any) && !document.hidden)
+      list.current?.animate([{ opacity: 0.4 }, { opacity: 1 }], 150);
+    const timers = moved
+      ? [
+          setTimeout(
+            () => {
+              if (!still)
+                for (const tile of tiles())
+                  before.current.set(
+                    tile.dataset.route ?? '',
+                    tile.getBoundingClientRect(),
+                  );
+              setOrder(ids);
+            },
+            still ? 0 : 700,
+          ),
+          setTimeout(
+            () => {
+              const [top, ...rest] = cards.map((c) => c.name);
+              setSaid(
+                `Forecast updated. ${top} is now top${rest.length ? `, then ${new Intl.ListFormat('en-GB').format(rest)}` : ''}.`,
+              );
+            },
+            still ? 0 : 1350,
+          ),
+        ]
+      : [];
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+      stop.abort();
+    };
+  }, [cards.map((c) => `${c.routeId}:${c.score}`).join()]);
+
+  // FLIP: each card slides from where it was; those moving up pass over the rest.
+  useLayoutEffect(() => {
+    const from = before.current;
+    if (!from.size) return;
+    before.current = new Map();
+    const old = [...from.keys()];
+    tiles().forEach((tile, i) => {
+      const id = tile.dataset.route ?? '';
+      const was = from.get(id);
+      if (!was) return;
+      const now = tile.getBoundingClientRect();
+      const [dx, dy] = [was.left - now.left, was.top - now.top];
+      if (!dx && !dy) return;
+      tile.style.zIndex = i < old.indexOf(id) ? '2' : '1';
+      tile.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+        { duration: 650, easing: 'cubic-bezier(.65,0,.25,1)' },
+      ).onfinish = () => {
+        tile.style.zIndex = '';
+      };
+    });
+  }, [order]);
+
+  const byId = new Map(cards.map((c) => [c.routeId, c]));
+  const shown = [
+    ...order.filter((id) => byId.has(id)),
+    ...cards.map((c) => c.routeId).filter((id) => !order.includes(id)),
+  ];
+  let scored = 0;
+  return (
+    <div ref={list} class={props.class}>
+      {shown.map((id, i) => {
+        const card = byId.get(id) as Card;
+        return props.render(
+          card,
+          i,
+          card.score !== null ? scored++ : null,
+          changes[id],
+        );
+      })}
+      <span class="ro-sr" aria-live="polite">
+        {said}
+      </span>
     </div>
   );
 };

@@ -46,9 +46,11 @@ import {
   shownOf,
   speed,
   tile,
+  updatedText,
   validateRange,
   viewOf,
   windowBest,
+  windowLabel,
   windowName,
   windowWhen,
 } from '../ui/format';
@@ -873,4 +875,38 @@ test('units: region defaults and display conversion', () => {
     conditionChips({ ...c, averageWindSpeedKph: 9 }, undefined, us)[1].text,
   ).toBe('6 mph');
   expect(conditionsText(c, us)).toBe('50–52° · crosswind 9 mph · dry');
+});
+
+test('Rides tab heading: the window, then how old the forecast is', () => {
+  const custom = (start: string, end: string) =>
+    ({ mode: 'custom', start, end }) as const;
+  const day = { kind: 'preset', preset: 'tomorrow' } as const;
+  const today = '2026-10-11';
+  const tomorrow: [string, string] = ['2026-10-12', '2026-10-12'];
+  expect(
+    windowLabel({ days: day, time: custom('07:00', '11:00') }, tomorrow, today),
+  ).toBe('Tomorrow morning');
+  expect(
+    windowLabel({ days: day, time: custom('08:00', '14:00') }, tomorrow, today),
+  ).toBe('Tomorrow');
+  expect(
+    windowLabel(
+      {
+        days: { kind: 'preset', preset: 'weekend' },
+        time: custom('17:00', '20:00'),
+      },
+      ['2026-10-17', '2026-10-18'],
+      today,
+    ),
+  ).toBe('This weekend');
+  const at = '2026-10-11T10:00:00Z';
+  expect(updatedText(at, new Date('2026-10-11T10:00:40Z'))).toBe(
+    'Updated just now',
+  );
+  expect(updatedText(at, new Date('2026-10-11T10:05:00Z'))).toBe(
+    'Updated 5 minutes ago',
+  );
+  expect(updatedText(at, new Date('2026-10-11T12:30:00Z'))).toBe(
+    'Updated 2 hours ago',
+  );
 });
