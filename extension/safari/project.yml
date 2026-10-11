@@ -67,6 +67,10 @@ targets:
     preBuildScripts:
       - name: Build web extension
         basedOnDependencyAnalysis: false
+        # Declared so Xcode re-signs the extension after the copy: without it, a web-only change
+        # leaves a stale signature and Safari silently stops loading the extension.
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/manifest.json
         script: |
           set -euo pipefail
           export PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH"
