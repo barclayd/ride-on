@@ -7,6 +7,7 @@ import {
   type State,
 } from '../lib/state';
 import type {
+  Conditions,
   DaySummary,
   Departure,
   Failure,
@@ -21,6 +22,7 @@ import {
   applyPatch,
   buildResults,
   checkinDay,
+  conditionChips,
   convert,
   coverageText,
   datesLabel,
@@ -747,4 +749,68 @@ test('next windows', () => {
     `Any daylight, ${datesLabel('2026-10-15', '2026-10-20')}`,
   );
   expect(windowBest(week, TZ)).toBe('Richmond, Sat 17 Oct 09:00 · 15° dry');
+});
+
+test('condition chips: temperature, wind, rain, amber where it lowers the score', () => {
+  const calm = {
+    temperatureC: { minimum: 9.6, maximum: 11.4 },
+    averageWindSpeedKph: 3.2,
+    averageHeadwindKph: 1,
+    averageTailwindKph: 2,
+    averageCrosswindKph: 1,
+    maximumPrecipitationProbability: 0.04,
+  };
+  const comfort = { comfortMinC: 8, comfortMaxC: 20 };
+  const chips = (c: Partial<Conditions>) =>
+    conditionChips({ ...calm, ...c }, comfort).map(
+      (chip) =>
+        `${chip.icon} ${chip.text} | ${chip.label}${chip.warn ? ' !' : ''}`,
+    );
+
+  // Calm: speed only, even with fractions; no summary yet and a low chance reads dry.
+  expect(
+    chips({
+      windDistanceFractions: { headwind: 0.1, tailwind: 0.8, crosswind: 0.1 },
+    }),
+  ).toEqual([
+    'temperature 10–11°C | Temperature 10–11°C',
+    'wind 3 km/h | Wind 3 km/h',
+    'dry Dry | Dry, no rain',
+  ]);
+  // Mostly tailwind is fine; mostly crosswind or headwind is amber; no majority names nothing.
+  const windy = (f: Record<'headwind' | 'tailwind' | 'crosswind', number>) =>
+    chips({ averageWindSpeedKph: 12, windDistanceFractions: f })[1];
+  expect(windy({ headwind: 0.1, tailwind: 0.6, crosswind: 0.3 })).toBe(
+    'wind 12 km/h tailwind | Tailwind 12 km/h',
+  );
+  expect(windy({ headwind: 0.2, tailwind: 0.2, crosswind: 0.6 })).toBe(
+    'wind 12 km/h crosswind | Crosswind 12 km/h !',
+  );
+  expect(windy({ headwind: 0.4, tailwind: 0.3, crosswind: 0.3 })).toBe(
+    'wind 12 km/h | Wind 12 km/h',
+  );
+  // Before the API ships fractions, the speed alone.
+  expect(chips({ averageWindSpeedKph: 15 })[1]).toBe(
+    'wind 15 km/h | Wind 15 km/h',
+  );
+
+  // Outside the comfort range; one rounded value shows once.
+  expect(chips({ temperatureC: { minimum: 6.6, maximum: 7.4 } })[0]).toBe(
+    'temperature 7°C | Temperature 7°C !',
+  );
+  expect(conditionChips(calm)[0].warn).toBe(false);
+
+  // Rain: the API's summary, else the chance.
+  expect(chips({ precipitationSummary: 'light_showers' })[2]).toBe(
+    'wet Light showers | Rain: light showers !',
+  );
+  expect(
+    chips({
+      precipitationSummary: 'dry',
+      maximumPrecipitationProbability: 0.2,
+    })[2],
+  ).toBe('dry Dry | Dry, no rain');
+  expect(chips({ maximumPrecipitationProbability: 0.35 })[2]).toBe(
+    'wet 35% chance of rain | 35% chance of rain !',
+  );
 });

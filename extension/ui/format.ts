@@ -229,6 +229,77 @@ export const rainText = (c: Conditions) => {
   return rain < 10 ? 'dry' : `${rain}% rain`;
 };
 
+// Journeys tile chips, always temperature · wind · rain; amber where that condition lowers the score.
+export const NAMED_WIND_KPH = 10; // below this, the wind's direction isn't worth naming
+const WET: Record<string, string> = {
+  drizzle: 'Drizzle',
+  light_showers: 'Light showers',
+  showers: 'Showers',
+  heavy_showers: 'Heavy showers',
+  light_rain: 'Light rain',
+  rain: 'Rain',
+  heavy_rain: 'Heavy rain',
+  sleet: 'Sleet',
+  hail: 'Hail',
+  snow: 'Snow',
+  thunder: 'Thunderstorms',
+};
+export type Chip = {
+  icon: 'temperature' | 'wind' | 'dry' | 'wet';
+  text: string;
+  label: string;
+  warn: boolean;
+};
+export const conditionChips = (
+  c: Conditions,
+  comfort?: Preferences['temperature'],
+): Chip[] => {
+  const low = Math.round(c.temperatureC.minimum);
+  const high = Math.round(c.temperatureC.maximum);
+  const temp = `${low === high ? high : `${low}–${high}`}°C`;
+  const speed = `${Math.round(c.averageWindSpeedKph)} km/h`;
+  const f = c.windDistanceFractions;
+  // Named only when one direction covers most of the route.
+  const wind =
+    f && c.averageWindSpeedKph >= NAMED_WIND_KPH
+      ? (['tailwind', 'crosswind', 'headwind'] as const).find((k) => f[k] > 0.5)
+      : undefined;
+  const pct = Math.round(c.maximumPrecipitationProbability * 100);
+  const chance = `${pct}% chance of rain`;
+  const summary = c.precipitationSummary ?? (pct < 10 ? 'dry' : 'possible');
+  const rain =
+    summary === 'dry'
+      ? null
+      : summary === 'possible'
+        ? chance
+        : (WET[summary] ?? 'Rain');
+  return [
+    {
+      icon: 'temperature',
+      text: temp,
+      label: `Temperature ${temp}`,
+      warn:
+        !!comfort && (low < comfort.comfortMinC || high > comfort.comfortMaxC),
+    },
+    {
+      icon: 'wind',
+      text: wind ? `${speed} ${wind}` : speed,
+      label: wind
+        ? `${wind[0].toUpperCase()}${wind.slice(1)} ${speed}`
+        : `Wind ${speed}`,
+      warn: !!wind && wind !== 'tailwind',
+    },
+    rain
+      ? {
+          icon: 'wet',
+          text: rain,
+          label: rain === chance ? chance : `Rain: ${rain.toLowerCase()}`,
+          warn: true,
+        }
+      : { icon: 'dry', text: 'Dry', label: 'Dry, no rain', warn: false },
+  ];
+};
+
 const FAILURES: Record<Standard, (f: Failure, timeZone: string) => string> = {
   maximumGustKph: (f) =>
     `Gusts reach ${Math.round(f.actual)} km/h (your limit ${f.limit} km/h)`,

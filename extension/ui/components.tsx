@@ -1,4 +1,5 @@
 // Pieces shared by the popup and the Journeys page.
+import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { onStateChange, readState, type State, send } from '../lib/state';
@@ -7,9 +8,12 @@ import {
   type Banner,
   type Card,
   type CardState,
+  type Chip,
   clock,
+  conditionChips,
   dayMonth,
   ridden,
+  shortDate,
   viewOf,
 } from './format';
 
@@ -112,11 +116,60 @@ const STATES: Record<CardState, string> = {
 const MEDALS = ['Gold', 'Silver', 'Bronze'];
 
 // A page tile's line, over a static placeholder bar in the same grid cell.
-const Slot = (props: { class: string; text: string | null }) => (
-  <span class={`ro-slot ${props.class}`}>
-    <span>{props.text}</span>
+const Slot = (props: { class: string; children: ComponentChildren }) => (
+  <div class={`ro-slot ${props.class}`}>
+    {props.children}
     <i aria-hidden="true" />
-  </span>
+  </div>
+);
+
+// 16-unit stroke icons from the design (11b).
+const ICONS: Record<Chip['icon'] | 'clock', ComponentChildren> = {
+  clock: (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 4.8V8l2.2 1.4" />
+    </>
+  ),
+  temperature: (
+    <>
+      <path d="M6.5 9.3V3.5a1.5 1.5 0 0 1 3 0v5.8a3 3 0 1 1-3 0z" />
+      <path d="M8 7v4" />
+    </>
+  ),
+  wind: (
+    <>
+      <path d="M2 6h8.5a2 2 0 1 0-2-2" />
+      <path d="M2 9.5h11a2 2 0 1 1-2 2" />
+    </>
+  ),
+  dry: (
+    <>
+      <path d="M8 2.2C8 2.2 4 6.6 4 9.6a4 4 0 0 0 8 0C12 6.6 8 2.2 8 2.2z" />
+      <path d="M2.5 2.5l11 11" />
+    </>
+  ),
+  wet: (
+    <>
+      <path d="M4.5 9.5a3 3 0 0 1 .4-6 4 4 0 0 1 7.4 1.2A2.5 2.5 0 0 1 12 9.5z" />
+      <path d="M5.5 11.5l-.7 2M8.5 11.5l-.7 2M11.5 11.5l-.7 2" />
+    </>
+  ),
+};
+const Icon = (props: { name: keyof typeof ICONS; size: number }) => (
+  <svg
+    width={props.size}
+    height={props.size}
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    {ICONS[props.name]}
+  </svg>
 );
 
 // The page shows the distance by the name and no medals; the popup medals its top three scored rides.
@@ -158,7 +211,7 @@ export const RideCard = (props: {
           <span class={`ro-pill ro-${card.state}`}>{STATES[card.state]}</span>
         </div>
         <CloseButton
-          title="Stop tracking"
+          title={`Stop tracking ${card.name}`}
           onClick={() => send({ type: 'untrack', routeId: card.routeId })}
         />
       </div>
@@ -178,8 +231,39 @@ export const RideCard = (props: {
       </div>
       {page ? (
         <>
-          <Slot class="ro-when" text={card.when ?? card.duration} />
-          <Slot class="ro-conditions" text={card.weather ?? card.reason} />
+          <Slot class="ro-when">
+            {card.best ? (
+              <span>
+                <Icon name="clock" size={15} />
+                {shortDate(card.best.date)}
+                <b aria-hidden="true">·</b>
+                {`${clock(card.best.departureAt, props.view.timeZone)} → ~${clock(card.best.finishAt, props.view.timeZone)}`}
+              </span>
+            ) : (
+              <span>{card.duration}</span>
+            )}
+          </Slot>
+          <Slot class="ro-conditions">
+            {card.best ? (
+              <ul class="ro-chips">
+                {conditionChips(
+                  card.best.conditions,
+                  props.view.state.user?.settings.preferences.temperature,
+                ).map((chip) => (
+                  <li
+                    key={chip.icon}
+                    aria-label={chip.label}
+                    data-warn={chip.warn}
+                  >
+                    <Icon name={chip.icon} size={16} />
+                    {chip.text}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span>{card.reason}</span>
+            )}
+          </Slot>
         </>
       ) : (
         <>
@@ -209,7 +293,9 @@ export const RideCard = (props: {
       {blank || card.score !== null ? (
         <div class="ro-score">
           <span aria-hidden={blank || undefined}>
-            Conditions {card.score ?? '–'}/100
+            Conditions{' '}
+            {page ? <strong>{card.score ?? '–'}</strong> : (card.score ?? '–')}
+            /100
           </span>
           <div>
             <div style={{ width: `${blank ? 0 : card.score}%` }} />

@@ -117,6 +117,8 @@ const CONDITIONS = {
   averageTailwindKph: 12,
   averageCrosswindKph: 4,
   maximumPrecipitationProbability: 0.05,
+  windDistanceFractions: { headwind: 0.1, tailwind: 0.7, crosswind: 0.2 },
+  precipitationSummary: 'dry' as const,
 };
 const coast = (): RouteSummary => ({
   id: 'r102',
@@ -1020,6 +1022,18 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     '/map/journey/101',
   );
   await expect(module.locator('.ro-window')).toHaveText(/ · Daylight hours$/);
+  // The 11b tile: clock line, then temperature · wind · rain chips (9° is under the 10° comfort minimum).
+  await expect(module.locator('.ro-ride .ro-when')).toHaveText(
+    /^\w{3} \d{1,2} \w{3}·\d\d:\d\d → ~\d\d:\d\d$/,
+  );
+  const chips = module.locator('.ro-chips li');
+  await expect(chips).toHaveText(['9–14°C', '15 km/h tailwind', 'Dry']);
+  await expect(chips.nth(0)).toHaveAttribute('data-warn', 'true');
+  await expect(chips.nth(1)).toHaveAttribute('aria-label', 'Tailwind 15 km/h');
+  await expect(chips.nth(2)).toHaveAttribute('data-warn', 'false');
+  await expect(
+    module.getByRole('button', { name: 'Stop tracking Hilly Loop' }),
+  ).toBeVisible();
   const chip = page.locator('#jr_101 .ro-chip');
   await expect(chip).toHaveText(/^\w{3} \d{1,2} · \d\d:\d\d$/);
   await expect(chip).toHaveAttribute('data-state', 'meets');
