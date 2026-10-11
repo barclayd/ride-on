@@ -814,7 +814,8 @@ arrived in v0.10.0 with algorithm `comfort-v0.8`. Ride history and recent-route
 preferences are v0.11.0 (`comfort-v0.9`). Planned snapshots, next-window suggestions
 and route-history summaries are v0.12.0. Safari extension sign-in is v0.13.0;
 the single Met Office choice is v0.14.0 (algorithm unchanged at `comfort-v0.9`).
-`GET /health` reports the running version. The canonical custom domain is
+`GET /health` reports the running API `version`, `algorithmVersion` and Git
+`revision` (null for an untagged local/manual build). The canonical custom domain is
 `https://api.ride-on.cc`. Both Met Office credentials and `AUTH_CONFIG_JSON` are
 Worker secrets. Apple Weather uses the separate `APPLE_WEATHER_CONFIG_JSON` secret.
 The obsolete `API_KEYS_JSON` secret is no longer used. Provider
@@ -853,12 +854,19 @@ workload requires Workers Paid limits, particularly for weather subrequests.
 No subscription or plan was changed. See [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
 
 CI checks and bundles the Worker on pull requests, with Node 24 and Bun 1.4.0.
-Automatic deployment remains gated by repository variable
-`API_MVP_DEPLOYMENT_READY=true`; this initial production deployment used the
-authenticated local Wrangler session. The gate remains unset. Before enabling it,
-verify the GitHub `CLOUDFLARE_API_TOKEN` has access to both Workers deployment and
-D1 migrations. When enabled, the workflow applies migrations before publishing
-and runs health/authentication smoke checks.
+Changes to `worker/**` or its deployment workflow merged to main automatically
+run checks, apply pending D1 migrations, and publish the Worker. Deployment uses
+the GitHub `CLOUDFLARE_API_TOKEN` secret, which needs Workers deployment (including
+its custom domain and KV binding) and D1 migration permissions for the configured
+Cloudflare account. No repository-variable setup gate is required.
+
+The deployment tags the Worker version with the commit SHA. Its smoke checks
+verify that exact revision and algorithm version at `https://api.ride-on.cc/health`
+and require an unauthenticated `/routes` request to return 401. These checks do not
+call a weather provider. A failed check, migration, deployment or smoke check
+makes the workflow fail visibly. Use `gh workflow run worker-deploy.yml --ref main`
+to retry a deployment; manual runs on other branches are skipped. Production
+deployments are serialized and an in-progress deployment is not cancelled.
 
 For an authorized manual deployment from `worker/`:
 

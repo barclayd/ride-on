@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { unauthorized } from '../src/identity/access.ts';
 import { createApp } from '../src/index.ts';
+import { ALGORITHM_VERSION } from '../src/recommendations/engine.ts';
 import type { Route } from '../src/routes/model.ts';
 import { type RouteStore, storedRouteSummary } from '../src/routes/store.ts';
 import type { Env } from '../src/types.ts';
@@ -10,6 +11,30 @@ import { forecastsFor, now, simpleGpx } from './fixtures/rides.ts';
 const aliceToken = 'a'.repeat(40);
 const bobToken = 'b'.repeat(40);
 const env = {} as Env;
+test('health identifies the deployed build without authentication or weather calls', async () => {
+  const app = createApp({ log: false });
+  for (const tag of [undefined, '', 'synthetic-commit-sha']) {
+    const response = await app.request('/health', {}, {
+      ...(tag === undefined
+        ? {}
+        : {
+            CF_VERSION_METADATA: {
+              id: 'synthetic-worker-version',
+              tag,
+              timestamp: '2026-10-11T00:00:00.000Z',
+            },
+          }),
+    } as Env);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect((await response.json()) as Record<string, unknown>).toEqual({
+      ok: true,
+      version: '0.14.0',
+      algorithmVersion: ALGORITHM_VERSION,
+      revision: tag || null,
+    });
+  }
+});
 const setup = () => {
   const routes = new Map<string, Route>();
   const cache = new Map<string, string>();
