@@ -3,18 +3,23 @@
 import type {
   Days,
   LocalPrefs,
+  Pick,
   Planning,
   Preset,
   Search,
+  Shown,
   State,
 } from '../lib/state';
 import type {
   Conditions,
   Departure,
   Failure,
+  NextWindow,
   Preferences,
   PreferencesPatch,
+  RecentRides,
   Recommendations,
+  Ride,
   RouteResult,
   RouteSummary,
   Standard,
@@ -31,10 +36,12 @@ const utcFormat = (options: Intl.DateTimeFormatOptions) =>
 const weekdayFormat = utcFormat({ weekday: 'short' });
 const longWeekdayFormat = utcFormat({ weekday: 'long' });
 const monthFormat = utcFormat({ month: 'short' });
+const longMonthFormat = utcFormat({ month: 'long' });
 
 export const weekday = (date: string) => weekdayFormat.format(noon(date));
 export const dayOfMonth = (date: string) => Number(date.slice(8, 10));
-const month = (date: string) => monthFormat.format(noon(date));
+// en-GB says "Sept"; the design says "Sep".
+const month = (date: string) => monthFormat.format(noon(date)).slice(0, 3);
 const longWeekday = (date: string) => longWeekdayFormat.format(noon(date));
 export const shortDate = (date: string) =>
   `${weekday(date)} ${dayOfMonth(date)} ${month(date)}`;
@@ -58,7 +65,7 @@ export const hours = (at: string, timeZone: string) => {
   const [h, m] = clock(at, timeZone).split(':').map(Number);
   return h + m / 60;
 };
-const duration = (minutes: number) =>
+export const duration = (minutes: number) =>
   `${Math.floor(minutes / 60)}h ${String(Math.round(minutes % 60)).padStart(2, '0')}m`;
 const join = (names: string[]) =>
   names.length > 2
@@ -205,8 +212,10 @@ export const daySummary = (recs: Recommendations | undefined) => {
     : null;
 };
 
+type Sourced = { weather: Recommendations['weather'] };
+
 // Every distinct source shown in these results, once each.
-export const attributions = (recs: Recommendations[]) => [
+export const attributions = (recs: Sourced[]) => [
   ...new Map(
     recs
       .flatMap((r) => r.weather.locations)
@@ -215,7 +224,7 @@ export const attributions = (recs: Recommendations[]) => [
   ).values(),
 ];
 
-export const retrievedAt = (recs: Recommendations[]) =>
+export const retrievedAt = (recs: Sourced[]) =>
   recs
     .flatMap((r) => r.weather.locations)
     .map((l) => l.provenance?.retrievedAt ?? '')
@@ -234,9 +243,14 @@ export const conditionsText = (c: Conditions) => {
     c.averageWindSpeedKph < 5
       ? 'light wind'
       : `${kind} ${Math.round(speed)} km/h`;
-  // ponytail: under 10% reads as dry; the card is a summary, the API keeps the detail.
+  return `${low === high ? high : `${low}–${high}`}° · ${wind} · ${rainText(c)}`;
+};
+export const tempText = (c: Conditions) =>
+  `${Math.round(c.temperatureC.maximum)}°`;
+// ponytail: under 10% reads as dry; the card is a summary, the API keeps the detail.
+export const rainText = (c: Conditions) => {
   const rain = Math.round(c.maximumPrecipitationProbability * 100);
-  return `${low === high ? high : `${low}–${high}`}° · ${wind} · ${rain < 10 ? 'dry' : `${rain}% rain`}`;
+  return rain < 10 ? 'dry' : `${rain}% rain`;
 };
 
 const FAILURES: Record<Standard, (f: Failure, timeZone: string) => string> = {
@@ -267,6 +281,7 @@ export type Card = {
   trade: string[];
   coverage: string | null;
   score: number | null;
+  best: Departure | null;
 };
 export type Banner = 'nomatch' | 'incomplete' | 'distance';
 export type Results = {
@@ -363,6 +378,7 @@ export const buildResults = (
             : [],
       coverage: null,
       score: null,
+      best: null,
     };
     if (!r)
       return selected.length && none.length === selected.length
@@ -407,6 +423,7 @@ export const buildResults = (
             ? "Partial assessment: some minimum conditions couldn't be checked."
             : null,
         score: Math.round(b.score),
+        best: b,
       };
     }
     if (results.every((x) => x.status === 'no_feasible_departure')) {
@@ -637,5 +654,219 @@ export const applyPatch = (
     climbing: patch.climbing ?? p.climbing,
     distance: patch.distance === undefined ? p.distance : patch.distance,
     minimumStandards,
+    recentRides: patch.recentRides
+      ? ({ ...p.recentRides, ...patch.recentRides } as RecentRides)
+      : p.recentRides,
   };
+};
+
+// Everything the popup and page render, from the stored state.
+export const viewOf = (state: State, now: Date) => {
+  const { user, planning, expired } = state;
+  const timeZone =
+    user?.settings.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const strip = availability(
+    now,
+    timeZone,
+    user?.settings.weather ?? { mode: 'strict', providerId: 'met-office' },
+  );
+  // An ended window reads as passed until new dates are picked.
+  const range = expired ? null : resolveDays(planning.days, strip);
+  const selected = range
+    ? strip.filter((d) => d.date >= range[0] && d.date <= range[1])
+    : [];
+  const results = buildResults(
+    range ? (state.selection?.routeIds ?? []) : [],
+    state.routes,
+    selected,
+    state.days,
+    timeZone,
+    Object.keys(user?.settings.preferences.minimumStandards ?? {}).length > 0,
+  );
+  const sources = expired
+    ? state.next
+      ? [state.next]
+      : []
+    : Object.values(state.days);
+  const at = retrievedAt(sources);
+  const passed: [string, string] | null =
+    expired?.dates ??
+    (planning.days.kind === 'range'
+      ? [planning.days.start, planning.days.end]
+      : null);
+  return {
+    timeZone,
+    today: localDate(now, timeZone),
+    strip,
+    range,
+    selected,
+    datesText: range
+      ? datesLabel(...range)
+      : passed
+        ? datesLabel(...passed)
+        : '',
+    timeText: timeText(
+      expired ? { ...planning, time: expired.time } : planning,
+      results.daylight,
+      timeZone,
+    ),
+    retrieved: at && clock(at, timeZone),
+    attributions: attributions(sources),
+    ...results,
+    banners: range ? results.banners : [],
+  };
+};
+
+// The window on screen now, kept so the next open can tell it has ended.
+export const shownOf = (state: State, now: Date): Shown | null => {
+  const view = viewOf({ ...state, expired: null }, now);
+  if (!view.range) return null;
+  const { time } = state.planning;
+  const last = state.days[view.range[1]];
+  const sunset = [...(last?.rankings ?? []), ...(last?.unranked ?? [])]
+    .flatMap((r) => (r.daylight ? [clock(r.daylight.end, view.timeZone)] : []))
+    .sort()
+    .pop();
+  const end =
+    time.mode === 'custom'
+      ? sunset && sunset < time.end
+        ? sunset
+        : time.end
+      : (sunset ?? null);
+  return {
+    dates: view.range,
+    time,
+    endsAt: end,
+    // Cards with a departure lead, so their order is the pick rank.
+    picks: view.cards.flatMap(({ routeId, best }, i): Pick[] =>
+      best
+        ? [
+            {
+              routeId,
+              departureAt: best.departureAt,
+              finishAt: best.finishAt,
+              conditions: best.conditions,
+              rank: i + 1,
+            },
+          ]
+        : [],
+    ),
+  };
+};
+
+export const ended = (shown: Shown, now: Date, timeZone: string) => {
+  const today = localDate(now, timeZone);
+  return (
+    shown.dates[1] < today ||
+    (shown.dates[1] === today &&
+      shown.endsAt !== null &&
+      clock(now, timeZone) >= shown.endsAt)
+  );
+};
+
+const partOfDay = (time: string) =>
+  time < '12:00' ? 'morning' : time < '17:00' ? 'afternoon' : 'evening';
+
+// "This morning, Sat 11 Oct", "Yesterday, Fri 10 Oct" or the date.
+export const checkinDay = (pick: Pick, today: string, timeZone: string) => {
+  const date = localDate(pick.departureAt, timeZone);
+  return date === today
+    ? `This ${partOfDay(clock(pick.departureAt, timeZone))}, ${shortDate(date)}`
+    : date === addDays(today, -1)
+      ? `Yesterday, ${shortDate(date)}`
+      : shortDate(date);
+};
+
+const SUFFIX: Record<string, string> = { one: 'st', two: 'nd', few: 'rd' };
+const ordinals = new Intl.PluralRules('en-GB', { type: 'ordinal' });
+export const rankText = (rank: number | null) =>
+  rank === null
+    ? 'not a pick'
+    : rank === 1
+      ? 'your top pick'
+      : `your ${rank}${SUFFIX[ordinals.select(rank)] ?? 'th'} pick`;
+
+// "22 Sep", with the year when it isn't this year's.
+export const dayMonth = (date: string, today: string) =>
+  `${dayOfMonth(date)} ${month(date)}${date.slice(0, 4) === today.slice(0, 4) ? '' : ` ${date.slice(0, 4)}`}`;
+export const monthLabel = (date: string, today: string) =>
+  `${longMonthFormat.format(noon(date))}${date.slice(0, 4) === today.slice(0, 4) ? '' : ` ${date.slice(0, 4)}`}`;
+
+// A route's ride tags, and when the API stops ranking it lower (riddenOn + lookbackDays).
+export const ridden = (
+  rides: Ride[],
+  routeId: string,
+  today: string,
+  recent: RecentRides | undefined,
+) => {
+  const dates = rides
+    .filter((r) => r.routeId === routeId && r.riddenOn <= today)
+    .map((r) => r.riddenOn)
+    .sort()
+    .reverse();
+  const until =
+    dates[0] && recent?.mode === 'prefer-variety'
+      ? addDays(dates[0], recent.lookbackDays)
+      : null;
+  return {
+    latest: (dates[0] as string | undefined) ?? null,
+    today: dates[0] === today,
+    last: dates.find((d) => d < today) ?? null,
+    until: until && until > today ? until : null,
+  };
+};
+
+export const windowName = (w: NextWindow) => {
+  if (w.kind === 'best_this_week') return 'Best time this week';
+  const part = w.window === 'daylight' ? '' : ` ${partOfDay(w.window.start)}`;
+  return w.kind === 'tomorrow'
+    ? `Tomorrow${part}`
+    : `Next ${longWeekday(w.date)}${part}`;
+};
+
+// Line 2 of a window card: its dates and times.
+export const windowWhen = (
+  w: NextWindow,
+  after: string,
+  today: string,
+  timeZone: string,
+) => {
+  if (w.kind === 'best_this_week')
+    return `Any daylight, ${datesLabel(addDays(today, 1), addDays(today, 6))}`;
+  const times =
+    w.window !== 'daylight'
+      ? `${w.window.start}–${w.window.end}`
+      : w.effectiveWindow
+        ? `${clock(w.effectiveWindow.start, timeZone)}–${clock(w.effectiveWindow.end, timeZone)}`
+        : 'Daylight hours';
+  const same =
+    w.kind !== 'same_weekday'
+      ? ''
+      : ` · same as ${after === today ? 'today' : after === addDays(today, -1) ? 'yesterday' : shortDate(after)}`;
+  return `${shortDate(w.date)} · ${times}${same}`;
+};
+
+// Line 3: the top route, its departure and the weather.
+export const windowBest = (w: NextWindow, name: string, timeZone: string) => {
+  const { departureAt, conditions } = w.best;
+  const leave =
+    w.kind === 'best_this_week'
+      ? `${shortDate(localDate(departureAt, timeZone))} ${clock(departureAt, timeZone)}`
+      : `leave ${clock(departureAt, timeZone)}`;
+  return `${name}, ${leave} · ${tempText(conditions)} ${rainText(conditions)}`;
+};
+
+// Matches GET /rides: newest day first.
+export const newest = (a: Ride, b: Ride) =>
+  b.riddenOn.localeCompare(a.riddenOn) || a.id.localeCompare(b.id);
+
+// History: "Sat 11 Oct · 08:00 · 35 km · 1h 46m", then "12° · dry · your top pick".
+export const rideLines = (ride: Ride, timeZone: string) => {
+  const km = `${Math.round(ride.route.distanceM / 1000)} km`;
+  const { plan } = ride;
+  if (!plan) return [`${shortDate(ride.riddenOn)} · ${km}`];
+  return [
+    `${shortDate(ride.riddenOn)} · ${clock(plan.departureAt, timeZone)} · ${km} · ${duration((Date.parse(plan.finishAt) - Date.parse(plan.departureAt)) / 60_000)}`,
+    `${tempText(plan.conditions)} · ${rainText(plan.conditions)} · ${rankText(plan.pickRank)}`,
+  ];
 };

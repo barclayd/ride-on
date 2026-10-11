@@ -701,8 +701,9 @@ fieldset {
 }
 .ro-ride-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 4px 8px;
   min-width: 0;
 }
 .ro-ride .ro-name {
@@ -713,7 +714,7 @@ fieldset {
 a.ro-name:hover {
   text-decoration: underline;
 }
-.ro-ride-title > span:not(.ro-name) {
+.ro-ride-title > span:not(.ro-name, .ro-tag) {
   flex: none;
   font: 400 12px var(--ro-serif);
   color: var(--ro-muted);
@@ -1332,4 +1333,334 @@ a.ro-name:hover {
 .ro-attribution img {
   display: block;
   height: 14px;
+}
+
+/* Design 4: ride tags, check-in, next windows, History, recently ridden */
+.ro-tag {
+  flex: none;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--ro-tint);
+  font: 700 11px / 1.3 var(--ro-sans);
+  color: var(--ro-olive-ink);
+  white-space: nowrap;
+}
+.ro-tag-last {
+  padding: 1px 8px;
+  border: 1px solid var(--ro-border-input);
+  background: none;
+  font-weight: 600;
+  color: var(--ro-muted);
+}
+.ro-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+.ro-until {
+  font: 500 12px var(--ro-serif);
+  color: var(--ro-muted);
+}
+
+/* The panes sit side by side; the inactive ones take the active one's height (contain: size). */
+.ro-checkin {
+  flex: none;
+  min-height: 178px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--ro-border);
+  border-radius: 10px;
+  transition:
+    min-height 320ms cubic-bezier(0.3, 0.7, 0.2, 1),
+    background-color 320ms,
+    border-color 320ms;
+}
+.ro-checkin[data-pane="done"] {
+  min-height: 64px;
+  background: var(--ro-tint);
+  border-color: var(--ro-tint);
+}
+.ro-checkin-track {
+  display: flex;
+  width: 300%;
+  transition: transform 380ms cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+.ro-checkin[data-pane="pick"] .ro-checkin-track {
+  transform: translateX(-33.333%);
+}
+.ro-checkin[data-pane="done"] .ro-checkin-track {
+  transform: translateX(-66.667%);
+}
+.ro-checkin-track > * {
+  flex: 0 0 33.333%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  contain: size;
+  transition: opacity 250ms;
+}
+.ro-checkin:not([data-pane="done"]) .ro-ask,
+.ro-checkin[data-pane="done"] .ro-done {
+  contain: none;
+}
+.ro-checkin-track > [aria-hidden="true"] {
+  opacity: 0;
+}
+.ro-checkin h2 {
+  margin: 0;
+}
+.ro-ask {
+  gap: 10px;
+  padding: 16px;
+}
+.ro-checkin-day {
+  font: 500 12px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-ask h2 {
+  font: 700 17px / 1.25 var(--ro-sans);
+}
+.ro-ask p {
+  margin: 0;
+  font: 400 12px / 1.45 var(--ro-serif);
+  color: var(--ro-ink);
+}
+.ro-checkin-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ro-checkin-actions button {
+  padding: 9px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.ro-checkin-actions .ro-secondary {
+  border-color: #c9d4b2;
+  color: var(--ro-olive-900);
+}
+.ro-ask .ro-link,
+.ro-done .ro-link {
+  align-self: flex-start;
+  font-size: 12px;
+}
+.ro-pick {
+  gap: 8px;
+  padding: 12px 16px 14px;
+}
+.ro-pick-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ro-pick h2 {
+  font: 700 15px var(--ro-sans);
+}
+.ro-back {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ro-olive-900);
+}
+.ro-back:hover {
+  background: var(--ro-tint-2);
+}
+.ro-pick-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.ro-pick-list label {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--ro-border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.ro-pick-list label:has(:checked) {
+  background: var(--ro-tint);
+  border-color: var(--ro-lime);
+}
+.ro-pick-list input {
+  flex: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #a9b0a0;
+  border-radius: 50%;
+}
+.ro-pick-list input:checked {
+  border: 4px solid var(--ro-olive-900);
+}
+.ro-pick-list span:first-of-type {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 13px var(--ro-sans);
+}
+.ro-pick-list span:last-of-type {
+  font: 400 12px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-checkin-track > .ro-done {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.ro-done::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ro-lime-accent)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.2' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.ro-done > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ro-done > div > span:first-child {
+  font: 700 13px / 1.3 var(--ro-sans);
+  color: var(--ro-olive-ink);
+}
+.ro-done > div > span + span {
+  font: 400 12px / 1.4 var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-done .ro-link {
+  align-self: center;
+  font-size: 13px;
+}
+
+.ro-next-head {
+  margin: 0;
+  padding: 6px 2px 0;
+  font: 700 16px var(--ro-sans);
+}
+.ro-next {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid var(--ro-border);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+}
+.ro-next[data-best="true"] {
+  border: 1.5px solid var(--ro-lime);
+  padding: 11.5px 13.5px;
+}
+.ro-next-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: 700 14px var(--ro-sans);
+}
+.ro-next-top > span:last-child {
+  flex: none;
+  font: 500 12px var(--ro-serif);
+  color: var(--ro-olive-900);
+}
+.ro-next-when {
+  font: 500 12px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-next-best {
+  font: 600 13px var(--ro-sans);
+  color: var(--ro-olive-700);
+}
+.ro-choose {
+  align-self: center;
+  padding: 4px;
+}
+
+.ro-month {
+  padding: 0 2px;
+  font: 600 12px var(--ro-sans);
+  color: var(--ro-muted);
+}
+.ro-history {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--ro-border);
+  border-radius: 10px;
+}
+.ro-history-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ro-history-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 15px var(--ro-sans);
+  color: var(--ro-olive-700);
+}
+.ro-history-head .ro-close {
+  margin: -4px -6px -4px 0;
+}
+.ro-history-line {
+  font: 700 13px var(--ro-sans);
+}
+.ro-history-conditions {
+  font: 500 12px / 1.4 var(--ro-sans);
+  color: var(--ro-muted);
+}
+.ro-removed {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font: 500 13px var(--ro-sans);
+  color: var(--ro-muted);
+}
+
+.ro-help {
+  margin: 0;
+  font: 400 12px / 1.45 var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-recent-example {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--ro-page);
+  font: 500 12px / 1.4 var(--ro-sans);
+  color: var(--ro-olive-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ro-checkin,
+  .ro-checkin-track,
+  .ro-checkin-track > * {
+    transition: none;
+  }
 }

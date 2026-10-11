@@ -1,27 +1,42 @@
 import { expect, test } from 'bun:test';
-import type { LocalPrefs } from '../lib/state';
+import { initialState, type LocalPrefs, type State } from '../lib/state';
 import type {
   Departure,
   Failure,
+  NextWindow,
   Preferences,
   Recommendations,
+  Ride,
   RouteResult,
+  User,
 } from '../lib/types';
 import {
   applyPatch,
   availability,
   buildResults,
+  checkinDay,
   convert,
   coverageText,
   datesLabel,
+  dayMonth,
   draftFrom,
   draftPatch,
+  ended,
+  monthLabel,
   pickDay,
   presetDates,
+  rankText,
   resolveDays,
+  ridden,
+  rideLines,
   rideSummary,
   searchPatch,
+  shownOf,
   validateRange,
+  viewOf,
+  windowBest,
+  windowName,
+  windowWhen,
 } from '../ui/format';
 
 const TZ = 'Europe/London'; // BST in mid-October
@@ -380,4 +395,209 @@ test('preferences draft round-trips through a PATCH', () => {
   const floor = monthly.minimumStandards?.minimumTemperature;
   expect(floor?.kind === 'monthly' && floor.valuesC['7']).toBe(10);
   expect(applyPatch(prefs, { distance: null }).distance).toBeNull();
+});
+
+test('recentRides patches keep the lookback', () => {
+  const recent = {
+    ...prefs,
+    recentRides: { mode: 'neutral', lookbackDays: 28 },
+  } as const;
+  expect(
+    applyPatch(recent, { recentRides: { mode: 'prefer-variety' } }).recentRides,
+  ).toEqual({ mode: 'prefer-variety', lookbackDays: 28 });
+});
+
+// Wed 14 Oct, 08:00–14:00: Route a at 09:00 BST, then b at 10:00.
+const shownState: State = {
+  ...initialState,
+  user: {
+    settings: { timeZone: TZ, weather: strict, preferences: prefs },
+  } as User,
+  selection: { version: 1, routeIds: ['b', 'a'], updatedAt: null },
+  planning: {
+    days: { kind: 'range', start: '2026-10-14', end: '2026-10-14' },
+    time: { mode: 'custom', start: '08:00', end: '14:00' },
+  },
+  days: {
+    '2026-10-14': recs('2026-10-14', 'match_found', [
+      result('a', departure('2026-10-14T08:00:00Z', 80)),
+      result('b', departure('2026-10-14T09:00:00Z', 70)),
+    ]),
+  },
+};
+
+test('the shown window, its end and its picks', () => {
+  const shown = shownOf(shownState, NOW);
+  expect(shown).toMatchObject({
+    dates: ['2026-10-14', '2026-10-14'],
+    endsAt: '14:00',
+  });
+  expect(shown?.picks.map((p) => [p.routeId, p.rank])).toEqual([
+    ['a', 1],
+    ['b', 2],
+  ]);
+  if (!shown) throw new Error('no window');
+  expect(ended(shown, NOW, TZ)).toBe(false);
+  expect(ended(shown, new Date('2026-10-14T12:59:00Z'), TZ)).toBe(false);
+  expect(ended(shown, new Date('2026-10-14T13:00:00Z'), TZ)).toBe(true);
+  expect(ended(shown, new Date('2026-10-15T00:00:00Z'), TZ)).toBe(true);
+  // Daylight ends at sunset (18:10 BST); a custom window ends at the earlier of the two.
+  const daylight = shownOf(
+    {
+      ...shownState,
+      planning: {
+        ...shownState.planning,
+        time: { ...shownState.planning.time, mode: 'daylight' },
+      },
+    },
+    NOW,
+  );
+  expect(daylight?.endsAt).toBe('18:10');
+  // Once ended, the view reads as passed and shows the window that ended.
+  const view = viewOf({ ...shownState, expired: shown }, NOW);
+  expect(view.range).toBeNull();
+  expect(view.cards).toEqual([]);
+  expect(view.timeText).toContain('08:00');
+});
+
+const ride = (id: string, routeId: string, riddenOn: string): Ride => ({
+  id,
+  version: 1,
+  routeId,
+  route: {
+    id: routeId,
+    name: `Route ${routeId}`,
+    version: 1,
+    distanceM: 35_200,
+    ascentM: null,
+  },
+  riddenOn,
+  timeZone: TZ,
+  recordedAt: `${riddenOn}T18:00:00Z`,
+  updatedAt: `${riddenOn}T18:00:00Z`,
+  plan: null,
+});
+
+test('ride tags and the ranked-lower date', () => {
+  const today = '2026-10-14';
+  const rides = [
+    ride('1', 'a', today),
+    ride('2', 'b', '2026-10-05'),
+    ride('3', 'a', '2026-09-22'),
+    ride('4', 'c', '2026-08-01'),
+  ];
+  const variety = { mode: 'prefer-variety', lookbackDays: 28 } as const;
+  expect(ridden(rides, 'a', today, variety)).toEqual({
+    latest: today,
+    today: true,
+    last: '2026-09-22',
+    until: '2026-11-11',
+  });
+  expect(ridden(rides, 'a', today, { ...variety, mode: 'neutral' }).until).toBe(
+    null,
+  );
+  expect(ridden(rides, 'b', today, variety)).toMatchObject({
+    today: false,
+    last: '2026-10-05',
+    until: '2026-11-02',
+  });
+  expect(ridden(rides, 'c', today, variety).until).toBeNull(); // over four weeks ago
+  expect(ridden(rides, 'd', today, variety)).toEqual({
+    latest: null,
+    today: false,
+    last: null,
+    until: null,
+  });
+  expect(dayMonth('2026-09-22', today)).toBe('22 Sep');
+  expect(dayMonth('2025-12-30', today)).toBe('30 Dec 2025');
+  expect(monthLabel('2026-10-11', today)).toBe('October');
+  expect(monthLabel('2025-12-30', today)).toBe('December 2025');
+  expect([1, 2, 3, 4, 11, 22, null].map(rankText)).toEqual([
+    'your top pick',
+    'your 2nd pick',
+    'your 3rd pick',
+    'your 4th pick',
+    'your 11th pick',
+    'your 22nd pick',
+    'not a pick',
+  ]);
+});
+
+test('check-in, next windows and history lines', () => {
+  const today = '2026-10-14';
+  const pick = {
+    routeId: 'a',
+    departureAt: '2026-10-14T07:00:00Z',
+    finishAt: '2026-10-14T08:46:00Z',
+    conditions,
+    rank: 1,
+  };
+  expect(checkinDay(pick, today, TZ)).toBe('This morning, Wed 14 Oct');
+  expect(checkinDay(pick, '2026-10-15', TZ)).toBe('Yesterday, Wed 14 Oct');
+  expect(checkinDay(pick, '2026-10-17', TZ)).toBe('Wed 14 Oct');
+
+  const best = {
+    routeId: 'a',
+    departureAt: '2026-10-15T08:00:00Z',
+    finishAt: '2026-10-15T10:00:00Z',
+    score: 84,
+    conditions,
+  };
+  const tomorrow: NextWindow = {
+    kind: 'tomorrow',
+    date: '2026-10-15',
+    window: { start: '08:00', end: '14:00' },
+    effectiveWindow: null,
+    best,
+  };
+  expect(windowName(tomorrow)).toBe('Tomorrow morning');
+  expect(windowWhen(tomorrow, today, today, TZ)).toBe(
+    'Thu 15 Oct · 08:00–14:00',
+  );
+  expect(windowBest(tomorrow, 'Richmond', TZ)).toBe(
+    'Richmond, leave 09:00 · 15° dry',
+  );
+  const weekday: NextWindow = {
+    ...tomorrow,
+    kind: 'same_weekday',
+    date: '2026-10-21',
+    window: { start: '15:00', end: '18:00' },
+  };
+  expect(windowName(weekday)).toBe('Next Wednesday afternoon');
+  expect(windowWhen(weekday, today, today, TZ)).toBe(
+    'Wed 21 Oct · 15:00–18:00 · same as today',
+  );
+  const week: NextWindow = {
+    ...tomorrow,
+    kind: 'best_this_week',
+    date: '2026-10-17',
+    window: 'daylight',
+    best: { ...best, departureAt: '2026-10-17T08:00:00Z' },
+  };
+  expect(windowName(week)).toBe('Best time this week');
+  expect(windowWhen(week, today, today, TZ)).toBe(
+    `Any daylight, ${datesLabel('2026-10-15', '2026-10-20')}`,
+  );
+  expect(windowBest(week, 'Richmond', TZ)).toBe(
+    'Richmond, Sat 17 Oct 09:00 · 15° dry',
+  );
+
+  const logged = ride('1', 'a', today);
+  expect(rideLines(logged, TZ)).toEqual(['Wed 14 Oct · 35 km']);
+  expect(
+    rideLines(
+      {
+        ...logged,
+        plan: {
+          ...pick,
+          conditions: { ...conditions, maximumPrecipitationProbability: 0.4 },
+          pickRank: 2,
+        },
+      },
+      TZ,
+    ),
+  ).toEqual([
+    'Wed 14 Oct · 08:00 · 35 km · 1h 46m',
+    '15° · 40% rain · your 2nd pick',
+  ]);
 });

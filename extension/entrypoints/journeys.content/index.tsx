@@ -15,16 +15,26 @@ import {
   iconUrl,
   injectFonts,
   RideCard,
+  riddenFor,
+  Tags,
   useView,
 } from '../../ui/components';
 import css from '../../ui/tokens.css?inline';
 
-type Row = { id: string; element: HTMLElement; mount: HTMLElement };
+type Row = {
+  id: string;
+  element: HTMLElement;
+  mount: HTMLElement;
+  tags: HTMLElement;
+};
 
 // Styles that must live on the page itself: host layout and the tracked-row edge.
 const PAGE_CSS = `ride-on-module{display:block}
 ride-on-chip{flex:none;align-self:center}
-li.journey_row[data-ride-on-tracked]{box-shadow:inset 3px 0 0 #8bc61f}`;
+li.journey_row[data-ride-on-tracked]{box-shadow:inset 3px 0 0 #8bc61f}
+ride-on-tags{display:none}
+li.journey_row[data-ride-on-ridden] .journey_name{flex:0 1 auto}
+li.journey_row[data-ride-on-ridden] ride-on-tags{display:block;flex:1 1 8rem;align-self:center}`;
 
 const shadowMount = (host: HTMLElement) => {
   const root = host.attachShadow({ mode: 'open' });
@@ -53,12 +63,28 @@ const Page = ({ rows }: { rows: Row[] }) => {
     const externalId = routes[routeId]?.source?.externalId;
     if (externalId) tracked.set(externalId, routeId);
   }
+  // Ride tags show on any route Ride On knows, tracked or not.
+  const known = new Map(
+    Object.values(routes).flatMap((route) =>
+      route.source ? [[route.source.externalId, route.id] as const] : [],
+    ),
+  );
+  const ridden = (externalId: string) => {
+    const routeId = known.get(externalId);
+    const ride = view && routeId ? riddenFor(view, routeId) : null;
+    return ride && (ride.today || ride.last) ? routeId : undefined;
+  };
 
   useEffect(() => {
     for (const row of rows)
       row.element.toggleAttribute(
         'data-ride-on-tracked',
         signedIn && tracked.has(row.id),
+      );
+    for (const row of rows)
+      row.element.toggleAttribute(
+        'data-ride-on-ridden',
+        signedIn && !!ridden(row.id),
       );
   });
 
@@ -182,6 +208,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
           {cards.map((card) => (
             <RideCard
               key={card.routeId}
+              view={view}
               card={card}
               href={href(routes[card.routeId])}
             />
@@ -190,6 +217,18 @@ const Page = ({ rows }: { rows: Row[] }) => {
       )}
       <CoverageWarn view={view} />
       {/* ponytail: weather attribution is popup-only by choice, though the cards show weather. */}
+      {rows.map((row) => {
+        const routeId = ridden(row.id);
+        return (
+          routeId &&
+          createPortal(
+            <div class="ro-tags">
+              <Tags view={view} routeId={routeId} />
+            </div>,
+            row.tags,
+          )
+        );
+      })}
       {rows.map((row) => {
         const routeId = tracked.get(row.id);
         const card = routeId && cardByRoute.get(routeId);
@@ -251,10 +290,15 @@ export default defineContentScript({
       const meta = element.querySelector('.journey_meta');
       if (meta) meta.before(host);
       else element.append(host);
+      const tags = document.createElement('ride-on-tags');
+      const name = element.querySelector('a.journey_name');
+      if (name) name.after(tags);
+      else host.before(tags);
       return {
         id: element.id.replace(/^jr_/, ''),
         element,
         mount: shadowMount(host),
+        tags: shadowMount(tags),
       };
     });
     render(<Page rows={rows} />, shadowMount(moduleHost));

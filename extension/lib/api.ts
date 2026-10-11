@@ -40,9 +40,14 @@ export const setToken = (token: string | null) =>
 // Background only: content scripts and the popup never call the API directly.
 export const api = async <T>(
   path: string,
-  init: { method?: string; body?: unknown; auth?: boolean } = {},
+  init: {
+    method?: string;
+    body?: unknown;
+    auth?: boolean;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<T> => {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...init.headers };
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (init.auth !== false) {
     const token = await getToken();

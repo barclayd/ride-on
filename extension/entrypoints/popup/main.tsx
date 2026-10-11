@@ -1,11 +1,12 @@
-import { render } from 'preact';
+import { Fragment, render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { type Planning, type Search, send, type Tab } from '../../lib/state';
-import type { Climbing } from '../../lib/types';
+import type { Climbing, NextWindow, Ride } from '../../lib/types';
 import {
   AppleMark,
   Attribution,
   Banners,
+  CloseButton,
   CoverageWarn,
   chooseAvailableDates,
   ErrorChip,
@@ -14,32 +15,45 @@ import {
   iconUrl,
   injectFonts,
   RideCard,
+  riddenFor,
   Segmented,
   useView,
   type View,
 } from '../../ui/components';
 import {
+  checkinDay,
   clock,
   convert,
   coverageText,
   type Draft,
+  dayMonth,
   dayOfMonth,
   daySummary,
   draftFrom,
   draftLocal,
   draftPatch,
   hours,
+  monthLabel,
+  newest,
   PRESETS,
   pickDay,
   providerIds,
   qualityColour,
+  rainText,
+  rankText,
+  rideLines,
   rideSummary,
   scaleMaxKm,
   searchDiffers,
+  shortDate,
+  tempText,
   unitLabel,
   usualSearch,
   validateRange,
   weekday,
+  windowBest,
+  windowName,
+  windowWhen,
 } from '../../ui/format';
 import '../../ui/tokens.css';
 
@@ -47,6 +61,7 @@ const TABS: [Tab, string][] = [
   ['rides', 'Rides'],
   ['when', 'When'],
   ['prefs', 'Preferences'],
+  ['history', 'History'],
 ];
 
 const SignedOut = ({ view }: { view: View }) => {
@@ -322,10 +337,217 @@ const WhenTab = ({ view }: { view: View }) => {
   );
 };
 
-const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
-  let medal = 0;
+const km = (m: number) => Math.round(m / 1000);
+
+// "Did you ride …?" for the window that just ended. Slides to a route picker and on to a confirmation.
+const CheckIn = ({ view }: { view: View }) => {
+  const { checkin, routes, selection } = view.state;
+  const [picking, setPicking] = useState(false);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!checkin) return null;
+  const tz = view.timeZone;
+  const top = checkin.picks[0];
+  const routeId = chosen ?? top.routeId;
+  const name = (id: string) => routes[id]?.name ?? 'your route';
+  const answer = async (
+    message: { answer: 'yes'; routeId: string } | { answer: 'no' | 'undo' },
+  ) => {
+    setBusy(true);
+    await send({ type: 'checkin', ...message });
+    setBusy(false);
+    if (message.answer === 'undo') setChosen(null);
+  };
+  const done = checkin.status === 'done' && checkin.routeId;
+  const pane = done ? 'done' : picking ? 'pick' : 'ask';
+  const { until } = riddenFor(view, checkin.routeId ?? routeId);
+  const c = top.conditions;
+  return (
+    <section class="ro-checkin" data-pane={pane} aria-label="Ride check-in">
+      <div class="ro-checkin-track">
+        <div class="ro-ask" aria-hidden={pane !== 'ask'} inert={pane !== 'ask'}>
+          <span class="ro-checkin-day">{checkinDay(top, view.today, tz)}</span>
+          <h2>Did you ride {name(routeId)}?</h2>
+          <p>
+            {routeId === top.routeId
+              ? `It was ${rankText(top.rank)}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c)} and ${rainText(c)}.`
+              : `${km(routes[routeId]?.distanceM ?? 0)} km · instead of ${name(top.routeId)}, ${rankText(top.rank)}`}
+          </p>
+          <div class="ro-checkin-actions">
+            <button
+              type="button"
+              class="ro-primary"
+              disabled={busy}
+              onClick={() => answer({ answer: 'yes', routeId })}
+            >
+              Yes, I rode it
+            </button>
+            <button
+              type="button"
+              class="ro-secondary"
+              disabled={busy}
+              onClick={() => answer({ answer: 'no' })}
+            >
+              Not this time
+            </button>
+          </div>
+          <button
+            type="button"
+            class="ro-link"
+            disabled={busy}
+            onClick={() => setPicking(true)}
+          >
+            I rode a different route ›
+          </button>
+        </div>
+        <div
+          class="ro-pick"
+          aria-hidden={pane !== 'pick'}
+          inert={pane !== 'pick'}
+        >
+          <div class="ro-pick-head">
+            <button
+              type="button"
+              class="ro-back"
+              aria-label="Back"
+              onClick={() => setPicking(false)}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+              >
+                <path
+                  d="M10 3 5 8l5 5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <h2>Which route did you ride?</h2>
+          </div>
+          <fieldset class="ro-pick-list" aria-label="Your tracked routes">
+            {(selection?.routeIds ?? []).map((id) => (
+              <label key={id}>
+                <input
+                  type="radio"
+                  name="ro-ridden-route"
+                  checked={id === routeId}
+                  onChange={() => {
+                    setChosen(id);
+                    setTimeout(() => setPicking(false), 260);
+                  }}
+                />
+                <span>{name(id)}</span>
+                <span>{km(routes[id]?.distanceM ?? 0)} km</span>
+              </label>
+            ))}
+          </fieldset>
+        </div>
+        <div
+          class="ro-done"
+          aria-hidden={pane !== 'done'}
+          inert={pane !== 'done'}
+        >
+          <div>
+            <span>
+              Nice ride on {name(checkin.routeId ?? routeId)}. Saved to History.
+            </span>
+            {until && (
+              <span>
+                {name(checkin.routeId ?? routeId)} is ranked lower until{' '}
+                {shortDate(until)}.
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            class="ro-link"
+            disabled={busy}
+            onClick={() => answer({ answer: 'undo' })}
+          >
+            Undo
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// The highest score is "Best"; the order stays tomorrow, same weekday, best this week.
+const NextWindows = ({ view }: { view: View }) => {
+  const { next, expired, planning, routes } = view.state;
+  if (!next || !expired) return null;
+  const { windows } = next;
+  const best = windows.reduce(
+    (b, w, i) => (w.best.score > windows[b].best.score ? i : b),
+    0,
+  );
+  const choose = (w: NextWindow) =>
+    send({
+      type: 'setPlanning',
+      planning: {
+        days: { kind: 'range', start: w.date, end: w.date },
+        time:
+          w.window === 'daylight'
+            ? { ...planning.time, mode: 'daylight' }
+            : { mode: 'custom', ...w.window },
+      },
+    });
   return (
     <>
+      <h2 class="ro-next-head">When's your next ride?</h2>
+      {windows.length === 0 && (
+        <span class="ro-empty">No forecast covers your next windows yet.</span>
+      )}
+      {windows.map((w, i) => (
+        <button
+          key={w.kind}
+          type="button"
+          class="ro-next"
+          data-best={i === best}
+          onClick={() => choose(w)}
+        >
+          <span class="ro-next-top">
+            <span>{windowName(w)}</span>
+            <span>{i === best ? `Best · ${w.best.score}` : w.best.score}</span>
+          </span>
+          <span class="ro-next-when">
+            {windowWhen(w, expired.dates[1], view.today, view.timeZone)}
+          </span>
+          <span class="ro-next-best">
+            {windowBest(
+              w,
+              routes[w.best.routeId]?.name ?? 'Your route',
+              view.timeZone,
+            )}
+          </span>
+        </button>
+      ))}
+    </>
+  );
+};
+
+const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
+  let medal = 0;
+  if (view.state.expired)
+    return (
+      <>
+        <CheckIn view={view} />
+        <NextWindows view={view} />
+        <button type="button" class="ro-link ro-choose" onClick={onChoose}>
+          Choose my own dates ›
+        </button>
+        <Attribution view={view} />
+      </>
+    );
+  return (
+    <>
+      <CheckIn view={view} />
       {!view.range && (
         <Expired view={view} variant="rides" onChoose={onChoose} />
       )}
@@ -339,6 +561,7 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
       {view.cards.map((card) => (
         <RideCard
           key={card.routeId}
+          view={view}
           card={card}
           medal={card.score !== null && medal < 3 ? medal++ : undefined}
         />
@@ -675,6 +898,7 @@ const PrefsTab = ({ view }: { view: View }) => {
   return (
     <>
       <DistanceCard view={view} />
+      <RecentlyRiddenCard view={view} />
       <section class="ro-card">
         <div class="ro-card-head">
           <span class="ro-label">Ideal temperature</span>
@@ -905,6 +1129,154 @@ const PrefsTab = ({ view }: { view: View }) => {
   );
 };
 
+// Newest first, by month. A removed ride stays collapsed with Undo until the panel closes.
+const HistoryTab = ({ view }: { view: View }) => {
+  const { rides, ridesCursor } = view.state;
+  const [removed, setRemoved] = useState<Record<string, Ride>>({});
+  const [notice, setNotice] = useState<string | null>(null);
+  const tz = view.timeZone;
+  const list = [
+    ...rides,
+    ...Object.values(removed).filter((r) => !rides.some((x) => x.id === r.id)),
+  ].sort(newest);
+  const setGone = (ride: Ride, gone: boolean) =>
+    setRemoved(({ [ride.id]: _, ...rest }) =>
+      gone ? { ...rest, [ride.id]: ride } : rest,
+    );
+  const remove = async (ride: Ride) => {
+    setNotice(null);
+    setGone(ride, true);
+    const { error } = await send({ type: 'deleteRide', id: ride.id });
+    if (error) {
+      setGone(ride, false);
+      setNotice(error);
+    }
+  };
+  const restore = async (ride: Ride) => {
+    setNotice(null);
+    const { error } = await send({ type: 'restoreRide', ride });
+    if (error) setNotice(error);
+    else setGone(ride, false);
+  };
+  if (!list.length)
+    return (
+      <span class="ro-empty">
+        No rides yet. When a window you planned ends, Ride On asks whether you
+        rode it.
+      </span>
+    );
+  const labelled = new Set<string>();
+  const routesSeen = new Set<string>();
+  return (
+    <>
+      {notice && (
+        <span class="ro-warn-chip" role="status">
+          {notice}
+        </span>
+      )}
+      {list.map((ride) => {
+        const month = monthLabel(ride.riddenOn, view.today);
+        const label = !labelled.has(month) && labelled.add(month);
+        const gone = removed[ride.id] && !rides.some((r) => r.id === ride.id);
+        const first = !gone && !routesSeen.has(ride.routeId);
+        if (first) routesSeen.add(ride.routeId);
+        const until = first && riddenFor(view, ride.routeId).until;
+        const [line, conditions] = rideLines(ride, tz);
+        return (
+          <Fragment key={ride.id}>
+            {label && <span class="ro-month">{month}</span>}
+            {gone ? (
+              <div class="ro-history ro-removed">
+                <span>Ride removed</span>·
+                <button
+                  type="button"
+                  class="ro-link"
+                  onClick={() => restore(ride)}
+                >
+                  Undo
+                </button>
+              </div>
+            ) : (
+              <article class="ro-history">
+                <div class="ro-history-head">
+                  <span class="ro-history-name">{ride.route.name}</span>
+                  {ride.riddenOn === view.today && (
+                    <span class="ro-tag">Ridden today</span>
+                  )}
+                  <CloseButton
+                    title="Remove ride"
+                    onClick={() => remove(ride)}
+                  />
+                </div>
+                <span class="ro-history-line">{line}</span>
+                {conditions && (
+                  <span class="ro-history-conditions">{conditions}</span>
+                )}
+                {until && (
+                  <span class="ro-until">
+                    Ranked lower until {shortDate(until)}
+                  </span>
+                )}
+              </article>
+            )}
+          </Fragment>
+        );
+      })}
+      {ridesCursor && (
+        <button
+          type="button"
+          class="ro-link ro-choose"
+          onClick={() => send({ type: 'moreRides' })}
+        >
+          Show older rides
+        </button>
+      )}
+    </>
+  );
+};
+
+const RecentlyRiddenCard = ({ view }: { view: View }) => {
+  const { user, rides } = view.state;
+  if (!user) return null;
+  const mode = user.settings.preferences.recentRides?.mode ?? 'neutral';
+  const latest = rides.find((r) => r.riddenOn <= view.today);
+  const until = latest && riddenFor(view, latest.routeId).until;
+  return (
+    <section class="ro-card ro-recent">
+      <span class="ro-label">Recently ridden routes</span>
+      <Segmented
+        label="Recently ridden routes"
+        options={[
+          { value: 'neutral', label: 'Happy to repeat' },
+          { value: 'prefer-variety', label: 'Prefer variety' },
+        ]}
+        value={mode}
+        onChange={(next) =>
+          send({
+            type: 'savePreferences',
+            preferences: { recentRides: { mode: next } },
+          })
+        }
+      />
+      <p class="ro-help">Considers roads ridden in the last four weeks.</p>
+      {latest && (
+        <div class="ro-recent-example">
+          <span class="ro-tag">{latest.route.name}</span>
+          <span>
+            {latest.riddenOn === view.today
+              ? 'Ridden today'
+              : `Ridden ${dayMonth(latest.riddenOn, view.today)}`}
+            ,{' '}
+            {until
+              ? `ranked lower until ${shortDate(until)}`
+              : 'ranked as normal'}
+          </span>
+        </div>
+      )}
+    </section>
+  );
+};
+
 const SyncFooter = ({ view }: { view: View }) => {
   const { syncing, syncedAt, syncError } = view.state;
   return (
@@ -1003,6 +1375,7 @@ const App = () => {
           )}
           {tab === 'when' && <WhenTab view={view} />}
           {tab === 'prefs' && <PrefsTab view={view} />}
+          {tab === 'history' && <HistoryTab view={view} />}
         </div>
       </div>
       {tab === 'prefs' && <SyncFooter view={view} />}

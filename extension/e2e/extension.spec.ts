@@ -9,8 +9,8 @@ import {
   type Page,
   type Worker,
 } from '@playwright/test';
-import type { RouteSummary, User } from '../lib/types';
-import { applyPatch } from '../ui/format';
+import type { Ride, RouteSummary, User } from '../lib/types';
+import { addDays, applyPatch, newest, shortDate } from '../ui/format';
 
 const EXTENSION = path.resolve('.output/chrome-mv3-e2e');
 const JOURNEYS = readFileSync(path.resolve('e2e/journeys.html'), 'utf8');
@@ -72,10 +72,11 @@ const PROVIDERS = [
   ),
 ];
 
-let calls: { method: string; path: string; body: any }[] = [];
+let calls: { method: string; path: string; body: any; key?: string }[] = [];
 let user: User;
 let selection: { version: number; routeIds: string[]; updatedAt: null };
 let routes: Record<string, RouteSummary>;
+let rides: Ride[];
 
 const reset = () => {
   calls = [];
@@ -96,6 +97,7 @@ const reset = () => {
         climbing: { preference: 'neutral' },
         distance: null,
         minimumStandards: {},
+        recentRides: { mode: 'neutral', lookbackDays: 28 },
       },
     },
   };
@@ -109,6 +111,85 @@ const reset = () => {
       version: 1,
       updatedAt: '2026-01-01T00:00:00Z',
     },
+  };
+  rides = [];
+};
+
+const CONDITIONS = {
+  temperatureC: { minimum: 9, maximum: 14 },
+  averageWindSpeedKph: 15,
+  averageHeadwindKph: 3,
+  averageTailwindKph: 12,
+  averageCrosswindKph: 4,
+  maximumPrecipitationProbability: 0.05,
+};
+const coast = (): RouteSummary => ({
+  id: 'r102',
+  name: 'Coast & Back',
+  distanceM: 35_000,
+  source: { providerId: 'cycle-travel', externalId: '102' },
+  version: 1,
+  updatedAt: '2026-01-01T00:00:00Z',
+});
+const ride = (
+  routeId: string,
+  riddenOn: string,
+  plan: Ride['plan'] = null,
+): Ride => {
+  const route = routes[routeId];
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    version: 1,
+    routeId,
+    route: { ...route, ascentM: null },
+    riddenOn,
+    timeZone: 'Europe/London',
+    recordedAt: now,
+    updatedAt: now,
+    plan,
+  };
+};
+// Yesterday 08:00–14:00, Hilly Loop at 08:00 London (07:00Z in summer time).
+const PLAN = {
+  departureAt: `${day(-1)}T07:00:00.000Z`,
+  finishAt: `${day(-1)}T08:46:00.000Z`,
+  conditions: CONDITIONS,
+};
+const SHOWN = {
+  dates: [day(-1), day(-1)],
+  time: { mode: 'custom', start: '08:00', end: '14:00' },
+  endsAt: '14:00',
+  picks: [{ routeId: 'r101', ...PLAN, rank: 1 }],
+};
+const nextWindows = (after: { window: unknown }) => {
+  const window = (
+    kind: string,
+    date: string,
+    score: number,
+    w: unknown = after.window,
+  ) => ({
+    kind,
+    date,
+    window: w,
+    effectiveWindow: null,
+    best: {
+      routeId: 'r101',
+      departureAt: `${date}T08:00:00.000Z`,
+      finishAt: `${date}T11:00:00.000Z`,
+      score,
+      conditions: CONDITIONS,
+    },
+  });
+  return {
+    timeZone: 'Europe/London',
+    windows: [
+      window('tomorrow', day(1), 72),
+      window('same_weekday', day(6), 86),
+      window('best_this_week', day(3), 80, 'daylight'),
+    ],
+    history: {},
+    weather: recommendations(day(1)).weather,
   };
 };
 
@@ -132,14 +213,7 @@ const recommendations = (date: string) => ({
       finishAt: `${date}T1${1 + i}:00:00Z`,
       score: 84 - i * 10,
       standards: { status: 'not_configured', failures: [] },
-      conditions: {
-        temperatureC: { minimum: 9, maximum: 14 },
-        averageWindSpeedKph: 15,
-        averageHeadwindKph: 3,
-        averageTailwindKph: 12,
-        averageCrosswindKph: 4,
-        maximumPrecipitationProbability: 0.05,
-      },
+      conditions: CONDITIONS,
     },
     issues: [],
     warnings: [],
@@ -217,6 +291,20 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
     return [version === 1 ? 201 : 200, { route: routes[id] }];
   }
   if (key === 'POST /recommendations') return [200, recommendations(body.date)];
+  if (key === 'POST /recommendations/next-windows')
+    return [200, nextWindows(body.after)];
+  if (key === 'GET /rides')
+    return [200, { rides: [...rides].sort(newest), nextCursor: null }];
+  if (key === 'POST /rides') {
+    const created = ride(body.routeId, body.riddenOn, body.plan ?? null);
+    rides.push(created);
+    return [201, { ride: created, replayed: false }];
+  }
+  const removed = key.match(/^DELETE \/rides\/(.+)$/);
+  if (removed) {
+    rides = rides.filter((r) => r.id !== removed[1]);
+    return [204, undefined];
+  }
   if (key === 'POST /api/auth/sign-out') return [200, {}];
   return [404, { error: { code: 'NOT_FOUND', message: key } }];
 };
@@ -228,7 +316,12 @@ base.beforeAll(async () => {
     for await (const chunk of req) raw += chunk;
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const body = raw ? JSON.parse(raw) : undefined;
-    calls.push({ method: req.method ?? 'GET', path: url.pathname, body });
+    calls.push({
+      method: req.method ?? 'GET',
+      path: url.pathname,
+      body,
+      key: req.headers['idempotency-key'] as string | undefined,
+    });
     const [status, json] = handle(req.method ?? 'GET', url, body);
     res.writeHead(status, { 'content-type': 'application/json' });
     res.end(JSON.stringify(json));
@@ -243,6 +336,8 @@ base.afterAll(
 base.beforeEach(reset);
 
 const recCalls = () => calls.filter((c) => c.path === '/recommendations');
+const rideCalls = (method: string) =>
+  calls.filter((c) => c.method === method && c.path.startsWith('/rides'));
 const patches = () => calls.filter((c) => c.method === 'PATCH');
 
 // ---- Extension fixtures ----
@@ -501,6 +596,173 @@ test('Preferences: search-only distance, then PATCH carries supported fields onl
   await page.screenshot({ path: test.info().outputPath('apple-weather.png') });
 });
 
+test('ended window: check-in, a different route, then the next windows', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  routes.r102 = coast();
+  selection.routeIds = ['r101', 'r102'];
+  await signIn(worker);
+  await worker.evaluate(
+    `chrome.storage.local.set({ state: { shown: ${JSON.stringify(SHOWN)} } })`,
+  );
+  const page = await openPopup(context, extensionId);
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // screenshots skip the slide
+  const checkin = page.locator('.ro-checkin');
+  await expect(checkin).toContainText('Did you ride Hilly Loop?');
+  await expect(checkin).toContainText(`Yesterday, ${shortDate(day(-1))}`);
+  await expect(checkin).toContainText(
+    /It was your top pick: 51 km, leave \d\d:\d\d, 14° and dry\./,
+  );
+  // One call for the windows after the one that ended; no per-day rankings.
+  await expect
+    .poll(() => calls.find((c) => c.path === '/recommendations/next-windows'))
+    .toMatchObject({
+      body: {
+        routeIds: ['r101', 'r102'],
+        after: { date: day(-1), window: { start: '08:00', end: '14:00' } },
+      },
+    });
+  const windows = page.locator('.ro-next');
+  await expect(windows).toHaveCount(3);
+  await expect(windows.nth(0)).toContainText('Tomorrow morning');
+  await expect(windows.nth(1)).toHaveAttribute('data-best', 'true');
+  await expect(windows.nth(1)).toContainText('Best · 86');
+  await expect(windows.nth(2)).toContainText('Best time this week');
+  await expect(
+    page.getByRole('link', { name: 'Powered by Met Office data' }),
+  ).toBeVisible();
+  expect(recCalls()).toEqual([]);
+  await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('checkin.png') });
+
+  // Yes logs yesterday's ride with what was recommended; Undo deletes it.
+  await page.getByRole('button', { name: 'Yes, I rode it' }).click();
+  await expect(checkin).toHaveAttribute('data-pane', 'done');
+  await expect(page.locator('.ro-done')).toContainText(
+    'Nice ride on Hilly Loop. Saved to History.',
+  );
+  const [logged] = rideCalls('POST');
+  expect(logged.key).toMatch(/^[0-9a-f-]{36}$/);
+  expect(logged.body).toEqual({
+    routeId: 'r101',
+    expectedRouteVersion: 1,
+    riddenOn: day(-1),
+    timeZone: 'Europe/London',
+    plan: { ...PLAN, pickRank: 1 },
+  });
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(checkin).toHaveAttribute('data-pane', 'ask');
+  expect(rideCalls('DELETE')).toHaveLength(1);
+  expect(rides).toEqual([]);
+
+  // A different route: pick it, then confirm. It wasn't a pick, so no plan.
+  await page
+    .getByRole('button', { name: 'I rode a different route ›' })
+    .click();
+  await expect(checkin).toHaveAttribute('data-pane', 'pick');
+  await page.screenshot({ path: test.info().outputPath('checkin-pick.png') });
+  await page.getByRole('radio', { name: /Coast & Back/ }).check();
+  await expect(checkin).toHaveAttribute('data-pane', 'ask');
+  await expect(checkin).toContainText('Did you ride Coast & Back?');
+  await expect(checkin).toContainText(
+    '35 km · instead of Hilly Loop, your top pick',
+  );
+  await page.getByRole('button', { name: 'Yes, I rode it' }).click();
+  await expect(checkin).toHaveAttribute('data-pane', 'done');
+  await expect(page.locator('.ro-done')).toContainText(
+    'Nice ride on Coast & Back.',
+  );
+  await page.screenshot({ path: test.info().outputPath('checkin-done.png') });
+  expect(rideCalls('POST')[1].body).toEqual({
+    routeId: 'r102',
+    expectedRouteVersion: 1,
+    riddenOn: day(-1),
+    timeZone: 'Europe/London',
+  });
+  expect(rideCalls('POST')[1].key).not.toBe(logged.key);
+
+  // Tapping a window searches it; the confirmation stays on top.
+  await windows.nth(0).click();
+  await expect(page.locator('.ro-ride').first()).toContainText('Hilly Loop');
+  await expect(page.locator('.ro-done')).toBeVisible();
+  expect(recCalls().map((c) => c.body.date)).toContain(day(1));
+  expect(recCalls()[0].body.riding).toEqual({
+    window: { start: '08:00', end: '14:00' },
+  });
+});
+
+test('History, recently ridden routes and the ranked-lower date', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  routes.r102 = coast();
+  rides = [
+    ride('r101', day(0), { ...PLAN, pickRank: 1 }),
+    ride('r102', day(-40)),
+  ];
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  const card = page.locator('.ro-ride').first();
+  await expect(card.locator('.ro-tag')).toHaveText('Ridden today');
+  await expect(card.locator('.ro-until')).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+  const recent = page.locator('.ro-recent');
+  await expect(recent).toContainText('Ridden today, ranked as normal');
+  await recent.getByRole('button', { name: 'Prefer variety' }).click();
+  await expect
+    .poll(() => patches()[0]?.body)
+    .toEqual({
+      expectedVersion: 1,
+      settings: { preferences: { recentRides: { mode: 'prefer-variety' } } },
+    });
+  const until = shortDate(addDays(day(0), 28));
+  await expect(recent).toContainText(
+    `Ridden today, ranked lower until ${until}`,
+  );
+  await expectPanelFits(page);
+
+  await page.getByRole('tab', { name: 'Rides' }).click();
+  await expect(card.locator('.ro-until')).toHaveText(
+    `Ranked lower until ${until}`,
+  );
+
+  await page.getByRole('tab', { name: 'History' }).click();
+  const history = page.locator('.ro-history');
+  await expect(history).toHaveCount(2);
+  await expect(page.locator('.ro-month').first()).toBeVisible();
+  await expect(history.nth(0)).toContainText('Hilly Loop');
+  await expect(history.nth(0).locator('.ro-tag')).toHaveText('Ridden today');
+  await expect(history.nth(0)).toContainText(/ · \d\d:\d\d · 51 km · 1h 46m/);
+  await expect(history.nth(0)).toContainText('14° · dry · your top pick');
+  await expect(history.nth(0)).toContainText(`Ranked lower until ${until}`);
+  await expect(history.nth(1)).toContainText(`${shortDate(day(-40))} · 35 km`);
+  await expect(history.nth(1).locator('.ro-until')).toHaveCount(0);
+  await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('history.png') });
+
+  // × collapses the row; Undo re-creates the ride with a new key.
+  const removedId = rides.find((r) => r.routeId === 'r101')?.id;
+  await history.nth(0).getByRole('button', { name: 'Remove ride' }).click();
+  await expect(page.locator('.ro-removed')).toContainText('Ride removed');
+  await expect
+    .poll(() => rideCalls('DELETE').map((c) => c.path))
+    .toEqual([`/rides/${removedId}`]);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('.ro-removed')).toHaveCount(0);
+  await expect(history).toHaveCount(2);
+  expect(rideCalls('POST')[0].body).toEqual({
+    routeId: 'r101',
+    expectedRouteVersion: 1,
+    riddenOn: day(0),
+    timeZone: 'Europe/London',
+    plan: { ...PLAN, pickRank: 1 },
+  });
+});
+
 // ---- cycle.travel Journeys page ----
 
 const fakeCycleTravel = (context: BrowserContext) =>
@@ -537,6 +799,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   context,
   worker,
 }) => {
+  rides = [ride('r101', day(-3))];
   await signIn(worker);
   await fakeCycleTravel(context);
   const page = await context.newPage();
@@ -560,6 +823,16 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     '',
   );
   await expect(page.locator('#jr_102 .ro-chip')).toHaveText('+ Track');
+  // Ride tags sit after the journey name, on the row and on the card.
+  await expect(page.locator('#jr_101 .ro-tags .ro-tag')).toHaveText(
+    /^Last ridden \d{1,2} \w{3}$/,
+  );
+  await expect(module.locator('.ro-ride .ro-tag')).toHaveText(/^Last ridden/);
+  await expect(page.locator('#jr_101')).toHaveAttribute(
+    'data-ride-on-ridden',
+    '',
+  );
+  await expect(page.locator('#jr_102 ride-on-tags')).toBeHidden();
   await expect(module.locator('.ro-grid')).toHaveAttribute(
     'data-loading',
     'false',

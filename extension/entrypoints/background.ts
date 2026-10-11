@@ -7,20 +7,32 @@ import {
   initialState,
   type JourneyGpx,
   type Message,
+  type Planning,
   readState,
   type State,
 } from '../lib/state';
 import {
   MAX_TRACKED,
+  type NextWindows,
   type PreferencesPatch,
   type Recommendations,
+  type Ride,
+  type RidePlan,
   type RouteSummary,
   type Selection,
   type SettingsPatch,
   type User,
   type WeatherProvider,
 } from '../lib/types';
-import { applyPatch, availability, localDate, searchPatch } from '../ui/format';
+import {
+  applyPatch,
+  availability,
+  ended,
+  localDate,
+  newest,
+  searchPatch,
+  shownOf,
+} from '../ui/format';
 
 // Serialise read-modify-write so concurrent handlers never drop each other's changes.
 let writes = Promise.resolve();
@@ -111,6 +123,11 @@ const patchUser = async (settings: SettingsPatch) => {
   }));
 };
 
+const windowOf = (time: Planning['time']) =>
+  time.mode === 'daylight'
+    ? ('daylight' as const)
+    : { start: time.start, end: time.end };
+
 // One request per forecast day; the selected days are merged in the view (ui/format.ts).
 let recommendation = 0;
 const recommend = async (force = false) => {
@@ -118,12 +135,13 @@ const recommend = async (force = false) => {
   const state = await readState();
   const { user, selection } = state;
   if (!user || !selection?.routeIds.length)
-    return update(() => ({ days: {}, recsKey: null, loading: false }));
-  const { time } = state.planning;
-  const window =
-    time.mode === 'daylight'
-      ? 'daylight'
-      : { start: time.start, end: time.end };
+    return update(() => ({
+      days: {},
+      recsKey: null,
+      loading: false,
+      shown: null,
+    }));
+  const window = windowOf(state.planning.time);
   const preferences = state.search
     ? searchPatch(state.search, state.unit)
     : undefined;
@@ -148,7 +166,7 @@ const recommend = async (force = false) => {
     .filter((day) => day.kind !== 'none' && !kept[day.date])
     .map((day) => day.date);
   if (!dates.length)
-    return update(() => ({ days: kept, recsKey: key, loading: false }));
+    return show({ days: kept, recsKey: key, loading: false }, user);
   await update(() => ({ loading: true }));
   const settled = await Promise.allSettled(
     dates.map((date) =>
@@ -172,15 +190,132 @@ const recommend = async (force = false) => {
     await update(() => ({ loading: false, error: errorMessage(failed) }));
     throw failed;
   }
-  await update(() => ({
-    days: {
-      ...kept,
-      ...Object.fromEntries(fetched.map((recs) => [recs.date, recs])),
+  await show(
+    {
+      days: {
+        ...kept,
+        ...Object.fromEntries(fetched.map((recs) => [recs.date, recs])),
+      },
+      recsKey: key,
+      recsAt: new Date().toISOString(),
+      loading: false,
+      error: failed ? errorMessage(failed) : null,
     },
-    recsKey: key,
-    recsAt: new Date().toISOString(),
-    loading: false,
-    error: failed ? errorMessage(failed) : null,
+    user,
+  );
+};
+
+// Remember the window on screen for the check-in. One picked after it ended
+// (08:00–14:00 at 15:20) goes straight to what's next, with no question.
+const show = async (patch: Partial<State>, user: User) => {
+  await update((state) => {
+    const next = { ...state, ...patch };
+    return { ...next, shown: shownOf(next, new Date()) };
+  });
+  const { shown } = await readState();
+  if (shown && ended(shown, new Date(), user.settings.timeZone))
+    return expire(false);
+};
+
+// While the shown window has ended: the next windows worth riding, in one call.
+const suggest = async () => {
+  const id = ++recommendation;
+  const { user, selection, expired, search, unit } = await readState();
+  if (!user || !expired || !selection?.routeIds.length)
+    return update(() => ({ next: null, loading: false }));
+  const preferences = search ? searchPatch(search, unit) : undefined;
+  await update(() => ({ loading: true }));
+  try {
+    const next = await api<NextWindows>('/recommendations/next-windows', {
+      body: {
+        routeIds: selection.routeIds,
+        after: { date: expired.dates[1], window: windowOf(expired.time) },
+        ...(preferences && { preferences }),
+      },
+    });
+    if (id !== recommendation) return;
+    await update(() => ({
+      next,
+      loading: false,
+      error: null,
+      recsAt: new Date().toISOString(),
+    }));
+  } catch (error) {
+    if (id !== recommendation) return;
+    await update(() => ({ loading: false, error: errorMessage(error) }));
+    throw error;
+  }
+};
+
+const rank = async (force = false) =>
+  (await readState()).expired ? suggest() : recommend(force);
+
+// The window on screen has ended: ask about it (unless its day has a ride) and suggest what's next.
+const expire = async (ask: boolean) => {
+  await update((state) => {
+    if (!state.shown) return {};
+    const { picks } = state.shown;
+    const date =
+      picks[0] &&
+      localDate(picks[0].departureAt, state.user?.settings.timeZone ?? 'UTC');
+    const fresh =
+      ask && date && !state.rides.some((ride) => ride.riddenOn === date);
+    return {
+      expired: state.shown,
+      shown: null,
+      next: null,
+      checkin: fresh
+        ? { date, picks, status: 'ask', routeId: null, rideId: null }
+        : state.checkin,
+    };
+  });
+  return suggest();
+};
+
+const loadRides = (cursor: string | null = null) =>
+  api<{ rides: Ride[]; nextCursor: string | null }>(
+    `/rides?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+  );
+
+// A fresh key per call: Undo re-creates a removed ride as a new request.
+const logRide = async (
+  ride: Pick<Ride, 'routeId' | 'riddenOn' | 'timeZone'> & {
+    plan: RidePlan | null;
+  },
+  routeVersion: number,
+) => {
+  const post = (expectedRouteVersion: number) =>
+    api<{ ride: Ride }>('/rides', {
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: {
+        routeId: ride.routeId,
+        expectedRouteVersion,
+        riddenOn: ride.riddenOn,
+        timeZone: ride.timeZone,
+        ...(ride.plan && { plan: ride.plan }),
+      },
+    });
+  let created: { ride: Ride };
+  try {
+    created = await post(routeVersion);
+  } catch (error) {
+    if (!(error instanceof ApiError && error.code === 'ROUTE_VERSION_CONFLICT'))
+      throw error;
+    const { route } = await api<{ route: RouteSummary }>(
+      `/routes/${ride.routeId}`,
+    );
+    created = await post(route.version);
+  }
+  await update((state) => ({
+    rides: [created.ride, ...state.rides].sort(newest),
+  }));
+  return created.ride;
+};
+
+const deleteRide = async (id: string) => {
+  await api(`/rides/${id}`, { method: 'DELETE' });
+  await update((state) => ({
+    rides: state.rides.filter((ride) => ride.id !== id),
   }));
 };
 
@@ -196,11 +331,13 @@ const refresh = async () => {
     if ((await readState()).auth === 'signed-in') await signOutLocally();
     return;
   }
-  const [user, selection, routes, providers] = await Promise.all([
+  const [user, selection, routes, providers, rides] = await Promise.all([
     loadUser(),
     loadSelection(),
     loadRoutes(),
     loadProviders(),
+    // History only adds tags and the check-in; the panel works without it.
+    loadRides().catch(() => null),
   ]);
   await update((state) => ({
     auth: 'signed-in',
@@ -211,8 +348,20 @@ const refresh = async () => {
     providers,
     error: null,
     syncedAt: pendingPatch ? state.syncedAt : new Date().toISOString(),
+    ...(rides && { rides: rides.rides, ridesCursor: rides.nextCursor }),
+    // A confirmation lasts until the panel next opens; a question until answered or its day has a ride.
+    checkin:
+      state.checkin?.status === 'ask' &&
+      !(rides?.rides ?? state.rides).some(
+        (ride) => ride.riddenOn === state.checkin?.date,
+      )
+        ? state.checkin
+        : null,
   }));
-  await recommend(true);
+  const { shown, expired } = await readState();
+  if (!expired && shown && ended(shown, new Date(), user.settings.timeZone))
+    return expire(true);
+  await rank(true);
 };
 
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
@@ -233,7 +382,7 @@ const flush = async () => {
     return update(() => ({ syncing: false, syncError: errorMessage(error) }));
   }
   await update(() => ({ syncing: pendingPatch !== null }));
-  await recommend().catch(() => {}); // recommend records its own error
+  await rank().catch(() => {}); // rank records its own error
 };
 
 const savePreferences = async (patch: PreferencesPatch) => {
@@ -337,13 +486,17 @@ const handle = async (message: Message) => {
     case 'refresh':
       return refresh();
     case 'setPlanning':
-      await update(() => ({ planning: message.planning }));
+      await update(() => ({
+        planning: message.planning,
+        expired: null,
+        next: null,
+      }));
       return recommend();
     case 'saveDefaultPlanning':
       return update((state) => ({ defaultPlanning: state.planning }));
     case 'setSearch':
       await update(() => ({ search: message.search }));
-      return recommend();
+      return rank();
     case 'saveUsual': {
       const { unit } = await readState();
       await update(() => ({ search: null }));
@@ -373,7 +526,7 @@ const handle = async (message: Message) => {
         }));
       }
       await update(() => ({ syncing: pendingPatch !== null }));
-      return recommend();
+      return rank();
     }
     case 'import': {
       const route = await importJourney(message.journey);
@@ -383,17 +536,80 @@ const handle = async (message: Message) => {
           ? ids
           : [...ids, route.id],
       );
-      return recommend();
+      return rank();
     }
     case 'untrack':
       await putSelection((ids) => ids.filter((id) => id !== message.routeId));
-      return recommend();
+      return rank();
     case 'openPopup':
       await update(() => ({ popupTab: message.tab }));
       // Chrome 127+; without a focused window it throws and the page keeps its state.
       return browser.action.openPopup().catch(() => {});
     case 'setTab':
       return update(() => ({ popupTab: message.tab }));
+    case 'checkin': {
+      const { checkin, user, routes } = await readState();
+      if (!checkin || !user) return;
+      if (message.answer === 'no') return update(() => ({ checkin: null }));
+      if (message.answer === 'yes') {
+        const { routeId } = message;
+        const timeZone = user.settings.timeZone;
+        // The plan is what was shown for that route on that day, if it was a pick.
+        const pick = checkin.picks.find(
+          (p) =>
+            p.routeId === routeId &&
+            localDate(p.departureAt, timeZone) === checkin.date,
+        );
+        const ride = await logRide(
+          {
+            routeId,
+            riddenOn: checkin.date,
+            timeZone,
+            plan: pick
+              ? {
+                  departureAt: pick.departureAt,
+                  finishAt: pick.finishAt,
+                  conditions: pick.conditions,
+                  pickRank: pick.rank,
+                }
+              : null,
+          },
+          routes[routeId]?.version ?? 1,
+        );
+        await update(() => ({
+          checkin: { ...checkin, status: 'done', routeId, rideId: ride.id },
+        }));
+      } else {
+        if (checkin.rideId) await deleteRide(checkin.rideId);
+        await update(() => ({
+          checkin: { ...checkin, status: 'ask', routeId: null, rideId: null },
+        }));
+      }
+      return rank(true);
+    }
+    case 'deleteRide':
+      await deleteRide(message.id);
+      await update((state) => ({
+        checkin: state.checkin?.rideId === message.id ? null : state.checkin,
+      }));
+      return rank(true);
+    case 'restoreRide': {
+      const { ride } = message;
+      await logRide(
+        { ...ride, plan: ride.plan ?? null },
+        (await readState()).routes[ride.routeId]?.version ?? ride.route.version,
+      );
+      return rank(true);
+    }
+    case 'moreRides': {
+      const { ridesCursor } = await readState();
+      if (!ridesCursor) return;
+      const page = await loadRides(ridesCursor);
+      return update((state) => ({
+        rides: [...state.rides, ...page.rides],
+        ridesCursor: page.nextCursor,
+      }));
+    }
   }
 };
 
