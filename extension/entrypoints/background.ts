@@ -516,14 +516,10 @@ const handle = async (message: Message) => {
     case 'savePreferences':
       return savePreferences(message.preferences);
     case 'setWeather': {
-      const provider = (await readState()).providers.find(
-        (p) => p.id === message.providerId,
-      );
-      if (!provider) return;
       await update(() => ({ syncing: true, syncError: null }));
       try {
         // ponytail: always saved to the profile; a for-this-search choice waits on the brief.
-        await patchUser(provider.recommendedSettings);
+        await patchUser({ weatherProviderId: message.providerId });
       } catch (error) {
         return update(() => ({
           syncing: false,
