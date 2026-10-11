@@ -94,9 +94,10 @@ test('planned dates resolve like the API', () => {
     '2026-10-15',
     '2026-10-15',
   ]);
+  // Next 5 days starts tomorrow; the background sends it to the API as this range.
   expect(planningDates({ kind: 'preset', preset: 'next' }, today)).toEqual([
-    today,
-    '2026-10-18',
+    '2026-10-15',
+    '2026-10-19',
   ]);
   expect(planningDates({ kind: 'preset', preset: 'weekend' }, today)).toEqual([
     '2026-10-17',

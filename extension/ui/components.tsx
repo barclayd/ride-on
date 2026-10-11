@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { onStateChange, readState, type State, send } from '../lib/state';
+import type { NextWindow } from '../lib/types';
 import {
   type Banner,
   type Card,
@@ -13,6 +14,8 @@ import {
 } from './format';
 
 export const iconUrl = () => browser.runtime.getURL('/ride-on-icon.png');
+export const reducedMotion = () =>
+  matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // @font-face is ignored inside shadow roots, so both surfaces declare the fonts on the document.
 export const injectFonts = () => {
@@ -53,12 +56,8 @@ export const Segmented = <T extends string>(props: {
   options: Option<T>[];
   value: T | null;
   onChange: (value: T) => void;
-  wrap?: boolean;
 }) => (
-  <fieldset
-    class={props.wrap ? 'ro-segmented ro-wrap' : 'ro-segmented'}
-    aria-label={props.label}
-  >
+  <fieldset class="ro-segmented" aria-label={props.label}>
     {props.options.map((option) => (
       <button
         key={option.value}
@@ -112,14 +111,26 @@ const STATES: Record<CardState, string> = {
 };
 const MEDALS = ['Gold', 'Silver', 'Bronze'];
 
+// A page tile's line, over a static placeholder bar in the same grid cell.
+const Slot = (props: { class: string; text: string | null }) => (
+  <span class={`ro-slot ${props.class}`}>
+    <span>{props.text}</span>
+    <i aria-hidden="true" />
+  </span>
+);
+
 // The page shows the distance by the name and no medals; the popup medals its top three scored rides.
+// Page tiles keep a scored tile's size: blank ones show placeholders until the scores arrive.
 export const RideCard = (props: {
   view: View;
   card: Card;
   medal?: number;
   href?: string | null; // the page links each ride to its journey
+  blank?: boolean;
+  index?: number; // staggers the page's fade-in
 }) => {
-  const { card, medal } = props;
+  const { card, medal, blank } = props;
+  const page = props.href !== undefined;
   const tint =
     medal !== undefined
       ? `ro-${MEDALS[medal].toLowerCase()}`
@@ -129,7 +140,13 @@ export const RideCard = (props: {
           ? 'ro-flag-available'
           : '';
   return (
-    <div class={`ro-ride ${tint}`} data-state={card.state}>
+    <div
+      class={`ro-ride ${tint}`}
+      data-state={card.state}
+      data-route={card.routeId}
+      data-blank={page ? !!blank : undefined}
+      style={page ? { '--ro-i': props.index ?? 0 } : undefined}
+    >
       <div class="ro-ride-head">
         <div class="ro-pills">
           {medal !== undefined && (
@@ -153,35 +170,49 @@ export const RideCard = (props: {
         ) : (
           <span class="ro-name">{card.name}</span>
         )}
-        {props.href !== undefined && <span>{card.km} km</span>}
+        {page && <span>{card.km} km</span>}
         <Tags view={props.view} routeId={card.routeId} />
         {card.recent && (
           <span class="ro-tag ro-tag-last">Similar roads recently ridden</span>
         )}
       </div>
-      {(card.when ?? card.duration) && (
-        <span class="ro-when">{card.when ?? card.duration}</span>
+      {page ? (
+        <>
+          <Slot class="ro-when" text={card.when ?? card.duration} />
+          <Slot class="ro-conditions" text={card.weather ?? card.reason} />
+        </>
+      ) : (
+        <>
+          {(card.when ?? card.duration) && (
+            <span class="ro-when">{card.when ?? card.duration}</span>
+          )}
+          {card.weather && <span class="ro-conditions">{card.weather}</span>}
+          {card.reason && <span class="ro-conditions">{card.reason}</span>}
+        </>
       )}
-      {card.weather && <span class="ro-conditions">{card.weather}</span>}
-      {card.reason && <span class="ro-conditions">{card.reason}</span>}
-      {card.drawbacks.map((drawback) => (
-        <span key={drawback} class="ro-drawback">
-          {drawback}
-        </span>
-      ))}
-      {card.trade.length > 0 && (
+      {!blank &&
+        card.drawbacks.map((drawback) => (
+          <span key={drawback} class="ro-drawback">
+            {drawback}
+          </span>
+        ))}
+      {!blank && card.trade.length > 0 && (
         <div class="ro-trades">
           {card.trade.map((trade) => (
             <span key={trade}>{trade}</span>
           ))}
         </div>
       )}
-      {card.coverage && <span class="ro-coverage">{card.coverage}</span>}
-      {card.score !== null ? (
+      {!blank && card.coverage && (
+        <span class="ro-coverage">{card.coverage}</span>
+      )}
+      {blank || card.score !== null ? (
         <div class="ro-score">
-          <span>Conditions {card.score}/100</span>
+          <span aria-hidden={blank || undefined}>
+            Conditions {card.score ?? '–'}/100
+          </span>
           <div>
-            <div style={{ width: `${card.score}%` }} />
+            <div style={{ width: `${blank ? 0 : card.score}%` }} />
           </div>
         </div>
       ) : (
@@ -244,29 +275,25 @@ export const Attribution = ({ view }: { view: View }) =>
     </div>
   ) : null;
 
-// Never silently swap a passed search for new dates; the rider picks again.
-export const chooseAvailableDates = (view: View) =>
+// A suggested window: its day, at its times.
+export const chooseWindow = (view: View, w: NextWindow) =>
   send({
     type: 'setPlanning',
     planning: {
-      ...view.state.planning,
-      days: { kind: 'preset', preset: 'next' },
+      days: { kind: 'range', start: w.date, end: w.date },
+      time:
+        w.window === 'daylight'
+          ? { ...view.state.planning.time, mode: 'daylight' }
+          : { mode: 'custom', ...w.window },
     },
   });
 
-export const Expired = (props: {
-  view: View;
-  variant: 'when' | 'rides' | 'page';
-  onChoose: () => void;
-}) => (
-  <div class={`ro-expired ro-${props.variant}`} role="alert">
+// Never silently swap a passed search for new dates; the When tab moves them on where the rider can see it.
+export const Expired = (props: { view: View; onChoose: () => void }) => (
+  <div class="ro-expired" role="alert">
     <div>
       <span>These dates have passed</span>
-      <span>
-        {props.variant === 'rides'
-          ? props.view.datesText
-          : `${props.view.datesText} · ${props.view.timeText}`}
-      </span>
+      <span>{props.view.datesText}</span>
     </div>
     <button type="button" class="ro-primary" onClick={props.onChoose}>
       Choose available dates

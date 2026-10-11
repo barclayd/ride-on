@@ -13,6 +13,7 @@ import type { Ride, RidePlan, RouteSummary, User } from '../lib/types';
 import {
   addDays,
   applyPatch,
+  longWeekday,
   newest,
   planningDates,
   shortDate,
@@ -565,7 +566,7 @@ test('Rides tab opens first with one request for the planned days', async ({
   expect(recCalls()).toHaveLength(1);
   expect(recCalls()[0].body).toEqual({
     routeIds: ['r101'],
-    days: { kind: 'preset', preset: 'next' },
+    days: { kind: 'range', start: day(1), end: day(5) }, // Next 5 days starts tomorrow
     previewDays: 7,
     riding: { window: 'daylight' },
   });
@@ -662,9 +663,21 @@ test('passed dates ask for new ones instead of swapping silently', async ({
     'aria-selected',
     'true',
   );
-  await expect(
-    page.getByRole('button', { name: 'Next few days' }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  // Amber for a moment, then on to tomorrow, with the old dates struck through.
+  const days = page.locator('.ro-card:has(.ro-label:text-is("Days"))');
+  await expect(days.locator('.ro-days-warn')).toHaveText('Dates passed');
+  await expect(days.locator('.ro-days-control')).toHaveAttribute(
+    'data-stale',
+    'true',
+  );
+  await page.screenshot({ path: test.info().outputPath('when-stale.png') });
+  await expect(page.getByRole('radio', { name: 'Tomorrow' })).toBeChecked();
+  await expect(days.locator('.ro-value s')).toContainText('5 Jan');
+  await expect(days.locator('.ro-sr')).toContainText('has passed. Showing');
+  await page.screenshot({ path: test.info().outputPath('when-moved.png') });
+  await expect
+    .poll(() => recCalls().at(-1)?.body.days)
+    .toEqual({ kind: 'preset', preset: 'tomorrow' });
 });
 
 test('Preferences: search-only distance, then PATCH carries supported fields only', async ({
@@ -1047,6 +1060,58 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   });
   expect(imported?.body.gpx).toContain('<ele>20</ele>');
   expect(selection.routeIds).toEqual(['r101', 'r102']);
+});
+
+test('Journeys page: a passed window asks for new dates, then rescores', async ({
+  context,
+  worker,
+}) => {
+  await signIn(worker);
+  await worker.evaluate(
+    `chrome.storage.local.set({ state: { shown: ${JSON.stringify(SHOWN)} } })`,
+  );
+  await fakeCycleTravel(context);
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys');
+
+  const module = page.locator('ride-on-module');
+  const strip = module.locator('.ro-passed');
+  await expect(strip).toHaveAttribute('data-phase', 'expired');
+  await expect(strip).toContainText('Pick new dates to see scores');
+  await expect(module.locator('.ro-window')).toHaveCount(0);
+  // Same-size blank tiles; the row chips say Tracked, not a time.
+  const tile = module.locator('.ro-ride');
+  await expect(tile).toHaveAttribute('data-blank', 'true');
+  await expect(tile).toContainText('Hilly Loop');
+  await expect(page.locator('#jr_101 .ro-chip')).toHaveText('Tracked');
+  await expect(
+    strip.getByRole('button', { name: `Next ${longWeekday(day(6))}` }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('journeys-passed.png'),
+    fullPage: true,
+  });
+
+  await strip.getByRole('button', { name: 'Tomorrow' }).click();
+  await expect(strip).toHaveAttribute('data-phase', 'confirmed');
+  await expect(strip).toContainText('Scores updated');
+  // The half fading out keeps the dates that passed.
+  await expect(strip.locator('> [aria-hidden="true"]')).toContainText(
+    `${shortDate(day(-1))}, 08:00–14:00 has passed.`,
+  );
+  await expect(tile).toHaveAttribute('data-blank', 'false');
+  await expect(tile.locator('.ro-score')).toContainText('Conditions 84/100');
+  await expect(page.locator('#jr_101 .ro-chip')).toHaveText(
+    /^\w{3} \d{1,2} · \d\d:\d\d$/,
+  );
+  expect(recCalls().at(-1)?.body).toMatchObject({
+    days: { kind: 'range', start: day(1), end: day(1) },
+    riding: { window: { start: '08:00', end: '14:00' } },
+  });
+  await page.screenshot({
+    path: test.info().outputPath('journeys-confirmed.png'),
+    fullPage: true,
+  });
 });
 
 // Safari injects content scripts again into open pages (on enable, on site access).

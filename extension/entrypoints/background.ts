@@ -34,9 +34,11 @@ import {
 import {
   applyPatch,
   ended,
+  localDate,
   logged,
   newest,
   planFor,
+  planningDates,
   searchPatch,
   shownOf,
 } from '../ui/format';
@@ -164,12 +166,19 @@ const recommend = async () => {
   const preferences = state.search
     ? searchPatch(state.search, state.unit)
     : undefined;
+  // The API's "next" preset starts today; Next 5 days starts tomorrow, so it goes as dates.
+  const today = localDate(new Date(), user.settings.timeZone);
+  const [start, end] = planningDates(planning.days, today) ?? [today, today];
+  const days =
+    planning.days.kind === 'preset' && planning.days.preset === 'next'
+      ? { kind: 'range' as const, start, end }
+      : planning.days;
   await update(() => ({ loading: true }));
   try {
     const recs = await api<Recommendations>('/recommendations', {
       body: {
         routeIds: selection.routeIds,
-        days: planning.days,
+        days,
         previewDays: 7,
         riding: { window: windowOf(planning.time) },
         ...(preferences && { preferences }),
