@@ -39,7 +39,7 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
   > 3. Ride On picks the best route and start time, with an estimated finish, and tells you why:
   >    temperature, wind along the route, gusts, rain and sunshine at ride time.
   > 4. Once your window has passed, tell Ride On whether you rode it, and see your next best
-  >    windows: tomorrow, the same day next week, and the best time this week.
+  >    windows: tomorrow, the same day next week, and the best of the next six days.
   >
   > WHAT YOU GET
   > • Your rides ranked with an enjoyment score out of 100, and a clear best pick
@@ -49,9 +49,9 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
   > • Preferences that are yours: distance and climbing, how much rain and sunshine matter, a
   >   minimum temperature (fixed or by month), and rain and gust limits
   > • Best times shown right on cycle.travel's Journeys page, next to each route
-  > • A history of the rides you've logged, with the plan and conditions you rode in
-  > • Prefer variety? Routes you've ridden in the last four weeks are ranked lower, so you're
-  >   nudged towards somewhere new
+  > • A history of the rides you've logged
+  > • Prefer variety? Routes that share roads with your last four weeks of rides score a little
+  >   lower, fading as the ride gets older, so you're nudged towards somewhere new
   > • Forecasts from Apple Weather or the Met Office
   >
   > PRIVATE BY DESIGN

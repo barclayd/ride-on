@@ -1,7 +1,7 @@
 import { Fragment, render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { type Planning, type Search, send, type Tab } from '../../lib/state';
-import type { Climbing, NextWindow, Ride } from '../../lib/types';
+import type { Climbing, NextWindow } from '../../lib/types';
 import {
   AppleMark,
   Attribution,
@@ -15,7 +15,6 @@ import {
   iconUrl,
   injectFonts,
   RideCard,
-  riddenFor,
   Segmented,
   useView,
   type View,
@@ -26,9 +25,7 @@ import {
   convert,
   coverageText,
   type Draft,
-  dayMonth,
   dayOfMonth,
-  daySummary,
   draftFrom,
   draftLocal,
   draftPatch,
@@ -41,11 +38,10 @@ import {
   qualityColour,
   rainText,
   rankText,
-  rideLines,
+  rideLine,
   rideSummary,
   scaleMaxKm,
   searchDiffers,
-  shortDate,
   tempText,
   unitLabel,
   usualSearch,
@@ -133,7 +129,7 @@ const width = (from: number, to: number) =>
   `${(Math.max(0, Math.min(21, to) - Math.max(5, from)) / 16) * 100}%`;
 
 const WhenTab = ({ view }: { view: View }) => {
-  const { planning, defaultPlanning, days } = view.state;
+  const { planning, defaultPlanning } = view.state;
   const set = (change: Partial<Planning>) =>
     send({ type: 'setPlanning', planning: { ...planning, ...change } });
   if (!view.range)
@@ -145,7 +141,7 @@ const WhenTab = ({ view }: { view: View }) => {
       />
     );
   const range = view.range;
-  const coverage = coverageText(view.selected);
+  const coverage = coverageText(view.selected, view.timeZone);
   const { time } = planning;
   const custom = time.mode === 'custom';
   const tz = view.timeZone;
@@ -174,59 +170,32 @@ const WhenTab = ({ view }: { view: View }) => {
           onChange={(preset) => set({ days: { kind: 'preset', preset } })}
         />
         <fieldset class="ro-days" aria-label="Pick days">
-          {view.strip.map((day, i) => {
-            const summary = daySummary(days[day.date]);
-            const morning = !!day.until && day.until <= '12:00';
-            const quality =
-              day.kind === 'none' || !summary
-                ? 0
-                : day.kind === 'partial'
-                  ? summary.score / 2
-                  : summary.score;
-            return (
-              <button
-                key={day.date}
-                type="button"
-                class="ro-day"
-                data-kind={day.kind}
-                title={
-                  day.kind === 'none'
-                    ? 'Forecast not available yet'
-                    : day.kind === 'partial'
-                      ? morning
-                        ? 'Morning forecast only'
-                        : `Forecast up to ${day.until}`
-                      : undefined
-                }
-                aria-pressed={day.date >= range[0] && day.date <= range[1]}
-                onClick={() => set({ days: pickDay(range, day.date) })}
-              >
-                <span>{i === 0 ? 'Today' : weekday(day.date)}</span>
-                <span>{dayOfMonth(day.date)}</span>
-                <span>
-                  {day.kind === 'none'
-                    ? 'Not yet'
-                    : day.kind === 'partial'
-                      ? morning
-                        ? 'AM only'
-                        : `To ${day.until}`
-                      : summary
-                        ? `${summary.tempC}°`
-                        : '–'}
-                </span>
-                <span class="ro-quality">
-                  {summary && (
-                    <span
-                      style={{
-                        width: `${quality}%`,
-                        background: qualityColour(summary.score),
-                      }}
-                    />
-                  )}
-                </span>
-              </button>
-            );
-          })}
+          {view.strip.map((day, i) => (
+            <button
+              key={day.date}
+              type="button"
+              class="ro-day"
+              data-kind={day.kind}
+              title={day.title}
+              aria-pressed={day.date >= range[0] && day.date <= range[1]}
+              onClick={() => set({ days: pickDay(range, day.date) })}
+            >
+              <span>{i === 0 ? 'Today' : weekday(day.date)}</span>
+              <span>{dayOfMonth(day.date)}</span>
+              <span>{day.label}</span>
+              <span class="ro-quality">
+                {day.quality !== null && (
+                  <span
+                    style={{
+                      // A partial day's bar is halved: its best ride may be missing.
+                      width: `${day.kind === 'partial' ? day.quality / 2 : day.quality}%`,
+                      background: qualityColour(day.quality),
+                    }}
+                  />
+                )}
+              </span>
+            </button>
+          ))}
         </fieldset>
         {coverage && <div class="ro-note">{coverage}</div>}
       </section>
@@ -351,7 +320,9 @@ const CheckIn = ({ view }: { view: View }) => {
   const routeId = chosen ?? top.routeId;
   const name = (id: string) => routes[id]?.name ?? 'your route';
   const answer = async (
-    message: { answer: 'yes'; routeId: string } | { answer: 'no' | 'undo' },
+    message:
+      | { answer: 'yes'; routeId: string }
+      | { answer: 'no' | 'undo' | 'updated' },
   ) => {
     setBusy(true);
     await send({ type: 'checkin', ...message });
@@ -360,7 +331,7 @@ const CheckIn = ({ view }: { view: View }) => {
   };
   const done = checkin.status === 'done' && checkin.routeId;
   const pane = done ? 'done' : picking ? 'pick' : 'ask';
-  const { until } = riddenFor(view, checkin.routeId ?? routeId);
+  const conflict = checkin.status === 'conflict' && checkin.routeId;
   const c = top.conditions;
   return (
     <section class="ro-checkin" data-pane={pane} aria-label="Ride check-in">
@@ -369,19 +340,32 @@ const CheckIn = ({ view }: { view: View }) => {
           <span class="ro-checkin-day">{checkinDay(top, view.today, tz)}</span>
           <h2>Did you ride {name(routeId)}?</h2>
           <p>
-            {routeId === top.routeId
-              ? `It was ${rankText(top.rank)}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c)} and ${rainText(c)}.`
-              : `${km(routes[routeId]?.distanceM ?? 0)} km · instead of ${name(top.routeId)}, ${rankText(top.rank)}`}
+            {conflict
+              ? `${name(conflict)} has changed since this plan.`
+              : routeId === top.routeId
+                ? `It was ${rankText(top.rank)}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c)} and ${rainText(c)}.`
+                : `${km(routes[routeId]?.distanceM ?? 0)} km · instead of ${name(top.routeId)}, ${rankText(top.rank)}`}
           </p>
           <div class="ro-checkin-actions">
-            <button
-              type="button"
-              class="ro-primary"
-              disabled={busy}
-              onClick={() => answer({ answer: 'yes', routeId })}
-            >
-              Yes, I rode it
-            </button>
+            {conflict ? (
+              <button
+                type="button"
+                class="ro-primary"
+                disabled={busy}
+                onClick={() => answer({ answer: 'updated' })}
+              >
+                Log the updated route
+              </button>
+            ) : (
+              <button
+                type="button"
+                class="ro-primary"
+                disabled={busy}
+                onClick={() => answer({ answer: 'yes', routeId })}
+              >
+                Yes, I rode it
+              </button>
+            )}
             <button
               type="button"
               class="ro-secondary"
@@ -457,12 +441,6 @@ const CheckIn = ({ view }: { view: View }) => {
             <span>
               Nice ride on {name(checkin.routeId ?? routeId)}. Saved to History.
             </span>
-            {until && (
-              <span>
-                {name(checkin.routeId ?? routeId)} is ranked lower until{' '}
-                {shortDate(until)}.
-              </span>
-            )}
           </div>
           <button
             type="button"
@@ -478,15 +456,11 @@ const CheckIn = ({ view }: { view: View }) => {
   );
 };
 
-// The highest score is "Best"; the order stays tomorrow, same weekday, best this week.
+// The API's recommended window is "Best"; the order stays tomorrow, same weekday, best in the next days.
 const NextWindows = ({ view }: { view: View }) => {
-  const { next, expired, planning, routes } = view.state;
+  const { next, expired, planning } = view.state;
   if (!next || !expired) return null;
   const { windows } = next;
-  const best = windows.reduce(
-    (b, w, i) => (w.best.score > windows[b].best.score ? i : b),
-    0,
-  );
   const choose = (w: NextWindow) =>
     send({
       type: 'setPlanning',
@@ -504,30 +478,32 @@ const NextWindows = ({ view }: { view: View }) => {
       {windows.length === 0 && (
         <span class="ro-empty">No forecast covers your next windows yet.</span>
       )}
-      {windows.map((w, i) => (
-        <button
-          key={w.kind}
-          type="button"
-          class="ro-next"
-          data-best={i === best}
-          onClick={() => choose(w)}
-        >
-          <span class="ro-next-top">
-            <span>{windowName(w)}</span>
-            <span>{i === best ? `Best · ${w.best.score}` : w.best.score}</span>
-          </span>
-          <span class="ro-next-when">
-            {windowWhen(w, expired.dates[1], view.today, view.timeZone)}
-          </span>
-          <span class="ro-next-best">
-            {windowBest(
-              w,
-              routes[w.best.routeId]?.name ?? 'Your route',
-              view.timeZone,
-            )}
-          </span>
-        </button>
-      ))}
+      {windows.map((w) => {
+        const score = Math.round(w.best.score);
+        const best = w.kind === next.recommendedKind;
+        return (
+          <button
+            key={w.kind}
+            type="button"
+            class="ro-next"
+            data-best={best}
+            onClick={() => choose(w)}
+          >
+            <span class="ro-next-top">
+              <span>{windowName(w)}</span>
+              {w.recommendationKind === 'best_available' && (
+                <span class="ro-pill ro-below">Best available</span>
+              )}
+              <span>{best ? `Best · ${score}` : score}</span>
+            </span>
+            <span class="ro-next-when">
+              {windowWhen(w, expired.dates[1], view.today, view.timeZone)}
+            </span>
+            <span class="ro-next-best">{windowBest(w, view.timeZone)}</span>
+            {w.warnings[0] && <span class="ro-next-when">{w.warnings[0]}</span>}
+          </button>
+        );
+      })}
     </>
   );
 };
@@ -1129,35 +1105,10 @@ const PrefsTab = ({ view }: { view: View }) => {
   );
 };
 
-// Newest first, by month. A removed ride stays collapsed with Undo until the panel closes.
+// Newest first, by month. A removed ride collapses with Undo; the background deletes it once the undo window passes.
 const HistoryTab = ({ view }: { view: View }) => {
-  const { rides, ridesCursor } = view.state;
-  const [removed, setRemoved] = useState<Record<string, Ride>>({});
-  const [notice, setNotice] = useState<string | null>(null);
-  const tz = view.timeZone;
-  const list = [
-    ...rides,
-    ...Object.values(removed).filter((r) => !rides.some((x) => x.id === r.id)),
-  ].sort(newest);
-  const setGone = (ride: Ride, gone: boolean) =>
-    setRemoved(({ [ride.id]: _, ...rest }) =>
-      gone ? { ...rest, [ride.id]: ride } : rest,
-    );
-  const remove = async (ride: Ride) => {
-    setNotice(null);
-    setGone(ride, true);
-    const { error } = await send({ type: 'deleteRide', id: ride.id });
-    if (error) {
-      setGone(ride, false);
-      setNotice(error);
-    }
-  };
-  const restore = async (ride: Ride) => {
-    setNotice(null);
-    const { error } = await send({ type: 'restoreRide', ride });
-    if (error) setNotice(error);
-    else setGone(ride, false);
-  };
+  const { rides, ridesCursor, pendingDeletes } = view.state;
+  const list = [...rides].sort(newest);
   if (!list.length)
     return (
       <span class="ro-empty">
@@ -1166,22 +1117,12 @@ const HistoryTab = ({ view }: { view: View }) => {
       </span>
     );
   const labelled = new Set<string>();
-  const routesSeen = new Set<string>();
   return (
     <>
-      {notice && (
-        <span class="ro-warn-chip" role="status">
-          {notice}
-        </span>
-      )}
       {list.map((ride) => {
         const month = monthLabel(ride.riddenOn, view.today);
         const label = !labelled.has(month) && labelled.add(month);
-        const gone = removed[ride.id] && !rides.some((r) => r.id === ride.id);
-        const first = !gone && !routesSeen.has(ride.routeId);
-        if (first) routesSeen.add(ride.routeId);
-        const until = first && riddenFor(view, ride.routeId).until;
-        const [line, conditions] = rideLines(ride, tz);
+        const gone = pendingDeletes.some((d) => d.id === ride.id);
         return (
           <Fragment key={ride.id}>
             {label && <span class="ro-month">{month}</span>}
@@ -1191,7 +1132,7 @@ const HistoryTab = ({ view }: { view: View }) => {
                 <button
                   type="button"
                   class="ro-link"
-                  onClick={() => restore(ride)}
+                  onClick={() => send({ type: 'undoDelete', id: ride.id })}
                 >
                   Undo
                 </button>
@@ -1205,18 +1146,10 @@ const HistoryTab = ({ view }: { view: View }) => {
                   )}
                   <CloseButton
                     title="Remove ride"
-                    onClick={() => remove(ride)}
+                    onClick={() => send({ type: 'deleteRide', id: ride.id })}
                   />
                 </div>
-                <span class="ro-history-line">{line}</span>
-                {conditions && (
-                  <span class="ro-history-conditions">{conditions}</span>
-                )}
-                {until && (
-                  <span class="ro-until">
-                    Ranked lower until {shortDate(until)}
-                  </span>
-                )}
+                <span class="ro-history-line">{rideLine(ride)}</span>
               </article>
             )}
           </Fragment>
@@ -1236,11 +1169,10 @@ const HistoryTab = ({ view }: { view: View }) => {
 };
 
 const RecentlyRiddenCard = ({ view }: { view: View }) => {
-  const { user, rides } = view.state;
+  const { user } = view.state;
   if (!user) return null;
-  const mode = user.settings.preferences.recentRides?.mode ?? 'neutral';
-  const latest = rides.find((r) => r.riddenOn <= view.today);
-  const until = latest && riddenFor(view, latest.routeId).until;
+  const recent = user.settings.preferences.recentRides;
+  const days = recent?.lookbackDays ?? 28;
   return (
     <section class="ro-card ro-recent">
       <span class="ro-label">Recently ridden routes</span>
@@ -1250,7 +1182,7 @@ const RecentlyRiddenCard = ({ view }: { view: View }) => {
           { value: 'neutral', label: 'Happy to repeat' },
           { value: 'prefer-variety', label: 'Prefer variety' },
         ]}
-        value={mode}
+        value={recent?.mode ?? 'neutral'}
         onChange={(next) =>
           send({
             type: 'savePreferences',
@@ -1258,21 +1190,11 @@ const RecentlyRiddenCard = ({ view }: { view: View }) => {
           })
         }
       />
-      <p class="ro-help">Considers roads ridden in the last four weeks.</p>
-      {latest && (
-        <div class="ro-recent-example">
-          <span class="ro-tag">{latest.route.name}</span>
-          <span>
-            {latest.riddenOn === view.today
-              ? 'Ridden today'
-              : `Ridden ${dayMonth(latest.riddenOn, view.today)}`}
-            ,{' '}
-            {until
-              ? `ranked lower until ${shortDate(until)}`
-              : 'ranked as normal'}
-          </span>
-        </div>
-      )}
+      <p class="ro-help">
+        Routes that share roads with rides from{' '}
+        {days === 28 ? 'the last 4 weeks' : `the last ${days} days`} score a
+        little lower. The effect fades as the ride gets older.
+      </p>
     </section>
   );
 };

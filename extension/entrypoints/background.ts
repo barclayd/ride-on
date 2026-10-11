@@ -18,6 +18,7 @@ import {
   type Recommendations,
   type Ride,
   type RidePlan,
+  type RideSummary,
   type RouteSummary,
   type Selection,
   type SettingsPatch,
@@ -26,10 +27,10 @@ import {
 } from '../lib/types';
 import {
   applyPatch,
-  availability,
   ended,
-  localDate,
+  logged,
   newest,
+  planFor,
   searchPatch,
   shownOf,
 } from '../ui/format';
@@ -128,93 +129,52 @@ const windowOf = (time: Planning['time']) =>
     ? ('daylight' as const)
     : { start: time.start, end: time.end };
 
-// One request per forecast day; the selected days are merged in the view (ui/format.ts).
+// One request across the planned days; previewDays fills the day strip.
 let recommendation = 0;
-const recommend = async (force = false) => {
+const recommend = async () => {
   const id = ++recommendation;
   const state = await readState();
-  const { user, selection } = state;
+  const { user, selection, planning } = state;
   if (!user || !selection?.routeIds.length)
-    return update(() => ({
-      days: {},
-      recsKey: null,
-      loading: false,
-      shown: null,
-    }));
-  const window = windowOf(state.planning.time);
+    return update(() => ({ recs: null, loading: false, shown: null }));
   const preferences = state.search
     ? searchPatch(state.search, state.unit)
     : undefined;
-  const key = JSON.stringify([
-    selection.routeIds,
-    window,
-    preferences,
-    user.version,
-  ]);
-  const today = localDate(new Date(), user.settings.timeZone);
-  const kept =
-    force || key !== state.recsKey
-      ? {}
-      : Object.fromEntries(
-          Object.entries(state.days).filter(([date]) => date >= today),
-        );
-  const dates = availability(
-    new Date(),
-    user.settings.timeZone,
-    user.settings.weather,
-  )
-    .filter((day) => day.kind !== 'none' && !kept[day.date])
-    .map((day) => day.date);
-  if (!dates.length)
-    return show({ days: kept, recsKey: key, loading: false }, user);
   await update(() => ({ loading: true }));
-  const settled = await Promise.allSettled(
-    dates.map((date) =>
-      api<Recommendations>('/recommendations', {
-        body: {
-          routeIds: selection.routeIds,
-          date,
-          riding: { window },
-          ...(preferences && { preferences }),
-        },
-      }),
-    ),
-  );
-  if (id !== recommendation) return;
-  const fetched = settled.flatMap((r) =>
-    r.status === 'fulfilled' ? [r.value] : [],
-  );
-  const failed = settled.find((r) => r.status === 'rejected')?.reason;
-  if (!fetched.length) {
-    // Keep the last results on screen; the error chip says what failed.
-    await update(() => ({ loading: false, error: errorMessage(failed) }));
-    throw failed;
-  }
-  await show(
-    {
-      days: {
-        ...kept,
-        ...Object.fromEntries(fetched.map((recs) => [recs.date, recs])),
+  try {
+    const recs = await api<Recommendations>('/recommendations', {
+      body: {
+        routeIds: selection.routeIds,
+        days: planning.days,
+        previewDays: 7,
+        riding: { window: windowOf(planning.time) },
+        ...(preferences && { preferences }),
       },
-      recsKey: key,
+    });
+    if (id !== recommendation) return;
+    await show({
+      recs,
       recsAt: new Date().toISOString(),
       loading: false,
-      error: failed ? errorMessage(failed) : null,
-    },
-    user,
-  );
+      error: null,
+    });
+  } catch (error) {
+    if (id !== recommendation) return;
+    // Keep the last results on screen; the error chip says what failed.
+    await update(() => ({ loading: false, error: errorMessage(error) }));
+    throw error;
+  }
 };
 
 // Remember the window on screen for the check-in. One picked after it ended
 // (08:00–14:00 at 15:20) goes straight to what's next, with no question.
-const show = async (patch: Partial<State>, user: User) => {
+const show = async (patch: Partial<State>) => {
   await update((state) => {
     const next = { ...state, ...patch };
     return { ...next, shown: shownOf(next, new Date()) };
   });
   const { shown } = await readState();
-  if (shown && ended(shown, new Date(), user.settings.timeZone))
-    return expire(false);
+  if (shown && ended(shown, new Date())) return expire(false);
 };
 
 // While the shown window has ended: the next windows worth riding, in one call.
@@ -247,26 +207,31 @@ const suggest = async () => {
   }
 };
 
-const rank = async (force = false) =>
-  (await readState()).expired ? suggest() : recommend(force);
+const rank = async () =>
+  (await readState()).expired ? suggest() : recommend();
 
-// The window on screen has ended: ask about it (unless its day has a ride) and suggest what's next.
+// The window on screen has ended: ask about it (unless one of its picks was logged that day) and suggest what's next.
 const expire = async (ask: boolean) => {
   await update((state) => {
     if (!state.shown) return {};
-    const { picks } = state.shown;
-    const date =
-      picks[0] &&
-      localDate(picks[0].departureAt, state.user?.settings.timeZone ?? 'UTC');
-    const fresh =
-      ask && date && !state.rides.some((ride) => ride.riddenOn === date);
+    const { picks, meta } = state.shown;
+    const date = picks[0]?.date;
     return {
       expired: state.shown,
       shown: null,
       next: null,
-      checkin: fresh
-        ? { date, picks, status: 'ask', routeId: null, rideId: null }
-        : state.checkin,
+      checkin:
+        ask && date && !logged(date, picks, state.rides)
+          ? {
+              date,
+              picks,
+              meta,
+              status: 'ask',
+              routeId: null,
+              rideId: null,
+              key: null,
+            }
+          : state.checkin,
     };
   });
   return suggest();
@@ -277,46 +242,66 @@ const loadRides = (cursor: string | null = null) =>
     `/rides?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
   );
 
-// A fresh key per call: Undo re-creates a removed ride as a new request.
-const logRide = async (
-  ride: Pick<Ride, 'routeId' | 'riddenOn' | 'timeZone'> & {
-    plan: RidePlan | null;
-  },
-  routeVersion: number,
-) => {
-  const post = (expectedRouteVersion: number) =>
-    api<{ ride: Ride }>('/rides', {
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
-      body: {
-        routeId: ride.routeId,
-        expectedRouteVersion,
-        riddenOn: ride.riddenOn,
-        timeZone: ride.timeZone,
-        ...(ride.plan && { plan: ride.plan }),
-      },
-    });
-  let created: { ride: Ride };
-  try {
-    created = await post(routeVersion);
-  } catch (error) {
-    if (!(error instanceof ApiError && error.code === 'ROUTE_VERSION_CONFLICT'))
-      throw error;
-    const { route } = await api<{ route: RouteSummary }>(
-      `/routes/${ride.routeId}`,
-    );
-    created = await post(route.version);
-  }
-  await update((state) => ({
-    rides: [created.ride, ...state.rides].sort(newest),
+// ponytail: the first 100 known routes (the API's limit); page when someone has more.
+const loadSummaries = async () => {
+  const routeIds = Object.keys((await readState()).routes).slice(0, 100);
+  const { summaries } = routeIds.length
+    ? await api<{ summaries: RideSummary[] }>('/rides/summaries', {
+        body: { routeIds },
+      })
+    : { summaries: [] };
+  await update(() => ({
+    summaries: Object.fromEntries(summaries.map((s) => [s.routeId, s])),
   }));
-  return created.ride;
+};
+
+// A retry with the same key replays the first POST, so it can't log twice.
+const logRide = async (
+  body: Pick<Ride, 'routeId' | 'riddenOn' | 'timeZone'> & {
+    expectedRouteVersion: number;
+    plan?: RidePlan;
+  },
+  key: string,
+) => {
+  const { ride } = await api<{ ride: Ride }>('/rides', {
+    headers: { 'Idempotency-Key': key },
+    body,
+  });
+  await update((state) => ({
+    rides: [ride, ...state.rides.filter((r) => r.id !== ride.id)].sort(newest),
+  }));
+  return ride;
 };
 
 const deleteRide = async (id: string) => {
-  await api(`/rides/${id}`, { method: 'DELETE' });
+  await api(`/rides/${id}`, { method: 'DELETE' }).catch((error) => {
+    if (!(error instanceof ApiError && error.status === 404)) throw error;
+  });
   await update((state) => ({
     rides: state.rides.filter((ride) => ride.id !== id),
   }));
+};
+
+// Rides removed in History are sent once the undo window passes, or on the next wake
+// if the panel closed first. A failed one stays pending and is retried then.
+const UNDO_MS = 8000;
+const commitDeletes = async (all = false) => {
+  const due = (await readState()).pendingDeletes.filter(
+    (d) => all || Date.now() - d.at >= UNDO_MS,
+  );
+  const settled = await Promise.allSettled(due.map((d) => deleteRide(d.id)));
+  const done = due
+    .filter((_, i) => settled[i].status === 'fulfilled')
+    .map((d) => d.id);
+  if (!done.length) return 0;
+  await update((state) => ({
+    pendingDeletes: state.pendingDeletes.filter((d) => !done.includes(d.id)),
+    checkin:
+      state.checkin?.rideId && done.includes(state.checkin.rideId)
+        ? null
+        : state.checkin,
+  }));
+  return done.length;
 };
 
 // Optional: without it the picker shows only the saved source.
@@ -331,6 +316,7 @@ const refresh = async () => {
     if ((await readState()).auth === 'signed-in') await signOutLocally();
     return;
   }
+  await commitDeletes().catch(() => {});
   const [user, selection, routes, providers, rides] = await Promise.all([
     loadUser(),
     loadSelection(),
@@ -349,19 +335,23 @@ const refresh = async () => {
     error: null,
     syncedAt: pendingPatch ? state.syncedAt : new Date().toISOString(),
     ...(rides && { rides: rides.rides, ridesCursor: rides.nextCursor }),
-    // A confirmation lasts until the panel next opens; a question until answered or its day has a ride.
+    // A confirmation lasts until the panel next opens; a question until answered or a pick has a ride that day.
     checkin:
-      state.checkin?.status === 'ask' &&
-      !(rides?.rides ?? state.rides).some(
-        (ride) => ride.riddenOn === state.checkin?.date,
+      state.checkin &&
+      state.checkin.status !== 'done' &&
+      !logged(
+        state.checkin.date,
+        state.checkin.picks,
+        rides?.rides ?? state.rides,
       )
         ? state.checkin
         : null,
   }));
+  const tags = loadSummaries().catch(() => {}); // tags only; the panel works without them
   const { shown, expired } = await readState();
-  if (!expired && shown && ended(shown, new Date(), user.settings.timeZone))
-    return expire(true);
-  await rank(true);
+  if (!expired && shown && ended(shown, new Date())) await expire(true);
+  else await rank();
+  await tags;
 };
 
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
@@ -481,6 +471,8 @@ const handle = async (message: Message) => {
       await update(() => ({ auth: 'signed-in', signingInWith: null }));
       return refresh();
     case 'signOut':
+      // Removals still in their undo window belong to this account; send them first.
+      await commitDeletes(true).catch(() => {});
       await api('/api/auth/sign-out', { body: {} }).catch(() => {});
       return signOutLocally();
     case 'refresh':
@@ -551,56 +543,94 @@ const handle = async (message: Message) => {
       const { checkin, user, routes } = await readState();
       if (!checkin || !user) return;
       if (message.answer === 'no') return update(() => ({ checkin: null }));
-      if (message.answer === 'yes') {
-        const { routeId } = message;
-        const timeZone = user.settings.timeZone;
-        // The plan is what was shown for that route on that day, if it was a pick.
-        const pick = checkin.picks.find(
-          (p) =>
-            p.routeId === routeId &&
-            localDate(p.departureAt, timeZone) === checkin.date,
-        );
-        const ride = await logRide(
-          {
-            routeId,
-            riddenOn: checkin.date,
-            timeZone,
-            plan: pick
-              ? {
-                  departureAt: pick.departureAt,
-                  finishAt: pick.finishAt,
-                  conditions: pick.conditions,
-                  pickRank: pick.rank,
-                }
-              : null,
-          },
-          routes[routeId]?.version ?? 1,
-        );
-        await update(() => ({
-          checkin: { ...checkin, status: 'done', routeId, rideId: ride.id },
-        }));
-      } else {
+      if (message.answer === 'undo') {
         if (checkin.rideId) await deleteRide(checkin.rideId);
         await update(() => ({
-          checkin: { ...checkin, status: 'ask', routeId: null, rideId: null },
+          checkin: {
+            ...checkin,
+            status: 'ask',
+            routeId: null,
+            rideId: null,
+            key: null,
+          },
         }));
+      } else {
+        // 'updated': the route changed since the plan, so log it as it is now, without the plan.
+        const routeId =
+          message.answer === 'yes' ? message.routeId : checkin.routeId;
+        if (!routeId) return;
+        let version = routes[routeId]?.version ?? 1;
+        let plan = planFor(checkin, routeId);
+        if (message.answer === 'updated') {
+          const { route } = await api<{ route: RouteSummary }>(
+            `/routes/${routeId}`,
+          );
+          await update((state) => ({
+            routes: { ...state.routes, [route.id]: route },
+          }));
+          version = route.version;
+          plan = null;
+        }
+        // Kept until answered, so a retry after a lost response replays rather than logs twice.
+        const key =
+          checkin.key && checkin.routeId === routeId
+            ? checkin.key
+            : crypto.randomUUID();
+        await update(() => ({ checkin: { ...checkin, routeId, key } }));
+        try {
+          const ride = await logRide(
+            {
+              routeId,
+              expectedRouteVersion: version,
+              riddenOn: checkin.date,
+              timeZone: user.settings.timeZone,
+              ...(plan && { plan }),
+            },
+            key,
+          );
+          await update(() => ({
+            checkin: {
+              ...checkin,
+              status: 'done',
+              routeId,
+              rideId: ride.id,
+              key: null,
+            },
+          }));
+        } catch (error) {
+          if (
+            !(
+              error instanceof ApiError &&
+              error.code === 'ROUTE_VERSION_CONFLICT'
+            )
+          )
+            throw error;
+          // Never upgraded silently: the rider chooses to log the updated route.
+          await update(() => ({
+            checkin: { ...checkin, status: 'conflict', routeId, key: null },
+          }));
+        }
       }
-      return rank(true);
+      await loadSummaries().catch(() => {});
+      return rank();
     }
     case 'deleteRide':
-      await deleteRide(message.id);
       await update((state) => ({
-        checkin: state.checkin?.rideId === message.id ? null : state.checkin,
+        pendingDeletes: [
+          ...state.pendingDeletes.filter((d) => d.id !== message.id),
+          { id: message.id, at: Date.now() },
+        ],
       }));
-      return rank(true);
-    case 'restoreRide': {
-      const { ride } = message;
-      await logRide(
-        { ...ride, plan: ride.plan ?? null },
-        (await readState()).routes[ride.routeId]?.version ?? ride.route.version,
-      );
-      return rank(true);
-    }
+      // ponytail: in-memory timer; a worker that dies first commits on its next wake instead.
+      setTimeout(async () => {
+        if (await commitDeletes().catch(() => 0))
+          await Promise.all([loadSummaries(), rank()]).catch(() => {});
+      }, UNDO_MS + 100);
+      return;
+    case 'undoDelete':
+      return update((state) => ({
+        pendingDeletes: state.pendingDeletes.filter((d) => d.id !== message.id),
+      }));
     case 'moreRides': {
       const { ridesCursor } = await readState();
       if (!ridesCursor) return;
@@ -624,6 +654,7 @@ export default defineBackground(() => {
   }));
   // ponytail: builds up to 0.1.0 kept the token in storage.local; drop it (costs one sign-in).
   // Delete once no such install remains.
+  commitDeletes().catch(() => {});
   browser.runtime.onInstalled.addListener(() =>
     browser.storage.local.remove('token'),
   );

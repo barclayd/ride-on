@@ -14,9 +14,9 @@ when, from the weather forecast. It talks to one service, the Ride On API at `ht
 - **Preferences.** Your ride settings (such as distance, climbing and forecast provider) are saved
   to your Ride On account; a few display settings stay in your browser only.
 - **Rides.** When you tell Ride On you rode a route, the date, the route and the plan it recommended
-  (start, finish and forecast conditions) are saved to your Ride On account. They're used to show
-  your History and, if you prefer variety, to rank recently ridden routes lower. Remove a ride from
-  History at any time.
+  (start, finish, forecast conditions and when the forecast was made) are saved to your Ride On
+  account. They're used to show your History and, if you prefer variety, to score routes that share
+  roads with recent rides a little lower. Remove a ride from History at any time.
 
 To score your routes, the Ride On API sends route coordinates and times to its weather providers
 (Apple Weather and the Met Office). The extension doesn't contact them directly.

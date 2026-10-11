@@ -9,7 +9,6 @@ import {
   clock,
   dayMonth,
   ridden,
-  shortDate,
   viewOf,
 } from './format';
 
@@ -86,12 +85,7 @@ export const CloseButton = (props: { title: string; onClick: () => void }) => (
 );
 
 export const riddenFor = (view: View, routeId: string) =>
-  ridden(
-    view.state.rides,
-    routeId,
-    view.today,
-    view.state.user?.settings.preferences.recentRides,
-  );
+  ridden(view.state.summaries[routeId], view.state.rides, routeId, view.today);
 
 // "Ridden today" and "Last ridden 22 Sep", next to a route's name.
 export const Tags = ({ view, routeId }: { view: View; routeId: string }) => {
@@ -125,7 +119,6 @@ export const RideCard = (props: {
   href?: string | null; // the page links each ride to its journey
 }) => {
   const { card, medal } = props;
-  const { until } = riddenFor(props.view, card.routeId);
   const tint =
     medal !== undefined
       ? `ro-${MEDALS[medal].toLowerCase()}`
@@ -161,6 +154,9 @@ export const RideCard = (props: {
         )}
         {props.href !== undefined && <span>{card.km} km</span>}
         <Tags view={props.view} routeId={card.routeId} />
+        {card.recent && (
+          <span class="ro-tag ro-tag-last">Similar roads recently ridden</span>
+        )}
       </div>
       {(card.when ?? card.duration) && (
         <span class="ro-when">{card.when ?? card.duration}</span>
@@ -189,9 +185,6 @@ export const RideCard = (props: {
         </div>
       ) : (
         card.state === 'incomplete' && <span class="ro-no-score">No score</span>
-      )}
-      {until && (
-        <span class="ro-until">Ranked lower until {shortDate(until)}</span>
       )}
     </div>
   );

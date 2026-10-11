@@ -1,4 +1,4 @@
-// Live API contracts (v0.11.0): worker/src/recommendations/input.ts, docs/api.md and docs/ride-history.md.
+// Live API contracts (v0.12.0): worker/src/recommendations/input.ts, docs/api.md and docs/ride-history.md.
 // Fields the extension needs but the API lacks are in docs/extension-api-brief-v2.md and -v3.md.
 
 export type Climbing = 'flatter' | 'neutral' | 'hillier';
@@ -105,6 +105,7 @@ export type Failure = {
   actual: number;
   sections: { fromKm: number; toKm: number; observedAt: string }[];
 };
+// ponytail: only the fields the extension reads; plans pass the API's full conditions through untouched.
 export type Conditions = {
   temperatureC: { minimum: number; maximum: number };
   averageWindSpeedKph: number;
@@ -114,6 +115,7 @@ export type Conditions = {
   maximumPrecipitationProbability: number;
 };
 export type Departure = {
+  date: string;
   departureAt: string;
   finishAt: string;
   score: number;
@@ -122,6 +124,10 @@ export type Departure = {
     failures: Failure[];
   };
   conditions: Conditions;
+  recentRides?: {
+    status: 'disabled' | 'no_recent_history' | 'assessed' | 'unavailable';
+    penaltyPoints: number;
+  };
 };
 export type Window = { start: string; end: string };
 export type RouteResult = {
@@ -141,6 +147,10 @@ export type RouteResult = {
   best: Departure | null;
   issues: string[];
   warnings: string[];
+  verdict: {
+    status: 'meets' | 'below_minimums' | 'doesnt_fit' | 'incomplete';
+    code: string;
+  };
 };
 export type StandardsStatus =
   | 'not_configured'
@@ -148,25 +158,47 @@ export type StandardsStatus =
   | 'unknown'
   | 'none_meet'
   | 'no_feasible_departure';
-export type Recommendations = {
+export type Weather = {
+  retrieval: { latestAt: string | null };
+  attribution: Attribution[];
+};
+// One forecast day, selected or preview.
+export type DaySummary = {
   date: string;
-  recommendedRouteId: string | null;
+  availability: 'full' | 'partial' | 'none';
+  availabilityReason: string;
+  until: string | null; // UTC; partial days covered up to here
+  daylight: { sunrise: string; sunset: string } | null;
+  temperatureMaxC: number | null;
+  quality: number | null;
+  selected: boolean;
+};
+export type RecommendationKind = 'best_pick' | 'best_available';
+// POST /recommendations with `days`: one ranking across the selected dates.
+export type Recommendations = {
+  generatedAt: string;
+  algorithmVersion: string;
+  timeZone: string;
   minimumStandardsStatus: StandardsStatus;
+  recommendation: { routeId: string; kind: RecommendationKind } | null;
   rankings: RouteResult[];
   unranked: RouteResult[];
-  weather: {
-    locations: {
-      provenance?: { retrievedAt: string; attribution?: Attribution[] } | null;
-    }[];
-  };
+  range: { start: string; end: string } | null; // null when expired or nothing forecast yet
+  expired: boolean;
+  days: DaySummary[];
+  weather: Weather;
 };
 
-// What the rider was shown for a ride (docs/extension-api-brief-v3.md §1); null until the API stores it.
+// What the rider was shown for a ride; checked strictly by POST /rides.
 export type RidePlan = {
+  schemaVersion: 1;
   departureAt: string;
   finishAt: string;
   conditions: Conditions;
   pickRank: number | null;
+  generatedAt: string;
+  algorithmVersion: string;
+  weather: { attribution: Attribution[] };
 };
 // POST/GET /rides
 export type Ride = {
@@ -186,25 +218,30 @@ export type Ride = {
   updatedAt: string;
   plan?: RidePlan | null;
 };
+// POST /rides/summaries
+export type RideSummary = {
+  routeId: string;
+  rideCount: number;
+  lastRiddenOn: string | null;
+};
 
-// POST /recommendations/next-windows (docs/extension-api-brief-v3.md §2)
+// POST /recommendations/next-windows
 export type NextWindow = {
-  kind: 'tomorrow' | 'same_weekday' | 'best_this_week';
+  kind: 'tomorrow' | 'same_weekday' | 'best_next_days';
   date: string;
   window: Window | 'daylight';
   effectiveWindow: Window | null;
-  best: {
-    routeId: string;
-    departureAt: string;
-    finishAt: string;
-    score: number;
-    conditions: Conditions;
-  };
+  recommendationKind: RecommendationKind;
+  warnings: string[];
+  best: Departure & { routeId: string; routeName: string };
 };
 export type NextWindows = {
+  generatedAt: string;
+  algorithmVersion: string;
   timeZone: string;
   windows: NextWindow[];
-  weather: Recommendations['weather'];
+  recommendedKind: NextWindow['kind'] | null;
+  weather: Weather;
 };
 
 export const MAX_TRACKED = 12;

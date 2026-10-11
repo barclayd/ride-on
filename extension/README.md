@@ -48,8 +48,7 @@ and the manifest `key` dropped. The first upload, listing copy and privacy answe
 
 ## API
 
-Contracts: `docs/api.md`. What the extension still works around is in
-`docs/extension-api-brief-v2.md`: one request per forecast day merged client-side, hard-coded
-provider horizons, and the default window, sunshine, rain and km/mi stored only in
+Contracts: `docs/api.md`. Rankings are one `POST /recommendations` across the planned days, with
+`previewDays: 7` for the day strip. The default window, sunshine, rain and km/mi are stored only in
 this browser. Only the background service worker calls the API; the popup and content script
 message it and render the shared state in `storage.local`.

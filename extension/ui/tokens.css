@@ -1357,10 +1357,6 @@ a.ro-name:hover {
   flex-wrap: wrap;
   gap: 4px 6px;
 }
-.ro-until {
-  font: 500 12px var(--ro-serif);
-  color: var(--ro-muted);
-}
 
 /* The panes sit side by side; the inactive ones take the active one's height (contain: size). */
 .ro-checkin {
@@ -1573,12 +1569,13 @@ a.ro-name:hover {
 }
 .ro-next-top {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
   font: 700 14px var(--ro-sans);
 }
 .ro-next-top > span:last-child {
   flex: none;
+  margin-left: auto;
   font: 500 12px var(--ro-serif);
   color: var(--ro-olive-900);
 }
@@ -1629,10 +1626,6 @@ a.ro-name:hover {
 .ro-history-line {
   font: 700 13px var(--ro-sans);
 }
-.ro-history-conditions {
-  font: 500 12px / 1.4 var(--ro-sans);
-  color: var(--ro-muted);
-}
 .ro-removed {
   flex-direction: row;
   align-items: center;
@@ -1645,16 +1638,6 @@ a.ro-name:hover {
   margin: 0;
   font: 400 12px / 1.45 var(--ro-serif);
   color: var(--ro-muted);
-}
-.ro-recent-example {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--ro-page);
-  font: 500 12px / 1.4 var(--ro-sans);
-  color: var(--ro-olive-ink);
 }
 
 @media (prefers-reduced-motion: reduce) {
