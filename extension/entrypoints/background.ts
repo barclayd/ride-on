@@ -1,7 +1,13 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { ApiError, api, getToken, setToken } from '../lib/api';
-import { SignInCancelled, signIn } from '../lib/auth';
+import {
+  cancelSignIn,
+  finishSignIn,
+  pendingSignIn,
+  SignInCancelled,
+  signIn,
+} from '../lib/auth';
 import {
   DEFAULT_PLANNING,
   initialState,
@@ -49,6 +55,24 @@ const signOutLocally = async (signInError: string | null = null) => {
   await setToken(null);
   await browser.storage.local.remove('seen');
   await update(() => ({ ...initialState, signInError }));
+};
+
+// Resolves false while Safari's sign-in tab is still open; its redirect calls this again.
+const signedIn = async (signing: Promise<boolean>) => {
+  try {
+    if (!(await signing)) return;
+  } catch (error) {
+    return update(() => ({
+      auth: 'signed-out',
+      signingInWith: null,
+      signInError:
+        error instanceof SignInCancelled
+          ? 'Sign-in was cancelled. Try again.'
+          : 'Sign-in failed. Try again.',
+    }));
+  }
+  await update(() => ({ auth: 'signed-in', signingInWith: null }));
+  return refresh();
 };
 
 const errorMessage = (error: unknown) =>
@@ -456,20 +480,9 @@ const handle = async (message: Message) => {
         signingInWith: message.provider,
         signInError: null,
       }));
-      try {
-        await signIn(message.provider);
-      } catch (error) {
-        return update(() => ({
-          auth: 'signed-out',
-          signingInWith: null,
-          signInError:
-            error instanceof SignInCancelled
-              ? 'Sign-in was cancelled. Try again.'
-              : 'Sign-in failed. Try again.',
-        }));
-      }
-      await update(() => ({ auth: 'signed-in', signingInWith: null }));
-      return refresh();
+      return signedIn(signIn(message.provider));
+    case 'signInRedirect':
+      return signedIn(finishSignIn(message.url));
     case 'signOut':
       // Removals still in their undo window belong to this account; send them first.
       await commitDeletes(true).catch(() => {});
@@ -535,8 +548,8 @@ const handle = async (message: Message) => {
       return rank();
     case 'openPopup':
       await update(() => ({ popupTab: message.tab }));
-      // Chrome 127+; without a focused window it throws and the page keeps its state.
-      return browser.action.openPopup().catch(() => {});
+      // Chrome 127+, Safari 16+; without a focused window it throws and the page keeps its state.
+      return browser.action.openPopup?.().catch(() => {});
     case 'setTab':
       return update(() => ({ popupTab: message.tab }));
     case 'checkin': {
@@ -644,14 +657,27 @@ const handle = async (message: Message) => {
 };
 
 export default defineBackground(() => {
-  // A worker restart abandons any sign-in window or unsent edit; don't leave either spinning.
-  update((state) => ({
-    syncing: false,
-    ...(state.auth === 'signing-in' && {
-      auth: 'signed-out',
-      signingInWith: null,
-    }),
-  }));
+  // A worker restart abandons Chrome's sign-in window and any unsent edit; don't leave either
+  // spinning. Safari's sign-in tab outlives it, so that stays until it finishes or expires.
+  (import.meta.env.SAFARI ? pendingSignIn() : Promise.resolve(undefined)).then(
+    (pending) =>
+      update((state) => ({
+        syncing: false,
+        ...(state.auth === 'signing-in' &&
+          !pending && { auth: 'signed-out', signingInWith: null }),
+      })),
+  );
+  // Closing Safari's sign-in tab cancels it, as closing Chrome's window does.
+  if (import.meta.env.SAFARI)
+    browser.tabs.onRemoved.addListener(async (tabId) => {
+      if ((await pendingSignIn())?.tabId !== tabId) return;
+      await cancelSignIn();
+      await update(() => ({
+        auth: 'signed-out',
+        signingInWith: null,
+        signInError: 'Sign-in was cancelled. Try again.',
+      }));
+    });
   // ponytail: builds up to 0.1.0 kept the token in storage.local; drop it (costs one sign-in).
   // Delete once no such install remains.
   commitDeletes().catch(() => {});

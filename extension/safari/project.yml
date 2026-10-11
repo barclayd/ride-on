@@ -1,0 +1,79 @@
+# Safari web extensions ship inside an app. This builds the WXT extension (bun run build:safari)
+# into RideOnExtension and wraps it in a small app that explains how to turn it on.
+# It has the main app's identity, so these targets move into app/project.yml when that ships.
+name: RideOn
+options:
+  bundleIdPrefix: com.danbarclay
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+
+settings:
+  base:
+    # archive.sh stamps the latest extension-v* tag and a timestamp build number.
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: R2GGK3VN2C
+    ENABLE_APP_SANDBOX: YES
+    ENABLE_HARDENED_RUNTIME: YES
+
+targets:
+  RideOn:
+    type: application
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: App
+      - path: ../../app/RideOn.icon
+    dependencies:
+      - target: RideOnExtension
+    info:
+      path: Generated/RideOn-Info.plist
+      properties:
+        CFBundleDisplayName: Ride On
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.healthcare-fitness
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danbarclay.rideon
+        PRODUCT_NAME: RideOn
+        ASSETCATALOG_COMPILER_APPICON_NAME: RideOn
+
+  RideOnExtension:
+    type: app-extension
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Extension
+    info:
+      path: Generated/RideOnExtension-Info.plist
+      properties:
+        CFBundleDisplayName: Ride On
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danbarclay.rideon.Extension
+        PRODUCT_NAME: RideOnExtension
+        ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
+        # The build script reads the WXT project and writes into the bundle.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    preBuildScripts:
+      - name: Build web extension
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          export PATH="$HOME/.bun/bin:/opt/homebrew/bin:$PATH"
+          cd "$SRCROOT/.."
+          EXTENSION_VERSION="$MARKETING_VERSION" bun run build:safari
+          # Safari reads manifest.json from the extension's resources root.
+          dest="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          mkdir -p "$dest"
+          rm -rf "$dest"/{assets,chunks,content-scripts,fonts,icon}
+          cp -R .output/safari-mv3/ "$dest/"

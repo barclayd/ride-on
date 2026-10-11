@@ -7,6 +7,7 @@ OAuth endpoints. The existing app clients have not yet been migrated.
 
 API v0.11.0 adds [ride history and recent-route preferences](ride-history.md).
 API v0.12.0 adds [planned ride snapshots, next-window suggestions and route-history summaries](extension-api-brief-v3.md).
+API v0.13.0 adds the [Safari extension sign-in](authentication.md#safari-extensions) landing page and CORS.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -31,7 +32,8 @@ database state are ignored by Git. Route IDs in local live reports refer to loca
 
 Product endpoints, including `/weather-providers`, require a session cookie or session bearer token. `/health`,
 authentication provider discovery and login entrypoints are public. Responses use
-`Cache-Control: no-store`. Cookie writes and browser CORS use exact trusted origins.
+`Cache-Control: no-store`. Cookie writes and browser CORS use exact trusted origins;
+Safari extension origins get CORS without credentials.
 See [authentication](authentication.md) for Apple, Google, passkeys, extension
 handoff and account linking. Legacy private API keys and the profile-claim endpoint
 have been retired; clients use normal sign-in.
@@ -787,7 +789,8 @@ arrived in v0.7.0 (`comfort-v0.5`). Preferred distance was v0.8.0 (`comfort-v0.6
 Apple Weather was v0.9.0 (`comfort-v0.7`). Multi-day planning and preference presets
 arrived in v0.10.0 with algorithm `comfort-v0.8`. Ride history and recent-route
 preferences are v0.11.0 (`comfort-v0.9`). Planned snapshots, next-window suggestions
-and route-history summaries are v0.12.0 (algorithm unchanged);
+and route-history summaries are v0.12.0 (algorithm unchanged). Safari extension sign-in is
+v0.13.0;
 `GET /health` reports the running version. The canonical custom domain is
 `https://api.ride-on.cc`. Both Met Office credentials and `AUTH_CONFIG_JSON` are
 Worker secrets. Apple Weather uses the separate `APPLE_WEATHER_CONFIG_JSON` secret.
@@ -801,7 +804,7 @@ in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before
 publishing the authentication-enabled Worker. No new database migration is
 required for v0.6.0 through v0.10.0. v0.11.0 requires additive migration
 `0005_rides.sql` before deployment. v0.12.0 additionally requires
-`0006_ride_plans.sql`. Neutral preferences preserve existing scores;
+`0006_ride_plans.sql`. v0.13.0 needs no migration. Neutral preferences preserve existing scores;
 legacy geometry upgrades are described in [ride history](ride-history.md).
 The additive authentication migration preserves route facts, shortlists and user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used

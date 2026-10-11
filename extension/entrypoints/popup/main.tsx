@@ -1,6 +1,14 @@
 import { Fragment, render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { type Planning, type Search, send, type Tab } from '../../lib/state';
+import { browser } from 'wxt/browser';
+import { API_URL } from '../../lib/api';
+import {
+  type Planning,
+  type Provider,
+  type Search,
+  send,
+  type Tab,
+} from '../../lib/state';
 import type { Climbing, NextWindow } from '../../lib/types';
 import {
   AppleMark,
@@ -64,6 +72,22 @@ const TABS: [Tab, string][] = [
 const SignedOut = ({ view }: { view: View }) => {
   const { auth, signingInWith, signInError } = view.state;
   const busy = auth === 'signing-in';
+  const [denied, setDenied] = useState(false);
+  const signIn = async (provider: Provider) => {
+    // Safari grants hosts per site; ask while the click still counts as a gesture.
+    if (import.meta.env.SAFARI) {
+      const origins = [`${API_URL}/*`, 'https://cycle.travel/*'];
+      const granted = await browser.permissions
+        .request({ origins })
+        .catch(() => false);
+      setDenied(!granted);
+      if (!granted) return;
+    }
+    send({ type: 'signIn', provider });
+  };
+  const error = denied
+    ? `Ride On needs access to cycle.travel and ${new URL(API_URL).host} to sign in.`
+    : signInError;
   const providers = [
     { id: 'google', name: 'Google', Mark: GoogleMark },
     { id: 'apple', name: 'Apple', Mark: AppleMark },
@@ -97,16 +121,17 @@ const SignedOut = ({ view }: { view: View }) => {
                 class={`ro-provider ro-${id}${busy && signingInWith !== id ? ' ro-faded' : ''}`}
                 aria-label={`Continue with ${name}`}
                 title={`Continue with ${name}`}
-                disabled={busy}
-                onClick={() => send({ type: 'signIn', provider: id })}
+                // Safari's sign-in tab can be left open; let the rider start again.
+                disabled={busy && !import.meta.env.SAFARI}
+                onClick={() => signIn(id)}
               >
                 <Mark />
               </button>
             ))}
           </div>
-          {signInError && (
+          {error && (
             <span class="ro-warn-chip" role="alert">
-              {signInError}
+              {error}
             </span>
           )}
         </div>

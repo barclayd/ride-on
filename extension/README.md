@@ -1,4 +1,8 @@
-# Ride On for cycle.travel (Chrome)
+# Ride On for cycle.travel (Chrome and Safari)
+
+**Every change goes into both Chrome and Safari unless told otherwise.** They share all of this
+source; differences live behind `import.meta.env.SAFARI` and the per-browser manifest in
+`wxt.config.ts`.
 
 MV3 extension (WXT + Preact) that ranks your cycle.travel journeys by the best time to ride them,
 using the Ride On API (v0.9.0). Design: handoff 3 (`design_handoff_ride_on_v2`), plus 4a (signed out).
@@ -24,6 +28,32 @@ The manifest key pins the ID to `gafikjcoeoddjgojefhmdpjkjpbhmjle`, so the sign-
 
 Builds target `https://api.ride-on.cc`; set `WXT_API_URL` to point elsewhere.
 
+### Safari (macOS, iPhone, iPad)
+
+Safari extensions ship inside an app: `safari/` is an XcodeGen project whose `RideOnExtension`
+target runs `bun run build:safari` and copies `.output/safari-mv3` into the extension bundle. The
+`RideOn` app around it only explains how to turn the extension on. It has the main app's identity
+(`com.danbarclay.rideon`, extension `com.danbarclay.rideon.Extension`), so these targets move into
+`app/project.yml` when the full app ships as an update to the same App Store record.
+
+```sh
+bun run safari       # WXT Safari build + xcodegen → open safari/RideOn.xcodeproj, run RideOn
+```
+
+Then on macOS: Safari → Settings → Extensions → tick Ride On (for unsigned local builds, first
+enable Settings → Advanced → "Show features for web developers", then Developer → "Allow unsigned
+extensions"). On iOS: Settings → Apps → Safari → Extensions → Ride On.
+
+Differences from Chrome, all for sign-in (Safari has no `identity` API):
+
+- The popup asks for `api.ride-on.cc` and `cycle.travel` access first, because Safari grants hosts per site.
+- Sign-in opens a tab instead of a window. The API redirects it to
+  `https://api.ride-on.cc/auth/browser/done`, which must be in `AUTH_CONFIG_JSON.clientRedirects`.
+  There, `entrypoints/auth.content.ts` (Safari only) hands the code to the background, which
+  checks `state`, exchanges it and closes the tab. The PKCE flow waits in IndexedDB, because Safari
+  can unload the background while the rider signs in. Closing the tab cancels it.
+- No manifest `key` and no `identity` permission. On iPhone the popup fills the sheet.
+
 ## Test
 
 ```sh
@@ -36,6 +66,8 @@ serves a minimal Journeys page fixture. Screenshots land in `test-results/`.
 
 ## Release
 
+Chrome and Safari share the version from the `extension-v*` tags.
+
 `.github/workflows/extension.yml` runs on PRs and every merge to `main` that touches `extension/`:
 check, e2e, then the store zip (uploaded as the `extension-zip` artifact). On `main`, if extension
 source changed since the last `extension-v*` tag (tests and docs don't count), it tags the next
@@ -45,6 +77,11 @@ patch version and publishes a GitHub Release with the zip. For a minor or major 
 Store zips are built with `EXTENSION_VERSION=<v> STORE_BUILD=1 bun run zip`: the version is set
 and the manifest `key` dropped. The first upload, listing copy and privacy answers are in
 [STORE.md](STORE.md); the privacy policy is [PRIVACY.md](PRIVACY.md).
+
+CI also builds the Safari container unsigned for macOS and the iOS Simulator. Signing and upload
+are manual: `bun run safari:archive` (`safari/archive.sh`) archives both platforms at the latest
+`extension-v*` version with a timestamp build number, and uploads them to App Store Connect for
+TestFlight. See [STORE.md](STORE.md) "App Store (Safari)".
 
 ## API
 

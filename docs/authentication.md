@@ -195,6 +195,18 @@ flow cannot complete it. Public handoff endpoints have persistent per-IP rate
 limits. Failed or cancelled OAuth should let the client cancel and restart the
 flow; there is no background provider retry.
 
+### Safari extensions
+
+Safari has no `launchWebAuthFlow`. The Safari extension opens `authorizationUrl` in an ordinary
+tab, with `redirectUri` set to `https://api.ride-on.cc/auth/browser/done`. That page is a static
+"Signed in, you can close this tab" page with `Content-Security-Policy: default-src 'none'` and
+`Referrer-Policy: no-referrer`. The extension's content script reads `code` and `state` from its URL
+and exchanges them exactly as above. Register the URL in `clientRedirects` to enable it.
+
+Product APIs answer CORS for any `safari-web-extension://` origin, without
+`Access-Control-Allow-Credentials`: those requests carry bearer tokens, never cookies, so
+cookie-authenticated writes still require a trusted origin.
+
 ## Passkeys
 
 First sign in with Apple or Google, then register a passkey for that same account.

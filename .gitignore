@@ -25,3 +25,8 @@ node_modules/
 /evaluation/initial-route-inventory.json
 /evaluation/*-live-check.json
 /evaluation/production-apple-profile-claim.json
+
+# Safari container (XcodeGen)
+extension/safari/RideOn.xcodeproj/
+extension/safari/Generated/
+extension/safari/build/

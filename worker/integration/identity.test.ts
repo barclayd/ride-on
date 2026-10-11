@@ -705,3 +705,42 @@ integration(
     );
   },
 );
+
+integration(
+  'Safari extensions get CORS without credentials and a sign-in landing page',
+  async ({ h }) => {
+    const origin =
+      'safari-web-extension://8D1C2C2E-0F3A-4F5B-9C1E-2B7A4D9E6F10';
+    const preflight = await h.send('/rides', {
+      token: null,
+      method: 'OPTIONS',
+      headers: { Origin: origin },
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), origin);
+    assert.equal(
+      preflight.headers.get('Access-Control-Allow-Credentials'),
+      null,
+    );
+    assert.equal(
+      (
+        await h.send('/rides', {
+          token: null,
+          method: 'OPTIONS',
+          headers: { Origin: 'chrome-extension://attacker' },
+        })
+      ).status,
+      403,
+    );
+    const done = await h.send('/auth/browser/done?code=c&state=s', {
+      token: null,
+    });
+    assert.equal(done.status, 200);
+    assert.match(
+      done.headers.get('Content-Security-Policy') ?? '',
+      /default-src 'none'/,
+    );
+    assert.equal(done.headers.get('Referrer-Policy'), 'no-referrer');
+    assert.match(await done.text(), /Signed in to Ride On/);
+  },
+);

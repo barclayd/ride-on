@@ -94,11 +94,16 @@ export const createApp = (
   });
   app.use('*', async (c, next) => {
     const origin = c.req.header('Origin');
-    if (origin && c.env.AUTH_CONFIG_JSON) {
-      const config = authConfig(c.env);
-      if ([config.baseUrl, ...config.trustedOrigins].includes(origin)) {
+    // Safari extensions send bearer tokens, never cookies, so they get CORS without credentials.
+    const extension = !!origin?.startsWith('safari-web-extension://');
+    if (origin && (extension || c.env.AUTH_CONFIG_JSON)) {
+      const config = extension ? undefined : authConfig(c.env);
+      if (
+        !config ||
+        [config.baseUrl, ...config.trustedOrigins].includes(origin)
+      ) {
         c.header('Access-Control-Allow-Origin', origin);
-        c.header('Access-Control-Allow-Credentials', 'true');
+        if (config) c.header('Access-Control-Allow-Credentials', 'true');
         c.header(
           'Access-Control-Allow-Headers',
           'Content-Type, Authorization, Idempotency-Key',
@@ -115,7 +120,7 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.12.0' }));
+  app.get('/health', (c) => c.json({ ok: true, version: '0.13.0' }));
   app.route('/', identityRoutes());
   for (const path of [
     '/rides',

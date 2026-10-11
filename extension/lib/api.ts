@@ -30,12 +30,14 @@ const auth = (
       request.onerror = () => reject(request.error);
     };
   });
-export const getToken = async () =>
-  (await auth('readonly', (store) => store.get('token'))) as string | undefined;
-export const setToken = (token: string | null) =>
+export const getSecret = async <T>(key: string) =>
+  (await auth('readonly', (store) => store.get(key))) as T | undefined;
+export const setSecret = (key: string, value: unknown) =>
   auth('readwrite', (store) =>
-    token ? store.put(token, 'token') : store.delete('token'),
+    value == null ? store.delete(key) : store.put(value, key),
   );
+export const getToken = () => getSecret<string>('token');
+export const setToken = (token: string | null) => setSecret('token', token);
 
 // Background only: content scripts and the popup never call the API directly.
 export const api = async <T>(
