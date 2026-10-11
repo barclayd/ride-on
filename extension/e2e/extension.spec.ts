@@ -295,7 +295,7 @@ const recommendations = (body: any) => {
         departuresUnknown: 0,
         departuresStandardsUnknown: 0,
         best: {
-          ...best(date, i, 84 - i * 10),
+          ...best(date, i, 84 - i * 40), // a second route scores 44: Not recommended
           recentRides: recent(routeId)
             ? { status: 'assessed', penaltyPoints: 3 }
             : {
@@ -565,7 +565,8 @@ test('Rides tab opens first with one request for the planned days', async ({
   const card = page.locator('.ro-ride').first();
   await expect(card).toContainText('Hilly Loop');
   await expect(card.locator('.ro-medal')).toHaveText('1');
-  await expect(card.locator('.ro-flag')).toHaveText('Best pick');
+  // Best pick only: no pill for meeting the preferences, the score says it.
+  await expect(card.locator('.ro-pill')).toHaveText(['Best pick']);
   await expect(card.locator('.ro-score')).toContainText('Conditions 84/100');
   await expect(
     page.getByRole('link', { name: 'Powered by Met Office data' }),
@@ -1098,6 +1099,11 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(page.locator('#jr_102 .ro-chip')).toHaveText(/ · /);
   await expect(module.locator('.ro-ride')).toHaveCount(2);
   await expect(module.locator('.ro-module-title')).toContainText('2 / 12');
+  // Under 50 is Best pick's opposite.
+  await expect(
+    module.locator('.ro-ride').nth(1).locator('.ro-pill'),
+  ).toHaveText(['Not recommended']);
+  await module.screenshot({ path: test.info().outputPath('tiles.png') });
   const imported = calls.find(
     (c) => c.path === '/route-imports' && c.body.source.externalId === '102',
   );
