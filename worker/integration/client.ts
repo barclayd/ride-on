@@ -8,6 +8,26 @@ import { routeGpx } from './fixtures.ts';
 import { type Harness, RIDE_DATE } from './harness.ts';
 
 const conditions = z.object({
+  windDistanceFractions: z.object({
+    headwind: z.number().min(0).max(1),
+    tailwind: z.number().min(0).max(1),
+    crosswind: z.number().min(0).max(1),
+  }),
+  precipitationSummary: z.enum([
+    'dry',
+    'possible',
+    'drizzle',
+    'light_showers',
+    'light_rain',
+    'showers',
+    'rain',
+    'heavy_showers',
+    'heavy_rain',
+    'sleet',
+    'snow',
+    'hail',
+    'thunder',
+  ]),
   temperatureC: z.object({ minimum: z.number(), maximum: z.number() }),
   maximumGustKph: z.number(),
   skyConditionDistanceFractions: z

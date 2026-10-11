@@ -64,7 +64,7 @@ export const forecastsFor = (
             descriptor.kind === 'scalar'
               ? descriptor.measure.quantity
               : descriptor.kind === 'category'
-                ? 'sky-condition'
+                ? descriptor.quantity
                 : 'probability';
           return {
             validAt: new Date(valid).toISOString(),

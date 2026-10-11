@@ -7,13 +7,19 @@ import type {
   ForecastProvider,
   ForecastRequest,
   ForecastSample,
+  ForecastSeries,
   LocationForecastResult,
   ProviderIssue,
   RequestedLocation,
   SampleTime,
 } from './contracts.ts';
-import { descriptorKey, weatherDescriptors as weather } from './descriptors.ts';
+import {
+  descriptorKey,
+  precipitationTypeDescriptor,
+  weatherDescriptors as weather,
+} from './descriptors.ts';
 import { readBoundedJson } from './http.ts';
+import { precipitationTypes as precipitation } from './precipitation.ts';
 import { forecastRequestSchema, utcInstant } from './validation.ts';
 
 const HOUR = 3_600_000;
@@ -66,6 +72,7 @@ const mappings: readonly Mapping[] = [
     aggregation: 'mean',
   },
   { field: 'conditionCode', descriptor: weather.skyCondition },
+  { field: 'conditionCode', descriptor: precipitationTypeDescriptor },
   {
     field: 'precipitationAmount',
     descriptor: weather.precipitationAmount,
@@ -170,12 +177,49 @@ export const appleSkyCondition = (
     return daylight === true ? skyConditions.sunnyIntervals : null;
   return null;
 };
+/** Broad display vocabulary only; freezing and tropical detail is not a hazard assessment. */
+export const applePrecipitationType = (code: unknown): number | null => {
+  switch (code) {
+    case 'Drizzle':
+    case 'FreezingDrizzle':
+      return precipitation.drizzle;
+    case 'Rain':
+    case 'FreezingRain':
+    case 'TropicalStorm':
+    case 'Hurricane':
+      return precipitation.rain;
+    case 'HeavyRain':
+      return precipitation.heavy_rain;
+    case 'SunShowers':
+      return precipitation.showers;
+    case 'Sleet':
+    case 'WintryMix':
+      return precipitation.sleet;
+    case 'Flurries':
+    case 'Snow':
+    case 'SunFlurries':
+    case 'Blizzard':
+    case 'HeavySnow':
+      return precipitation.snow;
+    case 'Hail':
+      return precipitation.hail;
+    case 'IsolatedThunderstorms':
+    case 'ScatteredThunderstorms':
+    case 'StrongStorms':
+    case 'Thunderstorms':
+      return precipitation.thunder;
+    default:
+      return null;
+  }
+};
 const convert = (
   row: Record<string, unknown>,
   mapping: Mapping,
 ): number | null => {
   if (mapping.descriptor.kind === 'category')
-    return appleSkyCondition(row[mapping.field], row.daylight);
+    return mapping.descriptor.quantity === 'precipitation-type'
+      ? applePrecipitationType(row[mapping.field])
+      : appleSkyCondition(row[mapping.field], row.daylight);
   const raw = row[mapping.field];
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
   if (
@@ -292,7 +336,14 @@ export const normaliseAppleWeather = (
     );
   const start = Date.parse(request.range.start);
   const end = Date.parse(request.range.end);
-  const series = request.required.flatMap((descriptor) => {
+  const wanted = [...request.required];
+  if (
+    !wanted.some(
+      (d) => descriptorKey(d) === descriptorKey(precipitationTypeDescriptor),
+    )
+  )
+    wanted.push(precipitationTypeDescriptor);
+  const series = wanted.flatMap<ForecastSeries>((descriptor) => {
     const mapping = mappingFor(descriptor);
     if (!mapping) {
       issues.push(
@@ -327,6 +378,12 @@ export const normaliseAppleWeather = (
             : { kind: 'instant', at: validAt },
         };
       });
+    // A missing display label must not change eligibility, fallback or cacheability.
+    if (
+      descriptor.kind === 'category' &&
+      descriptor.quantity === 'precipitation-type'
+    )
+      return [{ descriptor, samples }];
     const present = new Set(samples.map((s) => Date.parse(s.validAt)));
     const missing: number[] = [];
     for (let at = Math.floor(start / HOUR) * HOUR; at < end; at += HOUR)
@@ -354,7 +411,14 @@ export const normaliseAppleWeather = (
     return [{ descriptor, samples }];
   });
   const uniqueIssues = [...new Map(issues.map((i) => [i.code, i])).values()];
-  if (!series.some((s) => s.samples.some((sample) => sample.value !== null)))
+  if (
+    !series.some(
+      (s) =>
+        request.required.some(
+          (d) => descriptorKey(d) === descriptorKey(s.descriptor),
+        ) && s.samples.some((sample) => sample.value !== null),
+    )
+  )
     return unavailable(
       requested,
       uniqueIssues.find((i) => i.code !== 'unknown-model-run') ??

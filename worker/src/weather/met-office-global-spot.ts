@@ -10,9 +10,16 @@ import type {
   RequestedLocation,
   SampleTime,
 } from './contracts.ts';
-import { descriptorKey, weatherDescriptors as weather } from './descriptors.ts';
+import {
+  descriptorKey,
+  precipitationTypeDescriptor,
+  weatherDescriptors as weather,
+} from './descriptors.ts';
 import { readBoundedJson } from './http.ts';
-import { metOfficeSkyCondition } from './met-office-symbols.ts';
+import {
+  metOfficePrecipitationType,
+  metOfficeSkyCondition,
+} from './met-office-symbols.ts';
 import { forecastRequestSchema, utcInstant } from './validation.ts';
 
 const HOUR = 3_600_000;
@@ -37,6 +44,11 @@ type Mapping = Readonly<{
 
 // Timing verified against the DataHub glossary and parameter metadata, 2026-10-09.
 const mappings: readonly Mapping[] = [
+  {
+    field: 'significantWeatherCode',
+    descriptor: precipitationTypeDescriptor,
+    unit: '1',
+  },
   {
     field: 'significantWeatherCode',
     descriptor: weather.skyCondition,
@@ -132,7 +144,10 @@ const unavailable = (
 
 const convert = (raw: unknown, mapping: Mapping): number | null => {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
-  if (mapping.descriptor.kind === 'category') return metOfficeSkyCondition(raw);
+  if (mapping.descriptor.kind === 'category')
+    return mapping.descriptor.quantity === 'precipitation-type'
+      ? metOfficePrecipitationType(raw)
+      : metOfficeSkyCondition(raw);
   if (mapping.descriptor.kind === 'probability')
     return raw >= 0 && raw <= 100 ? raw / 100 : null;
   const quantity = mapping.descriptor.measure.quantity;
@@ -232,7 +247,17 @@ export const normaliseGlobalSpot = (
   >;
   const start = Date.parse(request.range.start);
   const end = Date.parse(request.range.end);
-  const series = request.required.flatMap((descriptor) => {
+  const wanted = [...request.required];
+  if (
+    !wanted.some(
+      (d) => descriptorKey(d) === descriptorKey(precipitationTypeDescriptor),
+    )
+  )
+    wanted.push(precipitationTypeDescriptor);
+  const series = wanted.flatMap((descriptor) => {
+    const optional =
+      descriptor.kind === 'category' &&
+      descriptor.quantity === 'precipitation-type';
     const mapping = mappings.find(
       (candidate) =>
         descriptorKey(candidate.descriptor) === descriptorKey(descriptor),
@@ -249,7 +274,7 @@ export const normaliseGlobalSpot = (
     const unit = unitSchema.safeParse(metadata[mapping.field]);
     const validUnit =
       unit.success && unit.data.unit.symbol.type === mapping.unit;
-    if (!validUnit)
+    if (!validUnit && !optional)
       issues.push(
         issue(
           'invalid-response',
@@ -281,6 +306,7 @@ export const normaliseGlobalSpot = (
         value: validUnit ? convert(row[mapping.field], mapping) : null,
       };
     });
+    if (optional) return [{ descriptor, samples }];
     // Coverage checks use the expected validity grid; ten-minute wind means do not
     // falsely promise continuously measured wind throughout each hour.
     const expected: number[] = [];
@@ -322,7 +348,12 @@ export const normaliseGlobalSpot = (
     ...new Map(issues.map((problem) => [problem.code, problem])).values(),
   ];
   if (
-    !series.some((item) => item.samples.some((sample) => sample.value !== null))
+    !series.some(
+      (item) =>
+        request.required.some(
+          (d) => descriptorKey(d) === descriptorKey(item.descriptor),
+        ) && item.samples.some((sample) => sample.value !== null),
+    )
   ) {
     return unavailable(
       requested,

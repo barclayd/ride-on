@@ -14,7 +14,7 @@ liveTest('deployed API identifies the recommendation build', async () => {
   };
   expect(health).toMatchObject({
     ok: true,
-    version: '0.14.0',
+    version: '0.15.0',
     algorithmVersion: ALGORITHM_VERSION,
   });
   if (process.env.EXPECTED_REVISION)

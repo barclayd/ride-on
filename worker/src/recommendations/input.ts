@@ -163,6 +163,12 @@ export const settingsSchema = z.strictObject({
   display: z
     .strictObject({ unit: z.enum(['km', 'mi']) })
     .default({ unit: 'km' }),
+  units: z
+    .strictObject({
+      temperature: z.enum(['C', 'F']),
+      windSpeed: z.enum(['kmh', 'mph']),
+    })
+    .optional(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 export const defaultSettings: Settings = {
@@ -244,6 +250,7 @@ export const settingsPatchSchema = z
     weather: weather.optional(),
     planning: planningSchema.partial().optional(),
     display: settingsSchema.shape.display.unwrap().partial().optional(),
+    units: settingsSchema.shape.units,
     preferenceLevels: preferenceLevelsSchema.optional(),
   })
   .superRefine(checkSettingsConflicts);
@@ -260,6 +267,11 @@ export const mergeSettings = (
   return {
     planning: { ...(base.planning ?? defaultPlanning), ...patch.planning },
     display: { ...(base.display ?? { unit: 'km' as const }), ...patch.display },
+    ...(patch.units === undefined && base.units === undefined
+      ? {}
+      : {
+          units: patch.units ?? base.units,
+        }),
     timeZone: patch.timeZone ?? base.timeZone,
     riding: { ...base.riding, ...patch.riding },
     forecast: { ...base.forecast, ...provider?.forecast, ...patch.forecast },

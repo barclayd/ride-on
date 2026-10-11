@@ -81,6 +81,38 @@ const createUser = async (
   return readUser(r);
 };
 
+for (const [code, expected] of [
+  ['SunShowers', 'showers'],
+  ['Snow', 'snow'],
+  ['Breezy', 'dry'],
+] as const)
+  integration(
+    `Apple condition chips use ${code} with sunshine disabled and reuse the cached forecast`,
+    async (h) => {
+      h.use(
+        apple((data) => {
+          for (const row of data.forecastHourly.hours) row.conditionCode = code;
+        }),
+      );
+      const route = await upload(h);
+      const initial = await recommend(h, [route.id]);
+      const best = first(initial.rankings).best;
+      assert.equal(best.conditions.precipitationSummary, expected);
+      assert.equal(best.conditions.skyConditionDistanceFractions, null);
+      assert.ok(
+        best.rideHours.every(
+          (hour) => hour.conditions?.precipitationSummary === expected,
+        ),
+      );
+      const calls = h.requests.length;
+      assert.equal(calls, initial.weather.locations.length);
+      await h.restart();
+      const cached = await recommend(h, [route.id]);
+      assert.equal(h.requests.length, calls);
+      assert.deepEqual(cached.rankings, initial.rankings);
+    },
+  );
+
 integration(
   'Apple is the default before profile creation and for new users; GPX recommendations and branding survive cache restart',
   async (h) => {

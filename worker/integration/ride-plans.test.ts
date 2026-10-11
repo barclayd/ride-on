@@ -94,6 +94,8 @@ integration(
   'planned recommendation persists through replay, restart, list and unchanged-date correction with its original provider credit',
   async (h) => {
     const { route, plan } = await fixture(h);
+    assert.equal(plan.conditions.precipitationSummary, 'dry');
+    assert.ok(plan.conditions.windDistanceFractions);
     const key = crypto.randomUUID();
     const created = await log(h, route.id, plan, key);
     assert.equal(created.status, 201, await created.clone().text());
@@ -123,6 +125,30 @@ integration(
       (await h.send(`/rides/${ride.id}`, { token: BOB_TOKEN })).status,
       404,
     );
+  },
+);
+
+integration(
+  'historical plans without condition chips still write, replay and read unchanged',
+  async (h) => {
+    const { route, plan } = await fixture(h);
+    const {
+      windDistanceFractions: _wind,
+      precipitationSummary: _rain,
+      ...conditions
+    } = plan.conditions;
+    const legacy = { ...plan, conditions };
+    const key = crypto.randomUUID();
+    const created = await log(h, route.id, legacy, key);
+    assert.equal(created.status, 201);
+    const ride = await readRide(created);
+    assert.deepEqual(ride.plan?.conditions, conditions);
+    await h.restart();
+    const fetched = await readRide(await h.send(`/rides/${ride.id}`));
+    assert.deepEqual(fetched.plan?.conditions, conditions);
+    const replay = await log(h, route.id, legacy, key);
+    assert.equal(replay.status, 200);
+    assert.deepEqual((await readRide(replay)).plan?.conditions, conditions);
   },
 );
 

@@ -128,8 +128,7 @@ export const cachedForecastSchema = forecastSnapshotSchema.refine(
     ) &&
       result.series.every(
         ({ descriptor, samples }) =>
-          (descriptor.kind === 'category' &&
-            descriptor.quantity === 'sky-condition') ||
+          descriptor.kind === 'category' ||
           (samples.length > 0 &&
             samples.every(
               (sample, index) =>

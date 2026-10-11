@@ -11,7 +11,9 @@ import {
   descriptorKey,
   weatherDescriptors as descriptors,
   ensembleDescriptors,
+  precipitationTypeDescriptor,
 } from '../weather/descriptors.ts';
+import { summarizePrecipitation } from '../weather/precipitation.ts';
 import { assessClimbing, CLIMBING_SHARE } from './climbing.ts';
 import { conditionsSchema } from './conditions.ts';
 import { planDepartures } from './daylight.ts';
@@ -120,6 +122,7 @@ type Observation = {
   windSpeedKph: number;
   cloudCoverFraction: number | null;
   skyCondition: number | null;
+  precipitationType: number | null;
   sunshine: number | null;
   clearSkies: number | null;
   headwindKph: number;
@@ -148,6 +151,26 @@ const summarize = (rows: readonly Observation[]) => {
   const mean = (value: (row: Observation) => number) =>
     rows.reduce((sum, row) => sum + value(row) * row.distanceM, 0) / distance;
   return conditionsSchema.parse({
+    windDistanceFractions: {
+      headwind: round(
+        mean((r) =>
+          r.headwindKph > 0 && Math.abs(r.headwindKph) >= r.crosswindKph
+            ? 1
+            : 0,
+        ),
+      ),
+      tailwind: round(
+        mean((r) =>
+          r.headwindKph <= 0 && Math.abs(r.headwindKph) >= r.crosswindKph
+            ? 1
+            : 0,
+        ),
+      ),
+      crosswind: round(
+        mean((r) => (r.crosswindKph > Math.abs(r.headwindKph) ? 1 : 0)),
+      ),
+    },
+    precipitationSummary: summarizePrecipitation(rows),
     skyConditionDistanceFractions: rows.every((r) => r.skyCondition !== null)
       ? Object.fromEntries(
           Object.entries(skyConditions).map(([name, code]) => [
@@ -336,6 +359,7 @@ const assessCandidate = (
       windSpeedKph: speedMs * 3.6,
       cloudCoverFraction,
       skyCondition,
+      precipitationType: values.at(-1) ?? null,
       sunshine,
       clearSkies,
       headwindKph,
@@ -613,8 +637,9 @@ export const recommendRides = (
       );
       return [
         id,
-        requiredWeatherFor(input).map((descriptor) =>
-          compileSeries(byDescriptor.get(descriptorKey(descriptor)) ?? []),
+        [...requiredWeatherFor(input), precipitationTypeDescriptor].map(
+          (descriptor) =>
+            compileSeries(byDescriptor.get(descriptorKey(descriptor)) ?? []),
         ),
       ];
     }),

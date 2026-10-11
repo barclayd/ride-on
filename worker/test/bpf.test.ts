@@ -197,7 +197,13 @@ describe('BPF CoverageJSON contract', () => {
       expect(result.status).toBe('partial');
       if (result.status !== 'unavailable')
         expect(
-          result.series.at(-1)?.samples.every((s) => s.value === null),
+          result.series
+            .find(
+              (s) =>
+                s.descriptor.kind === 'scalar' &&
+                s.descriptor.measure.quantity === 'total-cloud-cover',
+            )
+            ?.samples.every((s) => s.value === null),
         ).toBe(true);
     }
     const fixture = bpfFixture();
@@ -207,7 +213,14 @@ describe('BPF CoverageJSON contract', () => {
     present(cloud.domain.axes.percentiles).values = ['10', '40', '90'];
     const result = normalize(fixture);
     expect(result.status).toBe('partial');
-    if (result.status !== 'unavailable') expect(result.series).toHaveLength(6);
+    if (result.status !== 'unavailable')
+      expect(
+        result.series.some(
+          (s) =>
+            s.descriptor.kind === 'scalar' &&
+            s.descriptor.measure.quantity === 'total-cloud-cover',
+        ),
+      ).toBe(false);
   });
   test('cannot claim model-run freshness or use distant sites', () => {
     expect(
