@@ -1,159 +1,176 @@
-# API brief v3: Chrome extension (design 4, API v0.11.0)
+# Extension API brief v3 — reviewed contract
 
-The extension (`extension/`) is implementing design handoff 4 ("Expired window":
-ride check-in, History tab, recently ridden routes, next-window suggestions)
-against **API v0.11.0** ([ride history](ride-history.md)). This brief lists the two
-additions the extension is built against, and the design-4 asks that need no API
-work. The extension PR stays unmerged until these ship.
+API **0.12.0**, algorithm **comfort-v0.9**. This replaces the proposed v3 wire
+contract. The [review decisions](extension-api-v3-decisions.md) explain required
+UI changes. All endpoints require the normal owner-bound session.
 
-The usual rules apply: strict Zod input, documentation updated with the code, and
-no logging of tokens, GPX or forecast bodies. Keep field names as written, or
-update this file in the same PR.
+## Planned recommendation on a logged ride
 
-## Already working: no action needed
+`POST /rides` accepts optional `plan`; omitted and `null` mean no plan. Existing
+logging fields and `Idempotency-Key` still apply. Build it from the **original
+recommendation shown**, before updating history or re-ranking:
 
-- `POST /rides` with `Idempotency-Key`, `DELETE /rides/:id` and `GET /rides`
-  (newest first, `limit` up to 100, `nextCursor`). The check-in's "Yes, I rode it"
-  logs a ride; Undo deletes it; the History tab lists and removes rides.
-- `preferences.recentRides`: the Preferences card offers "Happy to repeat"
-  (`neutral`) and "Prefer variety" (`prefer-variety`), saved with `PATCH /users/me`.
-  The extension never sends `lookbackDays`, keeps the API default of `neutral` and
-  shows "Ranked lower until <last ridden + lookbackDays>" only for `prefer-variety`.
-- Re-running recommendations after logging, undoing or removing a ride.
-
-## 1. Planned-ride snapshot on a ride (highest priority)
-
-**Today's workaround:** none. A ride stores only its date and route snapshot, so the
-History card can't show design 4's second and third lines:
-
-```text
-Sat 11 Oct · 08:00 · 35 km · 1h 46m
-12° · dry · your top pick
+```ts
+const plan = {
+  schemaVersion: 1,
+  departureAt: ranked.best.departureAt,
+  finishAt: ranked.best.finishAt,
+  conditions: ranked.best.conditions,
+  pickRank: ranked.rank, // positive integer, or null if the rank was not retained
+  generatedAt: recommendation.generatedAt,
+  algorithmVersion: recommendation.algorithmVersion,
+  weather: { attribution: recommendation.weather.attribution },
+};
 ```
 
-The extension knows all of this at check-in time: it is the recommendation the
-rider was shown for the window that just ended.
+The additional metadata fields are required whenever `plan` is present. Retain
+all attribution fields, including logos and notices. Do not copy the full weather
+response or provider payloads. Conditions use the shared provider-neutral schema
+in `worker/src/recommendations/conditions.ts`, unchanged from `best.conditions`.
+`schemaVersion` defaults to 1; unsupported versions and unknown fields fail.
+Attribution is 1–10 entries, HTTPS URLs only; strings and the JSON body are bounded.
 
-**Ask:** accept an optional, nullable `plan` on `POST /rides` and return it on every
-ride representation (`POST`, `GET /rides`, `GET /rides/:id`, `PATCH`).
+Instants require an offset and are normalized to UTC milliseconds. Generation
+must not follow departure, departure must precede finish, and departure's date
+in the logged ride's time zone must equal `riddenOn`. A plan is **client-supplied
+display context**, not verified activity or a server-authenticated recommendation.
+All ride representations return `plan` and `planSource: "client-supplied" | null`.
+Without a plan, both fields are null. Show forecast conditions and planned times
+as such; do not imply observed weather or actual moving duration.
 
-```jsonc
+Plans do not affect recency, overlap, duration estimates or scoring. The plan is
+part of the idempotency fingerprint. Omitted/null plans preserve pre-v0.12 retry
+compatibility. Changing **either date or time zone** in `PATCH /rides/:id` clears
+the plan atomically. Retrying the original POST then returns the current, corrected
+record, as before. A deleted logging action still returns `409 RIDE_UNDONE`.
+Keep `expectedRouteVersion` from the route originally shown; do not silently
+upgrade it after a source refresh.
+
+## Next-window suggestions
+
+```http
+POST /recommendations/next-windows
+Content-Type: application/json
+```
+
+```json
 {
-  "routeId": "…",
-  "expectedRouteVersion": 3,
-  "riddenOn": "2026-10-11",
-  "timeZone": "Europe/London",
-  "plan": {
-    "departureAt": "2026-10-11T07:00:00.000Z", // the recommended departure
-    "finishAt": "2026-10-11T08:46:00.000Z",    // its estimated finish
-    "conditions": { /* that departure's `best.conditions`, unchanged */ },
-    "pickRank": 1                               // 1-based rank in that window, null if unranked
+  "routeIds": ["<owned route UUID>"],
+  "after": {
+    "date": "2026-10-11",
+    "window": { "start": "09:00", "end": "13:00" }
   }
 }
 ```
 
-- `plan` describes what was **recommended**, not what happened. It is not a
-  completion time and must not affect scoring, overlap or recency (which stay
-  date-based).
-- Validate strictly: `departureAt < finishAt`, both ISO instants; `departureAt`'s
-  local date in `timeZone` equals `riddenOn`; `conditions` uses the same schema
-  as recommendation `conditions`; `pickRank` is a positive integer or null.
-- `plan` is part of the idempotent request content (`IDEMPOTENCY_CONFLICT` if it
-  differs on replay).
-- `PATCH /rides/:id` that changes `riddenOn` sets `plan` to null, since it described
-  another day.
+`after.window` also accepts `"daylight"`. `after.date` must be today or earlier
+in the effective time zone; the API does not assert that a previous UI session
+actually existed or that a same-day window has expired. The client decides when
+to show this view.
 
-The extension sends `plan` when it has one and renders the lines only when `plan`
-is present, so rides logged without it (or before this ships) show
-`Sat 11 Oct · 35 km`.
+The same saved settings and temporary `preferences`, `preferenceLevels`,
+`timeZone`, `riding.averageSpeedKph`, `riding.departureStepMinutes`, `weather` and
+`forecast` overrides apply as for normal recommendations. Overrides are not saved.
+The settings-patch fields `planning` and `display` are also accepted for consistency
+but do not change this endpoint's fixed search policy. Do not send `date`, `days`,
+`previewDays` or `riding.window`; `after.window` is the repeated window.
+Route limits and unknown-field/weight-conflict validation are unchanged.
 
-## 2. Next-window suggestions in one call
+Returned suggestions remain in this order:
 
-**Today's workaround:** none. When the last window the rider saw has ended, design 4
-replaces the ranked list with "When's your next ride?": up to three window cards,
-each with its best score, top route, departure and weather. The design asks for
-one call rather than three.
+| `kind` | Search | Window |
+| --- | --- | --- |
+| `tomorrow` | Effective today + 1 | `after.window` |
+| `same_weekday` | First date at least today + 2 matching `after.date`'s weekday; can be today + 8 | `after.window` |
+| `best_next_days` | Effective today + 1 through today + 6 inclusive | Daylight |
 
-**Ask:** add `POST /recommendations/next-windows`.
+`best_next_days` replaces the proposed `best_this_week`; label it “Best in the next
+6 days”, not “Best this week”. Label other cards from their returned dates and
+window; a daylight search should not automatically be called “morning”.
 
-```jsonc
-// request
+The response contains:
+
+- `windows`: up to three suggestions. Each has `kind`, `searchRange`, `days`,
+  winning `date`, requested `window`, winning route's `effectiveWindow`,
+  `minimumStandardsStatus`, `recommendationKind`, `message`, `verdict`, `coverage`,
+  `warnings` and `best`. `best` contains `routeId`, `routeName` and the complete
+  standard assessed-departure fields (score, standards, conditions, drawbacks,
+  factor scores, recent-ride evidence and hourly variation).
+- `recommendedKind`: the card to highlight, or null. Uses the engine's
+  standards-first comparison, score, earlier departure and route-ID tie-breaker.
+  Do not find the highest raw score in the client.
+- `omitted`: one entry for each missing kind, with its `searchRange`, daily
+  availability evidence, `reasonCode: "no_ranked_ride" | "duplicate"`, and
+  `unranked` route verdicts. Daily reasons distinguish no fit, provider failure,
+  missing data and dates beyond the actual forecast horizon. A generated clock
+  time skipped/repeated at DST has `availabilityReason: "invalid_window_time"`;
+  other suggestions still work.
+- Standard `history`, `weather` (including attribution, selected source, cache
+  and retrieval evidence), `algorithmVersion`, `generatedAt`, `timeZone`,
+  `savedUser`, `resolvedPreferences`, `preferenceLevels`, `riding` and `forecast`.
+
+A fully assessable ride remains eligible when only part of the surrounding day
+is covered. Use coverage/warnings; do not claim the entire window was evaluated.
+Below-minimum rides remain available with `recommendationKind: "best_available"`.
+A best-next-days result matching an earlier card's route and departure is omitted
+as a duplicate. Other omissions must not be silently presented as “no good rides”.
+
+The endpoint uses the existing engine through a shared comparison service, with
+one history snapshot and one cached provider-horizon request per location per
+attempted provider. Explicit fallback policies can try multiple providers; strict
+Met Office stays strict. No self-HTTP calls or per-window forecast fan-out. The
+same snapshot supplies all comparisons; missing history geometry/assessment limits
+retain the comparison-wide conservative fallback documented in ride history.
+A fresh request after tapping a card may differ if forecasts or history changed.
+
+## Accurate route badges
+
+```http
+POST /rides/summaries
+Content-Type: application/json
+```
+
+```json
+{ "routeIds": ["<owned route UUID>"] }
+```
+
+Supply 1–100 unique route IDs (a route-list page). Returns `summaries` in input
+order and `historyRevision`, read in one database transaction:
+
+```json
 {
-  "routeIds": ["…"],               // as POST /recommendations
-  "after": {                        // the window that ended
-    "date": "2026-10-11",           // its last date, ≤ today
-    "window": { "start": "08:00", "end": "14:00" } // or "daylight"
-  },
-  "preferences": { /* optional overrides, as POST /recommendations */ }
-}
-
-// 200
-{
-  "timeZone": "Europe/London",
-  "windows": [
-    {
-      "kind": "tomorrow",           // "tomorrow" | "same_weekday" | "best_this_week"
-      "date": "2026-10-12",
-      "window": { "start": "08:00", "end": "14:00" }, // or "daylight"
-      "effectiveWindow": { "start": "…Z", "end": "…Z" }, // after daylight clipping
-      "best": {                     // the window's top-ranked ride
-        "routeId": "…",
-        "departureAt": "…Z",
-        "finishAt": "…Z",
-        "score": 84,
-        "conditions": { /* as recommendation conditions */ }
-      }
+  "summaries": [{
+    "routeId": "<owned route UUID>",
+    "rideCount": 3,
+    "lastRiddenOn": "2026-10-11",
+    "lastRide": {
+      "id": "<ride UUID>",
+      "riddenOn": "2026-10-11",
+      "timeZone": "Europe/London",
+      "routeVersion": 2
     }
-  ],
-  "history": { /* as POST /recommendations */ },
-  "weather": { /* as POST /recommendations, for attribution */ }
+  }],
+  "historyRevision": 8
 }
 ```
 
-The three windows, in this order:
+Unridden routes have count 0 and null `lastRiddenOn`/`lastRide`. Missing or unowned
+IDs return 404 for the whole request. “Latest” uses recorded calendar date,
+then the same stable ID tie-breaker as history; it does not invent completion
+timestamps. This is exact route-ID history across its versions, not an overlap
+assessment. It considers all history, independent of pagination. Use the recorded
+time zone when deciding whether that date is “today”; refresh after mutations.
 
-| `kind` | Date (effective time zone) | Window |
-|---|---|---|
-| `tomorrow` | today + 1 | `after.window` |
-| `same_weekday` | the first date ≥ today + 2 with `after.date`'s weekday | `after.window` |
-| `best_this_week` | the date of the best departure over today + 1 … today + 6 | `"daylight"` |
+## Client call sequence
 
-- Rank exactly as `POST /recommendations` does for that date and window, including
-  minimum standards, distance fit and `recentRides`. `best` is that ranking's
-  top ride.
-- **Omit** a window when its forecast doesn't cover it or no ride is ranked, and
-  omit `best_this_week` when its `best` (route and `departureAt`) equals an
-  earlier window's.
-- Reuse forecasts across the three windows: one fetch per location, not one per
-  window.
+On open, load profile, routes, shortlist and the first history page. Load route
+summaries for displayed route IDs. If the prior selection has expired, request
+next-window suggestions. Otherwise use **one** `POST /recommendations` with
+`days` for the entire selection (see [planning API](planning-api.md)).
 
-The extension names the cards itself ("Tomorrow morning", "Next Saturday morning",
-"Best time this week") and highlights the highest score. Tapping one sets the
-search to that date and window, then uses the existing `POST /recommendations`.
+Logging/undo/correction/deletion invalidates history, route summaries and
+recommendations. Keep pending logging idempotency keys until success; scope
+local check-in state to the authenticated account and the actual selection.
+History remains cursor-paginated; never infer completeness from its first page.
 
-## Not API work
-
-- **Window expiry** (design §7 item 4): the extension remembers the dates and
-  window it last showed, and their end from `effectiveWindow`. If those have ended
-  when the panel opens, it shows the check-in and suggestions without asking for
-  scores. No `window_expired` state is needed.
-- **Duration preference** (design §7 item 5, `recentRidePenalty: {days}|{months}`):
-  withdrawn. The extension uses `recentRides.mode` with the API's 28-day default.
-- **Route list ride fields** (design §7 item 6): "Ridden today" and "Last ridden"
-  tags come from the newest 100 rides in `GET /rides`.
-- **`windowId` and `source: 'checkin'`** on `POST /rides` (design §7 item 2): not
-  needed. The check-in is local state; it is skipped when `GET /rides` already has a
-  ride on that date.
-- **History Undo after removal:** the extension re-creates the ride with
-  `POST /rides` and a new idempotency key, sending the same route, date and `plan`.
-
-## Extension call sequence
-
-- **Panel open:** `GET /users/me`, `GET /routes`, the shortlist and
-  `GET /rides?limit=100`. If the last shown window has ended:
-  `POST /recommendations/next-windows`; otherwise one `POST /recommendations` per
-  date, as today.
-- **Yes, I rode it:** `POST /rides` (with `plan`), then `GET /rides` and the
-  suggestions or recommendations again. **Undo:** `DELETE /rides/:id`, then the same
-  refresh.
-- **History:** pages of `GET /rides?limit=100&cursor=…`; × is `DELETE /rides/:id`.
+Apply migration `0006_ride_plans.sql` after `0005_rides.sql`, before deployment.

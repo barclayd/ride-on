@@ -6,6 +6,7 @@ route/departure combinations. This replaces the legacy classification and Strava
 OAuth endpoints. The existing app clients have not yet been migrated.
 
 API v0.11.0 adds [ride history and recent-route preferences](ride-history.md).
+API v0.12.0 adds [planned ride snapshots, next-window suggestions and route-history summaries](extension-api-brief-v3.md).
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -785,7 +786,8 @@ The session-only authentication release was v0.6.0, and climbing preferences
 arrived in v0.7.0 (`comfort-v0.5`). Preferred distance was v0.8.0 (`comfort-v0.6`).
 Apple Weather was v0.9.0 (`comfort-v0.7`). Multi-day planning and preference presets
 arrived in v0.10.0 with algorithm `comfort-v0.8`. Ride history and recent-route
-preferences are v0.11.0 (`comfort-v0.9`);
+preferences are v0.11.0 (`comfort-v0.9`). Planned snapshots, next-window suggestions
+and route-history summaries are v0.12.0 (algorithm unchanged);
 `GET /health` reports the running version. The canonical custom domain is
 `https://api.ride-on.cc`. Both Met Office credentials and `AUTH_CONFIG_JSON` are
 Worker secrets. Apple Weather uses the separate `APPLE_WEATHER_CONFIG_JSON` secret.
@@ -798,7 +800,8 @@ The production `ride-on-routes` D1 database is in Western Europe. Its ID is reco
 in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before
 publishing the authentication-enabled Worker. No new database migration is
 required for v0.6.0 through v0.10.0. v0.11.0 requires additive migration
-`0005_rides.sql` before deployment. Neutral preferences preserve existing scores;
+`0005_rides.sql` before deployment. v0.12.0 additionally requires
+`0006_ride_plans.sql`. Neutral preferences preserve existing scores;
 legacy geometry upgrades are described in [ride history](ride-history.md).
 The additive authentication migration preserves route facts, shortlists and user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used

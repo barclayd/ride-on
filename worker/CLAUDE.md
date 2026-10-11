@@ -8,6 +8,7 @@ remain separate; adapt them after the API algorithm has been calibrated.
 Read `../docs/api.md` for contracts, defaults, setup, validation and limitations.
 Read `../docs/ride-history.md` for ride logging, geometry enrichment and repetition scoring.
 Read `../docs/planning-api.md` for multi-day searches, presets and coverage.
+Read `../docs/extension-api-brief-v3.md` for planned snapshots, next-window suggestions and route-history summaries.
 Read `../docs/weather-providers.md` for verified weather mappings and provider rules.
 
 ## Conventions

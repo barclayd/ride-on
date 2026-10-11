@@ -13,6 +13,7 @@ import {
   listRides,
   publicRide,
   rideDate,
+  summarizeRides,
 } from './store.ts';
 
 const notFound = () =>
@@ -26,16 +27,43 @@ const checkDate = (date: string, zone: string, now: Date) => {
 };
 export const rideRoutes = (now: () => Date) => {
   const app = new Hono<Bindings>();
+  app.post('/rides/summaries', async (c) => {
+    const input = await readJsonBody(
+      c,
+      z.strictObject({
+        routeIds: z
+          .array(z.uuid())
+          .min(1)
+          .max(100)
+          .refine((ids) => new Set(ids).size === ids.length),
+      }),
+    );
+    const result = await summarizeRides(
+      c.env.ROUTES_DB,
+      c.get('ownerId'),
+      input.routeIds,
+    );
+    if (!result)
+      throw new AppError(
+        404,
+        'ROUTE_NOT_FOUND',
+        'One or more routes were not found.',
+      );
+    return c.json(result);
+  });
   app.post('/rides', async (c) => {
     const key = validateInput(z.uuid(), c.req.header('Idempotency-Key'));
     const input = await readJsonBody(c, createRideSchema);
     const timestamp = now();
     checkDate(input.riddenOn, input.timeZone, timestamp);
+    // Preserve fingerprints created before plans existed; omitted and null are equivalent.
+    const { plan, ...base } = input;
+    const fingerprint = plan ? { ...base, plan } : base;
     const hash = Array.from(
       new Uint8Array(
         await crypto.subtle.digest(
           'SHA-256',
-          new TextEncoder().encode(JSON.stringify(input)),
+          new TextEncoder().encode(JSON.stringify(fingerprint)),
         ),
       ),
       (b) => b.toString(16).padStart(2, '0'),
@@ -130,9 +158,11 @@ export const rideRoutes = (now: () => Date) => {
     const timestamp = now();
     checkDate(input.riddenOn, input.timeZone, timestamp);
     const results = await c.env.ROUTES_DB.batch([
-      c.env.ROUTES_DB.prepare(`UPDATE rides SET ridden_on = ?, time_zone = ?, version = version + 1, updated_at = ?
+      c.env.ROUTES_DB.prepare(`UPDATE rides SET plan_json = CASE WHEN ridden_on <> ? OR time_zone <> ? THEN NULL ELSE plan_json END, ridden_on = ?, time_zone = ?, version = version + 1, updated_at = ?
         WHERE owner_id = ? AND id = ? AND version = ?
         RETURNING *, (source_hash IN (SELECT source_hash FROM ride_geometries WHERE owner_id = ?)) AS geometry_available`).bind(
+        input.riddenOn,
+        input.timeZone,
         input.riddenOn,
         input.timeZone,
         timestamp.toISOString(),
