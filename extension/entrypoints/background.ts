@@ -666,12 +666,14 @@ const handle = async (message: Message) => {
 };
 
 export default defineBackground(() => {
-  // A worker restart abandons Chrome's sign-in window and any unsent edit; don't leave either
-  // spinning. Safari's sign-in tab outlives it, so that stays until it finishes or expires.
+  // A worker restart abandons Chrome's sign-in window, any unsent edit and any request in
+  // flight (Safari stops its worker mid-fetch); don't leave them spinning or the panel dimmed.
+  // Safari's sign-in tab outlives it, so that stays until it finishes or expires.
   (import.meta.env.SAFARI ? pendingSignIn() : Promise.resolve(undefined)).then(
     (pending) =>
       update((state) => ({
         syncing: false,
+        loading: false,
         ...(state.auth === 'signing-in' &&
           !pending && { auth: 'signed-out', signingInWith: null }),
       })),
