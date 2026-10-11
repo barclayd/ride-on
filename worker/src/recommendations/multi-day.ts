@@ -94,7 +94,7 @@ export const mergeDays = (
   };
 };
 
-/** Coverage concerns all required evidence throughout each route's effective window,
+/** Coverage concerns essential evidence throughout each route's effective window,
  * independent of the score, route length and whether climbing is known. */
 export const daySummary = (
   routes: readonly Route[],
@@ -111,8 +111,13 @@ export const daySummary = (
       r,
     ]),
   );
+  // Sunshine is an optional preference factor. Missing symbols retain
+  // explicit uncertainty in the assessment without erasing usable hours.
+  const essential = required.filter(
+    (d) => !(d.kind === 'category' && d.quantity === 'sky-condition'),
+  );
   const evidence = new Map(
-    [...byId].map(([id, r]) => [id, forecastIntervals(r, required)]),
+    [...byId].map(([id, r]) => [id, forecastIntervals(r, essential)]),
   );
   const windows = routes.map((route) => {
     const plan = planDepartures(route, input, nowMs);

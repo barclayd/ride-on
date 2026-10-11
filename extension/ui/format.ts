@@ -163,7 +163,9 @@ export const coverageText = (selected: DaySummary[], timeZone: string) => {
   if (partial) {
     const until = partial.until && clock(partial.until, timeZone);
     parts.push(
-      `${longWeekday(partial.date)}'s forecast only covers ${!until ? 'part of the day' : until <= '12:00' ? 'the morning' : `up to ${until}`}`,
+      until
+        ? `${longWeekday(partial.date)}'s forecast only covers ${until <= '12:00' ? 'the morning' : `up to ${until}`}`
+        : `${longWeekday(partial.date)}'s forecast is missing some weather details or hours along your routes`,
     );
   }
   if (none.length) parts.push(unavailable(none));
@@ -193,7 +195,9 @@ export const tile = (d: DaySummary | undefined, timeZone: string) => {
     ? {
         kind: 'partial',
         label: until ? `To ${until}` : 'Partial',
-        title: until ? `Forecast up to ${until}` : 'Partial forecast',
+        title: until
+          ? `Forecast up to ${until}`
+          : 'Some weather details or hours are missing along your routes',
         quality: d.quality,
       }
     : {
@@ -427,9 +431,17 @@ export const buildResults = (
           FAILURES[f.standard](f, timeZone),
         ),
         coverage:
-          state === 'incomplete'
-            ? "Partial assessment: some minimum conditions couldn't be checked."
-            : null,
+          [
+            ...(state === 'incomplete'
+              ? [
+                  "Partial assessment: some minimum conditions couldn't be checked.",
+                ]
+              : []),
+            ...(b.sunshineAssessment &&
+            b.sunshineAssessment.status !== 'complete'
+              ? ['Sunshine is uncertain for this ride.']
+              : []),
+          ].join(' ') || null,
         score: Math.round(b.score),
         best: b,
         recent:

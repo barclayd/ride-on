@@ -21,7 +21,7 @@ import {
   resolveMinimumTemperature,
 } from './input.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.9';
+export const ALGORITHM_VERSION = 'comfort-v0.10';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -269,7 +269,10 @@ const assessCandidate = (
     const cloudCoverFraction =
       weights.clearSkies > 0 ? (values[6] ?? null) : null;
     const skyCondition =
-      weights.sunshine > 0
+      weights.sunshine > 0 &&
+      Object.values(skyConditions).some(
+        (code) => code === values[weights.clearSkies > 0 ? 7 : 6],
+      )
         ? (values[weights.clearSkies > 0 ? 7 : 6] ?? null)
         : null;
     if (
@@ -279,10 +282,7 @@ const assessCandidate = (
       gustMs == null ||
       precipitationRateMmH == null ||
       precipitationProbability == null ||
-      (weights.clearSkies > 0 && cloudCoverFraction === null) ||
-      (weights.sunshine > 0 &&
-        (skyCondition === null ||
-          !Object.values(skyConditions).some((code) => code === skyCondition)))
+      (weights.clearSkies > 0 && cloudCoverFraction === null)
     ) {
       missing.add('missing-weather-at-arrival');
       continue;
@@ -351,13 +351,30 @@ const assessCandidate = (
           weights.wind * wind +
           weights.dryness * dryness +
           weights.clearSkies * (clearSkies ?? 0) +
-          weights.sunshine * (sunshine ?? 0)) /
+          // Unknown sunshine affects preference scoring neutrally; it is not
+          // an observation of clear sky, cloud, sunshine duration or probability.
+          weights.sunshine * (sunshine ?? 0.5)) /
         weightTotal,
     });
   }
   if (missing.size || !rows.length)
     return { status: 'unknown' as const, reasons: [...missing] };
   const conditions = summarize(rows);
+  const unknownSunshine = rows.filter((row) => row.sunshine === null);
+  const sunshineAssessment =
+    weights.sunshine > 0
+      ? {
+          status: !unknownSunshine.length
+            ? ('complete' as const)
+            : unknownSunshine.length === rows.length
+              ? ('unavailable' as const)
+              : ('partial' as const),
+          unknownDistanceFraction: clamp(
+            unknownSunshine.reduce((sum, row) => sum + row.distanceM, 0) /
+              route.distanceM,
+          ),
+        }
+      : null;
   const failures: Failure[] = [];
   const standards = preferences.minimumStandards;
   const floor = resolveMinimumTemperature(input);
@@ -457,6 +474,10 @@ const assessCandidate = (
   );
   const recentRides = history.assess(route.id, iso(departure));
   const drawbacks: string[] = [];
+  if (sunshineAssessment && sunshineAssessment.status !== 'complete')
+    drawbacks.push(
+      'Sunshine details are incomplete; unknown sections have a neutral effect on the score.',
+    );
   if (recentRides.penaltyPoints > 0)
     drawbacks.push(
       `Recently ridden roads reduce this score by ${round(recentRides.penaltyPoints)} points.`,
@@ -499,6 +520,7 @@ const assessCandidate = (
     score: round(Math.max(0, score - recentRides.penaltyPoints)),
     recentRides,
     weatherScore: round(weatherScore),
+    sunshineAssessment,
     factors: {
       distance:
         distance.comfort === null ? null : round(100 * distance.comfort),

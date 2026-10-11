@@ -58,14 +58,22 @@ Clear daylight maps to sunny; mostly clear/partly cloudy maps to sunny intervals
 Night equivalents remain separate. Sun showers/flurries retain their explicit
 visible-sun category while precipitation affects dryness independently. Wind/heat-only
 codes and unknown future symbols do not imply clear skies. Missing gusts, direction,
-precipitation or required sky information remains missing and may make a departure
-unassessable; zero is never invented to complete the contract.
+precipitation information remains missing and may make a departure unassessable;
+zero is never invented to complete the contract. Missing sky symbols stay unknown
+but no longer block usable hours in `comfort-v0.10`. Their sunshine preference
+contribution is neutral (0.5), disclosed by `sunshineAssessment` and the response
+assumptions; reported sunshine factors/category shares remain null when incomplete.
+Cloud cover is never substituted for visible sunshine.
+Snapshots with unknown sunshine can be cached when every other supplied hourly
+measurement is complete. Missing essential values or interior rows still prevent
+caching; authentication, quota and transport failures are never retained.
 
 Apple does not expose a verified model-run time. `forecastRunAt` is absent and
 `unknown-model-run` remains visible, even when all requested hours are usable.
 `reportedTime` becomes `issuedAt`; format version is not a forecast dataset version.
 `expireTime` becomes `provenance.expiresAt`, and cache reads reject expired evidence
-even within the normal 20-minute TTL. Retrieval freshness cannot establish model age.
+even within the date-dependent refresh interval (today 3 hours, tomorrow 6 hours,
+later dates 12 hours). Retrieval freshness cannot establish model age.
 
 ## Access, cost and attribution
 

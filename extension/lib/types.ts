@@ -136,6 +136,10 @@ export type PrecipitationSummary =
   | 'snow'
   | 'thunder';
 export type Departure = {
+  sunshineAssessment?: {
+    status: 'complete' | 'partial' | 'unavailable';
+    unknownDistanceFraction: number;
+  } | null;
   date: string;
   departureAt: string;
   finishAt: string;

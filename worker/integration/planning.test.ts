@@ -58,6 +58,12 @@ const bestSchema = z.object({
   finishAt: z.string(),
   score: z.number(),
   weatherScore: z.number(),
+  sunshineAssessment: z
+    .object({
+      status: z.enum(['complete', 'partial', 'unavailable']),
+      unknownDistanceFraction: z.number().min(0).max(1),
+    })
+    .nullable(),
   standards: z.object({
     status: z.string(),
     failures: z.array(
@@ -270,6 +276,68 @@ integration(
     await h.restart({ TEST_NOW: '2026-10-10T07:00:00.000Z' });
     await recommend(h, [route.id], distant);
     assert.equal(h.requests.length, calls * 3);
+  },
+);
+
+integration(
+  'Apple wind symbols keep multi-day coverage usable through cache restart while a missing gust remains partial',
+  async (h) => {
+    h.use(
+      apple((data) => {
+        for (const row of data.forecastHourly.hours) {
+          const date = row.forecastStart.slice(0, 10);
+          if (['2026-10-13', '2026-10-15', '2026-10-16'].includes(date))
+            row.conditionCode = 'Breezy';
+        }
+      }),
+    );
+    const route = await upload(h);
+    const options = {
+      days: { kind: 'range', start: '2026-10-12', end: '2026-10-16' },
+      preferenceLevels: { sunshine: 'important' },
+    };
+    const r = await recommend(h, [route.id], options);
+    assert.deepEqual(
+      r.days.map((day) => [day.date, day.availability]),
+      [
+        ['2026-10-12', 'full'],
+        ['2026-10-13', 'full'],
+        ['2026-10-14', 'full'],
+        ['2026-10-15', 'full'],
+        ['2026-10-16', 'full'],
+      ],
+    );
+    assert.equal(r.days[2]?.until, null);
+    const calls = h.requests.length;
+    await h.restart();
+    const cached = await recommend(h, [route.id], {
+      ...options,
+      days: { kind: 'range', start: '2026-10-13', end: '2026-10-13' },
+    });
+    assert.equal(h.requests.length, calls);
+    assert.equal(first(cached.days).availability, 'full');
+    assert.equal(first(cached.rankings).coverage.assessedFraction, 1);
+    assert.deepEqual(first(cached.rankings).best.sunshineAssessment, {
+      status: 'unavailable',
+      unknownDistanceFraction: 1,
+    });
+    // Expire the provider snapshot, then verify a core-field gap stays partial
+    // and is not cached as if it were merely unknown sunshine.
+    await h.restart({ TEST_NOW: '2026-10-09T13:01:00.000Z' });
+    h.use(
+      apple((data) => {
+        data.forecastHourly.metadata.expireTime = '2026-10-09T14:00:00.000Z';
+        for (const row of data.forecastHourly.hours)
+          if (row.forecastStart === '2026-10-14T12:00:00.000Z')
+            delete (row as Record<string, unknown>).windGust;
+      }),
+    );
+    const gaps = await recommend(h, [route.id], options);
+    assert.equal(gaps.days[2]?.availability, 'partial');
+    assert.equal(gaps.days[2]?.until, null);
+    const gapCalls = h.requests.length;
+    await recommend(h, [route.id], options);
+    assert.equal(h.requests.length, gapCalls + calls);
   },
 );
 

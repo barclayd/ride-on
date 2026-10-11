@@ -622,7 +622,7 @@ export const createApp = (
           : []),
         ...(input.preferences.weights.sunshine > 0
           ? [
-              'Sunshine comfort uses forecast weather symbols: sunny, sunny intervals or other conditions. Category shares describe route sections, not sunshine duration or probability. Unknown symbols remain missing.',
+              'Sunshine comfort uses forecast weather symbols: sunny, sunny intervals or other conditions. Category shares describe route sections, not sunshine duration or probability. Unknown symbols remain missing and contribute neutral comfort (0.5) only in the combined score; sunshineAssessment reports the unknown distance fraction. They do not block otherwise usable forecast coverage.',
             ]
           : []),
         ...(input.forecast.representation === 'ensemble-summary'
