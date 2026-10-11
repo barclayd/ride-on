@@ -34,12 +34,20 @@ const measure = z.union([
   }),
 ]);
 export const forecastDescriptorSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('category'),
-    quantity: z.literal('sky-condition'),
-    vocabulary: z.literal('sky-condition-v1'),
-    basis: z.literal('provider-weather-symbol'),
-  }),
+  z.discriminatedUnion('quantity', [
+    z.object({
+      kind: z.literal('category'),
+      quantity: z.literal('sky-condition'),
+      vocabulary: z.literal('sky-condition-v1'),
+      basis: z.literal('provider-weather-symbol'),
+    }),
+    z.object({
+      kind: z.literal('category'),
+      quantity: z.literal('precipitation-type'),
+      vocabulary: z.literal('precipitation-type-v1'),
+      basis: z.literal('provider-weather-symbol'),
+    }),
+  ]),
   z.object({
     kind: z.literal('scalar'),
     measure,

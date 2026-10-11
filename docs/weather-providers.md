@@ -232,6 +232,18 @@ Runtime request validation, adapter response validation and source selection
 are now implemented beside them. Only the required envelope, units and selected
 values are checked; unrelated new upstream fields are tolerated.
 
+From v0.15.0, adapters also enrich snapshots with a separate optional
+`precipitation-type` category (`precipitation-type-v1`, provider-weather-symbol
+basis). It keeps the native symbol timestamp/interval and does not change the
+sky-condition vocabulary. Apple/Global Spot use fields already returned; BPF
+includes `weatherCodePt01h` in the existing percentile call, even with sunshine
+disabled. Missing/invalid optional descriptions do not produce core-data issues,
+select a fallback provider or invalidate a cache entry. Required measurements
+retain all existing validation. Existing snapshots need no invalidation; the
+engine falls back to rate/probability until type data arrives at normal refresh.
+See [the presentation policy](api.md#condition-chip-summaries) for mappings and
+the distinction between display summaries and scoring.
+
 ```text
 Route samples + target day + resolved rider preferences
   → source policy and capability selection

@@ -16,10 +16,14 @@ import type {
 } from './contracts.ts';
 import {
   descriptorKey,
+  precipitationTypeDescriptor,
   ensembleDescriptors as weather,
 } from './descriptors.ts';
 import { readBoundedJson } from './http.ts';
-import { metOfficeSkyCondition } from './met-office-symbols.ts';
+import {
+  metOfficePrecipitationType,
+  metOfficeSkyCondition,
+} from './met-office-symbols.ts';
 import {
   coordinateSchema,
   forecastRequestSchema,
@@ -45,6 +49,14 @@ type Mapping = {
   period?: 'maximum' | 'event' | 'categorical-summary';
 };
 const unchanged = (value: number) => value;
+const precipitationMapping: Mapping = {
+  field: 'weatherCodePt01h',
+  descriptor: precipitationTypeDescriptor,
+  unit: '1',
+  observed: 'weather_code',
+  convert: metOfficePrecipitationType,
+  period: 'categorical-summary',
+};
 const mappings: readonly Mapping[] = [
   {
     field: 'weatherCodePt01h',
@@ -455,6 +467,26 @@ export const normaliseBpf = (
           'The forecast site is too far from the requested location.',
         ),
       );
+    // Enrich from the existing percentile response. Invalid/missing optional
+    // symbols cannot discard otherwise usable core weather or trigger fallback.
+    try {
+      const containing = envelopes.filter((e) =>
+        e.coverages.some((c) => c.id === precipitationMapping.field),
+      );
+      const optional =
+        containing.length === 1 && containing[0]
+          ? decode(containing[0], precipitationMapping)
+          : null;
+      if (
+        optional &&
+        optional.site === first.site &&
+        optional.coordinate.latitude === first.coordinate.latitude &&
+        optional.coordinate.longitude === first.coordinate.longitude
+      )
+        decoded.push(optional);
+    } catch {
+      // No verified type: the presentation summary uses rate/probability instead.
+    }
     const unique = [...new Map(issues.map((i) => [i.code, i])).values()];
     return {
       status: unique.some((i) => i.code !== 'unknown-model-run')
@@ -555,6 +587,12 @@ export const createMetOfficeBpf = (options: {
               ),
           );
           if (!selected.length) continue;
+          // Piggyback on this call; no additional request for display-only data.
+          if (
+            collection === 'percentiles' &&
+            !selected.some((m) => m.field === precipitationMapping.field)
+          )
+            selected.push(precipitationMapping);
           try {
             if (terminal) {
               issue = terminal;

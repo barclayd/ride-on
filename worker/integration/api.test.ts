@@ -35,6 +35,44 @@ const integration = (name: string, run: (harness: Harness) => Promise<void>) =>
     }
   });
 
+for (const invalidUnit of [false, true])
+  integration(
+    `Global Spot rain descriptions work without sunshine and stay cacheable with invalid symbol units: ${invalidUnit}`,
+    async (h) => {
+      h.use(
+        metOffice(({ request }) => {
+          const body = hourlyForecast(request, {
+            values: () => ({
+              significantWeatherCode: 9,
+              probOfPrecipitation: 40,
+            }),
+          });
+          if (invalidUnit)
+            first(body.parameters).significantWeatherCode.unit.symbol.type =
+              'invalid';
+          return HttpResponse.json(body);
+        }),
+      );
+      const route = await upload(h);
+      const options = { preferences: { weights: { sunshine: 0 } } };
+      const result = await recommend(h, [route.id], options);
+      const best = first(result.rankings).best;
+      const summary = invalidUnit ? 'possible' : 'light_showers';
+      assert.equal(best.conditions.precipitationSummary, summary);
+      assert.equal(best.conditions.skyConditionDistanceFractions, null);
+      for (const hour of best.rideHours)
+        if (hour.conditions)
+          assert.equal(hour.conditions.precipitationSummary, summary);
+      const calls = h.requests.length;
+      assert.equal(calls, result.weather.locations.length);
+      await h.restart();
+      const repeat = await recommend(h, [route.id], options);
+      assert.deepEqual(repeat.rankings, result.rankings);
+      assert.equal(h.requests.length, calls);
+      assert.equal(repeat.weather.cache.misses, 0);
+    },
+  );
+
 integration(
   'personal crosswind sensitivity reverses the sunshine trade-off across Worker restart without refetching weather',
   async (h) => {

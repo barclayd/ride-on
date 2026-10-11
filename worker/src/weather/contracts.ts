@@ -94,6 +94,12 @@ export type ForecastDescriptor =
       basis: 'provider-weather-symbol';
     }>
   | Readonly<{
+      kind: 'category';
+      quantity: 'precipitation-type';
+      vocabulary: 'precipitation-type-v1';
+      basis: 'provider-weather-symbol';
+    }>
+  | Readonly<{
       kind: 'scalar';
       measure: WeatherMeasure;
       statistic:

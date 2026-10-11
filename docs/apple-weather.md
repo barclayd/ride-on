@@ -48,6 +48,7 @@ format version 1 are validated. Unknown extra fields are tolerated.
 | `precipitationChance` | Occurrence probability during that hour, already a 0–1 fraction; no invented numeric threshold |
 | `cloudCover` | Total cloud fraction over the hour, 0–1 |
 | `conditionCode`, `daylight` | Provider-neutral sky category at the hour's validity time |
+| `conditionCode` | Optional finer precipitation category, independent of sunshine weight; see the [condition-chip mapping](api.md#condition-chip-summaries) |
 
 `forecastStart` begins each period. Hourly means, gusts and probability events retain
 their forward hour bounds. Instants retain the evaluator's existing nearest-hour
@@ -64,6 +65,9 @@ but no longer block usable hours in `comfort-v0.10`. Their sunshine preference
 contribution is neutral (0.5), disclosed by `sunshineAssessment` and the response
 assumptions; reported sunshine factors/category shares remain null when incomplete.
 Cloud cover is never substituted for visible sunshine.
+The v0.15 precipitation description uses the same returned hourly payload and
+adds no calls. Missing or unknown wet-type details use the rate/probability
+fallback without becoming required weather evidence or changing scores.
 Snapshots with unknown sunshine can be cached when every other supplied hourly
 measurement is complete. Missing essential values or interior rows still prevent
 caching; authentication, quota and transport failures are never retained.

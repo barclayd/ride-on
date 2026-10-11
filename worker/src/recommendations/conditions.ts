@@ -1,10 +1,23 @@
 import { z } from 'zod';
+import { precipitationSummaries } from '../weather/precipitation.ts';
 
 const fraction = z.number().min(0).max(1);
 const nonnegative = z.number().nonnegative();
 /** Provider-neutral, version-one summary used by recommendations and saved plans.
  * Do not rename historical fields when adding a new forecast adapter. */
 export const conditionsSchema = z.strictObject({
+  // Optional only when parsing historical plans; new summaries always supply these.
+  windDistanceFractions: z
+    .strictObject({
+      headwind: fraction,
+      tailwind: fraction,
+      crosswind: fraction,
+    })
+    .refine(
+      (v) => Math.abs(v.headwind + v.tailwind + v.crosswind - 1) <= 0.010000001,
+    )
+    .optional(),
+  precipitationSummary: z.enum(precipitationSummaries).optional(),
   skyConditionDistanceFractions: z
     .record(
       // Keep v1 persisted plans readable if the live vocabulary later expands.

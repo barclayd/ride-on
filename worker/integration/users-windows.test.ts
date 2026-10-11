@@ -47,6 +47,83 @@ const patch = (h: Harness, body: unknown) =>
   h.send('/users/me', { method: 'PATCH', body: JSON.stringify(body) });
 
 integration(
+  'display units persist across devices without converting weather, changing scores or refetching',
+  async (h) => {
+    h.use(metOffice());
+    const route = await upload(h);
+    const created = await createUser(h, { display: { unit: 'mi' } });
+    assert.equal(created.settings.units, undefined);
+    const before = await recommendMetOffice(h, [route.id]);
+    const calls = h.requests.length;
+    const response = await patch(h, {
+      expectedVersion: 1,
+      settings: { units: { temperature: 'F', windSpeed: 'mph' } },
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await readUser(response)).settings.units, {
+      temperature: 'F',
+      windSpeed: 'mph',
+    });
+    await h.restart();
+    assert.deepEqual(
+      (await readUser(await h.send('/users/me'))).settings.units,
+      { temperature: 'F', windSpeed: 'mph' },
+    );
+    const after = await recommendMetOffice(h, [route.id]);
+    assert.deepEqual(after.rankings, before.rankings);
+    assert.equal(
+      first(after.rankings).best.conditions.temperatureC.minimum,
+      18,
+    );
+    assert.equal(h.requests.length, calls);
+    assert.equal(
+      (
+        await patch(h, {
+          expectedVersion: 1,
+          settings: { units: { temperature: 'C', windSpeed: 'kmh' } },
+        })
+      ).status,
+      409,
+    );
+    for (const units of [
+      { temperature: 'C' },
+      { temperature: 'K', windSpeed: 'kmh' },
+      { temperature: 'F', windSpeed: 'knots' },
+      { temperature: 'F', windSpeed: 'mph', distance: 'mi' },
+      null,
+    ])
+      assert.equal(
+        (await patch(h, { expectedVersion: 2, settings: { units } })).status,
+        400,
+      );
+    const updated = await readUser(
+      await patch(h, {
+        expectedVersion: 2,
+        settings: { units: { temperature: 'C', windSpeed: 'mph' } },
+      }),
+    );
+    assert.deepEqual(updated.settings.units, {
+      temperature: 'C',
+      windSpeed: 'mph',
+    });
+    const unrelated = await readUser(
+      await patch(h, { expectedVersion: 3, displayName: 'Another device' }),
+    );
+    assert.deepEqual(unrelated.settings.units, updated.settings.units);
+    assert.equal(unrelated.settings.display.unit, 'mi');
+    const bob = await createUser(
+      h,
+      { units: { temperature: 'F', windSpeed: 'kmh' } },
+      BOB_TOKEN,
+    );
+    assert.deepEqual(bob.settings.units, {
+      temperature: 'F',
+      windSpeed: 'kmh',
+    });
+  },
+);
+
+integration(
   'users are owner-bound, durable, private and created once without changing existing route ownership',
   async (h) => {
     const route = await upload(h);

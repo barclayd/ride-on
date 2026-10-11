@@ -50,6 +50,57 @@ const integration = (name: string, run: (h: Harness) => Promise<void>) =>
     }
   });
 
+for (const fault of ['none', 'missing', 'units', 'bounds', 'site'] as const)
+  integration(
+    `BPF rain labels are optional and use the existing calls: ${fault}`,
+    async (h) => {
+      h.use(
+        mock((body) => {
+          const symbol = body.coverages.find(
+            (c) => c.id === 'weatherCodePt01h',
+          );
+          if (!symbol) return;
+          first(Object.values(symbol.ranges)).values.fill(10);
+          if (fault === 'missing')
+            body.coverages = body.coverages.filter((c) => c !== symbol);
+          if (fault === 'units')
+            first(Object.values(symbol.parameters)).unit.symbol = 'invalid';
+          if (fault === 'bounds') symbol.domain.axes.t.bounds = [];
+          if (fault === 'site')
+            symbol.domain.axes.locationId.values = ['different-site'];
+        }),
+      );
+      const route = await upload(h);
+      const initial = await recommend(h, [route.id], profile);
+      const best = first(initial.rankings).best;
+      assert.equal(
+        best.conditions.precipitationSummary,
+        fault === 'none' ? 'light_showers' : 'dry',
+      );
+      assert.equal(best.conditions.skyConditionDistanceFractions, null);
+      assert.equal(initial.unranked.length, 0);
+      const forecasts = h.requests.filter((r) => r.url.includes('/locations/'));
+      const siteIds = new Set(
+        forecasts.map((r) => new URL(r.url).pathname.split('/locations/')[1]),
+      );
+      assert.equal(forecasts.length, siteIds.size * 2);
+      for (const request of forecasts.filter((r) =>
+        r.url.includes('uk-spot-percentiles'),
+      ))
+        assert.ok(
+          new URL(request.url).searchParams
+            .get('parameter-name')
+            ?.split(',')
+            .includes('weatherCodePt01h'),
+        );
+      const calls = h.requests.length;
+      await h.restart();
+      const cached = await recommend(h, [route.id], profile);
+      assert.equal(h.requests.length, calls);
+      assert.deepEqual(cached.rankings, initial.rankings);
+    },
+  );
+
 integration(
   'real Worker/D1/KV uses BPF cloud medians, native probabilities and reusable forecasts',
   async (h) => {

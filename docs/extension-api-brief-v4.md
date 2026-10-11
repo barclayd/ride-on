@@ -2,6 +2,11 @@
 
 Proposed against API **0.14.0**, algorithm **comfort-v0.9**. For the API agent.
 
+Implemented in API **0.15.0**, retaining the current **comfort-v0.10** scoring.
+The [API contract](api.md#condition-chip-summaries) documents the final mappings,
+fallback bands and compatibility; [display units](api.md#display-units) documents
+the profile PATCH shape.
+
 The Journeys page tile (design 11b) replaces the grey "At ride time: …" sentence
 with three chips, always in this order: **temperature · wind · rain**. Each chip
 is green when the condition is fine and amber when it lowers the score:
@@ -151,3 +156,11 @@ and send changes through the settings `PATCH`.
 - **Wind unit:** follows the rider's wind-speed setting (section 7), e.g.
   `9 mph crosswind`.
 - **Rain thresholds and severity order:** accepted as written in section 2.
+- **Optional weather types:** enrich existing forecast requests without adding
+  HTTP calls or making weather symbols an eligibility/cache requirement. Cached
+  forecasts without type detail use the numeric fallback until normal refresh.
+- **Distance units:** keep the existing `settings.display.unit` (`km` / `mi`)
+  rather than introducing a second setting. Send both temperature and wind fields
+  together when saving `settings.units`; omitted units remain absent.
+- **Chip colour meaning:** these are simplified display rules, not an exact
+  explanation of score deductions. Use factors and standards for that explanation.

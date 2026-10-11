@@ -1,5 +1,13 @@
 import type { ForecastDescriptor } from './contracts.ts';
 
+/** Optional display evidence supplied alongside the required scoring series. */
+export const precipitationTypeDescriptor = {
+  kind: 'category',
+  quantity: 'precipitation-type',
+  vocabulary: 'precipitation-type-v1',
+  basis: 'provider-weather-symbol',
+} as const satisfies ForecastDescriptor;
+
 /** Provider-neutral vocabulary; precipitation includes rain, snow and other forms. */
 export const weatherDescriptors = {
   skyCondition: {

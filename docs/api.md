@@ -9,6 +9,7 @@ API v0.11.0 adds [ride history and recent-route preferences](ride-history.md).
 API v0.12.0 adds [planned ride snapshots, next-window suggestions and route-history summaries](extension-api-brief-v3.md).
 API v0.13.0 adds the [Safari extension sign-in](authentication.md#safari-extensions) landing page and CORS.
 API v0.14.0 presents [one Met Office provider choice](weather-provider-choices.md) alongside Apple Weather.
+API v0.15.0 adds [wind and precipitation descriptions](#condition-chip-summaries) and [saved display units](#display-units). Scoring remains `comfort-v0.10`.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -113,6 +114,33 @@ Apple Weather; existing saved source policies are preserved. Responses
 include `savedUser: { "id": "dan", "version": 1 }` (or `null`) and the exact
 resolved settings, so a result can be traced to the profile used. Date, route IDs
 and the day's time window belong to the recommendation request, not the profile.
+
+### Display units
+
+From v0.15.0, profiles can include optional
+`settings.units: { temperature: "C" | "F", windSpeed: "kmh" | "mph" }`.
+Both switches are independent; Celsius with mph is valid. Omitted units stay absent
+on old and new profiles, so the client can choose its regional default until the
+rider saves a choice. Reads never infer a region or change a profile's version.
+
+Create with `POST /users`, or update with `PATCH /users/me`:
+
+```json
+{
+  "expectedVersion": 1,
+  "settings": {
+    "units": { "temperature": "C", "windSpeed": "mph" }
+  }
+}
+```
+
+Send both fields when changing units; the complete pair replaces the saved pair.
+Omitting `units` preserves it. Partial pairs, null and unknown values/keys are
+rejected. The existing optimistic version check applies. Distance remains in
+`settings.display.unit: "km" | "mi"`; there is no second distance-unit setting.
+Units only control client display. Every API temperature, wind speed, distance
+and preference retains its documented measurement unit; scores, thresholds,
+forecast requests and cache reuse are unaffected.
 
 ## Upload a route
 
@@ -628,7 +656,7 @@ The response includes:
 | `distanceFit` | `null` with no distance preference; otherwise `status` (`within_range`, `below_range`, `above_range`) and nonnegative `deviationKm`. Outside-range routes stay eligible. |
 | `best.departureAt`, `best.finishAt` | Suggested start and estimated finish. |
 | `best.score`, `best.weatherScore`, `best.factors` | Combined ride score, original weather-only score and temperature/wind/dryness/clear-sky/sunshine/climbing/distance factors. These are not probabilities. |
-| `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate, categorical sky-condition distance fractions and assisted-distance fraction. |
+| `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate, categorical sky-condition distance fractions, assisted-distance fraction and the v0.15 wind/precipitation summaries below. |
 | `best.standards` | `meets`, `below`, `unknown`, or `not_configured`, with structured failures. |
 | `minimumStandardsStatus` | Collection-level `match_found`, `none_meet`, `unknown`, `not_configured`, or `no_feasible_departure`. |
 | `message`, `best.drawbacks` | Readable conclusion and trade-offs. |
@@ -645,6 +673,74 @@ same rule. A high score never erases a failed standard.
 change that conclusion. If another route/departure lacks evidence, or a month
 rule is unresolved, return `unknown` instead. No feasible departure is distinct
 from bad weather. Missing data never becomes zero rain or zero wind.
+
+### Condition chip summaries
+
+Every newly computed conditions object includes the following two fields. They
+appear on best and alternative departures, ride-hour conditions, planning results
+and partial assessments wherever conditions can be computed. An hour with no
+observations still has `conditions: null`. Persisted ride-plan conditions accept
+these fields optionally: old snapshots stay readable and writable, and new
+snapshots round-trip without dropping them or recalculating their descriptions.
+
+`windDistanceFractions` contains `headwind`, `tailwind` and `crosswind` shares
+weighted by the distance of each observed route section. If the absolute along-route
+component is at least the crosswind component, positive along-route wind counts
+as headwind and nonpositive as tailwind; otherwise it counts as crosswind. Each
+share is rounded to two decimal places and their sum is within 0.01 of 1.
+This includes calm sections and is separate from `assistedDistanceFraction`,
+which requires a tailwind of at least 3 km/h that beats the crosswind. The client
+names a direction only when average sustained wind is at least 10 km/h and one
+share is greater than 0.5. Compare in km/h before display conversion.
+
+`precipitationSummary` is one of:
+
+```text
+dry, possible, drizzle, light_showers, showers, heavy_showers,
+light_rain, rain, heavy_rain, sleet, hail, snow, thunder
+```
+
+Provider weather types take precedence. The most severe wet type encountered
+along the ride wins, in this presentation order:
+
+```text
+drizzle < light_showers < light_rain < showers < rain < heavy_showers
+< heavy_rain < sleet < snow < hail < thunder
+```
+
+Without a recognised wet type, use the maximum observed precipitation rate:
+at least 4 mm/h is `heavy_rain`, at least 0.5 is `rain`, and at least 0.1 is
+`light_rain`. Below 0.1 mm/h, maximum probability of at least 0.3 gives `possible`;
+otherwise `dry`. These bands and the severity order are Ride On's display policy,
+not common official provider intensity bands or a change to dryness scoring.
+Provider rate periods still differ (Apple's is an hourly mean). `dry` means no
+wet description meets this policy, not a promise of zero precipitation risk.
+For `possible`, display the separately reported maximum probability. That
+probability includes frozen precipitation and is not a whole-ride probability.
+
+Both Met Office products use the [published weather symbols](https://datahub.metoffice.gov.uk/definition-of-codes):
+9–10 light showers, 11 drizzle, 12 light rain, 13–14 heavy showers, 15 heavy rain,
+16–18 sleet, 19–21 hail, 22–27 snow, 28–30 thunder; -1 (trace rain) maps to light rain.
+Apple's [condition codes](https://developer.apple.com/documentation/weatherkit/weathercondition)
+map drizzle/rain/heavy rain directly, sun showers to showers, sleet/wintry mix to
+sleet, snow/flurries/blizzard to snow, hail to hail and thunderstorm variants to
+thunder. Freezing drizzle/rain retain the broad drizzle/rain labels; tropical
+storm/hurricane map to rain. The small vocabulary does not preserve every hazard
+qualifier and is not a weather-alert assessment. Blowing snow, wind-only codes
+and unknown codes supply no wet type and use the numeric fallback.
+
+Weather types are optional display evidence, available even when sunshine has
+zero weight. Apple and Global Spot already return them; BPF adds the weather-code
+parameter to its existing percentile request. This adds no provider HTTP calls.
+Missing/invalid type data cannot block otherwise usable rides, trigger fallback
+or prevent caching. Existing cached snapshots stay valid and use the numeric
+fallback until their normal refresh; this release does not flush forecasts.
+Sky-condition distance shares and all scores remain unchanged (`comfort-v0.10`).
+
+Chip colours are a client presentation rule. They do not establish whether or
+how much a condition lowered the score: rider weights, gusts, thresholds and
+rounded display values can differ from a chip's rule. Use the returned factor
+breakdown and standards failures for an accurate scoring explanation.
 
 ## Algorithm v0.8
 

@@ -196,7 +196,11 @@ describe('Global Spot normalisation', () => {
       }),
     );
     expect(result.status).toBe('partial');
-    expect(result.series).toHaveLength(1);
+    expect(
+      result.series
+        .filter((s) => s.descriptor.kind === 'scalar')
+        .map((s) => s.descriptor),
+    ).toEqual([weather.airTemperature]);
     expect(result.issues[0]?.code).toBe('unsupported-statistic');
   });
 
