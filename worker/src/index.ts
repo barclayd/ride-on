@@ -57,6 +57,7 @@ import {
   updateUserSchema,
 } from './users/model.ts';
 import type { ForecastCache } from './weather/cache.ts';
+import { weatherProviderIdForPolicy } from './weather/choices.ts';
 import type { ForecastProvider } from './weather/contracts.ts';
 import { describeWeatherProviders } from './weather/providers.ts';
 
@@ -120,7 +121,7 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.13.0' }));
+  app.get('/health', (c) => c.json({ ok: true, version: '0.14.0' }));
   app.route('/', identityRoutes());
   for (const path of [
     '/rides',
@@ -149,6 +150,7 @@ export const createApp = (
   app.get('/weather-providers', (c) =>
     c.json({
       defaultPolicy: defaultSettings.weather,
+      defaultProviderId: weatherProviderIdForPolicy(defaultSettings.weather),
       providers: describeWeatherProviders(c.env),
     }),
   );
@@ -178,6 +180,7 @@ export const createApp = (
       {
         user: {
           ...user,
+          weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
           preferenceLevels: preferenceLevels(user.settings.preferences.weights),
         },
       },
@@ -195,6 +198,7 @@ export const createApp = (
     return c.json({
       user: {
         ...user,
+        weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
         preferenceLevels: preferenceLevels(user.settings.preferences.weights),
       },
     });
@@ -230,6 +234,7 @@ export const createApp = (
     return c.json({
       user: {
         ...user,
+        weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
         preferenceLevels: preferenceLevels(user.settings.preferences.weights),
       },
     });

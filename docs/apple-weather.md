@@ -18,30 +18,19 @@ needed. Dan's production profile was checked before release: it explicitly selec
 `met-office` with deterministic/model-run settings, which remain unchanged. The
 separate reviewed v4 calibration profile selects BPF and also remains unchanged.
 
-Authenticated clients can call `GET /weather-providers`. Each entry includes
-`id`, `name`, `configured`, `recommendedSettings` and `attribution`. The top-level
-`defaultPolicy` describes the new-user default, not the current user's selection.
-Read the current selection from `GET /users/me`. `configured` checks local
-credential configuration; it does not promise upstream availability or remaining quota.
+Authenticated clients use the [public provider-choice contract](weather-provider-choices.md)
+from v0.14.0: `GET /weather-providers` returns Apple Weather and one Met Office
+option. Read `user.weatherProviderId` for the current picker value. Save
+`{ "settings": { "weatherProviderId": "apple-weather" }, "expectedVersion": 3 }`
+with `PATCH /users/me`, or send top-level `weatherProviderId` on either
+recommendation endpoint for a temporary choice. The API resolves the compatible
+forecast representation and freshness policy; clients need not know those details.
 
-To switch providers, use the selected entry's complete `recommendedSettings`:
-
-```json
-{
-  "weather": { "mode": "strict", "providerId": "apple-weather" },
-  "forecast": {
-    "representation": "deterministic",
-    "freshnessBasis": "retrieval-time"
-  }
-}
-```
-
-Send those fields on `POST /recommendations` for a temporary choice, or inside
-`settings` on `PATCH /users/me` with the current `expectedVersion` to save them.
-Apply both fields together: a BPF percentile configuration cannot be supplied by
-Apple. Changes preserve the rider's comfort preferences. Strict mode never spends
-Met Office quota on an Apple failure. Ordered fallback remains explicitly opt-in
-and every listed source must support the requested statistics and freshness basis.
+The catalogue retains complete `recommendedSettings` pairs for compatibility.
+Existing stored choices are not rewritten. Strict mode never spends Met Office
+quota on an Apple failure; advanced ordered fallback remains explicitly opt-in.
+The response's `weather.selectedProvider` supplies the display name, while actual
+source/product evidence and attribution retain their existing detailed contracts.
 
 ## Verified mapping
 

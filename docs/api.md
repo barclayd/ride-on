@@ -8,6 +8,7 @@ OAuth endpoints. The existing app clients have not yet been migrated.
 API v0.11.0 adds [ride history and recent-route preferences](ride-history.md).
 API v0.12.0 adds [planned ride snapshots, next-window suggestions and route-history summaries](extension-api-brief-v3.md).
 API v0.13.0 adds the [Safari extension sign-in](authentication.md#safari-extensions) landing page and CORS.
+API v0.14.0 presents [one Met Office provider choice](weather-provider-choices.md) alongside Apple Weather.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -685,12 +686,19 @@ passing a percentile off as a deterministic value. Apple Weather, Met Office Glo
 Spot hourly and BPF v2 UK are configured with separate secrets. See the
 [Apple provider guide](apple-weather.md) for mapping, setup, cost and attribution.
 
-`GET /weather-providers` requires authentication and returns `defaultPolicy` and
-`providers`, each with `id`, `name`, `configured`, `recommendedSettings` and
-`attribution`. It makes no forecast calls. Apply a selected provider's complete
-`recommendedSettings` on a recommendation, or as a saved-user settings patch, to
-switch the source and compatible forecast representation/freshness together.
-`configured` reflects local configuration, not upstream health or remaining quota.
+`GET /weather-providers` requires authentication and returns `defaultProviderId`,
+`defaultPolicy` and two public `providers`: Apple Weather and Met Office. Entries
+include `id`, `name`, `configured`, `forecastHorizonHours`, `recommendedSettings`
+and `attribution`. It makes no forecast calls. Read `user.weatherProviderId` from
+`GET /users/me` for the current picker value, and send `settings.weatherProviderId`
+on a profile patch to save a choice. The same field works at the top level of both
+recommendation requests for temporary overrides. The API resolves compatible
+forecast settings; do not combine this field with advanced `weather`/`forecast`
+fields in the same request. Legacy presets and stored settings remain supported.
+See [provider choice contract](weather-provider-choices.md) for exact fields and
+legacy-product compatibility. `configured` reflects local configuration, not
+upstream health or remaining quota. `weather.selectedProvider` supplies a display
+label; exact technical provenance remains in `weather.selectedSource`.
 
 `weather: { "mode": "ordered-fallback", "providerIds": ["met-office", "another-provider"] }`
 allows that exact ordered list. The source-selection layer chooses one provider
@@ -789,8 +797,8 @@ arrived in v0.7.0 (`comfort-v0.5`). Preferred distance was v0.8.0 (`comfort-v0.6
 Apple Weather was v0.9.0 (`comfort-v0.7`). Multi-day planning and preference presets
 arrived in v0.10.0 with algorithm `comfort-v0.8`. Ride history and recent-route
 preferences are v0.11.0 (`comfort-v0.9`). Planned snapshots, next-window suggestions
-and route-history summaries are v0.12.0 (algorithm unchanged). Safari extension sign-in is
-v0.13.0;
+and route-history summaries are v0.12.0. Safari extension sign-in is v0.13.0;
+the single Met Office choice is v0.14.0 (algorithm unchanged at `comfort-v0.9`).
 `GET /health` reports the running version. The canonical custom domain is
 `https://api.ride-on.cc`. Both Met Office credentials and `AUTH_CONFIG_JSON` are
 Worker secrets. Apple Weather uses the separate `APPLE_WEATHER_CONFIG_JSON` secret.
@@ -804,7 +812,7 @@ in `wrangler.jsonc`. Apply all migrations, including `0004_identity.sql`, before
 publishing the authentication-enabled Worker. No new database migration is
 required for v0.6.0 through v0.10.0. v0.11.0 requires additive migration
 `0005_rides.sql` before deployment. v0.12.0 additionally requires
-`0006_ride_plans.sql`. v0.13.0 needs no migration. Neutral preferences preserve existing scores;
+`0006_ride_plans.sql`. v0.13.0 and v0.14.0 need no migration. Neutral preferences preserve existing scores;
 legacy geometry upgrades are described in [ride history](ride-history.md).
 The additive authentication migration preserves route facts, shortlists and user profiles. Earlier Worker versions remain compatible with the added columns.
 `preview_database_id: "ROUTES_DB"` preserves the existing local-only database used
