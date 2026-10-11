@@ -159,12 +159,17 @@ fieldset {
   accent-color: var(--ro-lime-accent);
   width: 100%;
 }
+/* Own chevron (--ro-muted), so it sits 12px in from the edge; the native one hugs the border. */
 .ro-select {
   font: 500 14px var(--ro-serif);
-  padding: 7px 8px;
+  padding: 10px 32px 10px 12px;
   border: 1px solid var(--ro-border-input);
   border-radius: 6px;
-  background: #fff;
+  appearance: none;
+  background:
+    #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%235b6472' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5'/%3E%3C/svg%3E")
+    no-repeat right 12px center / 12px 8px;
   color: var(--ro-ink);
 }
 .ro-loading {
