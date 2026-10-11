@@ -31,6 +31,7 @@ export const injectFonts = () => {
       '200 900',
     );
   document.head.append(style);
+  return style;
 };
 
 export type View = { state: State } & ReturnType<typeof viewOf>;

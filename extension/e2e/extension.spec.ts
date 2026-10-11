@@ -1067,3 +1067,32 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   expect(imported?.body.gpx).toContain('<ele>20</ele>');
   expect(selection.routeIds).toEqual(['r101', 'r102']);
 });
+
+// Safari injects content scripts again into open pages (on enable, on site access).
+test('Journeys page: injected twice, it shows once', async ({
+  context,
+  worker,
+}) => {
+  rides = [ride('r101', day(-3))];
+  await signIn(worker);
+  await fakeCycleTravel(context);
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys');
+  await expect(page.locator('#jr_101 .ro-chip')).toBeVisible();
+
+  await worker.evaluate(
+    `chrome.tabs.query({ url: 'https://cycle.travel/*' }).then(([tab]) => chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content-scripts/journeys.js'] }))`,
+  );
+  await expect(page.locator('ride-on-module')).toHaveCount(1);
+  const rows = await page.locator('li.journey_row').count();
+  await expect(page.locator('ride-on-chip')).toHaveCount(rows);
+  await expect(page.locator('ride-on-tags')).toHaveCount(rows);
+  // The newest copy is live.
+  await expect(page.locator('ride-on-module .ro-ride')).toContainText(
+    'Hilly Loop',
+  );
+  await expect(page.locator('#jr_101')).toHaveAttribute(
+    'data-ride-on-tracked',
+    '',
+  );
+});

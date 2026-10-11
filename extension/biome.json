@@ -12,7 +12,9 @@
       "!.output",
       "!.wxt",
       "!test-results",
-      "!playwright-report"
+      "!playwright-report",
+      "!safari/build",
+      "!safari/Generated"
     ]
   },
   "formatter": {
