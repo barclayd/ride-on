@@ -187,7 +187,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
             onClick={openWhen}
           >
             {view.range
-              ? `${view.datesText} · ${view.timeText}`
+              ? `${view.datesText} · ${view.state.planning.time.mode === 'daylight' ? 'Daylight hours' : view.timeText}`
               : 'Dates passed'}
           </button>
         </div>
