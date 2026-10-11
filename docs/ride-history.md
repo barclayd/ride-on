@@ -1,7 +1,10 @@
 # Ride history and recently ridden roads
 
-API v0.11.0, algorithm `comfort-v0.9`, 11 October 2026. This contract extends
-`api.md` and `planning-api.md`. Apply `0005_rides.sql` before deploying this version.
+API v0.12.0, algorithm `comfort-v0.9`, 11 October 2026. This contract extends
+`api.md` and `planning-api.md`. Apply `0005_rides.sql` and `0006_ride_plans.sql`
+before deploying this version. v0.12 adds optional planned recommendation
+snapshots and complete per-route history summaries; see the
+[reviewed extension contract](extension-api-brief-v3.md).
 
 ## Agreed product behaviour
 
@@ -68,6 +71,7 @@ Supporting endpoints:
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /rides?limit=…&cursor=…` | Paginated history, newest ridden date first; stable ID tie-breaker. Optional `routeId` filter for exact route history. |
+| `POST /rides/summaries` | Counts and latest dates for 1–100 owned route IDs across all history, independent of pagination. |
 | `GET /rides/:id` | One owned history record. |
 | `PATCH /rides/:id` | Correct date/time zone using `expectedVersion`; preserve the geometry snapshot. |
 | `DELETE /rides/:id` | Undo logging and remove the event from future scoring. Repeated deletion remains safe. |
@@ -85,7 +89,14 @@ is 1–100 (default 50). Use the returned cursor with the same filter; refresh a
 mutations. Nonexistent and unowned ride IDs both return 404 on reads/updates;
 DELETE returns 204 even when already absent. PATCH requires both date and time
 zone along with `expectedVersion` and returns `409 RIDE_VERSION_CONFLICT` on a
-stale version. Future dates return `400 FUTURE_RIDE`.
+stale version. Future dates return `400 FUTURE_RIDE`. Optional `plan` and
+`planSource` appear on every ride representation. Date or time-zone changes clear
+the plan; all history scoring still uses the recorded date and immutable geometry.
+
+Deleting a History record cannot be undone by POSTing a replacement: the original
+route version may have changed. Clients offering Undo for removal should delay the
+DELETE until their undo period ends, or offer confirmation instead. The DELETE
+endpoint itself is the undo operation for a newly logged check-in.
 
 Initially there is no rating, effort estimate, partial-route editor or automatic
 Strava/Garmin activity import. Future activity adapters should create the same

@@ -1,4 +1,3 @@
-import { Temporal } from '@js-temporal/polyfill';
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
@@ -7,11 +6,6 @@ import { AppError } from './errors.ts';
 import { resolveAccess } from './identity/access.ts';
 import { authConfig } from './identity/config.ts';
 import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
-import { planDepartures } from './recommendations/daylight.ts';
-import {
-  recommendRides,
-  requiredWeatherFor,
-} from './recommendations/engine.ts';
 import {
   defaultSettings,
   mergeSettings,
@@ -22,17 +16,20 @@ import {
   settingsSchema,
 } from './recommendations/input.ts';
 import { preferenceLevels } from './recommendations/levels.ts';
-import { daySummary, mergeDays } from './recommendations/multi-day.ts';
+import { mergeDays } from './recommendations/multi-day.ts';
+import {
+  nextWindowsSchema,
+  recommendNextWindows,
+} from './recommendations/next-windows.ts';
 import {
   datesBetween,
   localDate,
   resolvePlanningDays,
 } from './recommendations/planning.ts';
 import { presentRoute } from './recommendations/presentation.ts';
+import { evaluateComparisons } from './recommendations/service.ts';
 import { readJsonBody, validateInput } from './request.ts';
-import { prepareHistory } from './rides/overlap.ts';
 import { rideRoutes } from './rides/routes.ts';
-import { readHistory } from './rides/store.ts';
 import { importGpx } from './routes/gpx.ts';
 import { importSourceRoute } from './routes/import.ts';
 import {
@@ -59,22 +56,10 @@ import {
   type UserStore,
   updateUserSchema,
 } from './users/model.ts';
-import { type ForecastCache, withForecastCache } from './weather/cache.ts';
-import type { ForecastProvider, ForecastRequest } from './weather/contracts.ts';
-import { summarizeProvenance } from './weather/coverage.ts';
-import {
-  createWeatherProviders,
-  describeWeatherProviders,
-  forecastHorizonHours,
-} from './weather/providers.ts';
-import { getForecastForPolicy } from './weather/source-policy.ts';
+import type { ForecastCache } from './weather/cache.ts';
+import type { ForecastProvider } from './weather/contracts.ts';
+import { describeWeatherProviders } from './weather/providers.ts';
 
-const HOUR = 3_600_000;
-const quality = {
-  maxTimeStepSeconds: 3600,
-  maxLocationDistanceM: 10_000,
-  maxAgeSeconds: 6 * 3600,
-};
 export const createApp = (
   dependencies: {
     resolveAccess?: typeof resolveAccess;
@@ -130,7 +115,7 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.11.0' }));
+  app.get('/health', (c) => c.json({ ok: true, version: '0.12.0' }));
   app.route('/', identityRoutes());
   for (const path of [
     '/rides',
@@ -141,6 +126,7 @@ export const createApp = (
     '/route-imports',
     '/route-selection',
     '/recommendations',
+    '/recommendations/*',
     '/weather-providers',
     '/users',
     '/users/*',
@@ -442,6 +428,29 @@ export const createApp = (
       );
     return c.json({ outcome: 'updated', route: storedRouteSummary(record) });
   });
+  app.post('/recommendations/next-windows', async (c) => {
+    const raw = await readJsonBody(c, nextWindowsSchema);
+    const [user, routes] = await Promise.all([
+      users(c.env).get(c.get('ownerId')),
+      store(c.env).getMany(c.get('ownerId'), raw.routeIds),
+    ]);
+    const settings = validateInput(
+      settingsSchema,
+      mergeSettings(raw, user?.settings),
+    );
+    const result = await recommendNextWindows(raw, settings, routes, {
+      env: c.env,
+      ownerId: c.get('ownerId'),
+      signal: c.req.raw.signal,
+      now,
+      startedAt: now(),
+      dependencies,
+    });
+    return c.json({
+      ...result,
+      savedUser: user ? { id: user.id, version: user.version } : null,
+    });
+  });
   app.post('/recommendations', async (c) => {
     const raw = await readJsonBody(c, recommendationApiRequestSchema);
     const [user, routes] = await Promise.all([
@@ -497,146 +506,19 @@ export const createApp = (
         'ROUTE_NOT_FOUND',
         'One or more routes were not found.',
       );
-    const plans = inputs.flatMap((dayInput) =>
-      routes.map((route) => ({
-        route,
-        plan: planDepartures(route, dayInput, startedAt.getTime()),
-      })),
-    );
-    const feasible = plans.filter(({ plan }) => plan.departures.length > 0);
-    const locations = [
-      ...new Map(
-        feasible
-          .flatMap(({ route }) => route.weatherLocations)
-          .map((l) => [l.id, l]),
-      ).values(),
-    ];
-    if (locations.length > 256)
-      throw new AppError(
-        422,
-        'TOO_MANY_WEATHER_LOCATIONS',
-        'Compare fewer routes; a request supports up to 256 weather locations.',
-      );
-    const earliest = feasible.length
-      ? Math.min(...feasible.flatMap((p) => p.plan.departures))
-      : startedAt.getTime();
-    const latest = feasible.length
-      ? Math.max(...feasible.flatMap((p) => p.plan.departures))
-      : startedAt.getTime();
-    const recent = input.preferences.recentRides;
-    const historySnapshot =
-      recent.mode === 'prefer-variety' && feasible.length
-        ? await readHistory(
-            c.env.ROUTES_DB,
-            c.get('ownerId'),
-            Temporal.Instant.fromEpochMilliseconds(earliest)
-              .toZonedDateTimeISO('UTC')
-              .toPlainDate()
-              .subtract({ days: recent.lookbackDays + 2 })
-              .toString(),
-            Temporal.Instant.fromEpochMilliseconds(latest)
-              .toZonedDateTimeISO('UTC')
-              .toPlainDate()
-              .add({ days: 2 })
-              .toString(),
-          )
-        : null;
-    const history = prepareHistory(
-      [...new Map(feasible.map(({ route }) => [route.id, route])).values()],
-      recent,
-      historySnapshot,
-      new Date(earliest).toISOString(),
-      new Date(latest).toISOString(),
-    );
-    const cacheReads = { hits: 0, misses: 0 };
-    const cache = dependencies.cache ?? {
-      get: (key: string) => c.env.WEATHER_CACHE.get(key),
-      put: async (key: string, value: string, ttlSeconds: number) =>
-        c.env.WEATHER_CACHE.put(key, value, { expirationTtl: ttlSeconds }),
-    };
-    const configured =
-      dependencies.providers ?? createWeatherProviders(c.env, cache, now);
-    const providers = Object.fromEntries(
-      Object.entries(configured).map(([id, provider]) => [
-        id,
-        withForecastCache(provider, cache, {
-          now,
-          forecastHorizonHours: forecastHorizonHours(id),
-          onRead: (hit) => {
-            if (hit) cacheReads.hits++;
-            else cacheReads.misses++;
-          },
-        }),
-      ]),
-    );
-    // Requested comparison range; registered providers cache their independent full horizon.
-    const range = feasible.length
-      ? {
-          start: new Date(
-            Math.floor(
-              Math.min(
-                ...feasible.map(({ plan }) => plan.daylight?.start ?? Infinity),
-              ) / HOUR,
-            ) *
-              HOUR -
-              HOUR,
-          ).toISOString(),
-          end: new Date(
-            Math.ceil(
-              Math.max(
-                ...feasible.map(({ plan }) => plan.daylight?.end ?? -Infinity),
-              ) / HOUR,
-            ) *
-              HOUR +
-              HOUR,
-          ).toISOString(),
-        }
-      : null;
-    const request: ForecastRequest | null = range
-      ? {
-          locations,
-          range,
-          required: requiredWeatherFor(input),
-          ...quality,
-          freshnessBasis: input.forecast.freshnessBasis,
-        }
-      : null;
-    const selected = request
-      ? await getForecastForPolicy(
-          providers,
-          input.weather,
-          request,
-          AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(30_000)]),
-        )
-      : null;
-    const results = selected?.results ?? [];
-    const daily = new Map(
-      inputs.map((dayInput) => [
-        dayInput.date,
-        recommendRides(
-          routes,
-          dayInput,
-          results,
-          startedAt.getTime(),
-          quality.maxLocationDistanceM,
-          3,
-          history,
-        ),
-      ]),
-    );
-    const summaries = inputs.map((dayInput) => {
-      const evaluated = daily.get(dayInput.date);
-      if (!evaluated) throw new Error('Missing daily evaluation.');
-      return daySummary(
-        routes,
-        dayInput,
-        evaluated,
-        results,
-        requiredWeatherFor(dayInput),
-        startedAt.getTime(),
-        quality.maxLocationDistanceM,
-      );
+    const comparison = await evaluateComparisons(routes, inputs, input, {
+      env: c.env,
+      ownerId: c.get('ownerId'),
+      signal: c.req.raw.signal,
+      now,
+      startedAt,
+      dependencies,
     });
+    const daily = new Map(
+      comparison.comparisons.map((item) => [item.input.date, item.result]),
+    );
+    const summaries = comparison.comparisons.map((item) => item.summary);
+    const recent = input.preferences.recentRides;
     const selectedDates = selection.dates.filter(
       (date) =>
         !raw.days ||
@@ -698,14 +580,7 @@ export const createApp = (
         ...d,
         selected: selectedDates.includes(d.date),
       })),
-      history: {
-        revision: history.revision,
-        status: feasible.length ? history.status : 'not_evaluated',
-        matcherVersion: history.matcherVersion,
-        reasonCode: feasible.length ? history.reasonCode : null,
-        affectedRouteIds: history.affectedRouteIds,
-        affectedRideIds: history.affectedRideIds,
-      },
+      history: comparison.history,
       generatedAt: startedAt.toISOString(),
       date: raw.date ?? null,
       timeZone: input.timeZone,
@@ -762,32 +637,7 @@ export const createApp = (
         'Comfort weights are provisional. Weather score combines 75% distance-weighted mean comfort and 25% worst sampled comfort; it is not a probability.',
         'Precipitation includes rain, snow and other forms. The highest local hourly probability is not the probability of precipitation anywhere on the whole ride.',
       ],
-      weather: {
-        ...summarizeProvenance(results),
-        snapshotPolicy: 'provider-horizon',
-        requestedPolicy: input.weather,
-        selectedSource: selected?.source ?? null,
-        attempts: selected?.attempts ?? [],
-        quality: { ...quality, freshnessBasis: input.forecast.freshnessBasis },
-        descriptors: request?.required ?? [],
-        range,
-        cache: cacheReads,
-        locations: results.map((result) =>
-          result.status === 'unavailable'
-            ? {
-                id: result.requested.id,
-                status: result.status,
-                issues: result.issues,
-              }
-            : {
-                id: result.location.requested.id,
-                status: result.status,
-                distanceFromRequestedM: result.location.distanceFromRequestedM,
-                provenance: result.provenance,
-                issues: result.issues,
-              },
-        ),
-      },
+      weather: comparison.weather,
     });
   });
   app.notFound((c) =>
