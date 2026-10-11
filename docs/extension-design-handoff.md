@@ -40,7 +40,7 @@ Use the existing ride cards, with distinct labels and explanations for these out
 
 | Outcome | What the rider should see |
 | --- | --- |
-| Meets your preferences | A comfort score, recommended departure and estimated finish. |
+| Meets your preferences | A projected enjoyment score, recommended departure and estimated finish. |
 | Below your minimum conditions | The available score and specific drawbacks. The best available option can still be highlighted, with the shortfall clearly visible. |
 | Doesn't fit your window | The estimated ride duration and an explanation of why it cannot fit. Do not present this as poor weather. |
 | Forecast incomplete | Explain that the route cannot be fully assessed. An unassessable route has no score, rather than a zero score. If the API can return a partial assessment, retain its coverage warning. |
@@ -69,7 +69,7 @@ falls outside the preferred range. No preference means no distance-fit label.
 
 ## Scores and weather summaries
 
-- Label the number **Comfort score**, for example **78/100**. It represents suitability for the rider's preferences, not forecast confidence or a probability.
+- Label the number **Projected enjoyment score**, for example **78/100**. It represents suitability for the rider's preferences, not forecast confidence or a probability.
 - For multi-day results, always show the recommended **date as well as departure time**, together with the estimated finish.
 - Tie weather summaries to the recommended ride and its timing. Do not present the warmest temperature anywhere across all saved routes as the expected temperature for the recommendation.
 - Label retrieval time as **Forecast retrieved**, not **Forecast updated**, unless the API actually provides the upstream publication time.
