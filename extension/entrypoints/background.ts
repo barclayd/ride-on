@@ -46,11 +46,13 @@ import {
 // Serialise read-modify-write so concurrent handlers never drop each other's changes.
 let writes = Promise.resolve();
 const update = (patch: (state: State) => Partial<State>) => {
-  writes = writes.then(async () => {
+  const write = writes.then(async () => {
     const state = await readState();
     await browser.storage.local.set({ state: { ...state, ...patch(state) } });
   });
-  return writes;
+  // One failed write mustn't skip every later one (loading would never clear).
+  writes = write.catch(() => {});
+  return write;
 };
 
 const signOutLocally = async (signInError: string | null = null) => {
