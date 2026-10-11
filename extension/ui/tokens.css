@@ -379,6 +379,10 @@ fieldset {
 .ro-day > span:nth-child(3) {
   font: 400 11px var(--ro-serif);
   min-height: 1lh;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ro-quality {
   width: 70%;
@@ -796,7 +800,8 @@ a.ro-name:hover {
   color: var(--ro-warn-fg);
   border-color: #f0d9bf;
 }
-.ro-banner.ro-incomplete {
+.ro-banner.ro-incomplete,
+.ro-banner.ro-provider {
   background: #f2eedc;
   color: #6b5516;
   border-color: #e4dcbc;
@@ -879,6 +884,12 @@ a.ro-name:hover {
   border-radius: 6px;
   padding: 8px 10px;
   font: 500 12px / 1.45 var(--ro-sans);
+}
+.ro-banner .ro-link,
+.ro-note .ro-link {
+  font-size: inherit;
+  color: inherit;
+  text-decoration: underline;
 }
 .ro-times {
   display: grid;

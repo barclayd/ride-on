@@ -190,7 +190,7 @@ export const RideCard = (props: {
   );
 };
 
-const BANNERS: Record<Banner, string> = {
+const BANNERS: Record<Exclude<Banner, 'provider'>, string> = {
   nomatch:
     'None of these rides meets all your minimum conditions. Here are the best available options.',
   incomplete:
@@ -199,10 +199,24 @@ const BANNERS: Record<Banner, string> = {
     'None of your selected rides is within your preferred distance range. These are the best options at other distances.',
 };
 
-export const Banners = ({ view }: { view: View }) =>
-  view.banners.map((banner) => (
+// The chosen provider returned nothing for these days: name it and offer the fix.
+export const ProviderDown = (props: { view: View; onChange: () => void }) => (
+  <>
+    {props.view.provider} has no forecast for these days.{' '}
+    <button type="button" class="ro-link" onClick={props.onChange}>
+      Change forecast provider
+    </button>
+  </>
+);
+
+export const Banners = (props: { view: View; onProvider: () => void }) =>
+  props.view.banners.map((banner) => (
     <div key={banner} class={`ro-banner ro-${banner}`} role="status">
-      {BANNERS[banner]}
+      {banner === 'provider' ? (
+        <ProviderDown view={props.view} onChange={props.onProvider} />
+      ) : (
+        BANNERS[banner]
+      )}
     </div>
   ));
 

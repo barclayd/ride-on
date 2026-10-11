@@ -14,6 +14,7 @@ import {
   GoogleMark,
   iconUrl,
   injectFonts,
+  ProviderDown,
   RideCard,
   Segmented,
   useView,
@@ -128,6 +129,8 @@ const pct = (h: number) =>
 const width = (from: number, to: number) =>
   `${(Math.max(0, Math.min(21, to) - Math.max(5, from)) / 16) * 100}%`;
 
+const toPrefs = () => send({ type: 'setTab', tab: 'prefs' });
+
 const WhenTab = ({ view }: { view: View }) => {
   const { planning, defaultPlanning } = view.state;
   const set = (change: Partial<Planning>) =>
@@ -197,6 +200,11 @@ const WhenTab = ({ view }: { view: View }) => {
             </button>
           ))}
         </fieldset>
+        {view.banners.includes('provider') && (
+          <div class="ro-note">
+            <ProviderDown view={view} onChange={toPrefs} />
+          </div>
+        )}
         {coverage && <div class="ro-note">{coverage}</div>}
       </section>
       <section class="ro-card">
@@ -527,7 +535,7 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
       {!view.range && (
         <Expired view={view} variant="rides" onChoose={onChoose} />
       )}
-      <Banners view={view} />
+      <Banners view={view} onProvider={toPrefs} />
       {view.range && view.cards.length === 0 && (
         <span class="ro-empty">
           No tracked routes yet. Track some from your cycle.travel Journeys

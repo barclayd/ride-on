@@ -176,7 +176,8 @@ export const coverageText = (selected: DaySummary[], timeZone: string) => {
 const NONE: Record<string, [string, string]> = {
   outside_forecast_horizon: ['Not yet', 'Forecast not available yet'],
   no_feasible_departure: ['No fit', 'No ride fits your window'],
-  no_remaining_window: ['Too late', 'Your window has passed'],
+  no_remaining_window: ['Passed', 'Your window has passed'],
+  provider_unavailable: ['No data', 'Your forecast provider returned no data'],
 };
 // A day strip tile from the API's summary of that day; '–' until it arrives.
 export const tile = (d: DaySummary | undefined, timeZone: string) => {
@@ -184,7 +185,7 @@ export const tile = (d: DaySummary | undefined, timeZone: string) => {
   if (!d) return blank;
   if (d.availability === 'none') {
     const [label, title] = NONE[d.availabilityReason] ?? [
-      'Unavailable',
+      'No data',
       'Forecast unavailable',
     ];
     return { kind: 'none', label, title, quality: null };
@@ -261,7 +262,7 @@ export type Card = {
   best: Departure | null;
   recent: boolean; // shares roads with recent rides, so scored a little lower
 };
-export type Banner = 'nomatch' | 'incomplete' | 'distance';
+export type Banner = 'provider' | 'nomatch' | 'incomplete' | 'distance';
 export type Results = {
   status: StandardsStatus;
   cards: Card[];
@@ -404,8 +405,13 @@ export const buildResults = (
     return r ? [r.distanceFit] : [];
   });
   const banners: Banner[] = [];
+  // The provider itself failed: say so instead of the vaguer 'incomplete'.
+  const down = selected.some(
+    (d) => d.availabilityReason === 'provider_unavailable',
+  );
+  if (down) banners.push('provider');
   if (status === 'none_meet') banners.push('nomatch');
-  if (status === 'unknown') banners.push('incomplete');
+  if (status === 'unknown' && !down) banners.push('incomplete');
   if (fits.length && fits.every((f) => f && f.status !== 'within_range'))
     banners.push('distance');
   const sun = selected.find((d) => d.daylight)?.daylight;
@@ -622,6 +628,7 @@ export const viewOf = (state: State, now: Date) => {
     timeZone,
   );
   const weather = expired ? state.next?.weather : recs?.weather;
+  const source = user && providerIds(user.settings.weather)[0];
   const at = weather?.retrieval.latestAt;
   const passed: [string, string] | null =
     expired?.dates ??
@@ -655,6 +662,9 @@ export const viewOf = (state: State, now: Date) => {
     ),
     retrieved: at ? clock(at, timeZone) : null,
     attributions: weather?.attribution ?? [],
+    provider:
+      state.providers.find((p) => p.id === source)?.name ??
+      'Your forecast provider',
     ...results,
     banners: range ? results.banners : [],
   };
