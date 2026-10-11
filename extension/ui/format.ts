@@ -28,7 +28,6 @@ import type {
   RouteSummary,
   Standard,
   StandardsStatus,
-  WeatherSource,
   Window,
 } from '../lib/types';
 
@@ -78,9 +77,6 @@ const join = (names: string[]) =>
 
 export const qualityColour = (score: number) =>
   score >= 75 ? '#8bc61f' : score >= 60 ? '#c9b458' : '#d98b4a';
-
-export const providerIds = (weather: WeatherSource) =>
-  weather.mode === 'strict' ? [weather.providerId] : weather.providerIds;
 
 // A local date and time as a UTC instant.
 // ponytail: can be an hour out within an hour of a DST change; fine for "has the window ended".
@@ -628,7 +624,6 @@ export const viewOf = (state: State, now: Date) => {
     timeZone,
   );
   const weather = expired ? state.next?.weather : recs?.weather;
-  const source = user && providerIds(user.settings.weather)[0];
   const at = weather?.retrieval.latestAt;
   const passed: [string, string] | null =
     expired?.dates ??
@@ -663,7 +658,7 @@ export const viewOf = (state: State, now: Date) => {
     retrieved: at ? clock(at, timeZone) : null,
     attributions: weather?.attribution ?? [],
     provider:
-      state.providers.find((p) => p.id === source)?.name ??
+      state.providers.find((p) => p.id === user?.weatherProviderId)?.name ??
       'Your forecast provider',
     ...results,
     banners: range ? results.banners : [],

@@ -29,20 +29,11 @@ const day = (offset: number) =>
 
 const APPLE_LEGAL =
   'https://developer.apple.com/weatherkit/data-source-attribution/';
-const provider = (
-  id: string,
-  name: string,
-  configured: boolean,
-  freshnessBasis: string,
-  attribution: object,
-) => ({
+// GET /weather-providers (API 0.14): one Met Office choice; products stay server-side.
+const provider = (id: string, name: string, attribution: object) => ({
   id,
   name,
-  configured,
-  recommendedSettings: {
-    weather: { mode: 'strict', providerId: id },
-    forecast: { representation: 'deterministic', freshnessBasis },
-  },
+  configured: true,
   attribution: [attribution],
 });
 const METOFFICE = {
@@ -50,7 +41,7 @@ const METOFFICE = {
   url: 'https://www.metoffice.gov.uk/',
 };
 const PROVIDERS = [
-  provider('apple-weather', 'Apple Weather', true, 'retrieval-time', {
+  provider('apple-weather', 'Apple Weather', {
     text: 'Apple Weather',
     url: APPLE_LEGAL,
     logo: {
@@ -62,21 +53,13 @@ const PROVIDERS = [
     notice:
       'Ride On route assessments are derived from and modify Apple Weather data.',
   }),
-  provider(
-    'met-office',
-    'Met Office Global Spot',
-    true,
-    'model-run',
-    METOFFICE,
-  ),
-  provider(
-    'met-office-bpf',
-    'Met Office Blended Probabilistic',
-    false,
-    'model-run',
-    METOFFICE,
-  ),
+  provider('met-office', 'Met Office', METOFFICE),
 ];
+// The technical product behind each choice; a saved BPF profile reports 'met-office'.
+const PRODUCTS: Record<string, string> = {
+  'apple-weather': 'apple-weather',
+  'met-office': 'met-office-bpf',
+};
 
 let calls: { method: string; path: string; body: any; key?: string }[] = [];
 let user: User;
@@ -94,9 +77,10 @@ const reset = () => {
     id: 'u1',
     version: 1,
     displayName: 'Test Rider',
+    weatherProviderId: 'met-office',
     settings: {
       timeZone: 'Europe/London',
-      weather: { mode: 'strict', providerId: 'met-office' }, // an existing profile
+      weather: { mode: 'strict', providerId: 'met-office-bpf' }, // an existing profile
       forecast: {
         representation: 'deterministic',
         freshnessBasis: 'model-run',
@@ -190,11 +174,7 @@ const SHOWN = {
 const weather = () => ({
   retrieval: { latestAt: new Date().toISOString() },
   attribution:
-    PROVIDERS.find(
-      (p) =>
-        user.settings.weather.mode === 'strict' &&
-        p.id === user.settings.weather.providerId,
-    )?.attribution ?? [],
+    PROVIDERS.find((p) => p.id === user.weatherProviderId)?.attribution ?? [],
 });
 const best = (date: string, i: number, score: number) => ({
   date,
@@ -343,13 +323,16 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
   if (key === 'PATCH /users/me') {
     if (body.expectedVersion !== user.version)
       return [409, { error: { code: 'USER_VERSION_CONFLICT', message: 'x' } }];
+    const choice = body.settings.weatherProviderId;
     user = {
       ...user,
       version: user.version + 1,
+      weatherProviderId: choice ?? user.weatherProviderId,
       settings: {
         ...user.settings,
-        weather: body.settings.weather ?? user.settings.weather,
-        forecast: body.settings.forecast ?? user.settings.forecast,
+        weather: choice
+          ? { mode: 'strict', providerId: PRODUCTS[choice] }
+          : user.settings.weather,
         preferences: applyPatch(
           user.settings.preferences,
           body.settings.preferences ?? {},
@@ -362,7 +345,7 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
     return [
       200,
       {
-        defaultPolicy: PROVIDERS[0].recommendedSettings.weather,
+        defaultProviderId: 'apple-weather',
         providers: PROVIDERS,
       },
     ];
@@ -744,19 +727,19 @@ test('Preferences: search-only distance, then PATCH carries supported fields onl
   });
   await expect(page.locator('.ro-sync')).toHaveText('Synced');
 
-  // The saved Met Office choice shows; unconfigured providers don't.
+  // A saved BPF profile shows as the single Met Office choice, not its product ID.
   const picker = page.getByLabel('Forecast provider');
   await expect(picker).toHaveValue('met-office');
   await expect(picker.locator('option')).toHaveText([
     'Apple Weather',
-    'Met Office Global Spot',
+    'Met Office',
   ]);
   const before = recCalls().length;
   await picker.selectOption('apple-weather');
   await expect.poll(() => patches().length).toBe(3);
   expect(patches()[2].body).toEqual({
     expectedVersion: 3,
-    settings: PROVIDERS[0].recommendedSettings,
+    settings: { weatherProviderId: 'apple-weather' },
   });
   await expect.poll(() => recCalls().length).toBeGreaterThan(before);
   await expect(picker).toHaveValue('apple-weather');

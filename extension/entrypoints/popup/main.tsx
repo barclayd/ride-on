@@ -43,7 +43,6 @@ import {
   newest,
   PRESETS,
   pickDay,
-  providerIds,
   qualityColour,
   rainText,
   rankText,
@@ -832,14 +831,15 @@ const PrefsTab = ({ view }: { view: View }) => {
   const [monthsOpen, setMonthsOpen] = useState(false);
   if (!user) return null;
   const draft = { ...draftFrom(user.settings.preferences, local), ...edits };
-  // ponytail: a fallback chain shows as its first provider.
-  const source = providerIds(user.settings.weather)[0];
+  // Not the technical settings.weather: both saved Met Office products are one choice.
+  const source = user.weatherProviderId ?? '';
   const listed = view.state.providers.filter(
     (p) => p.configured || p.id === source,
   );
+  // A custom policy has no choice: show it rather than overwrite it.
   const sources = listed.some((p) => p.id === source)
     ? listed
-    : [...listed, { id: source, name: source }];
+    : [...listed, { id: source, name: source || 'Custom' }];
   const edit = (change: Partial<Draft>) => {
     const next = { ...draft, ...change };
     setEdits((current) => ({ ...current, ...change }));

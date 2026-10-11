@@ -47,7 +47,6 @@ export type WeatherProvider = {
   id: string;
   name: string;
   configured: boolean;
-  recommendedSettings: { weather: WeatherSource; forecast: ForecastPolicy };
   attribution: Attribution[];
 };
 
@@ -55,6 +54,8 @@ export type User = {
   id: string;
   version: number;
   displayName: string;
+  // The public picker choice; null for an advanced fallback/custom policy.
+  weatherProviderId: string | null;
   settings: {
     timeZone: string;
     preferences: Preferences;
@@ -76,8 +77,7 @@ export type PreferencesPatch = {
 };
 export type SettingsPatch = {
   preferences?: PreferencesPatch;
-  weather?: WeatherSource;
-  forecast?: ForecastPolicy;
+  weatherProviderId?: string;
 };
 
 export type RouteSummary = {

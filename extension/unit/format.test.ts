@@ -49,7 +49,7 @@ import {
 
 const TZ = 'Europe/London'; // BST in mid-October
 const NOW = new Date('2026-10-14T09:00:00Z'); // Wednesday 10:00
-const strict = { mode: 'strict', providerId: 'met-office' } as const;
+const strict = { mode: 'strict', providerId: 'met-office-bpf' } as const;
 
 const summary = (
   date: string,
@@ -486,6 +486,7 @@ test('recentRides patches keep the lookback', () => {
 const shownState: State = {
   ...initialState,
   user: {
+    weatherProviderId: 'met-office',
     settings: { timeZone: TZ, weather: strict, preferences: prefs },
   } as User,
   selection: { version: 1, routeIds: ['b', 'a'], updatedAt: null },
@@ -521,11 +522,11 @@ test('the view: strip, selected days and weather', () => {
     viewOf(
       {
         ...shownState,
-        providers: [{ id: 'met-office', name: 'Met Office Global Spot' }],
+        providers: [{ id: 'met-office', name: 'Met Office' }],
       } as State,
       NOW,
     ).provider,
-  ).toBe('Met Office Global Spot');
+  ).toBe('Met Office');
 });
 
 test('the shown window, its end and its picks', () => {
