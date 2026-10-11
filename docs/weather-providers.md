@@ -309,11 +309,17 @@ upstream batch API. Adapters use bounded concurrency, cancellation, timeouts and
 quota-aware retry behaviour. Avoid retry storms when a daily quota is exhausted.
 
 The adapter deduplicates identical coordinates within a request. A KV-compatible
-wrapper now caches normalized evidence for 20 minutes. Keys include source identity,
-coordinates, descriptors, provider-horizon range and quality limits; cached values retain the model
-run and resolved location. Both retrieval age and model age are checked on reuse.
-Changing preferences or speed can rescore the same day snapshot. Nearby-site reuse
-and cross-request coalescing remain future work. Cache writes are awaited so a
+wrapper retains normalized horizon snapshots for up to 12 hours and refreshes
+after 3 hours for today, 6 hours for tomorrow and 12 hours for later dates.
+Provider expiry and the selected model-age limit can require an earlier refresh.
+Stable keys include source identity, coordinates, descriptors, horizon length and
+quality limits, without the moving clock hour. BPF also reuses nearest-site
+snapshots across nearby route points. Cached values retain provenance and resolved
+locations. Unknown sunshine symbols may be retained with their missing-data issue
+when all other supplied hourly measurements are complete; essential gaps and
+transient failures remain retryable. Changing preferences or speed can rescore
+compatible evidence. Cross-request coalescing remains future work.
+Cache writes are awaited so a
 successful local repeated request can reuse them; KV propagation across regions
 still follows Cloudflare's consistency behaviour.
 

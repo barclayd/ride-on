@@ -42,7 +42,7 @@ export const isFreshForecast = (
   );
 };
 /** Validated cacheable evidence; offline calibration uses the same snapshot shape. */
-export const cachedForecastSchema = z.object({
+const forecastSnapshotSchema = z.object({
   status: z.enum(['complete', 'partial']),
   location: z.object({
     requested: z.object({ id: z.string(), coordinate: coordinateSchema }),
@@ -105,14 +105,43 @@ export const cachedForecastSchema = z.object({
       ),
     }),
   ),
-  // Only complete or horizon-limited snapshots are stored, never transient failures.
+  // Unknown sky symbols are durable missing evidence, not a transport failure.
+  // The refinement below still rejects gaps in the other hourly measurements.
   issues: z.array(
     z.object({
-      code: z.enum(['outside-forecast-horizon', 'unknown-model-run']),
+      code: z.enum([
+        'outside-forecast-horizon',
+        'unknown-model-run',
+        'missing-data',
+      ]),
       message: z.string(),
     }),
   ),
 });
+export const cachedForecastSchema = forecastSnapshotSchema.refine(
+  (result) =>
+    !result.issues.some((i) => i.code === 'missing-data') ||
+    (result.series.some(
+      (s) =>
+        s.descriptor.kind === 'category' &&
+        s.descriptor.quantity === 'sky-condition',
+    ) &&
+      result.series.every(
+        ({ descriptor, samples }) =>
+          (descriptor.kind === 'category' &&
+            descriptor.quantity === 'sky-condition') ||
+          (samples.length > 0 &&
+            samples.every(
+              (sample, index) =>
+                sample.value !== null &&
+                (index === 0 ||
+                  Date.parse(sample.validAt) -
+                    Date.parse(samples[index - 1]?.validAt ?? '') ===
+                    3_600_000),
+            )),
+      )),
+  'Only missing sunshine may be retained in an otherwise complete hourly snapshot.',
+);
 
 /** Source fallback must assess the requested comparison, not unused prefetched hours. */
 const forRequestedRange = (

@@ -68,11 +68,13 @@ let selection: { version: number; routeIds: string[]; updatedAt: null };
 let routes: Record<string, RouteSummary>;
 let rides: Ride[];
 let providerDown: boolean; // every forecast failed, as with a mis-chosen provider
+let sunshineUncertain: boolean;
 let replays: Map<string, Ride>;
 
 const reset = () => {
   calls = [];
   providerDown = false;
+  sunshineUncertain = false;
   replays = new Map();
   user = {
     id: 'u1',
@@ -186,6 +188,9 @@ const best = (date: string, i: number, score: number) => ({
   score,
   standards: { status: 'not_configured', failures: [] },
   conditions: CONDITIONS,
+  sunshineAssessment: sunshineUncertain
+    ? { status: 'partial', unknownDistanceFraction: 0.4 }
+    : null,
 });
 
 const nextWindows = (after: { window: unknown }) => {
@@ -573,6 +578,32 @@ test('Rides tab opens first with one request for the planned days', async ({
     riding: { window: 'daylight' },
   });
   await page.screenshot({ path: test.info().outputPath('rides.png') });
+});
+
+test('a scored ride explains uncertain sunshine in the popup and on Journeys', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  sunshineUncertain = true;
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  const card = page.locator('.ro-ride').first();
+  await expect(card).toContainText('Hilly Loop');
+  await expect(card.locator('.ro-coverage')).toHaveText(
+    'Sunshine is uncertain for this ride.',
+  );
+  await expect(card.locator('.ro-score')).toContainText('Conditions 84/100');
+  await expectPanelFits(page);
+  await page.screenshot({
+    path: test.info().outputPath('uncertain-sunshine.png'),
+  });
+  const journeys = await context.newPage();
+  await fakeCycleTravel(context);
+  await journeys.goto('https://cycle.travel/user/journeys');
+  await expect(
+    journeys.locator('.ro-ride').first().locator('.ro-coverage'),
+  ).toHaveText('Sunshine is uncertain for this ride.');
 });
 
 test('When tab: Days and Time visible; custom times re-query', async ({

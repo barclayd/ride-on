@@ -154,7 +154,7 @@ test('day tiles and the coverage note come from the API', () => {
   ).toEqual(['No data', 'No data', 'No fit', 'Passed']);
   expect(tile({ ...days[2], until: null }, TZ)).toMatchObject({
     label: 'Partial',
-    title: 'Partial forecast',
+    title: 'Some weather details or hours are missing along your routes',
   });
 
   expect(coverageText(days.slice(0, 2), TZ)).toBeNull();
@@ -162,7 +162,7 @@ test('day tiles and the coverage note come from the API', () => {
     "Wednesday and Thursday available; Friday's forecast only covers the morning; Saturday's forecast isn't available yet.",
   );
   expect(coverageText([{ ...days[2], until: null }], TZ)).toBe(
-    "Friday's forecast only covers part of the day.",
+    "Friday's forecast is missing some weather details or hours along your routes.",
   );
 });
 
@@ -277,6 +277,30 @@ const gust: Failure = {
   sections: [],
 };
 const below = { status: 'below_minimums', code: 'below_minimums' } as const;
+
+test('usable rides explain uncertain sunshine without an incomplete-forecast verdict', () => {
+  for (const status of ['complete', 'partial', 'unavailable'] as const) {
+    const best = {
+      ...departure('2026-10-14T08:00:00Z', 80),
+      sunshineAssessment: {
+        status,
+        unknownDistanceFraction: status === 'complete' ? 0 : 0.5,
+      },
+    };
+    const out = buildResults(
+      ['a'],
+      {},
+      recs('match_found', [result('a', best)]),
+      [days[0]],
+      TZ,
+    );
+    expect(out.cards[0]?.state).toBe('meets');
+    expect(out.cards[0]?.coverage).toBe(
+      status === 'complete' ? null : 'Sunshine is uncertain for this ride.',
+    );
+    expect(out.coverageWarn).toBe(false);
+  }
+});
 
 test('cards follow the API: ranked, then unranked, then pending', () => {
   const out = buildResults(

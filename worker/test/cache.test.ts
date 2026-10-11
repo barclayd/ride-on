@@ -1,11 +1,53 @@
 import { expect, test } from 'bun:test';
 import { requiredWeather } from '../src/recommendations/engine.ts';
-import { withForecastCache } from '../src/weather/cache.ts';
+import {
+  cachedForecastSchema,
+  withForecastCache,
+} from '../src/weather/cache.ts';
 import type {
   ForecastProvider,
   ForecastRequest,
 } from '../src/weather/contracts.ts';
+import { weatherDescriptors } from '../src/weather/descriptors.ts';
 import { forecastsFor, makeRoute, now, present } from './fixtures/rides.ts';
+
+test('only sunshine gaps are cacheable; missing essential values, rows and failures remain retryable', async () => {
+  const route = await makeRoute();
+  const result = present(
+    forecastsFor(
+      [route],
+      (quantity) => (quantity === 'sky-condition' ? null : 1),
+      [...requiredWeather, weatherDescriptors.skyCondition],
+    )[0],
+  );
+  if (result.status === 'unavailable') throw new Error('Expected forecast');
+  const partial = {
+    ...result,
+    status: 'partial',
+    issues: [{ code: 'missing-data', message: 'Unknown sky symbol' }],
+  };
+  const core = present(result.series[0]);
+  expect(cachedForecastSchema.safeParse(partial).success).toBe(true);
+  for (const samples of [
+    [],
+    core.samples.map((s, i) => (i === 12 ? { ...s, value: null } : s)),
+    core.samples.filter((_, i) => i !== 12),
+  ]) {
+    expect(
+      cachedForecastSchema.safeParse({
+        ...partial,
+        series: partial.series.map((s, i) => (i === 0 ? { ...s, samples } : s)),
+      }).success,
+    ).toBe(false);
+  }
+  for (const code of ['stale-data', 'invalid-response', 'upstream-unavailable'])
+    expect(
+      cachedForecastSchema.safeParse({
+        ...partial,
+        issues: [{ code, message: 'Retryable' }],
+      }).success,
+    ).toBe(false);
+});
 
 test('cache reuses equivalent locations with new IDs, expires by retrieval and model age, and ignores corruption', async () => {
   const route = await makeRoute();

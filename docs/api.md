@@ -435,6 +435,15 @@ a high sunshine score, while another profile can explicitly prefer lower cloud.
 A missing weather symbol never becomes sunny, even if temperature and wind look
 comfortable. No cloud percentage is inferred from a weather symbol.
 
+In `comfort-v0.10`, unknown sunshine contributes neutral comfort (0.5) to the
+combined score for the affected route sections, without blocking an otherwise
+assessable departure or removing hours from day coverage. It remains missing in
+the reported sunshine factor and category shares. Each departure includes
+`sunshineAssessment: {status, unknownDistanceFraction}`, where status is
+`complete`, `partial` or `unavailable`; the assessment is null when sunshine
+has zero weight. The response assumptions and departure drawbacks disclose the
+neutral scoring rule. Essential weather and minimum-condition checks are unchanged.
+
 ### Personal crosswind sensitivity
 
 `preferences.wind.crosswindSensitivity` scales the crosswind discomfort term

@@ -163,9 +163,16 @@ integration(
     const result = await recommend(h, [route.id], {
       preferences: { weights: { sunshine: 0.45 } },
     });
-    assert.equal(result.recommendedRouteId, null);
+    assert.equal(result.recommendedRouteId, route.id);
+    assert.equal(first(result.rankings).departuresUnknown, 0);
+    assert.equal(
+      first(result.rankings).best.conditions.skyConditionDistanceFractions,
+      null,
+    );
     assert.ok(
-      first(result.unranked).issues.includes('missing-weather-at-arrival'),
+      first(result.rankings).best.drawbacks.some((d) =>
+        d.startsWith('Sunshine details are incomplete'),
+      ),
     );
   },
 );

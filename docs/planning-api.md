@@ -66,8 +66,15 @@ Each day includes `availability: full | partial | none`, `availabilityReason`,
 `temperatureMaxC`, `quality`, `recommendedRouteId`, `minimumStandardsStatus` and
 per-route `coverage[].intervals` with UTC start/end instants.
 
-Availability checks all required measurements, their native intervals and location
+Availability checks essential measurements, their native intervals and location
 constraints throughout the effective windows of routes with feasible departures.
+Unknown sunshine symbols do not remove otherwise usable hours: sunshine is a
+preference factor, with unknown sections contributing neutral comfort (0.5) to
+the score. Each departure's `sunshineAssessment` reports `complete`, `partial`
+or `unavailable` and `unknownDistanceFraction`; it is null when sunshine is not
+requested. Temperature, wind, gusts, precipitation and explicitly requested cloud
+cover remain strict. Sunshine category shares and the sunshine factor stay null
+when any evaluated section lacks a symbol; neutral scoring is not forecast data.
 It is temporal evidence coverage, not confidence, weather quality, or proof that a
 ride meets minimum standards. A fully covered window may still have no comparable
 score because climbing evidence is missing. Likewise, some complete rides can fit
@@ -82,7 +89,9 @@ no forecasts are fetched just to decorate tiles.
 
 `until` is a full UTC timestamp, present only for partial coverage that forms one
 continuous prefix from each relevant window's start. Interior gaps return null;
-use the actual intervals instead. Format timestamps using response `timeZone`.
+use the actual intervals instead. With no cutoff, explain that some weather
+details or hours are missing along the routes, rather than implying the provider
+stops forecasting that date. Format timestamps using response `timeZone`.
 Daylight is the conservative shared sunrise/sunset interval across route samples;
 it can be null. `quality` is the score of that day's best assessed route, not a
 probability or forecast confidence. `temperatureMaxC` describes that same
