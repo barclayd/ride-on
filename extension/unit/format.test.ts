@@ -148,7 +148,7 @@ test('day tiles and the coverage note come from the API', () => {
       'no_feasible_departure',
       'no_remaining_window',
     ].map(none),
-  ).toEqual(['Unavailable', 'Unavailable', 'No fit', 'Too late']);
+  ).toEqual(['No data', 'No data', 'No fit', 'Passed']);
   expect(tile({ ...days[2], until: null }, TZ)).toMatchObject({
     label: 'Partial',
     title: 'Partial forecast',
@@ -368,6 +368,20 @@ test('banners, flags, recent roads and rides that cannot be scored', () => {
   );
   expect(unknown.banners).toEqual(['incomplete']);
   expect(unknown.coverageWarn).toBe(true);
+  // A failed provider is named instead of the vaguer 'incomplete'.
+  const down = buildResults(
+    ['a'],
+    {},
+    recs('unknown', []),
+    [
+      summary('2026-10-14', {
+        ...notYet,
+        availabilityReason: 'provider_unavailable',
+      }),
+    ],
+    TZ,
+  );
+  expect(down.banners).toEqual(['provider']);
 
   const nofit = buildResults(
     ['a'],
@@ -502,6 +516,16 @@ test('the view: strip, selected days and weather', () => {
   expect(view.retrieved).toBe('09:50');
   expect(view.attributions).toEqual(attribution);
   expect(view.cards.map((c) => c.routeId)).toEqual(['a', 'b']);
+  expect(view.provider).toBe('Your forecast provider');
+  expect(
+    viewOf(
+      {
+        ...shownState,
+        providers: [{ id: 'met-office', name: 'Met Office Global Spot' }],
+      } as State,
+      NOW,
+    ).provider,
+  ).toBe('Met Office Global Spot');
 });
 
 test('the shown window, its end and its picks', () => {

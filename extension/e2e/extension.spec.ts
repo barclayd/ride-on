@@ -83,10 +83,12 @@ let user: User;
 let selection: { version: number; routeIds: string[]; updatedAt: null };
 let routes: Record<string, RouteSummary>;
 let rides: Ride[];
+let providerDown: boolean; // every forecast failed, as with a mis-chosen provider
 let replays: Map<string, Ride>;
 
 const reset = () => {
   calls = [];
+  providerDown = false;
   replays = new Map();
   user = {
     id: 'u1',
@@ -245,6 +247,14 @@ const daySummary = (i: number, selected: boolean) => {
     quality: 84,
     selected,
   };
+  if (providerDown)
+    return {
+      ...base,
+      availability: 'none',
+      availabilityReason: i ? 'provider_unavailable' : 'no_remaining_window',
+      temperatureMaxC: null,
+      quality: null,
+    };
   if (i === 5)
     return {
       ...base,
@@ -616,6 +626,40 @@ test('When tab: Days and Time visible; custom times re-query', async ({
     page.getByRole('button', { name: 'Saved as your default window' }),
   ).toBeVisible();
   expect(patches()).toEqual([]); // planning stays in this browser
+});
+
+test('a failed forecast provider is named, with a way to change it', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  providerDown = true;
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  const banner = page.locator('.ro-banner.ro-provider');
+  await expect(banner).toContainText('has no forecast for these days');
+  await expect(page.locator('.ro-banner.ro-incomplete')).toHaveCount(0);
+  await page.getByRole('tab', { name: 'When' }).click();
+  await expectPanelFits(page);
+  const labels = page.locator('.ro-day > span:nth-child(3)');
+  await expect(labels).toHaveText([
+    'Passed',
+    ...Array.from({ length: 6 }, () => 'No data'),
+  ]);
+  // Every label stays inside its tile.
+  for (const label of await labels.all())
+    expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+      true,
+    );
+  await page.screenshot({ path: test.info().outputPath('provider-down.png') });
+  await page
+    .locator('.ro-note')
+    .getByRole('button', { name: 'Change forecast provider' })
+    .click();
+  await expect(page.getByRole('tab', { name: 'Preferences' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });
 
 test('passed dates ask for new ones instead of swapping silently', async ({

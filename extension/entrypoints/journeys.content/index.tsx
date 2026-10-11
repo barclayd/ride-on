@@ -202,7 +202,10 @@ const Page = ({ rows }: { rows: Row[] }) => {
           }}
         />
       )}
-      <Banners view={view} />
+      <Banners
+        view={view}
+        onProvider={() => send({ type: 'openPopup', tab: 'prefs' })}
+      />
       {cards.length > 0 && (
         <div class="ro-grid ro-loading" data-loading={view.state.loading}>
           {cards.map((card) => (
