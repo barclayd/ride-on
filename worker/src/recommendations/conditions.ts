@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { skyConditions } from '../weather/conditions.ts';
 
 const fraction = z.number().min(0).max(1);
 const nonnegative = z.number().nonnegative();
@@ -8,12 +7,17 @@ const nonnegative = z.number().nonnegative();
 export const conditionsSchema = z.strictObject({
   skyConditionDistanceFractions: z
     .record(
-      z.enum(
-        Object.keys(skyConditions) as [
-          keyof typeof skyConditions,
-          ...(keyof typeof skyConditions)[],
-        ],
-      ),
+      // Keep v1 persisted plans readable if the live vocabulary later expands.
+      z.enum([
+        'sunny',
+        'sunnyIntervals',
+        'cloudy',
+        'overcast',
+        'obscured',
+        'precipitation',
+        'clearNight',
+        'partlyCloudyNight',
+      ]),
       fraction,
     )
     .nullable(),
