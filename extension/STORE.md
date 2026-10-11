@@ -38,6 +38,8 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
   > 2. Say when you can ride: today, tomorrow, the weekend or days you pick, and your time window.
   > 3. Ride On picks the best route and start time, with an estimated finish, and tells you why:
   >    temperature, wind along the route, gusts, rain and sunshine at ride time.
+  > 4. Once your window has passed, tell Ride On whether you rode it, and see your next best
+  >    windows: tomorrow, the same day next week, and the best of the next six days.
   >
   > WHAT YOU GET
   > • Your rides ranked with an enjoyment score out of 100, and a clear best pick
@@ -47,6 +49,9 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
   > • Preferences that are yours: distance and climbing, how much rain and sunshine matter, a
   >   minimum temperature (fixed or by month), and rain and gust limits
   > • Best times shown right on cycle.travel's Journeys page, next to each route
+  > • A history of the rides you've logged
+  > • Prefer variety? Routes that share roads with your last four weeks of rides score a little
+  >   lower, fading as the ride gets older, so you're nudged towards somewhere new
   > • Forecasts from Apple Weather or the Met Office
   >
   > PRIVATE BY DESIGN
@@ -61,13 +66,14 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
 | Asset | Size | Required | Source |
 | --- | --- | --- | --- |
 | Store icon | 128×128 (96×96 artwork, 16px transparent padding) | yes | `store/icon-128.png` |
-| Screenshots | 1280×800 (1–5) | at least 1 | `store/screenshot-1280x800.png` |
+| Screenshots | 1280×800 (1–5) | at least 1 | `store/screenshot-1280x800.png`, then `store/screenshot-2-1280x800.png` to `-5` in order |
 | Small promo tile | 440×280 | yes | `store/promo-small-440x280.png` |
 | Marquee promo tile | 1400×560 | no | `store/promo-marquee-1400x560.png` |
 
 The icon and small tile are made from the app logo (`app/RideOn.icon`) with the extension's fonts
-and colours. The screenshot and the marquee's right half come from a design mock of the popup over
-the Journeys page.
+and colours. The screenshots and the marquee's right half are the real extension (the e2e build
+against a mock API) over a saved copy of the Journeys page: the page alone, then the popup's
+check-in and next windows, History, Preferences and Rides.
 
 ## Privacy practices
 
@@ -75,7 +81,7 @@ the Journeys page.
   the weather forecast.
 - **`identity`:** Sign-in to Ride On with Google or Apple via `chrome.identity.launchWebAuthFlow`
   (OAuth with PKCE).
-- **`storage`:** Keeps ride preferences and the latest recommendations on the device.
+- **`storage`:** Keeps ride preferences, recent rides and the latest recommendations on the device.
 - **Host permission `https://api.ride-on.cc/*`:** The extension's own backend: imports tracked
   routes and returns weather-based ride recommendations.
 - **Content script on `https://cycle.travel/user/journeys*`:** Reads the user's saved journeys so
@@ -84,7 +90,7 @@ the Journeys page.
 - **Data usage, collected:**
   - Personally identifiable information (name and email from sign-in)
   - Authentication information (session token)
-  - Location (route coordinates)
+  - Location (route coordinates, and which routes you rode on which dates)
   - Website content (cycle.travel journeys)
 - **Data usage, not collected:** health, financial, personal communications, web history, user
   activity.

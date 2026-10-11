@@ -1,11 +1,12 @@
-import { render } from 'preact';
+import { Fragment, render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { type Planning, type Search, send, type Tab } from '../../lib/state';
-import type { Climbing } from '../../lib/types';
+import type { Climbing, NextWindow } from '../../lib/types';
 import {
   AppleMark,
   Attribution,
   Banners,
+  CloseButton,
   CoverageWarn,
   chooseAvailableDates,
   ErrorChip,
@@ -19,27 +20,36 @@ import {
   type View,
 } from '../../ui/components';
 import {
+  checkinDay,
   clock,
   convert,
   coverageText,
   type Draft,
   dayOfMonth,
-  daySummary,
   draftFrom,
   draftLocal,
   draftPatch,
   hours,
+  monthLabel,
+  newest,
   PRESETS,
   pickDay,
   providerIds,
   qualityColour,
+  rainText,
+  rankText,
+  rideLine,
   rideSummary,
   scaleMaxKm,
   searchDiffers,
+  tempText,
   unitLabel,
   usualSearch,
   validateRange,
   weekday,
+  windowBest,
+  windowName,
+  windowWhen,
 } from '../../ui/format';
 import '../../ui/tokens.css';
 
@@ -47,6 +57,7 @@ const TABS: [Tab, string][] = [
   ['rides', 'Rides'],
   ['when', 'When'],
   ['prefs', 'Preferences'],
+  ['history', 'History'],
 ];
 
 const SignedOut = ({ view }: { view: View }) => {
@@ -118,7 +129,7 @@ const width = (from: number, to: number) =>
   `${(Math.max(0, Math.min(21, to) - Math.max(5, from)) / 16) * 100}%`;
 
 const WhenTab = ({ view }: { view: View }) => {
-  const { planning, defaultPlanning, days } = view.state;
+  const { planning, defaultPlanning } = view.state;
   const set = (change: Partial<Planning>) =>
     send({ type: 'setPlanning', planning: { ...planning, ...change } });
   if (!view.range)
@@ -130,7 +141,7 @@ const WhenTab = ({ view }: { view: View }) => {
       />
     );
   const range = view.range;
-  const coverage = coverageText(view.selected);
+  const coverage = coverageText(view.selected, view.timeZone);
   const { time } = planning;
   const custom = time.mode === 'custom';
   const tz = view.timeZone;
@@ -159,59 +170,32 @@ const WhenTab = ({ view }: { view: View }) => {
           onChange={(preset) => set({ days: { kind: 'preset', preset } })}
         />
         <fieldset class="ro-days" aria-label="Pick days">
-          {view.strip.map((day, i) => {
-            const summary = daySummary(days[day.date]);
-            const morning = !!day.until && day.until <= '12:00';
-            const quality =
-              day.kind === 'none' || !summary
-                ? 0
-                : day.kind === 'partial'
-                  ? summary.score / 2
-                  : summary.score;
-            return (
-              <button
-                key={day.date}
-                type="button"
-                class="ro-day"
-                data-kind={day.kind}
-                title={
-                  day.kind === 'none'
-                    ? 'Forecast not available yet'
-                    : day.kind === 'partial'
-                      ? morning
-                        ? 'Morning forecast only'
-                        : `Forecast up to ${day.until}`
-                      : undefined
-                }
-                aria-pressed={day.date >= range[0] && day.date <= range[1]}
-                onClick={() => set({ days: pickDay(range, day.date) })}
-              >
-                <span>{i === 0 ? 'Today' : weekday(day.date)}</span>
-                <span>{dayOfMonth(day.date)}</span>
-                <span>
-                  {day.kind === 'none'
-                    ? 'Not yet'
-                    : day.kind === 'partial'
-                      ? morning
-                        ? 'AM only'
-                        : `To ${day.until}`
-                      : summary
-                        ? `${summary.tempC}°`
-                        : '–'}
-                </span>
-                <span class="ro-quality">
-                  {summary && (
-                    <span
-                      style={{
-                        width: `${quality}%`,
-                        background: qualityColour(summary.score),
-                      }}
-                    />
-                  )}
-                </span>
-              </button>
-            );
-          })}
+          {view.strip.map((day, i) => (
+            <button
+              key={day.date}
+              type="button"
+              class="ro-day"
+              data-kind={day.kind}
+              title={day.title}
+              aria-pressed={day.date >= range[0] && day.date <= range[1]}
+              onClick={() => set({ days: pickDay(range, day.date) })}
+            >
+              <span>{i === 0 ? 'Today' : weekday(day.date)}</span>
+              <span>{dayOfMonth(day.date)}</span>
+              <span>{day.label}</span>
+              <span class="ro-quality">
+                {day.quality !== null && (
+                  <span
+                    style={{
+                      // A partial day's bar is halved: its best ride may be missing.
+                      width: `${day.kind === 'partial' ? day.quality / 2 : day.quality}%`,
+                      background: qualityColour(day.quality),
+                    }}
+                  />
+                )}
+              </span>
+            </button>
+          ))}
         </fieldset>
         {coverage && <div class="ro-note">{coverage}</div>}
       </section>
@@ -322,10 +306,224 @@ const WhenTab = ({ view }: { view: View }) => {
   );
 };
 
-const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
-  let medal = 0;
+const km = (m: number) => Math.round(m / 1000);
+
+// "Did you ride …?" for the window that just ended. Slides to a route picker and on to a confirmation.
+const CheckIn = ({ view }: { view: View }) => {
+  const { checkin, routes, selection } = view.state;
+  const [picking, setPicking] = useState(false);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!checkin) return null;
+  const tz = view.timeZone;
+  const top = checkin.picks[0];
+  const routeId = chosen ?? top.routeId;
+  const name = (id: string) => routes[id]?.name ?? 'your route';
+  const answer = async (
+    message:
+      | { answer: 'yes'; routeId: string }
+      | { answer: 'no' | 'undo' | 'updated' },
+  ) => {
+    setBusy(true);
+    await send({ type: 'checkin', ...message });
+    setBusy(false);
+    if (message.answer === 'undo') setChosen(null);
+  };
+  const done = checkin.status === 'done' && checkin.routeId;
+  const pane = done ? 'done' : picking ? 'pick' : 'ask';
+  const conflict = checkin.status === 'conflict' && checkin.routeId;
+  const c = top.conditions;
+  return (
+    <section class="ro-checkin" data-pane={pane} aria-label="Ride check-in">
+      <div class="ro-checkin-track">
+        <div class="ro-ask" aria-hidden={pane !== 'ask'} inert={pane !== 'ask'}>
+          <span class="ro-checkin-day">{checkinDay(top, view.today, tz)}</span>
+          <h2>Did you ride {name(routeId)}?</h2>
+          <p>
+            {conflict
+              ? `${name(conflict)} has changed since this plan.`
+              : routeId === top.routeId
+                ? `It was ${rankText(top.rank)}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c)} and ${rainText(c)}.`
+                : `${km(routes[routeId]?.distanceM ?? 0)} km · instead of ${name(top.routeId)}, ${rankText(top.rank)}`}
+          </p>
+          <div class="ro-checkin-actions">
+            {conflict ? (
+              <button
+                type="button"
+                class="ro-primary"
+                disabled={busy}
+                onClick={() => answer({ answer: 'updated' })}
+              >
+                Log the updated route
+              </button>
+            ) : (
+              <button
+                type="button"
+                class="ro-primary"
+                disabled={busy}
+                onClick={() => answer({ answer: 'yes', routeId })}
+              >
+                Yes, I rode it
+              </button>
+            )}
+            <button
+              type="button"
+              class="ro-secondary"
+              disabled={busy}
+              onClick={() => answer({ answer: 'no' })}
+            >
+              Not this time
+            </button>
+          </div>
+          <button
+            type="button"
+            class="ro-link"
+            disabled={busy}
+            onClick={() => setPicking(true)}
+          >
+            I rode a different route ›
+          </button>
+        </div>
+        <div
+          class="ro-pick"
+          aria-hidden={pane !== 'pick'}
+          inert={pane !== 'pick'}
+        >
+          <div class="ro-pick-head">
+            <button
+              type="button"
+              class="ro-back"
+              aria-label="Back"
+              onClick={() => setPicking(false)}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+              >
+                <path
+                  d="M10 3 5 8l5 5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <h2>Which route did you ride?</h2>
+          </div>
+          <fieldset class="ro-pick-list" aria-label="Your tracked routes">
+            {(selection?.routeIds ?? []).map((id) => (
+              <label key={id}>
+                <input
+                  type="radio"
+                  name="ro-ridden-route"
+                  checked={id === routeId}
+                  onChange={() => {
+                    setChosen(id);
+                    setTimeout(() => setPicking(false), 260);
+                  }}
+                />
+                <span>{name(id)}</span>
+                <span>{km(routes[id]?.distanceM ?? 0)} km</span>
+              </label>
+            ))}
+          </fieldset>
+        </div>
+        <div
+          class="ro-done"
+          aria-hidden={pane !== 'done'}
+          inert={pane !== 'done'}
+        >
+          <div>
+            <span>
+              Nice ride on {name(checkin.routeId ?? routeId)}. Saved to History.
+            </span>
+          </div>
+          <button
+            type="button"
+            class="ro-link"
+            disabled={busy}
+            onClick={() => answer({ answer: 'undo' })}
+          >
+            Undo
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// The API's recommended window is "Best"; the order stays tomorrow, same weekday, best in the next days.
+const NextWindows = ({ view }: { view: View }) => {
+  const { next, expired, planning } = view.state;
+  if (!next || !expired) return null;
+  const { windows } = next;
+  const choose = (w: NextWindow) =>
+    send({
+      type: 'setPlanning',
+      planning: {
+        days: { kind: 'range', start: w.date, end: w.date },
+        time:
+          w.window === 'daylight'
+            ? { ...planning.time, mode: 'daylight' }
+            : { mode: 'custom', ...w.window },
+      },
+    });
   return (
     <>
+      <h2 class="ro-next-head">When's your next ride?</h2>
+      {windows.length === 0 && (
+        <span class="ro-empty">No forecast covers your next windows yet.</span>
+      )}
+      {windows.map((w) => {
+        const score = Math.round(w.best.score);
+        const best = w.kind === next.recommendedKind;
+        return (
+          <button
+            key={w.kind}
+            type="button"
+            class="ro-next"
+            data-best={best}
+            onClick={() => choose(w)}
+          >
+            <span class="ro-next-top">
+              <span>{windowName(w)}</span>
+              {w.recommendationKind === 'best_available' && (
+                <span class="ro-pill ro-below">Best available</span>
+              )}
+              <span>{best ? `Best · ${score}` : score}</span>
+            </span>
+            <span class="ro-next-when">
+              {windowWhen(w, expired.dates[1], view.today, view.timeZone)}
+            </span>
+            <span class="ro-next-best">{windowBest(w, view.timeZone)}</span>
+            {w.warnings[0] && <span class="ro-next-when">{w.warnings[0]}</span>}
+          </button>
+        );
+      })}
+    </>
+  );
+};
+
+const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
+  let medal = 0;
+  if (view.state.expired)
+    return (
+      <>
+        <CheckIn view={view} />
+        <NextWindows view={view} />
+        <button type="button" class="ro-link ro-choose" onClick={onChoose}>
+          Choose my own dates ›
+        </button>
+        <Attribution view={view} />
+      </>
+    );
+  return (
+    <>
+      <CheckIn view={view} />
       {!view.range && (
         <Expired view={view} variant="rides" onChoose={onChoose} />
       )}
@@ -339,6 +537,7 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
       {view.cards.map((card) => (
         <RideCard
           key={card.routeId}
+          view={view}
           card={card}
           medal={card.score !== null && medal < 3 ? medal++ : undefined}
         />
@@ -675,6 +874,7 @@ const PrefsTab = ({ view }: { view: View }) => {
   return (
     <>
       <DistanceCard view={view} />
+      <RecentlyRiddenCard view={view} />
       <section class="ro-card">
         <div class="ro-card-head">
           <span class="ro-label">Ideal temperature</span>
@@ -905,6 +1105,100 @@ const PrefsTab = ({ view }: { view: View }) => {
   );
 };
 
+// Newest first, by month. A removed ride collapses with Undo; the background deletes it once the undo window passes.
+const HistoryTab = ({ view }: { view: View }) => {
+  const { rides, ridesCursor, pendingDeletes } = view.state;
+  const list = [...rides].sort(newest);
+  if (!list.length)
+    return (
+      <span class="ro-empty">
+        No rides yet. When a window you planned ends, Ride On asks whether you
+        rode it.
+      </span>
+    );
+  const labelled = new Set<string>();
+  return (
+    <>
+      {list.map((ride) => {
+        const month = monthLabel(ride.riddenOn, view.today);
+        const label = !labelled.has(month) && labelled.add(month);
+        const gone = pendingDeletes.some((d) => d.id === ride.id);
+        return (
+          <Fragment key={ride.id}>
+            {label && <span class="ro-month">{month}</span>}
+            {gone ? (
+              <div class="ro-history ro-removed">
+                <span>Ride removed</span>·
+                <button
+                  type="button"
+                  class="ro-link"
+                  onClick={() => send({ type: 'undoDelete', id: ride.id })}
+                >
+                  Undo
+                </button>
+              </div>
+            ) : (
+              <article class="ro-history">
+                <div class="ro-history-head">
+                  <span class="ro-history-name">{ride.route.name}</span>
+                  {ride.riddenOn === view.today && (
+                    <span class="ro-tag">Ridden today</span>
+                  )}
+                  <CloseButton
+                    title="Remove ride"
+                    onClick={() => send({ type: 'deleteRide', id: ride.id })}
+                  />
+                </div>
+                <span class="ro-history-line">{rideLine(ride)}</span>
+              </article>
+            )}
+          </Fragment>
+        );
+      })}
+      {ridesCursor && (
+        <button
+          type="button"
+          class="ro-link ro-choose"
+          onClick={() => send({ type: 'moreRides' })}
+        >
+          Show older rides
+        </button>
+      )}
+    </>
+  );
+};
+
+const RecentlyRiddenCard = ({ view }: { view: View }) => {
+  const { user } = view.state;
+  if (!user) return null;
+  const recent = user.settings.preferences.recentRides;
+  const days = recent?.lookbackDays ?? 28;
+  return (
+    <section class="ro-card ro-recent">
+      <span class="ro-label">Recently ridden routes</span>
+      <Segmented
+        label="Recently ridden routes"
+        options={[
+          { value: 'neutral', label: 'Happy to repeat' },
+          { value: 'prefer-variety', label: 'Prefer variety' },
+        ]}
+        value={recent?.mode ?? 'neutral'}
+        onChange={(next) =>
+          send({
+            type: 'savePreferences',
+            preferences: { recentRides: { mode: next } },
+          })
+        }
+      />
+      <p class="ro-help">
+        Routes that share roads with rides from{' '}
+        {days === 28 ? 'the last 4 weeks' : `the last ${days} days`} score a
+        little lower. The effect fades as the ride gets older.
+      </p>
+    </section>
+  );
+};
+
 const SyncFooter = ({ view }: { view: View }) => {
   const { syncing, syncedAt, syncError } = view.state;
   return (
@@ -1003,6 +1297,7 @@ const App = () => {
           )}
           {tab === 'when' && <WhenTab view={view} />}
           {tab === 'prefs' && <PrefsTab view={view} />}
+          {tab === 'history' && <HistoryTab view={view} />}
         </div>
       </div>
       {tab === 'prefs' && <SyncFooter view={view} />}

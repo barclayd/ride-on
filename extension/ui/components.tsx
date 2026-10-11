@@ -3,18 +3,13 @@ import { useEffect, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { onStateChange, readState, type State, send } from '../lib/state';
 import {
-  attributions,
-  availability,
   type Banner,
-  buildResults,
   type Card,
   type CardState,
   clock,
-  type Day,
-  datesLabel,
-  resolveDays,
-  retrievedAt,
-  timeText,
+  dayMonth,
+  ridden,
+  viewOf,
 } from './format';
 
 export const iconUrl = () => browser.runtime.getURL('/ride-on-icon.png');
@@ -38,17 +33,7 @@ export const injectFonts = () => {
   document.head.append(style);
 };
 
-export type View = {
-  state: State;
-  timeZone: string;
-  strip: Day[];
-  range: [string, string] | null; // the selected days; null once they've passed
-  selected: Day[];
-  datesText: string;
-  timeText: string;
-  retrieved: string | null;
-  attributions: ReturnType<typeof attributions>;
-} & ReturnType<typeof buildResults>;
+export type View = { state: State } & ReturnType<typeof viewOf>;
 
 export const useView = (): View | null => {
   const [state, setState] = useState<State | null>(null);
@@ -57,46 +42,7 @@ export const useView = (): View | null => {
     readState().then((read) => setState((current) => current ?? read));
     return stop;
   }, []);
-  if (!state) return null;
-  const { user, planning } = state;
-  const timeZone =
-    user?.settings.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const strip = availability(
-    new Date(),
-    timeZone,
-    user?.settings.weather ?? { mode: 'strict', providerId: 'met-office' },
-  );
-  const range = resolveDays(planning.days, strip);
-  const selected = range
-    ? strip.filter((d) => d.date >= range[0] && d.date <= range[1])
-    : [];
-  const results = buildResults(
-    range ? (state.selection?.routeIds ?? []) : [],
-    state.routes,
-    selected,
-    state.days,
-    timeZone,
-    Object.keys(user?.settings.preferences.minimumStandards ?? {}).length > 0,
-  );
-  const at = retrievedAt(Object.values(state.days));
-  const days = planning.days;
-  return {
-    state,
-    timeZone,
-    strip,
-    range,
-    selected,
-    datesText: range
-      ? datesLabel(...range)
-      : days.kind === 'range'
-        ? datesLabel(days.start, days.end)
-        : '',
-    timeText: timeText(planning, results.daylight, timeZone),
-    retrieved: at && clock(at, timeZone),
-    attributions: attributions(Object.values(state.days)),
-    ...results,
-    banners: range ? results.banners : [],
-  };
+  return state && { state, ...viewOf(state, new Date()) };
 };
 
 export type Option<T> = { value: T; label: string; disabled?: boolean };
@@ -138,6 +84,24 @@ export const CloseButton = (props: { title: string; onClick: () => void }) => (
   </button>
 );
 
+export const riddenFor = (view: View, routeId: string) =>
+  ridden(view.state.summaries[routeId], view.state.rides, routeId, view.today);
+
+// "Ridden today" and "Last ridden 22 Sep", next to a route's name.
+export const Tags = ({ view, routeId }: { view: View; routeId: string }) => {
+  const ride = riddenFor(view, routeId);
+  return (
+    <>
+      {ride.today && <span class="ro-tag">Ridden today</span>}
+      {ride.last && (
+        <span class="ro-tag ro-tag-last">
+          Last ridden {dayMonth(ride.last, view.today)}
+        </span>
+      )}
+    </>
+  );
+};
+
 const STATES: Record<CardState, string> = {
   meets: 'Meets your preferences',
   below: 'Below your minimums',
@@ -149,6 +113,7 @@ const MEDALS = ['Gold', 'Silver', 'Bronze'];
 
 // The page shows the distance by the name and no medals; the popup medals its top three scored rides.
 export const RideCard = (props: {
+  view: View;
   card: Card;
   medal?: number;
   href?: string | null; // the page links each ride to its journey
@@ -188,6 +153,10 @@ export const RideCard = (props: {
           <span class="ro-name">{card.name}</span>
         )}
         {props.href !== undefined && <span>{card.km} km</span>}
+        <Tags view={props.view} routeId={card.routeId} />
+        {card.recent && (
+          <span class="ro-tag ro-tag-last">Similar roads recently ridden</span>
+        )}
       </div>
       {(card.when ?? card.duration) && (
         <span class="ro-when">{card.when ?? card.duration}</span>

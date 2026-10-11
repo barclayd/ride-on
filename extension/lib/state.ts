@@ -1,15 +1,20 @@
 import { browser } from 'wxt/browser';
 import type {
+  Attribution,
   Climbing,
+  Conditions,
+  NextWindows,
   PreferencesPatch,
   Recommendations,
+  Ride,
+  RideSummary,
   RouteSummary,
   Selection,
   User,
   WeatherProvider,
 } from './types';
 
-export type Tab = 'rides' | 'when' | 'prefs';
+export type Tab = 'rides' | 'when' | 'prefs' | 'history';
 export type Provider = 'google' | 'apple';
 
 export type Preset = 'today' | 'tomorrow' | 'weekend' | 'next';
@@ -55,6 +60,40 @@ export const DEFAULT_LOCAL: LocalPrefs = {
   gustKph: 45,
 };
 
+// A ranked ride as shown: rank 1 is the top pick.
+export type Pick = {
+  routeId: string;
+  date: string; // the departure's local day
+  departureAt: string;
+  finishAt: string;
+  conditions: Conditions;
+  rank: number;
+};
+// The window the rider last saw, kept to notice when it has ended.
+export type Shown = {
+  dates: [string, string];
+  time: Planning['time'];
+  endsAt: string; // UTC instant the last day's window ends
+  picks: Pick[];
+  meta: PlanMeta;
+};
+// The response the picks came from, sent with a logged ride's plan.
+export type PlanMeta = {
+  generatedAt: string;
+  algorithmVersion: string;
+  attribution: Attribution[];
+};
+// "Did you ride …?" for an ended window, until answered.
+export type Checkin = {
+  date: string; // the top pick's day, which the ride is logged on
+  picks: Pick[];
+  meta: PlanMeta;
+  status: 'ask' | 'done' | 'conflict'; // conflict: the route changed since the plan
+  routeId: string | null; // the route being logged, or logged once done
+  rideId: string | null;
+  key: string | null; // Idempotency-Key for routeId, kept so a retry can't log twice
+};
+
 // One shared view state. The background owns writes; popup and page render it.
 export type State = {
   auth: 'signed-out' | 'signing-in' | 'signed-in';
@@ -69,8 +108,7 @@ export type State = {
   search: Search | null;
   unit: 'km' | 'mi';
   local: LocalPrefs;
-  days: Record<string, Recommendations>; // one response per date
-  recsKey: string | null; // what `days` was fetched for
+  recs: Recommendations | null; // across the planned days, plus a 7-day preview for the strip
   recsAt: string | null;
   loading: boolean;
   error: string | null;
@@ -78,6 +116,14 @@ export type State = {
   syncedAt: string | null;
   syncError: string | null;
   popupTab: Tab | null; // set when the page asks the popup to open on a tab
+  shown: Shown | null;
+  expired: Shown | null; // set once the shown window ends, until new dates are picked
+  checkin: Checkin | null;
+  next: NextWindows | null; // suggestions while expired
+  rides: Ride[]; // newest first
+  ridesCursor: string | null;
+  summaries: Record<string, RideSummary>; // by route ID, for ride tags
+  pendingDeletes: { id: string; at: number }[]; // removed in History, sent after the undo window
 };
 
 export const initialState: State = {
@@ -93,8 +139,7 @@ export const initialState: State = {
   search: null,
   unit: 'km',
   local: DEFAULT_LOCAL,
-  days: {},
-  recsKey: null,
+  recs: null,
   recsAt: null,
   loading: false,
   error: null,
@@ -102,6 +147,14 @@ export const initialState: State = {
   syncedAt: null,
   syncError: null,
   popupTab: null,
+  shown: null,
+  expired: null,
+  checkin: null,
+  next: null,
+  rides: [],
+  ridesCursor: null,
+  summaries: {},
+  pendingDeletes: [],
 };
 
 const withDefaults = (state: Partial<State> | undefined): State => {
@@ -139,7 +192,12 @@ export type Message =
   | { type: 'import'; journey: JourneyGpx; track: boolean }
   | { type: 'untrack'; routeId: string }
   | { type: 'openPopup'; tab: Tab }
-  | { type: 'setTab'; tab: Tab | null };
+  | { type: 'setTab'; tab: Tab | null }
+  | { type: 'checkin'; answer: 'yes'; routeId: string }
+  | { type: 'checkin'; answer: 'no' | 'undo' | 'updated' }
+  | { type: 'deleteRide'; id: string }
+  | { type: 'undoDelete'; id: string }
+  | { type: 'moreRides' };
 
 export type JourneyGpx = {
   externalId: string;

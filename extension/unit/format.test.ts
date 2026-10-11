@@ -1,76 +1,117 @@
 import { expect, test } from 'bun:test';
-import type { LocalPrefs } from '../lib/state';
+import {
+  type Checkin,
+  initialState,
+  type LocalPrefs,
+  type Pick,
+  type State,
+} from '../lib/state';
 import type {
+  DaySummary,
   Departure,
   Failure,
+  NextWindow,
   Preferences,
   Recommendations,
+  Ride,
   RouteResult,
+  User,
 } from '../lib/types';
 import {
   applyPatch,
-  availability,
   buildResults,
+  checkinDay,
   convert,
   coverageText,
   datesLabel,
+  dayMonth,
   draftFrom,
   draftPatch,
+  ended,
+  logged,
+  monthLabel,
   pickDay,
-  presetDates,
-  resolveDays,
+  planFor,
+  planningDates,
+  rankText,
+  ridden,
+  rideLine,
   rideSummary,
   searchPatch,
+  shownOf,
+  tile,
   validateRange,
+  viewOf,
+  windowBest,
+  windowName,
+  windowWhen,
 } from '../ui/format';
 
 const TZ = 'Europe/London'; // BST in mid-October
 const NOW = new Date('2026-10-14T09:00:00Z'); // Wednesday 10:00
 const strict = { mode: 'strict', providerId: 'met-office' } as const;
-const strip = availability(NOW, TZ, strict); // Wed 14 … Tue 20
 
-test('availability follows the provider horizon', () => {
-  expect(strip.map((d) => d.kind)).toEqual([
-    'full',
-    'full',
-    'partial',
-    'none',
-    'none',
-    'none',
-    'none',
-  ]);
-  expect(strip[2]).toEqual({
-    date: '2026-10-16',
-    kind: 'partial',
-    until: '10:00',
-  });
-  const bpf = availability(NOW, TZ, {
-    mode: 'ordered-fallback',
-    providerIds: ['met-office', 'met-office-bpf'],
-  });
-  expect(bpf.map((d) => d.kind).join()).toBe(
-    'full,full,full,full,full,partial,none',
-  );
-  const apple = availability(NOW, TZ, {
-    mode: 'strict',
-    providerId: 'apple-weather',
-  });
-  expect(apple.every((d) => d.kind === 'full')).toBe(true);
-  // "Next few days" stops at five even with ten days of forecast.
-  expect(presetDates('next', apple)).toEqual(['2026-10-14', '2026-10-18']);
+const summary = (
+  date: string,
+  extra: Partial<DaySummary> = {},
+): DaySummary => ({
+  date,
+  availability: 'full',
+  availabilityReason: 'available',
+  until: null,
+  daylight: { sunrise: `${date}T06:20:00Z`, sunset: `${date}T17:10:00Z` },
+  temperatureMaxC: 14.6,
+  quality: 72,
+  selected: false,
+  ...extra,
 });
+const notYet = {
+  availability: 'none',
+  availabilityReason: 'outside_forecast_horizon',
+  daylight: null,
+  temperatureMaxC: null,
+  quality: null,
+} as const;
+// Wed 14 … Tue 20: two full days, Friday to 10:00 BST, then nothing yet.
+const days = [
+  summary('2026-10-14'),
+  summary('2026-10-15'),
+  summary('2026-10-16', {
+    availability: 'partial',
+    availabilityReason: 'partial',
+    until: '2026-10-16T09:00:00Z',
+  }),
+  ...['17', '18', '19', '20'].map((d) => summary(`2026-10-${d}`, notYet)),
+];
 
-test('presets, picked days and expiry', () => {
-  expect(presetDates('today', strip)).toEqual(['2026-10-14', '2026-10-14']);
-  expect(presetDates('tomorrow', strip)).toEqual(['2026-10-15', '2026-10-15']);
-  expect(presetDates('weekend', strip)).toEqual(['2026-10-17', '2026-10-18']);
-  expect(presetDates('next', strip)).toEqual(['2026-10-14', '2026-10-16']);
+test('planned dates resolve like the API', () => {
+  const today = '2026-10-14';
+  expect(planningDates({ kind: 'preset', preset: 'today' }, today)).toEqual([
+    today,
+    today,
+  ]);
+  expect(planningDates({ kind: 'preset', preset: 'tomorrow' }, today)).toEqual([
+    '2026-10-15',
+    '2026-10-15',
+  ]);
+  expect(planningDates({ kind: 'preset', preset: 'next' }, today)).toEqual([
+    today,
+    '2026-10-18',
+  ]);
+  expect(planningDates({ kind: 'preset', preset: 'weekend' }, today)).toEqual([
+    '2026-10-17',
+    '2026-10-18',
+  ]);
+  // On Sunday the weekend is what's left of it.
+  expect(
+    planningDates({ kind: 'preset', preset: 'weekend' }, '2026-10-18'),
+  ).toEqual(['2026-10-18', '2026-10-18']);
   const range = (start: string, end: string) =>
     ({ kind: 'range', start, end }) as const;
-  expect(resolveDays(range('2026-10-01', '2026-10-02'), strip)).toBeNull();
-  expect(resolveDays(range('2026-10-13', '2026-10-25'), strip)).toEqual([
-    '2026-10-14',
-    '2026-10-20',
+  expect(planningDates(range('2026-10-01', '2026-10-13'), today)).toBeNull();
+  expect(planningDates(range('2026-10-12', '2026-10-15'), today)).toEqual([
+    today,
+    '2026-10-15',
   ]);
   expect(pickDay(['2026-10-15', '2026-10-15'], '2026-10-14')).toEqual(
     range('2026-10-14', '2026-10-15'),
@@ -82,10 +123,43 @@ test('presets, picked days and expiry', () => {
   expect(datesLabel('2026-10-31', '2026-11-01')).toBe('Sat 31 Oct – Sun 1 Nov');
 });
 
-test('coverage note', () => {
-  expect(coverageText(strip.slice(0, 2))).toBeNull();
-  expect(coverageText(strip.slice(0, 4))).toBe(
+test('day tiles and the coverage note come from the API', () => {
+  expect(days.map((d) => tile(d, TZ).label)).toEqual([
+    '15°',
+    '15°',
+    'To 10:00',
+    'Not yet',
+    'Not yet',
+    'Not yet',
+    'Not yet',
+  ]);
+  expect(tile(days[2], TZ)).toMatchObject({
+    kind: 'partial',
+    title: 'Forecast up to 10:00',
+    quality: 72,
+  });
+  expect(tile(undefined, TZ)).toMatchObject({ label: '–', quality: null });
+  const none = (availabilityReason: string) =>
+    tile(summary('2026-10-14', { ...notYet, availabilityReason }), TZ).label;
+  expect(
+    [
+      'provider_unavailable',
+      'missing_data',
+      'no_feasible_departure',
+      'no_remaining_window',
+    ].map(none),
+  ).toEqual(['Unavailable', 'Unavailable', 'No fit', 'Too late']);
+  expect(tile({ ...days[2], until: null }, TZ)).toMatchObject({
+    label: 'Partial',
+    title: 'Partial forecast',
+  });
+
+  expect(coverageText(days.slice(0, 2), TZ)).toBeNull();
+  expect(coverageText(days.slice(0, 4), TZ)).toBe(
     "Wednesday and Thursday available; Friday's forecast only covers the morning; Saturday's forecast isn't available yet.",
+  );
+  expect(coverageText([{ ...days[2], until: null }], TZ)).toBe(
+    "Friday's forecast only covers part of the day.",
   );
 });
 
@@ -136,6 +210,7 @@ const departure = (
   status: Departure['standards']['status'] = 'meets',
   failures: Departure['standards']['failures'] = [],
 ): Departure => ({
+  date: at.slice(0, 10),
   departureAt: at,
   finishAt: new Date(Date.parse(at) + 2 * 3_600_000).toISOString(),
   score,
@@ -152,7 +227,7 @@ const result = (
   distanceKm: 30,
   distanceFit: null,
   estimatedDurationMinutes: 120,
-  daylight: { start: '2026-10-14T06:20:00Z', end: '2026-10-14T17:10:00Z' },
+  daylight: null,
   effectiveWindow: null,
   status: best ? 'assessed' : 'unassessable',
   departuresUnknown: 0,
@@ -160,20 +235,37 @@ const result = (
   best,
   issues: [],
   warnings: [],
+  verdict: best
+    ? { status: 'meets', code: 'meets' }
+    : { status: 'incomplete', code: 'forecast_unavailable' },
   ...extra,
 });
+const attribution = [
+  { text: 'Powered by Met Office data', url: 'https://www.metoffice.gov.uk/' },
+];
 const recs = (
-  date: string,
   status: Recommendations['minimumStandardsStatus'],
   rankings: RouteResult[],
   unranked: RouteResult[] = [],
+  extra: Partial<Recommendations> = {},
 ): Recommendations => ({
-  date,
-  recommendedRouteId: rankings[0]?.routeId ?? null,
+  generatedAt: '2026-10-14T08:55:00Z',
+  algorithmVersion: '2026-10-10',
+  timeZone: TZ,
   minimumStandardsStatus: status,
+  recommendation: rankings[0]
+    ? {
+        routeId: rankings[0].routeId,
+        kind: status === 'none_meet' ? 'best_available' : 'best_pick',
+      }
+    : null,
   rankings,
   unranked,
-  weather: { locations: [] },
+  range: { start: '2026-10-14', end: '2026-10-14' },
+  expired: false,
+  days,
+  weather: { retrieval: { latestAt: '2026-10-14T08:50:00Z' }, attribution },
+  ...extra,
 });
 const gust: Failure = {
   standard: 'maximumGustKph',
@@ -181,28 +273,36 @@ const gust: Failure = {
   actual: 52.4,
   sections: [],
 };
+const below = { status: 'below_minimums', code: 'below_minimums' } as const;
 
-test('cards: meeting rides lead, then below, unassessable and pending', () => {
-  const day = recs(
-    '2026-10-14',
-    'match_found',
-    [
-      result('a', departure('2026-10-14T08:00:00Z', 80)),
-      result('b', departure('2026-10-14T09:00:00Z', 90, 'below', [gust])),
-    ],
-    [result('c', null, { issues: ['missing-elevation'] })],
-  );
+test('cards follow the API: ranked, then unranked, then pending', () => {
   const out = buildResults(
     ['b', 'a', 'c', 'd'],
     {},
-    [strip[0]],
-    { '2026-10-14': day },
+    recs(
+      'match_found',
+      [
+        result('a', departure('2026-10-14T08:00:00Z', 80.4)),
+        result('b', departure('2026-10-14T09:00:00Z', 90, 'below', [gust]), {
+          verdict: below,
+        }),
+      ],
+      [
+        result('c', null, {
+          verdict: { status: 'incomplete', code: 'missing_elevation' },
+        }),
+      ],
+    ),
+    [days[0]],
     TZ,
-    true,
   );
   expect(out.status).toBe('match_found');
   expect(out.banners).toEqual([]);
-  expect(out.daylight?.start).toBe('2026-10-14T06:20:00Z');
+  expect(out.daylight).toEqual({
+    start: '2026-10-14T06:20:00Z',
+    end: '2026-10-14T17:10:00Z',
+  });
+  expect(out.coverageWarn).toBe(false);
   const [a, b, c, d] = out.cards;
   expect(a).toMatchObject({
     routeId: 'a',
@@ -212,6 +312,7 @@ test('cards: meeting rides lead, then below, unassessable and pending', () => {
     when: 'Wed 14 Oct · depart 09:00 · finish ~11:00',
     weather: 'At ride time: 12–15° · tailwind 8 km/h · dry',
     score: 80,
+    recent: false,
   });
   expect(b).toMatchObject({
     state: 'below',
@@ -229,93 +330,65 @@ test('cards: meeting rides lead, then below, unassessable and pending', () => {
   expect(d).toMatchObject({ state: 'pending', chip: 'Checking…' });
 });
 
-test('cards merge the selected days and keep each ride’s best departure', () => {
-  const out = buildResults(
-    ['a'],
-    {},
-    strip.slice(0, 2),
-    {
-      '2026-10-14': recs('2026-10-14', 'match_found', [
-        result('a', departure('2026-10-14T08:00:00Z', 60)),
-      ]),
-      '2026-10-15': recs('2026-10-15', 'match_found', [
-        result('a', departure('2026-10-15T08:00:00Z', 75)),
-      ]),
-    },
-    TZ,
-    true,
-  );
-  expect(out.cards[0].chip).toBe('Thu 15 · 09:00');
-  expect(out.coverageWarn).toBe(false);
-});
-
-test('banners, flags and rides that cannot be scored', () => {
-  const below = recs('2026-10-14', 'none_meet', [
-    result('a', departure('2026-10-14T08:00:00Z', 70, 'below', [gust]), {
-      distanceFit: { status: 'above_range', deviationKm: 5 },
-    }),
-  ]);
+test('banners, flags, recent roads and rides that cannot be scored', () => {
+  const recent = (penaltyPoints: number) => ({
+    ...departure('2026-10-14T08:00:00Z', 70, 'below', [gust]),
+    recentRides: { status: 'assessed', penaltyPoints } as const,
+  });
   const none = buildResults(
-    ['a'],
+    ['a', 'b'],
     {},
-    [strip[0]],
-    { '2026-10-14': below },
+    recs('none_meet', [
+      result('a', recent(4), {
+        verdict: below,
+        distanceFit: { status: 'above_range', deviationKm: 5 },
+      }),
+      result('b', recent(0), {
+        verdict: below,
+        distanceFit: { status: 'below_range', deviationKm: 2 },
+      }),
+    ]),
+    [days[0]],
     TZ,
-    true,
   );
   expect(none.banners).toEqual(['nomatch', 'distance']);
   expect(none.cards[0]).toMatchObject({
     flag: 'Best available',
+    recent: true,
     trade: ['Longer than your preferred range'],
   });
+  expect(none.cards[1]).toMatchObject({ flag: null, recent: false });
 
-  // A selected day without a response can't confirm a match.
-  const partial = buildResults(
+  const unknown = buildResults(
     ['a'],
     {},
-    strip.slice(0, 3),
-    { '2026-10-14': below },
+    recs('unknown', [result('a', recent(0))]),
+    days.slice(0, 3),
     TZ,
-    true,
   );
-  expect(partial.status).toBe('unknown');
-  expect(partial.banners[0]).toBe('incomplete');
-  expect(partial.coverageWarn).toBe(true);
-
-  const unset = buildResults(
-    ['a'],
-    {},
-    [strip[0]],
-    { '2026-10-14': below },
-    TZ,
-    false,
-  );
-  expect(unset.status).toBe('not_configured');
-  expect(unset.cards[0].flag).toBe('Best pick');
+  expect(unknown.banners).toEqual(['incomplete']);
+  expect(unknown.coverageWarn).toBe(true);
 
   const nofit = buildResults(
     ['a'],
     {},
-    [strip[0]],
-    {
-      '2026-10-14': recs(
-        '2026-10-14',
-        'no_feasible_departure',
-        [],
-        [
-          result('a', null, {
-            status: 'no_feasible_departure',
-            estimatedDurationMinutes: 150,
-            effectiveWindow: {
-              start: '2026-10-14T07:00:00Z',
-              end: '2026-10-14T09:00:00Z',
-            },
-          }),
-        ],
-      ),
-    },
+    recs(
+      'no_feasible_departure',
+      [],
+      [
+        result('a', null, {
+          status: 'no_feasible_departure',
+          verdict: { status: 'doesnt_fit', code: 'no_feasible_departure' },
+          estimatedDurationMinutes: 150,
+          effectiveWindow: {
+            start: '2026-10-14T07:00:00Z',
+            end: '2026-10-14T09:00:00Z',
+          },
+        }),
+      ],
+    ),
+    [days[0]],
     TZ,
-    true,
   );
   expect(nofit.cards[0]).toMatchObject({
     state: 'nofit',
@@ -323,11 +396,14 @@ test('banners, flags and rides that cannot be scored', () => {
     reason: 'Your window, 08:00–10:00, allows 2h 00m.',
   });
 
-  const later = buildResults(['a'], {}, [strip[3]], {}, TZ, true);
-  expect(later.cards[0]).toMatchObject({
+  // No answer yet: only days beyond the forecast read as incomplete.
+  expect(buildResults(['a'], {}, null, [days[3]], TZ).cards[0]).toMatchObject({
     state: 'incomplete',
     reason: "Can't be assessed. Saturday's forecast isn't available yet.",
   });
+  expect(buildResults(['a'], {}, null, [days[0]], TZ).cards[0].state).toBe(
+    'pending',
+  );
 });
 
 const prefs: Preferences = {
@@ -380,4 +456,269 @@ test('preferences draft round-trips through a PATCH', () => {
   const floor = monthly.minimumStandards?.minimumTemperature;
   expect(floor?.kind === 'monthly' && floor.valuesC['7']).toBe(10);
   expect(applyPatch(prefs, { distance: null }).distance).toBeNull();
+});
+
+test('recentRides patches keep the lookback', () => {
+  const recent = {
+    ...prefs,
+    recentRides: { mode: 'neutral', lookbackDays: 28 },
+  } as const;
+  expect(
+    applyPatch(recent, { recentRides: { mode: 'prefer-variety' } }).recentRides,
+  ).toEqual({ mode: 'prefer-variety', lookbackDays: 28 });
+});
+
+// Wed 14 Oct, 08:00–14:00: Route a at 09:00 BST, then b at 10:00.
+const shownState: State = {
+  ...initialState,
+  user: {
+    settings: { timeZone: TZ, weather: strict, preferences: prefs },
+  } as User,
+  selection: { version: 1, routeIds: ['b', 'a'], updatedAt: null },
+  planning: {
+    days: { kind: 'range', start: '2026-10-14', end: '2026-10-14' },
+    time: { mode: 'custom', start: '08:00', end: '14:00' },
+  },
+  recs: recs('match_found', [
+    result('a', departure('2026-10-14T08:00:00Z', 80)),
+    result('b', departure('2026-10-14T09:00:00Z', 70)),
+  ]),
+};
+
+test('the view: strip, selected days and weather', () => {
+  const view = viewOf(shownState, NOW);
+  expect(view.strip.map((d) => d.label)).toEqual([
+    '15°',
+    '15°',
+    'To 10:00',
+    'Not yet',
+    'Not yet',
+    'Not yet',
+    'Not yet',
+  ]);
+  expect(view.range).toEqual(['2026-10-14', '2026-10-14']);
+  expect(view.selected.map((d) => d.date)).toEqual(['2026-10-14']);
+  expect(view.datesText).toBe('Wed 14 Oct');
+  expect(view.retrieved).toBe('09:50');
+  expect(view.attributions).toEqual(attribution);
+  expect(view.cards.map((c) => c.routeId)).toEqual(['a', 'b']);
+});
+
+test('the shown window, its end and its picks', () => {
+  const shown = shownOf(shownState, NOW);
+  if (!shown) throw new Error('no window');
+  expect(shown.dates).toEqual(['2026-10-14', '2026-10-14']);
+  // The earlier of 14:00 BST and sunset.
+  expect(shown.endsAt).toBe('2026-10-14T13:00:00.000Z');
+  expect(shown.picks.map((p) => [p.routeId, p.date, p.rank])).toEqual([
+    ['a', '2026-10-14', 1],
+    ['b', '2026-10-14', 2],
+  ]);
+  expect(shown.meta).toEqual({
+    generatedAt: '2026-10-14T08:55:00Z',
+    algorithmVersion: '2026-10-10',
+    attribution,
+  });
+  expect(ended(shown, new Date('2026-10-14T12:59:00Z'))).toBe(false);
+  expect(ended(shown, new Date('2026-10-14T13:00:00Z'))).toBe(true);
+  const daylight = {
+    ...shownState.planning,
+    time: { ...shownState.planning.time, mode: 'daylight' },
+  } as const;
+  expect(shownOf({ ...shownState, planning: daylight }, NOW)?.endsAt).toBe(
+    '2026-10-14T17:10:00.000Z',
+  );
+  // No sunset: the end of the local day.
+  const dark = recs('match_found', [], [], {
+    days: [{ ...days[0], daylight: null }],
+  });
+  expect(
+    shownOf({ ...shownState, planning: daylight, recs: dark }, NOW)?.endsAt,
+  ).toBe('2026-10-14T23:00:00.000Z');
+  expect(
+    shownOf(
+      { ...shownState, recs: recs('match_found', [], [], { range: null }) },
+      NOW,
+    ),
+  ).toBeNull();
+  // Once ended, the view reads as passed and shows the window that ended.
+  const view = viewOf({ ...shownState, expired: shown }, NOW);
+  expect(view.range).toBeNull();
+  expect(view.cards).toEqual([]);
+  expect(view.timeText).toContain('08:00');
+});
+
+const ride = (id: string, routeId: string, riddenOn: string): Ride => ({
+  id,
+  version: 1,
+  routeId,
+  route: {
+    id: routeId,
+    name: `Route ${routeId}`,
+    version: 1,
+    distanceM: 35_200,
+    ascentM: null,
+  },
+  riddenOn,
+  timeZone: TZ,
+  recordedAt: `${riddenOn}T18:00:00Z`,
+  updatedAt: `${riddenOn}T18:00:00Z`,
+  plan: null,
+});
+const pick = (routeId: string, rank: number): Pick => ({
+  routeId,
+  date: '2026-10-14',
+  departureAt: '2026-10-14T07:00:00Z',
+  finishAt: '2026-10-14T08:46:00Z',
+  conditions,
+  rank,
+});
+
+test('check-in: settled by a pick, and the plan it sends', () => {
+  const picks = [pick('a', 1), pick('b', 2)];
+  expect(logged('2026-10-14', picks, [ride('1', 'c', '2026-10-14')])).toBe(
+    false,
+  );
+  expect(logged('2026-10-14', picks, [ride('1', 'b', '2026-10-13')])).toBe(
+    false,
+  );
+  expect(logged('2026-10-14', picks, [ride('1', 'b', '2026-10-14')])).toBe(
+    true,
+  );
+
+  const checkin: Checkin = {
+    date: '2026-10-14',
+    picks,
+    meta: {
+      generatedAt: '2026-10-14T06:00:00Z',
+      algorithmVersion: '2026-10-10',
+      attribution,
+    },
+    status: 'ask',
+    routeId: null,
+    rideId: null,
+    key: null,
+  };
+  expect(planFor(checkin, 'b')).toEqual({
+    schemaVersion: 1,
+    departureAt: '2026-10-14T07:00:00Z',
+    finishAt: '2026-10-14T08:46:00Z',
+    conditions,
+    pickRank: 2,
+    generatedAt: '2026-10-14T06:00:00Z',
+    algorithmVersion: '2026-10-10',
+    weather: { attribution },
+  });
+  expect(planFor(checkin, 'z')).toBeNull(); // not a pick
+  expect(
+    planFor({ ...checkin, meta: { ...checkin.meta, attribution: [] } }, 'a'),
+  ).toBeNull();
+  // Planned after it left: the API would refuse it.
+  expect(
+    planFor(
+      {
+        ...checkin,
+        meta: { ...checkin.meta, generatedAt: '2026-10-14T07:30:00Z' },
+      },
+      'a',
+    ),
+  ).toBeNull();
+
+  expect(checkinDay(picks[0], '2026-10-14', TZ)).toBe(
+    'This morning, Wed 14 Oct',
+  );
+  expect(checkinDay(picks[0], '2026-10-15', TZ)).toBe('Yesterday, Wed 14 Oct');
+  expect(checkinDay(picks[0], '2026-10-17', TZ)).toBe('Wed 14 Oct');
+});
+
+test('ride tags, dates and history lines', () => {
+  const today = '2026-10-14';
+  const rides = [ride('1', 'a', '2026-09-22'), ride('2', 'c', '2026-08-01')];
+  const sum = (routeId: string, lastRiddenOn: string | null) => ({
+    routeId,
+    rideCount: 2,
+    lastRiddenOn,
+  });
+  expect(ridden(sum('a', today), rides, 'a', today)).toEqual({
+    today: true,
+    last: '2026-09-22',
+  });
+  expect(ridden(sum('b', '2026-10-05'), rides, 'b', today)).toEqual({
+    today: false,
+    last: '2026-10-05',
+  });
+  expect(ridden(undefined, rides, 'c', today)).toEqual({
+    today: false,
+    last: '2026-08-01',
+  });
+  expect(ridden(undefined, rides, 'd', today)).toEqual({
+    today: false,
+    last: null,
+  });
+  expect(rideLine(ride('1', 'a', today))).toBe('Wed 14 Oct · 35 km');
+  expect(dayMonth('2026-09-22', today)).toBe('22 Sep');
+  expect(dayMonth('2025-12-30', today)).toBe('30 Dec 2025');
+  expect(monthLabel('2026-10-11', today)).toBe('October');
+  expect(monthLabel('2025-12-30', today)).toBe('December 2025');
+  expect([1, 2, 3, 4, 11, 22, null].map(rankText)).toEqual([
+    'your top pick',
+    'your 2nd pick',
+    'your 3rd pick',
+    'your 4th pick',
+    'your 11th pick',
+    'your 22nd pick',
+    'not a pick',
+  ]);
+});
+
+test('next windows', () => {
+  const today = '2026-10-14';
+  const tomorrow: NextWindow = {
+    kind: 'tomorrow',
+    date: '2026-10-15',
+    window: { start: '08:00', end: '12:00' },
+    effectiveWindow: null,
+    recommendationKind: 'best_pick',
+    warnings: [],
+    best: {
+      ...departure('2026-10-15T08:00:00Z', 84),
+      routeId: 'a',
+      routeName: 'Richmond',
+    },
+  };
+  expect(windowName(tomorrow)).toBe('Tomorrow morning');
+  // Named only when the whole window lies in one part of the day.
+  expect(
+    windowName({ ...tomorrow, window: { start: '08:00', end: '14:00' } }),
+  ).toBe('Tomorrow');
+  expect(windowWhen(tomorrow, today, today, TZ)).toBe(
+    'Thu 15 Oct · 08:00–12:00',
+  );
+  expect(windowBest(tomorrow, TZ)).toBe('Richmond, leave 09:00 · 15° dry');
+  const weekday: NextWindow = {
+    ...tomorrow,
+    kind: 'same_weekday',
+    date: '2026-10-21',
+    window: { start: '15:00', end: '17:00' },
+  };
+  expect(windowName(weekday)).toBe('Next Wednesday afternoon');
+  expect(
+    windowName({ ...weekday, window: { start: '18:00', end: '20:00' } }),
+  ).toBe('Next Wednesday evening');
+  expect(windowName({ ...weekday, window: 'daylight' })).toBe('Next Wednesday');
+  expect(windowWhen(weekday, today, today, TZ)).toBe(
+    'Wed 21 Oct · 15:00–17:00 · same as today',
+  );
+  const week: NextWindow = {
+    ...tomorrow,
+    kind: 'best_next_days',
+    date: '2026-10-17',
+    window: 'daylight',
+    best: { ...tomorrow.best, departureAt: '2026-10-17T08:00:00Z' },
+  };
+  expect(windowName(week)).toBe('Best in the next 6 days');
+  expect(windowWhen(week, today, today, TZ)).toBe(
+    `Any daylight, ${datesLabel('2026-10-15', '2026-10-20')}`,
+  );
+  expect(windowBest(week, TZ)).toBe('Richmond, Sat 17 Oct 09:00 · 15° dry');
 });
