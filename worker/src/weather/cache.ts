@@ -16,6 +16,31 @@ export type ForecastCache = Readonly<{
   put: (key: string, value: string, ttlSeconds: number) => Promise<void>;
 }>;
 const range = z.object({ start: utcInstant, end: utcInstant });
+export const FORECAST_RETENTION_SECONDS = 12 * 3600;
+
+/** Retaining evidence does not make it fresh for every requested ride date. */
+export const isFreshForecast = (
+  result: Exclude<LocationForecastResult, { status: 'unavailable' }>,
+  request: Pick<ForecastRequest, 'maxAgeSeconds' | 'freshnessBasis'>,
+  now: number,
+  ttlSeconds: number,
+) => {
+  const age = now - Date.parse(result.provenance.retrievedAt);
+  const freshnessAt =
+    request.freshnessBasis === 'retrieval-time'
+      ? result.provenance.retrievedAt
+      : result.provenance.forecastRunAt;
+  const runAge = freshnessAt ? now - Date.parse(freshnessAt) : NaN;
+  return (
+    age >= 0 &&
+    age < ttlSeconds * 1000 &&
+    (result.provenance.expiresAt === undefined ||
+      Date.parse(result.provenance.expiresAt) > now) &&
+    Number.isFinite(runAge) &&
+    runAge < request.maxAgeSeconds * 1000 &&
+    runAge >= -300_000
+  );
+};
 /** Validated cacheable evidence; offline calibration uses the same snapshot shape. */
 export const cachedForecastSchema = z.object({
   status: z.enum(['complete', 'partial']),
@@ -129,6 +154,9 @@ export const withForecastCache = (
   options: {
     now?: () => Date;
     ttlSeconds?: number;
+    retentionSeconds?: number;
+    /** Site adapters use provider site IDs; route-point IDs are otherwise ignored. */
+    keyByLocationId?: boolean;
     forecastHorizonHours?: number;
     onRead?: (hit: boolean) => void;
   } = {},
@@ -138,8 +166,8 @@ export const withForecastCache = (
     const originalRequest = request;
     const now = (options.now ?? (() => new Date()))().getTime();
     const ttl = options.ttlSeconds ?? 1200;
-    // A rolling hourly anchor is independent of selected dates/windows and stable for
-    // the cache lifetime. Keep a preceding hour for nearest-instant arrival sampling.
+    // Fetch a moving horizon on misses, but never put the current clock in its key.
+    // Keep a preceding hour for nearest-instant arrival sampling.
     if (options.forecastHorizonHours !== undefined) {
       const start = Math.floor(now / 3_600_000) * 3_600_000 - 3_600_000;
       request = {
@@ -158,9 +186,12 @@ export const withForecastCache = (
           JSON.stringify({
             source: provider.source,
             coordinate: location.coordinate,
-            range: request.range,
+            locationId: options.keyByLocationId ? location.id : undefined,
+            coverage:
+              options.forecastHorizonHours === undefined
+                ? request.range
+                : { forecastHorizonHours: options.forecastHorizonHours },
             required: request.required.map(descriptorKey).sort(),
-            maxAgeSeconds: request.maxAgeSeconds,
             freshnessBasis: request.freshnessBasis ?? 'model-run',
             maxLocationDistanceM: request.maxLocationDistanceM,
             maxTimeStepSeconds: request.maxTimeStepSeconds,
@@ -169,7 +200,7 @@ export const withForecastCache = (
         const hash = new Uint8Array(
           await crypto.subtle.digest('SHA-256', encoded),
         );
-        return `weather:v1:${Array.from(hash, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+        return `weather:v2:${Array.from(hash, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
       }),
     );
     const found = await Promise.all(
@@ -183,20 +214,8 @@ export const withForecastCache = (
             const parsed = cachedForecastSchema.safeParse(JSON.parse(text));
             if (!parsed.success) return null;
             const result = parsed.data;
-            const age = now - Date.parse(result.provenance.retrievedAt);
-            const freshnessAt =
-              request.freshnessBasis === 'retrieval-time'
-                ? result.provenance.retrievedAt
-                : result.provenance.forecastRunAt;
-            const runAge = freshnessAt ? now - Date.parse(freshnessAt) : NaN;
             if (
-              age < 0 ||
-              age > ttl * 1000 ||
-              (result.provenance.expiresAt !== undefined &&
-                Date.parse(result.provenance.expiresAt) <= now) ||
-              !Number.isFinite(runAge) ||
-              runAge > request.maxAgeSeconds * 1000 ||
-              runAge < -300_000 ||
+              !isFreshForecast(result, request, now, ttl) ||
               JSON.stringify(result.provenance.source) !==
                 JSON.stringify(provider.source) ||
               result.location.requested.coordinate.latitude !==
@@ -244,7 +263,11 @@ export const withForecastCache = (
         )
           return;
         try {
-          await cache.put(key, JSON.stringify(result), ttl);
+          await cache.put(
+            key,
+            JSON.stringify(result),
+            Math.max(ttl, options.retentionSeconds ?? ttl),
+          );
         } catch {
           /* Forecasts remain usable if the cache is unavailable. */
         }

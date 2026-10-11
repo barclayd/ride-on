@@ -94,6 +94,27 @@ integration(
 );
 
 integration(
+  'adding a nearby route after an hour reuses site forecasts across Worker restart',
+  async (h) => {
+    h.use(mock());
+    const route = await upload(h);
+    const firstResult = await recommend(h, [route.id], profile);
+    const calls = h.requests.length;
+    await h.restart({ TEST_NOW: '2026-10-09T13:05:00.000Z' });
+    const nearby = await upload(h, 'Nearby route', -1.001);
+    const added = await recommend(h, [route.id, nearby.id], profile);
+    assert.equal(added.rankings.length, 2);
+    assert.equal(h.requests.length, calls);
+    assert.ok(added.weather.cache.hits > 0);
+    assert.ok(added.weather.cache.misses > 0); // New coordinates reuse the lower-level site cache.
+    assert.equal(
+      added.weather.locations[0]?.provenance?.retrievedAt,
+      firstResult.weather.locations[0]?.provenance?.retrievedAt,
+    );
+  },
+);
+
+integration(
   'missing numeric cloud excludes rides without falling back or inventing clear skies',
   async (h) => {
     h.use(

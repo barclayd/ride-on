@@ -175,18 +175,50 @@ Provider selection still applies the complete compatible `recommendedSettings`.
 
 Registered providers prefetch their advertised hourly horizon once per unique
 upstream location in a cold request. Normalized snapshots are keyed by source,
-coordinate, descriptors, quality limits and a rolling whole-hour anchor (with one
-preceding hour), independently of selected dates and windows. The 20-minute TTL,
-provider expiry and freshness checks still apply. Changing preferences/windows
-can reuse evidence; changing required measurements, provider, freshness policy,
-anchor or expired data can require new calls. Fallback checks the requested
-comparison's coverage, rather than penalizing unused prefetched hours.
+coordinate, descriptors, spatial/temporal quality limits, freshness basis and
+horizon length. The moving fetch range includes one preceding hour but is **not**
+part of a horizon cache key: crossing the clock hour never invalidates a snapshot.
+Evidence is retained for 12 hours, with freshness checked on every read according
+to the nearest selected ride date in the rider's timezone:
+
+| Selected ride date | Refresh after retrieval |
+|---|---|
+| Today | 3 hours |
+| Tomorrow | 6 hours |
+| Two or more days away | 12 hours |
+
+These are on-demand refresh thresholds, not scheduled background calls. Selecting
+a closer date tightens freshness immediately without changing the cache key.
+Provider-declared expiry always takes precedence; model-run policies additionally
+retain the six-hour model-age limit. Keeping an older snapshot never guarantees
+that its trailing hours cover a newly available date; actual coverage remains
+authoritative until the next refresh.
+
+Preview dates do not force a distant selection to refresh at today's frequency.
+A preview whose evidence is too old for its date is unassessable; selecting that
+date triggers the appropriate refresh. `weather.quality.refreshAfterSeconds`
+describes the selected dates' retrieval threshold, while `maxAgeSeconds` applies
+to the reported freshness basis. BPF also shares cached forecasts by resolved
+forecast site across different routes and requests, preserving the original
+retrieval timestamp and each query point's actual distance from the site.
+
+Changing preferences/windows can reuse evidence; changing required measurements,
+provider, freshness basis or expired data can require new calls. Fallback checks
+the requested comparison's coverage, rather than penalizing unused prefetched hours.
 
 This removes per-date fan-out inside a multi-day comparison. KV is not a global
 request lock: simultaneous cold requests can still duplicate upstream work.
 Clients should replace the old seven parallel calls with one multi-day request,
 debounce controls and discard stale results. This release does not add a paid plan,
 automatic fallback or a claim that quota is unlimited.
+
+BPF still needs two forecast requests per distinct uncached site for the current
+assessment (percentiles and precipitation probabilities). At 28 sites that is 56
+forecast calls, plus a catalogue request if its 24-hour cache is cold. Caching
+cannot make that initial load fit a 55-call allowance. This change introduces no
+hard daily quota limiter, reduced route sampling or silent provider substitution.
+`weather.cache` counts coordinate snapshot hits/misses, not upstream calls: a
+coordinate miss may still reuse the BPF site cache without contacting Met Office.
 
 `weather.attribution` deduplicates the actual source metadata, including Apple
 logos/legal link/derived-data notice. `weather.retrieval.oldestAt/latestAt` gives

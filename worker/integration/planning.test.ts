@@ -207,6 +207,73 @@ integration(
   },
 );
 integration(
+  'distant selections keep forecasts for twelve hours while stale previews wait for selection',
+  async (h) => {
+    h.use(
+      apple((data) => {
+        // Provider expiry is deliberately later than our policy in this scenario.
+        data.forecastHourly.metadata.expireTime = '2026-10-11T12:00:00.000Z';
+      }),
+    );
+    const route = await upload(h);
+    const distant = {
+      days: { kind: 'range', start: '2026-10-13', end: '2026-10-13' },
+      previewDays: 7,
+      riding: { averageSpeedKph: 40 },
+    };
+    await recommend(h, [route.id], distant);
+    const calls = h.requests.length;
+    await h.restart({ TEST_NOW: '2026-10-09T13:05:00.000Z' });
+    const reused = await recommend(h, [route.id], distant);
+    assert.equal(reused.rankings.length, 1);
+    assert.equal(h.requests.length, calls);
+    assert.notEqual(
+      reused.days.find((d) => d.date === '2026-10-09')?.quality,
+      null,
+    );
+    assert.notEqual(
+      reused.days.find((d) => d.date === '2026-10-10')?.quality,
+      null,
+    );
+    await h.restart({ TEST_NOW: '2026-10-09T14:59:00.000Z' });
+    const almostThreeHours = await recommend(h, [route.id], distant);
+    assert.equal(h.requests.length, calls);
+    assert.notEqual(
+      almostThreeHours.days.find((d) => d.date === '2026-10-09')?.quality,
+      null,
+    );
+    await h.restart({ TEST_NOW: '2026-10-09T15:00:00.000Z' });
+    const threeHours = await recommend(h, [route.id], distant);
+    assert.equal(h.requests.length, calls);
+    assert.equal(
+      threeHours.days.find((d) => d.date === '2026-10-09')?.quality,
+      null,
+    );
+    await h.restart({ TEST_NOW: '2026-10-09T19:00:00.000Z' });
+    const sevenHours = await recommend(h, [route.id], distant);
+    assert.equal(sevenHours.rankings.length, 1);
+    assert.equal(h.requests.length, calls); // No hidden six-hour cutoff.
+    assert.equal(
+      sevenHours.days.find((d) => d.date === '2026-10-10')?.quality,
+      null,
+    );
+    const tomorrow = await recommend(h, [route.id], {
+      days: { kind: 'preset', preset: 'tomorrow' },
+    });
+    assert.equal(tomorrow.rankings.length, 1);
+    assert.equal(h.requests.length, calls * 2);
+    assert.equal(
+      tomorrow.weather.retrieval.oldestAt,
+      '2026-10-09T19:00:00.000Z',
+    );
+    // Exactly twelve hours after the newest retrieval, the distant date refreshes too.
+    await h.restart({ TEST_NOW: '2026-10-10T07:00:00.000Z' });
+    await recommend(h, [route.id], distant);
+    assert.equal(h.requests.length, calls * 3);
+  },
+);
+
+integration(
   'actual partial coverage includes a timestamp and distinguishes interior gaps from a forecast cutoff',
   async (h) => {
     h.use(
@@ -229,9 +296,11 @@ integration(
     assert.equal(day.until, '2026-10-10T11:30:00.000Z');
     const fraction = first(r.rankings).coverage.assessedFraction;
     assert.ok(fraction !== null && fraction > 0 && fraction < 1);
-    await h.restart({ TEST_NOW: '2026-10-09T12:21:00.000Z' });
+    // The original provider expiry, not the old twenty-minute cache, forces this refresh.
+    await h.restart({ TEST_NOW: '2026-10-09T13:01:00.000Z' });
     h.use(
       apple((data) => {
+        data.forecastHourly.metadata.expireTime = '2026-10-09T14:00:00.000Z';
         data.forecastHourly.hours = data.forecastHourly.hours.filter(
           (row) => row.forecastStart !== '2026-10-10T10:00:00.000Z',
         );

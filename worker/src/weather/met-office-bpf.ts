@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { haversineKm } from '../geo.ts';
-import type { ForecastCache } from './cache.ts';
+import {
+  FORECAST_RETENTION_SECONDS,
+  type ForecastCache,
+  withForecastCache,
+} from './cache.ts';
 import type {
   ForecastDescriptor,
   ForecastProvider,
@@ -509,16 +513,161 @@ export const createMetOfficeBpf = (options: {
     concurrency > 8
   )
     throw new Error('Invalid weather transport configuration.');
+  const getCapabilities: ForecastProvider['getCapabilities'] = async () => ({
+    available: mappings.map(({ descriptor }) => ({
+      descriptor,
+      timeStepSeconds: 3600,
+      forecastHorizonSeconds: 5 * 24 * 3600,
+    })),
+    maxLocationsPerUpstreamRequest: 1,
+  });
+  const fetchSites: ForecastProvider['getForecast'] = async (
+    request,
+    signal,
+  ) => {
+    const results = new Map<string, LocationForecastResult>();
+    const queue = request.locations.map(
+      (location) => [location.id, [location]] as const,
+    );
+    let cursor = 0;
+    let terminal: ProviderIssue | undefined;
+    const run = async () => {
+      while (cursor < queue.length) {
+        const entry = queue[cursor++];
+        const siteId = entry?.[0];
+        const group = entry?.[1];
+        const first = group?.[0];
+        if (!first) continue;
+        let issue = signal.aborted
+          ? problem('cancelled', 'Forecast request was cancelled.')
+          : terminal;
+        const raw: unknown[] = [];
+        const timeout = AbortSignal.timeout(timeoutMs);
+        const abort = AbortSignal.any([signal, timeout]);
+        for (const collection of ['percentiles', 'probabilities']) {
+          if (issue) break;
+          const selected = mappings.filter(
+            (m) =>
+              (m.descriptor.kind === 'probability') ===
+                (collection === 'probabilities') &&
+              request.required.some(
+                (d) => descriptorKey(d) === descriptorKey(m.descriptor),
+              ),
+          );
+          if (!selected.length) continue;
+          try {
+            if (terminal) {
+              issue = terminal;
+              break;
+            }
+            const url = new URL(
+              `${BPF_ENDPOINT}/collections/uk-spot-${collection}/instances/blended/locations/${encodeURIComponent(siteId ?? '')}`,
+            );
+            url.searchParams.set(
+              'datetime',
+              `${request.range.start}/${request.range.end}`,
+            );
+            url.searchParams.set(
+              'parameter-name',
+              selected.map((m) => m.field).join(','),
+            );
+            const response = await transport(url.href, {
+              headers: {
+                apikey: options.apiKey,
+                Accept: 'application/prs.coverage+json',
+              },
+              signal: abort,
+              redirect: 'manual',
+            });
+            if (!response.ok || response.status === 204) {
+              issue = problem(
+                response.status === 401 || response.status === 403
+                  ? 'unauthorized'
+                  : response.status === 429
+                    ? 'rate-limited'
+                    : response.status === 204
+                      ? 'missing-data'
+                      : 'upstream-unavailable',
+                'Met Office BPF could not supply the requested forecast.',
+              );
+              const retry = response.headers.get('Retry-After');
+              const seconds =
+                retry && /^\d+$/.test(retry)
+                  ? Number(retry)
+                  : retry
+                    ? Math.ceil((Date.parse(retry) - now().getTime()) / 1000)
+                    : NaN;
+              if (
+                issue.code === 'rate-limited' &&
+                Number.isFinite(seconds) &&
+                seconds >= 0
+              )
+                issue = { ...issue, retryAfterSeconds: seconds };
+              if (
+                issue.code === 'unauthorized' ||
+                issue.code === 'rate-limited'
+              )
+                terminal = issue;
+              await response.body?.cancel();
+            } else {
+              try {
+                raw.push(await readBoundedJson(response, 1_000_000));
+              } catch {
+                issue = problem(
+                  'invalid-response',
+                  'Met Office returned an invalid or oversized forecast.',
+                );
+              }
+            }
+          } catch {
+            issue = problem(
+              signal.aborted
+                ? 'cancelled'
+                : timeout.aborted
+                  ? 'timeout'
+                  : 'upstream-unavailable',
+              'Met Office BPF request did not complete.',
+            );
+          }
+          if (abort.aborted)
+            issue = problem(
+              signal.aborted ? 'cancelled' : 'timeout',
+              'Met Office BPF request did not complete.',
+            );
+        }
+        const retrievedAt = now().toISOString();
+        for (const location of group ?? []) {
+          const result = issue
+            ? unavailable(location, issue)
+            : normaliseBpf(raw, location, request, retrievedAt);
+          results.set(
+            location.id,
+            result.status !== 'unavailable' &&
+              result.location.sourceLocationId !== siteId
+              ? unavailable(
+                  location,
+                  problem(
+                    'invalid-response',
+                    'The returned forecast site does not match the requested site.',
+                  ),
+                )
+              : result,
+          );
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, queue.length) }, run),
+    );
+    return request.locations.map(
+      (l) =>
+        results.get(l.id) ??
+        unavailable(l, problem('missing-data', 'No result was returned.')),
+    );
+  };
   return {
     source,
-    getCapabilities: async () => ({
-      available: mappings.map(({ descriptor }) => ({
-        descriptor,
-        timeStepSeconds: 3600,
-        forecastHorizonSeconds: 5 * 24 * 3600,
-      })),
-      maxLocationsPerUpstreamRequest: 1,
-    }),
+    getCapabilities,
     getForecast: async (request, signal) => {
       const unsupported = request.required.some(
         (d) =>
@@ -638,9 +787,10 @@ export const createMetOfficeBpf = (options: {
         }
       }
       const groups = new Map<string, RequestedLocation[]>();
+      const siteLocations = new Map<string, RequestedLocation>();
       const results = new Map<string, LocationForecastResult>();
       for (const location of request.locations) {
-        let nearest: string | undefined;
+        let nearest: (typeof catalog.features)[number] | undefined;
         let closest = request.maxLocationDistanceM;
         for (const site of catalog.features) {
           const [longitude, latitude] = site.geometry.coordinates;
@@ -657,7 +807,7 @@ export const createMetOfficeBpf = (options: {
             ) * 1000;
           if (distance <= closest) {
             closest = distance;
-            nearest = site.id;
+            nearest = site;
           }
         }
         if (!nearest)
@@ -671,143 +821,84 @@ export const createMetOfficeBpf = (options: {
               ),
             ),
           );
-        else groups.set(nearest, [...(groups.get(nearest) ?? []), location]);
-      }
-      const queue = [...groups.entries()];
-      let cursor = 0;
-      let terminal: ProviderIssue | undefined;
-      const run = async () => {
-        while (cursor < queue.length) {
-          const entry = queue[cursor++];
-          const siteId = entry?.[0];
-          const group = entry?.[1];
-          const first = group?.[0];
-          if (!first) continue;
-          let issue = signal.aborted
-            ? problem('cancelled', 'Forecast request was cancelled.')
-            : terminal;
-          const raw: unknown[] = [];
-          const timeout = AbortSignal.timeout(timeoutMs);
-          const abort = AbortSignal.any([signal, timeout]);
-          for (const collection of ['percentiles', 'probabilities']) {
-            if (issue) break;
-            const selected = mappings.filter(
-              (m) =>
-                (m.descriptor.kind === 'probability') ===
-                  (collection === 'probabilities') &&
-                request.required.some(
-                  (d) => descriptorKey(d) === descriptorKey(m.descriptor),
-                ),
-            );
-            if (!selected.length) continue;
-            try {
-              if (terminal) {
-                issue = terminal;
-                break;
-              }
-              const url = new URL(
-                `${BPF_ENDPOINT}/collections/uk-spot-${collection}/instances/blended/locations/${encodeURIComponent(siteId ?? '')}`,
-              );
-              url.searchParams.set(
-                'datetime',
-                `${request.range.start}/${request.range.end}`,
-              );
-              url.searchParams.set(
-                'parameter-name',
-                selected.map((m) => m.field).join(','),
-              );
-              const response = await transport(url.href, {
-                headers: {
-                  apikey: options.apiKey,
-                  Accept: 'application/prs.coverage+json',
-                },
-                signal: abort,
-                redirect: 'manual',
-              });
-              if (!response.ok || response.status === 204) {
-                issue = problem(
-                  response.status === 401 || response.status === 403
-                    ? 'unauthorized'
-                    : response.status === 429
-                      ? 'rate-limited'
-                      : response.status === 204
-                        ? 'missing-data'
-                        : 'upstream-unavailable',
-                  'Met Office BPF could not supply the requested forecast.',
-                );
-                const retry = response.headers.get('Retry-After');
-                const seconds =
-                  retry && /^\d+$/.test(retry)
-                    ? Number(retry)
-                    : retry
-                      ? Math.ceil((Date.parse(retry) - now().getTime()) / 1000)
-                      : NaN;
-                if (
-                  issue.code === 'rate-limited' &&
-                  Number.isFinite(seconds) &&
-                  seconds >= 0
-                )
-                  issue = { ...issue, retryAfterSeconds: seconds };
-                if (
-                  issue.code === 'unauthorized' ||
-                  issue.code === 'rate-limited'
-                )
-                  terminal = issue;
-                await response.body?.cancel();
-              } else {
-                try {
-                  raw.push(await readBoundedJson(response, 1_000_000));
-                } catch {
-                  issue = problem(
-                    'invalid-response',
-                    'Met Office returned an invalid or oversized forecast.',
-                  );
-                }
-              }
-            } catch {
-              issue = problem(
-                signal.aborted
-                  ? 'cancelled'
-                  : timeout.aborted
-                    ? 'timeout'
-                    : 'upstream-unavailable',
-                'Met Office BPF request did not complete.',
-              );
-            }
-            if (abort.aborted)
-              issue = problem(
-                signal.aborted ? 'cancelled' : 'timeout',
-                'Met Office BPF request did not complete.',
-              );
-          }
-          const retrievedAt = now().toISOString();
-          for (const location of group ?? []) {
-            const result = issue
-              ? unavailable(location, issue)
-              : normaliseBpf(raw, location, request, retrievedAt);
-            results.set(
-              location.id,
-              result.status !== 'unavailable' &&
-                result.location.sourceLocationId !== siteId
-                ? unavailable(
-                    location,
-                    problem(
-                      'invalid-response',
-                      'The returned forecast site does not match the requested site.',
-                    ),
-                  )
-                : result,
-            );
-          }
+        else {
+          groups.set(nearest.id, [...(groups.get(nearest.id) ?? []), location]);
+          siteLocations.set(nearest.id, {
+            id: nearest.id,
+            coordinate: {
+              longitude: nearest.geometry.coordinates[0],
+              latitude: nearest.geometry.coordinates[1],
+            },
+          });
         }
+      }
+      const siteRequest = {
+        ...request,
+        locations: [...siteLocations.values()],
       };
-      await Promise.all(
-        Array.from({ length: Math.min(concurrency, queue.length) }, run),
-      );
+      const siteProvider: ForecastProvider = {
+        source,
+        getCapabilities,
+        getForecast: fetchSites,
+      };
+      const cachedSites = options.cache
+        ? withForecastCache(siteProvider, options.cache, {
+            now,
+            ttlSeconds: request.maxAgeSeconds,
+            retentionSeconds: FORECAST_RETENTION_SECONDS,
+            forecastHorizonHours: 120,
+            keyByLocationId: true,
+          })
+        : siteProvider;
+      const forecasts = siteRequest.locations.length
+        ? await cachedSites.getForecast(siteRequest, signal)
+        : [];
+      for (const forecast of forecasts) {
+        const siteId =
+          forecast.status === 'unavailable'
+            ? forecast.requested.id
+            : forecast.location.requested.id;
+        for (const location of groups.get(siteId) ?? []) {
+          if (forecast.status === 'unavailable') {
+            results.set(location.id, { ...forecast, requested: location });
+            continue;
+          }
+          const distance =
+            haversineKm(
+              [location.coordinate.latitude, location.coordinate.longitude],
+              [
+                forecast.location.coordinate.latitude,
+                forecast.location.coordinate.longitude,
+              ],
+            ) * 1000;
+          results.set(
+            location.id,
+            distance > request.maxLocationDistanceM
+              ? unavailable(
+                  location,
+                  problem(
+                    'outside-coverage',
+                    'The forecast site is too far from the requested location.',
+                  ),
+                )
+              : {
+                  ...forecast,
+                  location: {
+                    ...forecast.location,
+                    requested: location,
+                    distanceFromRequestedM: distance,
+                  },
+                },
+          );
+        }
+      }
       return request.locations.map(
-        (l) =>
-          results.get(l.id) ??
-          unavailable(l, problem('missing-data', 'No result was returned.')),
+        (location) =>
+          results.get(location.id) ??
+          unavailable(
+            location,
+            problem('missing-data', 'No result was returned.'),
+          ),
       );
     },
   };

@@ -522,6 +522,7 @@ export const createApp = (
       signal: c.req.raw.signal,
       now,
       startedAt,
+      refreshDates: selection.dates,
       dependencies,
     });
     const daily = new Map(
