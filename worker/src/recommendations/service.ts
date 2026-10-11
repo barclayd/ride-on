@@ -1,0 +1,222 @@
+import { Temporal } from '@js-temporal/polyfill';
+import { AppError } from '../errors.ts';
+import { prepareHistory } from '../rides/overlap.ts';
+import { readHistory } from '../rides/store.ts';
+import type { Route } from '../routes/model.ts';
+import type { Env } from '../types.ts';
+import { type ForecastCache, withForecastCache } from '../weather/cache.ts';
+import type {
+  ForecastProvider,
+  ForecastRequest,
+} from '../weather/contracts.ts';
+import { summarizeProvenance } from '../weather/coverage.ts';
+import {
+  createWeatherProviders,
+  forecastHorizonHours,
+} from '../weather/providers.ts';
+import { getForecastForPolicy } from '../weather/source-policy.ts';
+import { planDepartures } from './daylight.ts';
+import { recommendRides, requiredWeatherFor } from './engine.ts';
+import type { RecommendationInput } from './input.ts';
+import { daySummary } from './multi-day.ts';
+
+const HOUR = 3_600_000;
+const quality = {
+  maxTimeStepSeconds: 3600,
+  maxLocationDistanceM: 10_000,
+  maxAgeSeconds: 6 * 3600,
+};
+export type ComparisonContext = {
+  env: Env;
+  ownerId: string;
+  signal: AbortSignal;
+  now: () => Date;
+  startedAt: Date;
+  dependencies: {
+    cache?: ForecastCache;
+    providers?: Readonly<Record<string, ForecastProvider>>;
+  };
+};
+/** One history snapshot and one provider selection for a bounded set of date/window
+ * comparisons. Callers supply identical settings apart from their dates and windows. */
+export const evaluateComparisons = async (
+  routes: readonly Route[],
+  inputs: readonly RecommendationInput[],
+  input: RecommendationInput,
+  { env, ownerId, signal, now, startedAt, dependencies }: ComparisonContext,
+) => {
+  const plans = inputs.flatMap((dayInput) =>
+    routes.map((route) => ({
+      route,
+      plan: planDepartures(route, dayInput, startedAt.getTime()),
+    })),
+  );
+  const feasible = plans.filter(({ plan }) => plan.departures.length > 0);
+  const locations = [
+    ...new Map(
+      feasible
+        .flatMap(({ route }) => route.weatherLocations)
+        .map((l) => [l.id, l]),
+    ).values(),
+  ];
+  if (locations.length > 256)
+    throw new AppError(
+      422,
+      'TOO_MANY_WEATHER_LOCATIONS',
+      'Compare fewer routes; a request supports up to 256 weather locations.',
+    );
+  const earliest = feasible.length
+    ? Math.min(...feasible.flatMap((p) => p.plan.departures))
+    : startedAt.getTime();
+  const latest = feasible.length
+    ? Math.max(...feasible.flatMap((p) => p.plan.departures))
+    : startedAt.getTime();
+  const recent = input.preferences.recentRides;
+  const historySnapshot =
+    recent.mode === 'prefer-variety' && feasible.length
+      ? await readHistory(
+          env.ROUTES_DB,
+          ownerId,
+          Temporal.Instant.fromEpochMilliseconds(earliest)
+            .toZonedDateTimeISO('UTC')
+            .toPlainDate()
+            .subtract({ days: recent.lookbackDays + 2 })
+            .toString(),
+          Temporal.Instant.fromEpochMilliseconds(latest)
+            .toZonedDateTimeISO('UTC')
+            .toPlainDate()
+            .add({ days: 2 })
+            .toString(),
+        )
+      : null;
+  const history = prepareHistory(
+    [...new Map(feasible.map(({ route }) => [route.id, route])).values()],
+    recent,
+    historySnapshot,
+    new Date(earliest).toISOString(),
+    new Date(latest).toISOString(),
+  );
+  const cacheReads = { hits: 0, misses: 0 };
+  const cache = dependencies.cache ?? {
+    get: (key: string) => env.WEATHER_CACHE.get(key),
+    put: async (key: string, value: string, ttlSeconds: number) =>
+      env.WEATHER_CACHE.put(key, value, { expirationTtl: ttlSeconds }),
+  };
+  const configured =
+    dependencies.providers ?? createWeatherProviders(env, cache, now);
+  const providers = Object.fromEntries(
+    Object.entries(configured).map(([id, provider]) => [
+      id,
+      withForecastCache(provider, cache, {
+        now,
+        forecastHorizonHours: forecastHorizonHours(id),
+        onRead: (hit) => {
+          if (hit) cacheReads.hits++;
+          else cacheReads.misses++;
+        },
+      }),
+    ]),
+  );
+  // Requested comparison range; registered providers cache their independent full horizon.
+  const range = feasible.length
+    ? {
+        start: new Date(
+          Math.floor(
+            Math.min(
+              ...feasible.map(({ plan }) => plan.daylight?.start ?? Infinity),
+            ) / HOUR,
+          ) *
+            HOUR -
+            HOUR,
+        ).toISOString(),
+        end: new Date(
+          Math.ceil(
+            Math.max(
+              ...feasible.map(({ plan }) => plan.daylight?.end ?? -Infinity),
+            ) / HOUR,
+          ) *
+            HOUR +
+            HOUR,
+        ).toISOString(),
+      }
+    : null;
+  const request: ForecastRequest | null = range
+    ? {
+        locations,
+        range,
+        required: requiredWeatherFor(input),
+        ...quality,
+        freshnessBasis: input.forecast.freshnessBasis,
+      }
+    : null;
+  const selected = request
+    ? await getForecastForPolicy(
+        providers,
+        input.weather,
+        request,
+        AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+      )
+    : null;
+  const results = selected?.results ?? [];
+  const comparisons = inputs.map((dayInput) => {
+    const result = recommendRides(
+      routes,
+      dayInput,
+      results,
+      startedAt.getTime(),
+      quality.maxLocationDistanceM,
+      3,
+      history,
+    );
+    return {
+      input: dayInput,
+      result,
+      summary: daySummary(
+        routes,
+        dayInput,
+        result,
+        results,
+        requiredWeatherFor(dayInput),
+        startedAt.getTime(),
+        quality.maxLocationDistanceM,
+      ),
+    };
+  });
+  return {
+    comparisons,
+    history: {
+      revision: history.revision,
+      status: feasible.length ? history.status : 'not_evaluated',
+      matcherVersion: history.matcherVersion,
+      reasonCode: feasible.length ? history.reasonCode : null,
+      affectedRouteIds: history.affectedRouteIds,
+      affectedRideIds: history.affectedRideIds,
+    },
+    weather: {
+      ...summarizeProvenance(results),
+      snapshotPolicy: 'provider-horizon',
+      requestedPolicy: input.weather,
+      selectedSource: selected?.source ?? null,
+      attempts: selected?.attempts ?? [],
+      quality: { ...quality, freshnessBasis: input.forecast.freshnessBasis },
+      descriptors: request?.required ?? [],
+      range,
+      cache: cacheReads,
+      locations: results.map((result) =>
+        result.status === 'unavailable'
+          ? {
+              id: result.requested.id,
+              status: result.status,
+              issues: result.issues,
+            }
+          : {
+              id: result.location.requested.id,
+              status: result.status,
+              distanceFromRequestedM: result.location.distanceFromRequestedM,
+              provenance: result.provenance,
+              issues: result.issues,
+            },
+      ),
+    },
+  };
+};

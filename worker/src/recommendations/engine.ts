@@ -13,6 +13,7 @@ import {
   ensembleDescriptors,
 } from '../weather/descriptors.ts';
 import { assessClimbing, CLIMBING_SHARE } from './climbing.ts';
+import { conditionsSchema } from './conditions.ts';
 import { planDepartures } from './daylight.ts';
 import { assessDistance, DISTANCE_SHARE } from './distance.ts';
 import {
@@ -146,7 +147,7 @@ const summarize = (rows: readonly Observation[]) => {
   const distance = rows.reduce((sum, row) => sum + row.distanceM, 0);
   const mean = (value: (row: Observation) => number) =>
     rows.reduce((sum, row) => sum + value(row) * row.distanceM, 0) / distance;
-  return {
+  return conditionsSchema.parse({
     skyConditionDistanceFractions: rows.every((r) => r.skyCondition !== null)
       ? Object.fromEntries(
           Object.entries(skyConditions).map(([name, code]) => [
@@ -195,7 +196,7 @@ const summarize = (rows: readonly Observation[]) => {
         0,
       ) / distance,
     ),
-  };
+  });
 };
 
 const assessCandidate = (

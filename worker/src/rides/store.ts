@@ -1,6 +1,7 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { z } from 'zod';
 import { geometrySchema, type RideGeometry } from './geometry.ts';
+import { ridePlanSchema } from './plan.ts';
 
 export const rideDate = z.iso.date().refine((value) => {
   try {
@@ -21,12 +22,33 @@ export const rideTimeZone = z
       return false;
     }
   }, 'Use an IANA time zone.');
-export const createRideSchema = z.strictObject({
-  routeId: z.uuid(),
-  expectedRouteVersion: z.number().int().positive(),
-  riddenOn: rideDate,
-  timeZone: rideTimeZone,
-});
+export const createRideSchema = z
+  .strictObject({
+    routeId: z.uuid(),
+    expectedRouteVersion: z.number().int().positive(),
+    riddenOn: rideDate,
+    timeZone: rideTimeZone,
+    plan: ridePlanSchema.nullable().default(null),
+  })
+  .refine(
+    (input) => {
+      if (!input.plan) return true;
+      try {
+        return (
+          Temporal.Instant.from(input.plan.departureAt)
+            .toZonedDateTimeISO(input.timeZone)
+            .toPlainDate()
+            .toString() === input.riddenOn
+        );
+      } catch {
+        return false;
+      }
+    },
+    {
+      path: ['plan', 'departureAt'],
+      message: 'Plan departure must fall on riddenOn in the ride time zone.',
+    },
+  );
 export const correctRideSchema = z.strictObject({
   expectedVersion: z.number().int().positive(),
   riddenOn: rideDate,
@@ -50,6 +72,7 @@ type RideRow = {
   updated_at: string;
   version: number;
   request_hash: string;
+  plan_json: string | null;
   geometry_available: number;
 };
 export const publicRide = (row: RideRow) => ({
@@ -61,6 +84,8 @@ export const publicRide = (row: RideRow) => ({
   timeZone: row.time_zone,
   recordedAt: row.recorded_at,
   updatedAt: row.updated_at,
+  plan: row.plan_json ? ridePlanSchema.parse(JSON.parse(row.plan_json)) : null,
+  planSource: row.plan_json ? ('client-supplied' as const) : null,
   source: { type: 'manual' as const },
   geometryBasis: 'assumed-saved-route' as const,
   geometryStatus: row.geometry_available ? 'available' : 'unavailable',
@@ -88,11 +113,11 @@ export const createRide = async (
     db
       .prepare(`INSERT INTO rides
       (owner_id, id, idempotency_key, request_hash, route_id, source_hash,
-       route_snapshot, ridden_on, time_zone, recorded_at, updated_at)
+       route_snapshot, ridden_on, time_zone, recorded_at, updated_at, plan_json)
       SELECT owner_id, ?, ?, ?, id, json_extract(route_json, '$.sourceHash'),
        json_object('id', id, 'name', name, 'version', version,
         'distanceM', json_extract(route_json, '$.distanceM'), 'ascentM', json_extract(route_json, '$.ascentM')),
-       ?, ?, ?, ? FROM routes WHERE owner_id = ? AND id = ? AND version = ?
+       ?, ?, ?, ?, ? FROM routes WHERE owner_id = ? AND id = ? AND version = ?
        AND NOT EXISTS (SELECT 1 FROM ride_tombstones WHERE owner_id = ? AND idempotency_key = ?)
       ON CONFLICT(owner_id, idempotency_key) DO NOTHING`)
       .bind(
@@ -103,6 +128,7 @@ export const createRide = async (
         input.timeZone,
         timestamp,
         timestamp,
+        input.plan ? JSON.stringify(input.plan) : null,
         owner,
         input.routeId,
         input.expectedRouteVersion,
@@ -178,6 +204,56 @@ export const listRides = async (
         : null,
     summary: result[1]?.results[0] ?? { rideCount: 0, lastRiddenOn: null },
     historyRevision: Number(result[2]?.results[0]?.revision ?? 0),
+  };
+};
+
+/** Exact-route badges must use all history, not the currently loaded UI page.
+ * Indexed correlated reads stay bounded by the requested route page; geometry
+ * overlap remains a separate recommendation concern. */
+export const summarizeRides = async (
+  db: D1Database,
+  owner: string,
+  routeIds: readonly string[],
+) => {
+  const result = await db.batch<Record<string, unknown>>([
+    db
+      .prepare(`SELECT r.id AS routeId,
+      (SELECT COUNT(*) FROM rides h WHERE h.owner_id = r.owner_id AND h.route_id = r.id) AS rideCount,
+      (SELECT json_object('id', h.id, 'riddenOn', h.ridden_on, 'timeZone', h.time_zone,
+        'routeVersion', json_extract(h.route_snapshot, '$.version'))
+       FROM rides h WHERE h.owner_id = r.owner_id AND h.route_id = r.id
+       ORDER BY h.ridden_on DESC, h.id LIMIT 1) AS latest
+      FROM routes r WHERE r.owner_id = ? AND r.id IN (SELECT value FROM json_each(?))`)
+      .bind(owner, JSON.stringify(routeIds)),
+    db
+      .prepare('SELECT revision FROM ride_history_revisions WHERE owner_id = ?')
+      .bind(owner),
+  ]);
+  const rows = new Map(
+    (result[0]?.results ?? []).map((row) => [String(row.routeId), row]),
+  );
+  if (rows.size !== routeIds.length) return null;
+  const latest = z.object({
+    id: z.uuid(),
+    riddenOn: rideDate,
+    timeZone: rideTimeZone,
+    routeVersion: z.number().int().positive(),
+  });
+  return {
+    summaries: routeIds.map((routeId) => {
+      const row = rows.get(routeId);
+      const lastRide =
+        typeof row?.latest === 'string'
+          ? latest.parse(JSON.parse(row.latest))
+          : null;
+      return {
+        routeId,
+        rideCount: Number(row?.rideCount ?? 0),
+        lastRiddenOn: lastRide?.riddenOn ?? null,
+        lastRide,
+      };
+    }),
+    historyRevision: Number(result[1]?.results[0]?.revision ?? 0),
   };
 };
 
