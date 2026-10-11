@@ -1,6 +1,6 @@
-import { render } from 'preact';
+import { type ComponentChildren, render } from 'preact';
 import { createPortal } from 'preact/compat';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { fetchJourney, fetchJourneyGpx } from '../../lib/cycletravel';
@@ -9,16 +9,17 @@ import { MAX_TRACKED, type RouteSummary } from '../../lib/types';
 import {
   Banners,
   CoverageWarn,
-  chooseAvailableDates,
+  chooseWindow,
   ErrorChip,
-  Expired,
   iconUrl,
   injectFonts,
   RideCard,
+  reducedMotion,
   riddenFor,
   Tags,
   useView,
 } from '../../ui/components';
+import { buildResults, longWeekday } from '../../ui/format';
 import css from '../../ui/tokens.css?inline';
 
 type Row = {
@@ -51,11 +52,31 @@ const errorText = (error: unknown) =>
 
 const CHIP_STATES = new Set(['below', 'nofit', 'incomplete']);
 
+const Tick = () => (
+  <svg width="18" height="18" viewBox="0 0 14 14" aria-hidden="true">
+    <circle cx="7" cy="7" r="7" fill="#7ba62a" />
+    <path
+      d="M4 7.2l2 2 4-4.4"
+      fill="none"
+      stroke="#fff"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+);
+
 const Page = ({ rows }: { rows: Row[] }) => {
   const view = useView();
   const [busy, setBusy] = useState(new Set<string>());
   const [notice, setNotice] = useState<string | null>(null);
   const synced = useRef(false);
+  // Once the window has passed, picking new dates confirms in the strip until the page is next loaded.
+  const passed = useRef(false);
+  const asked = useRef<ComponentChildren>(null); // the expired half, frozen while it fades out
+  const [ranked, setRanked] = useState(false);
+  const grid = useRef<HTMLDivElement>(null);
+  const before = useRef(new Map<string, DOMRect>());
   const signedIn = view?.state.auth === 'signed-in';
   const routes = view?.state.routes ?? {};
   const tracked = new Map<string, string>();
@@ -111,6 +132,65 @@ const Page = ({ rows }: { rows: Row[] }) => {
     );
   });
 
+  if (view && !view.range) passed.current = true;
+  const phase = !view?.range
+    ? 'expired'
+    : passed.current
+      ? 'confirmed'
+      : 'normal';
+  const recs = view?.state.recs;
+  const fresh =
+    !!view?.range &&
+    !view.state.loading &&
+    recs?.range?.start === view.range[0] &&
+    recs.range.end === view.range[1];
+  // Placeholders until the new dates' scores arrive, so nothing old flashes up.
+  const blank =
+    phase === 'expired' || (phase === 'confirmed' && !ranked && !fresh);
+  const reduce = reducedMotion();
+
+  // The scores fade in, then the tiles move into ranked order.
+  useEffect(() => {
+    if (phase !== 'confirmed' || blank || ranked) return;
+    const timer = setTimeout(
+      () => {
+        for (const tile of grid.current?.querySelectorAll<HTMLElement>(
+          '.ro-ride',
+        ) ?? [])
+          before.current.set(
+            tile.dataset.route ?? '',
+            tile.getBoundingClientRect(),
+          );
+        setRanked(true);
+      },
+      reduce ? 0 : 750,
+    );
+    return () => clearTimeout(timer);
+  }, [phase, blank, ranked, reduce]);
+
+  // FLIP: each tile slides from where it was; those moving forward pass over the rest.
+  useLayoutEffect(() => {
+    if (!ranked || reduce) return;
+    const old = [...before.current.keys()];
+    const tiles = grid.current?.querySelectorAll<HTMLElement>('.ro-ride') ?? [];
+    tiles.forEach((tile, i) => {
+      const id = tile.dataset.route ?? '';
+      const from = before.current.get(id);
+      if (!from) return;
+      const to = tile.getBoundingClientRect();
+      const [dx, dy] = [from.left - to.left, from.top - to.top];
+      if (!dx && !dy) return;
+      tile.style.zIndex = i < old.indexOf(id) ? '2' : '1';
+      tile.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+        { duration: 700, easing: 'cubic-bezier(.65,0,.25,1)' },
+      ).onfinish = () => {
+        tile.style.zIndex = '';
+      };
+    });
+    before.current.clear();
+  }, [ranked, reduce]);
+
   if (!view) return null;
   if (!signedIn)
     return (
@@ -156,13 +236,56 @@ const Page = ({ rows }: { rows: Row[] }) => {
     }
   };
 
-  const { cards } = view;
   const count = tracked.size;
   const full = count >= MAX_TRACKED;
-  const cardByRoute = new Map(cards.map((card) => [card.routeId, card]));
+  const cardByRoute = new Map(view.cards.map((card) => [card.routeId, card]));
+  const routeIds = view.state.selection?.routeIds ?? [];
+  // Blank tiles in tracked order; after new dates, scores fill in place before the ranked move.
+  const cards = blank
+    ? buildResults(routeIds, routes, null, [], view.timeZone).cards
+    : phase === 'confirmed' && !ranked && !reduce
+      ? routeIds.flatMap((id) => cardByRoute.get(id) ?? [])
+      : view.cards;
   const href = (route: RouteSummary | undefined) =>
     route?.source ? `/map/journey/${route.source.externalId}` : '';
   const openWhen = () => send({ type: 'openPopup', tab: 'when' });
+  const time = view.state.expired?.time ?? view.state.planning.time;
+  const daylight = time.mode === 'daylight';
+  const windowText = `${view.datesText} · ${daylight ? 'Daylight hours' : view.timeText}`;
+  // Tomorrow and the same weekday next week, at the passed window's times; the API leaves out what the forecast doesn't cover.
+  const suggestions = (view.state.next?.windows ?? []).filter(
+    (w) => w.kind !== 'best_next_days',
+  );
+
+  if (phase === 'expired')
+    asked.current = (
+      <>
+        <div class="ro-passed-text">
+          <span>Pick new dates to see scores</span>
+          <span>
+            {view.datesText}, {daylight ? 'daylight hours' : view.timeText} has
+            passed.
+          </span>
+        </div>
+        <div class="ro-passed-actions">
+          {suggestions.map((w) => (
+            <button
+              key={w.kind}
+              type="button"
+              class={w.kind === 'tomorrow' ? 'ro-primary' : 'ro-secondary'}
+              onClick={() => chooseWindow(view, w)}
+            >
+              {w.kind === 'tomorrow'
+                ? 'Tomorrow'
+                : `Next ${longWeekday(w.date)}`}
+            </button>
+          ))}
+          <button type="button" class="ro-link" onClick={openWhen}>
+            Other dates
+          </button>
+        </div>
+      </>
+    );
 
   return (
     <section class="ro-module" aria-label="Tracked routes">
@@ -180,40 +303,51 @@ const Page = ({ rows }: { rows: Row[] }) => {
               {notice}
             </span>
           )}
-          <button
-            type="button"
-            class="ro-window"
-            data-expired={!view.range}
-            onClick={openWhen}
-          >
-            {view.range
-              ? `${view.datesText} · ${view.state.planning.time.mode === 'daylight' ? 'Daylight hours' : view.timeText}`
-              : 'Dates passed'}
-          </button>
+          {phase === 'normal' && (
+            <button type="button" class="ro-window" onClick={openWhen}>
+              {windowText}
+            </button>
+          )}
         </div>
       </div>
-      {!view.range && (
-        <Expired
-          view={view}
-          variant="page"
-          onChoose={() => {
-            chooseAvailableDates(view);
-            openWhen();
-          }}
-        />
+      {phase !== 'normal' && (
+        <div class="ro-passed" data-phase={phase}>
+          <div aria-hidden={phase !== 'expired'} inert={phase !== 'expired'}>
+            {asked.current}
+          </div>
+          <div
+            aria-hidden={phase !== 'confirmed'}
+            inert={phase !== 'confirmed'}
+          >
+            <Tick />
+            <div class="ro-passed-text">
+              <span>Scores updated</span>
+              <span>{windowText}</span>
+            </div>
+            <button type="button" class="ro-link" onClick={openWhen}>
+              Change dates
+            </button>
+          </div>
+        </div>
       )}
       <Banners
         view={view}
         onProvider={() => send({ type: 'openPopup', tab: 'prefs' })}
       />
       {cards.length > 0 && (
-        <div class="ro-grid ro-loading" data-loading={view.state.loading}>
-          {cards.map((card) => (
+        <div
+          ref={grid}
+          class="ro-grid ro-loading"
+          data-loading={view.state.loading && !blank}
+        >
+          {cards.map((card, i) => (
             <RideCard
               key={card.routeId}
               view={view}
               card={card}
               href={href(routes[card.routeId])}
+              blank={blank}
+              index={i}
             />
           ))}
         </div>
@@ -242,17 +376,21 @@ const Page = ({ rows }: { rows: Row[] }) => {
               type="button"
               class="ro-chip ro-tracked"
               data-state={
-                !view.range
-                  ? 'below'
-                  : card && CHIP_STATES.has(card.state)
-                    ? card.state
-                    : 'meets'
+                !blank && card && CHIP_STATES.has(card.state)
+                  ? card.state
+                  : 'meets'
               }
               title="Stop tracking"
               disabled={working}
               onClick={() => toggle(row.id)}
             >
-              {!view.range ? 'Dates passed' : card ? card.chip : 'Checking…'}
+              {blank
+                ? view.range
+                  ? 'Checking…'
+                  : 'Tracked'
+                : card
+                  ? card.chip
+                  : 'Checking…'}
             </button>
           ) : (
             <button

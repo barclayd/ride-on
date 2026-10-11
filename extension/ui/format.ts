@@ -45,7 +45,8 @@ export const weekday = (date: string) => weekdayFormat.format(noon(date));
 export const dayOfMonth = (date: string) => Number(date.slice(8, 10));
 // en-GB says "Sept"; the design says "Sep".
 const month = (date: string) => monthFormat.format(noon(date)).slice(0, 3);
-const longWeekday = (date: string) => longWeekdayFormat.format(noon(date));
+export const longWeekday = (date: string) =>
+  longWeekdayFormat.format(noon(date));
 export const shortDate = (date: string) =>
   `${weekday(date)} ${dayOfMonth(date)} ${month(date)}`;
 export const addDays = (date: string, days: number) =>
@@ -92,10 +93,11 @@ export const PRESETS: [Preset, string][] = [
   ['today', 'Today'],
   ['tomorrow', 'Tomorrow'],
   ['weekend', 'Weekend'],
-  ['next', 'Next few days'],
+  ['next', 'Next 5 days'],
 ];
 
 // The planned dates as the API resolves them (worker/src/recommendations/planning.ts); null once passed.
+// Next 5 days starts tomorrow here; the API's starts today, so the background sends it as a range.
 export const planningDates = (
   planned: Days,
   today: string,
@@ -107,7 +109,7 @@ export const planningDates = (
   if (planned.preset === 'today') return [today, today];
   if (planned.preset === 'tomorrow')
     return [addDays(today, 1), addDays(today, 1)];
-  if (planned.preset === 'next') return [today, addDays(today, 4)];
+  if (planned.preset === 'next') return [addDays(today, 1), addDays(today, 5)];
   const day = noon(today).getUTCDay(); // 0 is Sunday
   if (day === 0) return [today, today];
   const saturday = addDays(today, 6 - day);
@@ -644,6 +646,7 @@ export const viewOf = (state: State, now: Date) => {
       };
     }),
     range,
+    passed,
     selected,
     datesText: range
       ? datesLabel(...range)

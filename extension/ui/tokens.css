@@ -778,6 +778,7 @@ a.ro-name:hover {
   color: var(--ro-muted);
 }
 .ro-module .ro-ride {
+  position: relative;
   border-radius: 8px;
   padding: 14px 16px;
   gap: 8px;
@@ -826,7 +827,7 @@ a.ro-name:hover {
   background: #fff;
   border: 1px solid #f0d9bf;
   border-radius: 10px;
-  padding: 16px;
+  padding: 14px;
 }
 .ro-expired > div {
   display: flex;
@@ -834,7 +835,7 @@ a.ro-name:hover {
   gap: 4px;
 }
 .ro-expired > div > span:first-child {
-  font: 700 16px var(--ro-sans);
+  font: 700 15px var(--ro-sans);
   color: var(--ro-warn-fg);
 }
 .ro-expired > div > span:last-child {
@@ -842,42 +843,208 @@ a.ro-name:hover {
   color: var(--ro-muted);
 }
 .ro-expired .ro-primary {
-  margin-top: 6px;
-  padding: 10px 16px;
-}
-.ro-expired.ro-rides {
-  padding: 14px;
-}
-.ro-expired.ro-rides > div > span:first-child {
-  font-size: 15px;
-}
-.ro-expired.ro-rides .ro-primary {
   align-self: flex-start;
+  margin-top: 6px;
   padding: 8px 14px;
   font-size: 13px;
 }
-.ro-expired.ro-page {
-  flex-direction: row;
+
+/* Journeys page: the window has passed, then the confirmation, in one grid cell */
+.ro-passed {
+  display: grid;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px 16px;
-  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--ro-border-2);
+  border-radius: 10px;
+  padding: 12px 14px 12px 16px;
 }
-.ro-expired.ro-page .ro-primary {
-  margin-top: 0;
-  padding: 9px 16px;
-  white-space: nowrap;
+.ro-passed > div {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  transition: opacity 0.3s;
+}
+.ro-passed > div:last-child {
+  gap: 12px;
+  flex-wrap: nowrap;
+  transition-delay: 0.15s;
+}
+.ro-passed > div[aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+.ro-passed svg {
+  flex: none;
+}
+.ro-passed-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 220px;
+}
+.ro-passed > div:last-child .ro-passed-text {
+  min-width: 0;
+}
+.ro-passed-text > span:first-child {
+  font: 700 15px var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-passed-text > span:last-child {
+  font: 400 13px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-passed-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ro-passed .ro-primary {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.ro-passed .ro-secondary {
+  border-radius: 6px;
+  padding: 7px 13px;
+  color: var(--ro-olive-ink);
+}
+.ro-passed .ro-secondary:hover {
+  background: #f5f7f1;
+}
+.ro-passed .ro-link {
+  padding: 0 4px;
 }
 
-/* When tab */
-.ro-segmented.ro-wrap {
-  display: flex;
-  flex-wrap: wrap;
+/* Journeys tiles: a scored tile's size throughout; data fades in over static placeholders */
+.ro-module .ro-ride-head {
+  min-height: 19px;
 }
-.ro-segmented.ro-wrap button {
-  flex: 1 1 auto;
-  padding: 6px 10px;
+.ro-slot {
+  display: grid;
+}
+.ro-slot > *,
+.ro-module .ro-pills,
+.ro-module .ro-score > span {
+  transition: opacity 0.3s calc(var(--ro-i) * 80ms);
+}
+.ro-slot > * {
+  grid-area: 1 / 1;
+}
+.ro-slot > i {
+  border-radius: 4px;
+  background: var(--ro-tint-2);
+  opacity: 0;
+}
+.ro-when.ro-slot {
+  min-height: 18px;
+}
+.ro-when.ro-slot > i {
+  align-self: center;
+  width: 62%;
+  height: 10px;
+}
+.ro-conditions.ro-slot {
+  min-height: 34px;
+}
+.ro-conditions.ro-slot > i {
+  align-self: start;
+  width: 80%;
+  height: 8px;
+  margin-top: 4px;
+}
+.ro-module .ro-score {
+  min-height: 18px;
+}
+.ro-module .ro-score > span {
+  min-width: 44px;
+}
+.ro-module .ro-score > div > div {
+  transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--ro-i) * 80ms);
+}
+.ro-ride[data-blank="true"] .ro-slot > i {
+  opacity: 1;
+}
+.ro-ride[data-blank="true"] .ro-slot > span,
+.ro-ride[data-blank="true"] .ro-pills,
+.ro-ride[data-blank="true"] .ro-score > span {
+  opacity: 0;
+}
+
+/* When tab: Days, one segment always on */
+.ro-days-warn {
+  color: var(--ro-warn-fg);
+}
+.ro-value s {
+  color: var(--ro-disabled);
+}
+.ro-days-control {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) 32px;
+  background: var(--ro-tint-2);
+  border-radius: 8px;
+  padding: 3px;
+}
+.ro-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 6px;
+  background: var(--ro-olive-900);
+  transition:
+    left 0.45s cubic-bezier(0.65, 0, 0.25, 1),
+    width 0.45s cubic-bezier(0.65, 0, 0.25, 1),
+    background 0.3s,
+    box-shadow 0.3s;
+}
+.ro-days-control label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  padding: 7px 1px;
+  white-space: nowrap;
+  font: 600 11.5px var(--ro-sans);
+  color: var(--ro-slate);
+  transition: color 0.3s;
+}
+.ro-days-control input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+}
+.ro-days-control label:has(:focus-visible) {
+  outline: 2px solid var(--ro-lime);
+}
+.ro-days-control label:has(:disabled) {
+  color: #a9b0a0;
+}
+.ro-days-control label:has(:checked) {
+  color: #fff;
+}
+.ro-days-control[data-stale="true"] .ro-thumb {
+  background: var(--ro-warn-bg);
+  box-shadow: inset 0 0 0 1px #e6c3a2;
+}
+.ro-days-control[data-stale="true"] label:has(:checked) {
+  color: var(--ro-warn-fg);
+}
+.ro-days[data-stale="true"] .ro-day[aria-pressed="true"] {
+  background: var(--ro-warn-bg);
+  border-color: #e6c3a2;
+  color: var(--ro-warn-fg);
+}
+.ro-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .ro-day[data-kind="none"] {
   background: repeating-linear-gradient(135deg, #f3f4ef 0 4px, #e8eae3 4px 8px);
@@ -1298,11 +1465,6 @@ a.ro-name:hover {
   padding: 6px 12px;
   font: 400 13px var(--ro-serif);
 }
-.ro-window[data-expired="true"] {
-  background: var(--ro-warn-bg);
-  border-color: #f0d9bf;
-  color: var(--ro-warn-fg);
-}
 .ro-chip {
   white-space: nowrap;
   font: 600 12px var(--ro-sans);
@@ -1662,7 +1824,10 @@ a.ro-name:hover {
 @media (prefers-reduced-motion: reduce) {
   .ro-checkin,
   .ro-checkin-track,
-  .ro-checkin-track > * {
+  .ro-checkin-track > *,
+  .ro-thumb,
+  .ro-days-control label,
+  .ro-module .ro-score > div > div {
     transition: none;
   }
 }

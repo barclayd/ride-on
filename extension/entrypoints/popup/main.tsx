@@ -4,19 +4,20 @@ import { browser } from 'wxt/browser';
 import { API_URL } from '../../lib/api';
 import {
   type Planning,
+  type Preset,
   type Provider,
   type Search,
   send,
   type Tab,
 } from '../../lib/state';
-import type { Climbing, NextWindow } from '../../lib/types';
+import type { Climbing } from '../../lib/types';
 import {
   AppleMark,
   Attribution,
   Banners,
   CloseButton,
   CoverageWarn,
-  chooseAvailableDates,
+  chooseWindow,
   ErrorChip,
   Expired,
   GoogleMark,
@@ -24,6 +25,7 @@ import {
   injectFonts,
   ProviderDown,
   RideCard,
+  reducedMotion,
   Segmented,
   useView,
   type View,
@@ -43,6 +45,7 @@ import {
   newest,
   PRESETS,
   pickDay,
+  planningDates,
   qualityColour,
   rainText,
   rankText,
@@ -50,6 +53,7 @@ import {
   rideSummary,
   scaleMaxKm,
   searchDiffers,
+  shortDate,
   tempText,
   unitLabel,
   usualSearch,
@@ -155,19 +159,194 @@ const width = (from: number, to: number) =>
 
 const toPrefs = () => send({ type: 'setTab', tab: 'prefs' });
 
+type DaysValue = Preset | 'custom';
+
+const Calendar = () => (
+  <svg
+    width="15"
+    height="15"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    aria-hidden="true"
+  >
+    <rect x="2.5" y="3.5" width="11" height="10" rx="2" />
+    <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" />
+  </svg>
+);
+
+// Exactly one segment is always on. Days that have passed show in amber, then move on to tomorrow.
+const Days = (props: {
+  view: View;
+  set: (change: Partial<Planning>) => void;
+}) => {
+  const { view, set } = props;
+  const { planning, expired } = view.state;
+  const [custom, setCustom] = useState(false); // the calendar was tapped: the strip waits for a pick
+  const [moved, setMoved] = useState<string | null>(null);
+  const [said, setSaid] = useState('');
+  const stale = !view.range;
+  const dates = view.range ?? view.passed;
+  const segments = [
+    ...PRESETS.map(([value, label]) => {
+      const [start, end] = planningDates(
+        { kind: 'preset', preset: value },
+        view.today,
+      ) ?? [view.today, view.today];
+      const days = view.strip.filter((d) => d.date >= start && d.date <= end);
+      return {
+        value: value as DaysValue,
+        label,
+        matches: dates?.[0] === start && dates[1] === end,
+        disabled:
+          days.every((d) => d.kind === 'none') ||
+          (value === 'today' && expired?.dates[1] === view.today),
+      };
+    }),
+    {
+      value: 'custom' as DaysValue,
+      label: '',
+      matches: false,
+      disabled: false,
+    },
+  ];
+  const matched = segments.filter((s) => s.matches).map((s) => s.value);
+  const selected: DaysValue = custom
+    ? 'custom'
+    : planning.days.kind === 'preset' && matched.includes(planning.days.preset)
+      ? planning.days.preset
+      : (matched[0] ?? 'custom');
+  const at = segments.findIndex((s) => s.value === selected);
+
+  const pick = (value: DaysValue) => {
+    setMoved(null);
+    setCustom(value === 'custom');
+    if (value !== 'custom') set({ days: { kind: 'preset', preset: value } });
+  };
+  // Passed days stay up for a moment, then move on to tomorrow, or the first day the forecast covers.
+  useEffect(() => {
+    if (!stale) return;
+    const timer = setTimeout(
+      () => {
+        const later = view.strip.slice(1);
+        const day = later.find((d) => d.kind !== 'none');
+        if (!day) return;
+        setCustom(false);
+        setMoved(view.datesText);
+        setSaid(
+          `${view.datesText} has passed. Showing ${shortDate(day.date)}.`,
+        );
+        set({
+          days:
+            day === later[0]
+              ? { kind: 'preset', preset: 'tomorrow' }
+              : { kind: 'range', start: day.date, end: day.date },
+        });
+      },
+      reducedMotion() ? 0 : 1600,
+    );
+    return () => clearTimeout(timer);
+  }, [stale]);
+
+  return (
+    <>
+      <div class="ro-card-head">
+        <span class="ro-label">Days</span>
+        {custom || stale ? (
+          <span class="ro-value ro-days-warn">
+            {custom
+              ? 'Pick days'
+              : view.passed?.[1] === view.today
+                ? 'Too late today'
+                : 'Dates passed'}
+          </span>
+        ) : (
+          <span class="ro-value">
+            {moved && <s>{moved}</s>} {view.datesText}
+          </span>
+        )}
+      </div>
+      <div
+        class="ro-days-control"
+        role="radiogroup"
+        aria-label="Days"
+        data-stale={stale}
+      >
+        <div
+          class="ro-thumb"
+          style={
+            at < 4
+              ? {
+                  left: `calc(3px + (100% - 38px) * ${at / 4})`,
+                  width: 'calc((100% - 38px) / 4)',
+                }
+              : { left: 'calc(100% - 35px)', width: '32px' }
+          }
+        />
+        {/* Native radios: arrow keys move between the segments that can be picked. */}
+        {segments.map((s) => (
+          <label key={s.value} title={s.label ? undefined : 'Custom days'}>
+            <input
+              type="radio"
+              name="ro-days"
+              checked={s.value === selected}
+              disabled={s.disabled}
+              aria-label={s.label ? undefined : 'Custom days'}
+              onClick={() => pick(s.value)}
+            />
+            {s.label || <Calendar />}
+          </label>
+        ))}
+      </div>
+      <span class="ro-sr" aria-live="polite">
+        {said}
+      </span>
+      <fieldset class="ro-days" aria-label="Pick days" data-stale={stale}>
+        {view.strip.map((day, i) => (
+          <button
+            key={day.date}
+            type="button"
+            class="ro-day"
+            data-kind={day.kind}
+            title={day.title}
+            aria-pressed={
+              !custom && !!dates && day.date >= dates[0] && day.date <= dates[1]
+            }
+            onClick={() => {
+              setCustom(false);
+              setMoved(null);
+              set({
+                days: pickDay(custom ? null : view.range, day.date),
+              });
+            }}
+          >
+            <span>{i === 0 ? 'Today' : weekday(day.date)}</span>
+            <span>{dayOfMonth(day.date)}</span>
+            <span>{day.label}</span>
+            <span class="ro-quality">
+              {day.quality !== null && (
+                <span
+                  style={{
+                    // A partial day's bar is halved: its best ride may be missing.
+                    width: `${day.kind === 'partial' ? day.quality / 2 : day.quality}%`,
+                    background: qualityColour(day.quality),
+                  }}
+                />
+              )}
+            </span>
+          </button>
+        ))}
+      </fieldset>
+    </>
+  );
+};
+
 const WhenTab = ({ view }: { view: View }) => {
   const { planning, defaultPlanning } = view.state;
   const set = (change: Partial<Planning>) =>
     send({ type: 'setPlanning', planning: { ...planning, ...change } });
-  if (!view.range)
-    return (
-      <Expired
-        view={view}
-        variant="when"
-        onChoose={() => chooseAvailableDates(view)}
-      />
-    );
-  const range = view.range;
   const coverage = coverageText(view.selected, view.timeZone);
   const { time } = planning;
   const custom = time.mode === 'custom';
@@ -185,45 +364,7 @@ const WhenTab = ({ view }: { view: View }) => {
   return (
     <>
       <section class="ro-card">
-        <div class="ro-card-head">
-          <span class="ro-label">Days</span>
-          <span class="ro-value">{view.datesText}</span>
-        </div>
-        <Segmented
-          label="Days"
-          wrap
-          options={PRESETS.map(([value, label]) => ({ value, label }))}
-          value={planning.days.kind === 'preset' ? planning.days.preset : null}
-          onChange={(preset) => set({ days: { kind: 'preset', preset } })}
-        />
-        <fieldset class="ro-days" aria-label="Pick days">
-          {view.strip.map((day, i) => (
-            <button
-              key={day.date}
-              type="button"
-              class="ro-day"
-              data-kind={day.kind}
-              title={day.title}
-              aria-pressed={day.date >= range[0] && day.date <= range[1]}
-              onClick={() => set({ days: pickDay(range, day.date) })}
-            >
-              <span>{i === 0 ? 'Today' : weekday(day.date)}</span>
-              <span>{dayOfMonth(day.date)}</span>
-              <span>{day.label}</span>
-              <span class="ro-quality">
-                {day.quality !== null && (
-                  <span
-                    style={{
-                      // A partial day's bar is halved: its best ride may be missing.
-                      width: `${day.kind === 'partial' ? day.quality / 2 : day.quality}%`,
-                      background: qualityColour(day.quality),
-                    }}
-                  />
-                )}
-              </span>
-            </button>
-          ))}
-        </fieldset>
+        <Days view={view} set={set} />
         {view.banners.includes('provider') && (
           <div class="ro-note">
             <ProviderDown view={view} onChange={toPrefs} />
@@ -490,20 +631,9 @@ const CheckIn = ({ view }: { view: View }) => {
 
 // The API's recommended window is "Best"; the order stays tomorrow, same weekday, best in the next days.
 const NextWindows = ({ view }: { view: View }) => {
-  const { next, expired, planning } = view.state;
+  const { next, expired } = view.state;
   if (!next || !expired) return null;
   const { windows } = next;
-  const choose = (w: NextWindow) =>
-    send({
-      type: 'setPlanning',
-      planning: {
-        days: { kind: 'range', start: w.date, end: w.date },
-        time:
-          w.window === 'daylight'
-            ? { ...planning.time, mode: 'daylight' }
-            : { mode: 'custom', ...w.window },
-      },
-    });
   return (
     <>
       <h2 class="ro-next-head">When's your next ride?</h2>
@@ -519,7 +649,7 @@ const NextWindows = ({ view }: { view: View }) => {
             type="button"
             class="ro-next"
             data-best={best}
-            onClick={() => choose(w)}
+            onClick={() => chooseWindow(view, w)}
           >
             <span class="ro-next-top">
               <span>{windowName(w)}</span>
@@ -556,9 +686,7 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
   return (
     <>
       <CheckIn view={view} />
-      {!view.range && (
-        <Expired view={view} variant="rides" onChoose={onChoose} />
-      )}
+      {!view.range && <Expired view={view} onChoose={onChoose} />}
       <Banners view={view} onProvider={toPrefs} />
       {view.range && view.cards.length === 0 && (
         <span class="ro-empty">
@@ -1320,13 +1448,7 @@ const App = () => {
           style={{ gap: tab === 'rides' ? '10px' : '12px' }}
         >
           {tab === 'rides' && (
-            <RidesTab
-              view={view}
-              onChoose={() => {
-                chooseAvailableDates(view);
-                setTab('when');
-              }}
-            />
+            <RidesTab view={view} onChoose={() => setTab('when')} />
           )}
           {tab === 'when' && <WhenTab view={view} />}
           {tab === 'prefs' && <PrefsTab view={view} />}
