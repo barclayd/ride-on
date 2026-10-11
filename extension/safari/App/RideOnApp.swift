@@ -42,11 +42,14 @@ struct EnableGuide: View {
                 }
                 #if os(macOS)
                 HStack {
-                    if let isOn {
-                        Label(
-                            isOn ? "Ride On is on in Safari." : "Ride On is off in Safari.",
-                            systemImage: isOn ? "checkmark.circle.fill" : "circle.dashed"
-                        )
+                    if isOn == true {
+                        Label { Text("Ride On is enabled in Safari.") } icon: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .green)
+                        }
+                    } else if isOn == false {
+                        Label("Ride On is disabled in Safari.", systemImage: "circle.dashed")
                     }
                     Spacer()
                     Button("Open Safari Settings…") {
