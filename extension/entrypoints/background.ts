@@ -518,6 +518,10 @@ const handle = async (message: Message) => {
     }
     case 'setUnit':
       return update(() => ({ unit: message.unit }));
+    case 'setUnits':
+      return update((state) => ({
+        units: { ...state.units, ...message.units },
+      }));
     case 'setLocal':
       return update((state) => ({
         local: { ...state.local, ...message.local },

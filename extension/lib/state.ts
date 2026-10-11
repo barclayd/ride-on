@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import { METRIC, regionUnits, type Units } from '../ui/format';
 import type {
   Attribution,
   Climbing,
@@ -107,6 +108,7 @@ export type State = {
   defaultPlanning: Planning | null;
   search: Search | null;
   unit: 'km' | 'mi';
+  units: Units; // temperature and wind display; set from the browser's region until the rider picks
   local: LocalPrefs;
   recs: Recommendations | null; // across the planned days, plus a 7-day preview for the strip
   recsAt: string | null;
@@ -138,6 +140,7 @@ export const initialState: State = {
   defaultPlanning: null,
   search: null,
   unit: 'km',
+  units: METRIC,
   local: DEFAULT_LOCAL,
   recs: null,
   recsAt: null,
@@ -161,7 +164,12 @@ const withDefaults = (state: Partial<State> | undefined): State => {
   const local = { ...DEFAULT_LOCAL, ...state?.local };
   // ponytail: 'Strongly prefer dry' was dropped; older saves show as 'Prefer dry'. Delete once no such install remains.
   if (local.rain !== "Don't mind") local.rain = 'Prefer dry';
-  return { ...initialState, ...state, local };
+  return {
+    ...initialState,
+    units: regionUnits(navigator.language),
+    ...state,
+    local,
+  };
 };
 
 export const readState = async (): Promise<State> =>
@@ -187,6 +195,7 @@ export type Message =
   | { type: 'setSearch'; search: Search | null }
   | { type: 'saveUsual'; search: Search }
   | { type: 'setUnit'; unit: 'km' | 'mi' }
+  | { type: 'setUnits'; units: Partial<Units> }
   | { type: 'setLocal'; local: Partial<LocalPrefs> }
   | { type: 'savePreferences'; preferences: PreferencesPatch }
   | { type: 'setWeather'; providerId: string }

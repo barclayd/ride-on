@@ -1892,3 +1892,44 @@ a.ro-name:hover {
     transition: none;
   }
 }
+/* Units card (design 12a): the segmented look on native radios. */
+.ro-units {
+  gap: 12px;
+}
+.ro-unit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 12px;
+  align-items: center;
+  font: 600 13px var(--ro-sans);
+  color: var(--ro-olive-ink);
+}
+.ro-unit-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--ro-tint-2);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 3px;
+}
+.ro-unit-switch label {
+  position: relative;
+  text-align: center;
+  border-radius: 6px;
+  padding: 6px 4px;
+  font: 600 12px var(--ro-sans);
+  color: var(--ro-slate);
+}
+.ro-unit-switch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+}
+.ro-unit-switch label:has(:checked) {
+  background: var(--ro-olive-900);
+  color: #fff;
+}
+.ro-unit-switch label:has(:focus-visible) {
+  outline: 2px solid var(--ro-lime);
+}

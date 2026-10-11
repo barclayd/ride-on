@@ -23,10 +23,12 @@ import {
   buildResults,
   checkinDay,
   conditionChips,
+  conditionsText,
   convert,
   coverageText,
   datesLabel,
   dayMonth,
+  degrees,
   draftFrom,
   draftPatch,
   ended,
@@ -36,11 +38,13 @@ import {
   planFor,
   planningDates,
   rankText,
+  regionUnits,
   ridden,
   rideLine,
   rideSummary,
   searchPatch,
   shownOf,
+  speed,
   tile,
   validateRange,
   viewOf,
@@ -813,4 +817,36 @@ test('condition chips: temperature, wind, rain, amber where it lowers the score'
   expect(chips({ maximumPrecipitationProbability: 0.35 })[2]).toBe(
     'wet 35% chance of rain | 35% chance of rain !',
   );
+});
+
+test('units: region defaults and display conversion', () => {
+  expect(regionUnits('en-US')).toEqual({ temperature: '°F', wind: 'mph' });
+  expect(regionUnits('en-GB')).toEqual({ temperature: '°C', wind: 'mph' });
+  expect(regionUnits('de-DE')).toEqual({ temperature: '°C', wind: 'km/h' });
+  expect(regionUnits('fr')).toEqual({ temperature: '°C', wind: 'km/h' });
+  const us = regionUnits('en-US');
+  expect(degrees(10, us)).toBe(50);
+  expect(degrees(-5, us)).toBe(23);
+  expect(speed(15, us)).toBe('9 mph');
+  expect(speed(15, regionUnits('de'))).toBe('15 km/h');
+
+  const c = {
+    temperatureC: { minimum: 9.6, maximum: 11.4 },
+    averageWindSpeedKph: 15,
+    averageTailwindKph: 2,
+    averageHeadwindKph: 0,
+    averageCrosswindKph: 15,
+    maximumPrecipitationProbability: 0,
+    windDistanceFractions: { headwind: 0.1, tailwind: 0.1, crosswind: 0.8 },
+  } as Conditions;
+  expect(
+    conditionChips(c, { comfortMinC: 10, comfortMaxC: 22 }, us).map(
+      (chip) => `${chip.text}${chip.warn ? ' !' : ''}`,
+    ),
+  ).toEqual(['50–52°F', '9 mph crosswind !', 'Dry']);
+  // The 10 km/h threshold holds whatever the unit: 9 km/h is 6 mph, unnamed.
+  expect(
+    conditionChips({ ...c, averageWindSpeedKph: 9 }, undefined, us)[1].text,
+  ).toBe('6 mph');
+  expect(conditionsText(c, us)).toBe('50–52° · crosswind 9 mph · dry');
 });
