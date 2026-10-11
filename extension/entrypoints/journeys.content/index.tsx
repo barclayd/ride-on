@@ -13,7 +13,7 @@ import {
   ErrorChip,
   iconUrl,
   injectFonts,
-  RideCard,
+  RouteTile,
   reducedMotion,
   riddenFor,
   Tags,
@@ -342,7 +342,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
           data-loading={view.state.loading && !blank}
         >
           {cards.map((card, i) => (
-            <RideCard
+            <RouteTile
               key={card.routeId}
               view={view}
               card={card}

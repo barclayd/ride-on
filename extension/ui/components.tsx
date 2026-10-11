@@ -124,7 +124,26 @@ const Slot = (props: { class: string; children: ComponentChildren }) => (
 );
 
 // 16-unit stroke icons from the design (11b).
-const ICONS: Record<Chip['icon'] | 'clock', ComponentChildren> = {
+const ICONS: Record<
+  Chip['icon'] | 'clock' | 'route' | 'star',
+  ComponentChildren
+> = {
+  route: (
+    <>
+      <circle cx="3.5" cy="12.5" r="1.6" />
+      <circle cx="12.5" cy="3.5" r="1.6" />
+      <path d="M5 12.5h4.5a2.5 2.5 0 0 0 0-5h-3a2.5 2.5 0 0 1 0-5H11" />
+    </>
+  ),
+  // Filled, on the Best pick tab (the design's 12-unit star, scaled to 16).
+  star: (
+    <path
+      d="M6 1l1.5 3.1 3.4.5-2.5 2.4.6 3.4L6 8.8 2.9 10.4l.6-3.4L1 4.6l3.4-.5z"
+      fill="currentColor"
+      stroke="none"
+      transform="scale(1.333)"
+    />
+  ),
   clock: (
     <>
       <circle cx="8" cy="8" r="6" />
@@ -172,33 +191,64 @@ const Icon = (props: { name: keyof typeof ICONS; size: number }) => (
   </svg>
 );
 
-// The page shows the distance by the name and no medals; the popup medals its top three scored rides.
-// Page tiles keep a scored tile's size: blank ones show placeholders until the scores arrive.
-export const RideCard = (props: {
-  view: View;
-  card: Card;
-  medal?: number;
-  href?: string | null; // the page links each ride to its journey
-  blank?: boolean;
-  index?: number; // staggers the page's fade-in
-}) => {
-  const { card, medal, blank } = props;
-  const page = props.href !== undefined;
-  const tint =
-    medal !== undefined
-      ? `ro-${MEDALS[medal].toLowerCase()}`
-      : card.flag === 'Best pick'
-        ? 'ro-flag-best'
-        : card.flag
-          ? 'ro-flag-available'
-          : '';
+const tint = (card: Card) =>
+  card.flag === 'Best pick'
+    ? 'ro-flag-best'
+    : card.flag
+      ? 'ro-flag-available'
+      : '';
+
+// The flag, its opposite under 50, then any state but meeting the preferences (the score says that).
+const Pills = ({ card, star }: { card: Card; star?: boolean }) => (
+  <>
+    {card.flag && (
+      <span class="ro-pill ro-flag">
+        {star && card.flag === 'Best pick' && <Icon name="star" size={11} />}
+        {card.flag}
+      </span>
+    )}
+    {card.score !== null && card.score < 50 && (
+      <span class="ro-pill ro-not-recommended">Not recommended</span>
+    )}
+    {card.state !== 'meets' && (
+      <span class={`ro-pill ro-${card.state}`}>{STATES[card.state]}</span>
+    )}
+  </>
+);
+
+const Notes = ({ card }: { card: Card }) => (
+  <>
+    {card.drawbacks.map((drawback) => (
+      <span key={drawback} class="ro-drawback">
+        {drawback}
+      </span>
+    ))}
+    {card.trade.length > 0 && (
+      <div class="ro-trades">
+        {card.trade.map((trade) => (
+          <span key={trade}>{trade}</span>
+        ))}
+      </div>
+    )}
+    {card.coverage && <span class="ro-coverage">{card.coverage}</span>}
+  </>
+);
+
+const untrack = (card: Card) => (
+  <CloseButton
+    title={`Stop tracking ${card.name}`}
+    onClick={() => send({ type: 'untrack', routeId: card.routeId })}
+  />
+);
+
+// Popup card; medals on its top three scored rides.
+export const RideCard = (props: { view: View; card: Card; medal?: number }) => {
+  const { card, medal } = props;
   return (
     <div
-      class={`ro-ride ${tint}`}
+      class={`ro-ride ${medal !== undefined ? `ro-${MEDALS[medal].toLowerCase()}` : tint(card)}`}
       data-state={card.state}
       data-route={card.routeId}
-      data-blank={page ? !!blank : undefined}
-      style={page ? { '--ro-i': props.index ?? 0 } : undefined}
     >
       <div class="ro-ride-head">
         <div class="ro-pills">
@@ -207,101 +257,135 @@ export const RideCard = (props: {
               {medal + 1}
             </span>
           )}
-          {card.flag && <span class="ro-pill ro-flag">{card.flag}</span>}
-          {card.score !== null && card.score < 50 && (
-            <span class="ro-pill ro-not-recommended">Not recommended</span>
-          )}
-          {card.state !== 'meets' && (
-            <span class={`ro-pill ro-${card.state}`}>{STATES[card.state]}</span>
-          )}
+          <Pills card={card} />
         </div>
-        <CloseButton
-          title={`Stop tracking ${card.name}`}
-          onClick={() => send({ type: 'untrack', routeId: card.routeId })}
-        />
+        {untrack(card)}
       </div>
       <div class="ro-ride-title">
-        {props.href ? (
-          <a class="ro-name" href={props.href}>
-            {card.name}
-          </a>
-        ) : (
-          <span class="ro-name">{card.name}</span>
-        )}
-        {page && <span>{card.km} km</span>}
+        <span class="ro-name">{card.name}</span>
         <Tags view={props.view} routeId={card.routeId} />
         {card.recent && (
           <span class="ro-tag ro-tag-last">Similar roads recently ridden</span>
         )}
       </div>
-      {page ? (
-        <>
-          <Slot class="ro-when">
-            {card.best ? (
+      {(card.when ?? card.duration) && (
+        <span class="ro-when">{card.when ?? card.duration}</span>
+      )}
+      {card.weather && <span class="ro-conditions">{card.weather}</span>}
+      {card.reason && <span class="ro-conditions">{card.reason}</span>}
+      <Notes card={card} />
+      {card.score !== null ? (
+        <div class="ro-score">
+          <span>Conditions {card.score}/100</span>
+          <div>
+            <div style={{ width: `${card.score}%` }} />
+          </div>
+        </div>
+      ) : (
+        card.state === 'incomplete' && <span class="ro-no-score">No score</span>
+      )}
+    </div>
+  );
+};
+
+// Journeys page tile (14a): name, distance and time, chips, then the score. Flags sit on the top border,
+// so every tile has the same layout. A blank tile keeps a scored tile's size: placeholders until scores arrive.
+export const RouteTile = (props: {
+  view: View;
+  card: Card;
+  href: string | null; // the page links each ride to its journey
+  blank: boolean;
+  index: number; // staggers the fade-in
+}) => {
+  const { card, blank, view } = props;
+  return (
+    <div
+      class={`ro-ride ${tint(card)}`}
+      data-state={card.state}
+      data-route={card.routeId}
+      data-blank={blank}
+      style={{ '--ro-i': props.index }}
+    >
+      <div class="ro-flags">
+        <Pills card={card} star />
+      </div>
+      <div class="ro-ride-head">
+        <div class="ro-ride-title">
+          {props.href ? (
+            <a class="ro-name" href={props.href}>
+              {card.name}
+            </a>
+          ) : (
+            <span class="ro-name">{card.name}</span>
+          )}
+          <Tags view={view} routeId={card.routeId} />
+          {card.recent && (
+            <span class="ro-tag ro-tag-last">
+              Similar roads recently ridden
+            </span>
+          )}
+        </div>
+        {untrack(card)}
+      </div>
+      <div class="ro-facts">
+        <span>
+          <Icon name="route" size={15} />
+          {card.km} km
+        </span>
+        <Slot class="ro-when">
+          {card.best ? (
+            <span>
+              <Icon name="clock" size={15} />
+              {shortDate(card.best.date)}
+              <b aria-hidden="true">·</b>
+              {`${clock(card.best.departureAt, view.timeZone)} → ~${clock(card.best.finishAt, view.timeZone)}`}
+            </span>
+          ) : (
+            card.duration && (
               <span>
                 <Icon name="clock" size={15} />
-                {shortDate(card.best.date)}
-                <b aria-hidden="true">·</b>
-                {`${clock(card.best.departureAt, props.view.timeZone)} → ~${clock(card.best.finishAt, props.view.timeZone)}`}
+                {card.duration}
               </span>
-            ) : (
-              <span>{card.duration}</span>
-            )}
-          </Slot>
-          <Slot class="ro-conditions">
-            {card.best ? (
-              <ul class="ro-chips">
-                {conditionChips(
-                  card.best.conditions,
-                  props.view.state.user?.settings.preferences.temperature,
-                  props.view.state.units,
-                ).map((chip) => (
-                  <li
-                    key={chip.icon}
-                    aria-label={chip.label}
-                    data-warn={chip.warn}
-                  >
-                    <Icon name={chip.icon} size={16} />
-                    {chip.text}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <span>{card.reason}</span>
-            )}
-          </Slot>
-        </>
-      ) : (
-        <>
-          {(card.when ?? card.duration) && (
-            <span class="ro-when">{card.when ?? card.duration}</span>
+            )
           )}
-          {card.weather && <span class="ro-conditions">{card.weather}</span>}
-          {card.reason && <span class="ro-conditions">{card.reason}</span>}
-        </>
-      )}
-      {!blank &&
-        card.drawbacks.map((drawback) => (
-          <span key={drawback} class="ro-drawback">
-            {drawback}
-          </span>
-        ))}
-      {!blank && card.trade.length > 0 && (
-        <div class="ro-trades">
-          {card.trade.map((trade) => (
-            <span key={trade}>{trade}</span>
-          ))}
-        </div>
-      )}
-      {!blank && card.coverage && (
-        <span class="ro-coverage">{card.coverage}</span>
-      )}
+        </Slot>
+      </div>
+      <div class="ro-rule" />
+      <Slot class="ro-conditions">
+        {card.best ? (
+          <ul class="ro-chips">
+            {conditionChips(
+              card.best.conditions,
+              view.state.user?.settings.preferences.temperature,
+              view.state.units,
+            ).map((chip) => (
+              <li key={chip.icon} aria-label={chip.label} data-warn={chip.warn}>
+                <Icon name={chip.icon} size={16} />
+                {chip.text}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <span>{card.reason}</span>
+        )}
+      </Slot>
+      {!blank && <Notes card={card} />}
       {blank || card.score !== null ? (
-        <div class="ro-score">
-          <span aria-hidden={blank || undefined}>
-            Conditions{' '}
-            {page ? <strong>{card.score ?? '–'}</strong> : (card.score ?? '–')}
-            /100
+        // biome-ignore lint/a11y/useSemanticElements: the design's label row and bar; a native <meter> can't hold or style them.
+        <div
+          class="ro-meter"
+          role="meter"
+          aria-label="Conditions score"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={card.score ?? 0}
+          aria-hidden={blank || undefined}
+        >
+          <span>
+            Conditions
+            <span>
+              <strong>{card.score ?? '–'}</strong>/100
+            </span>
           </span>
           <div>
             <div style={{ width: `${blank ? 0 : card.score}%` }} />
