@@ -556,9 +556,7 @@ test('Rides tab opens first with one request for the planned days', async ({
   await expect(card).toContainText('Hilly Loop');
   await expect(card.locator('.ro-medal')).toHaveText('1');
   await expect(card.locator('.ro-flag')).toHaveText('Best pick');
-  await expect(card.locator('.ro-score')).toContainText(
-    'Enjoyment score 84/100',
-  );
+  await expect(card.locator('.ro-score')).toContainText('Conditions 84/100');
   await expect(
     page.getByRole('link', { name: 'Powered by Met Office data' }),
   ).toHaveAttribute('href', 'https://www.metoffice.gov.uk/');

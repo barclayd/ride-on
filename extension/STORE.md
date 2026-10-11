@@ -42,7 +42,7 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
   >    windows: tomorrow, the same day next week, and the best of the next six days.
   >
   > WHAT YOU GET
-  > • Your rides ranked with an enjoyment score out of 100, and a clear best pick
+  > • Your rides ranked with a conditions score out of 100, and a clear best pick
   > • The warnings you'd want before setting off, like "Headwind for the first half" or gusts over
   >   your limit
   > • Routes that don't fit your time window or fall below your minimums are flagged, not hidden

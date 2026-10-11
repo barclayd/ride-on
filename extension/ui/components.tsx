@@ -179,7 +179,7 @@ export const RideCard = (props: {
       {card.coverage && <span class="ro-coverage">{card.coverage}</span>}
       {card.score !== null ? (
         <div class="ro-score">
-          <span>Enjoyment score {card.score}/100</span>
+          <span>Conditions {card.score}/100</span>
           <div>
             <div style={{ width: `${card.score}%` }} />
           </div>
