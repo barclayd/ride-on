@@ -1,11 +1,15 @@
 name: worker-deploy
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - "worker/**"
       - ".github/workflows/worker-deploy.yml"
+
+permissions:
+  contents: read
 
 concurrency:
   group: worker-deploy
@@ -13,9 +17,10 @@ concurrency:
 
 jobs:
   deploy:
-    # Enable only after remote D1, API secrets and the Workers plan are configured.
-    if: ${{ vars.API_MVP_DEPLOYMENT_READY == 'true' }}
+    # Manual retries must also deploy main, never an unmerged feature branch.
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: worker
@@ -29,14 +34,14 @@ jobs:
           bun-version: 1.4.0
       - run: bun install --frozen-lockfile
       - run: bun run check
-      # Provision remote D1 and required Worker secrets before the first API MVP deployment.
       - run: bun run migrate:remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      - run: bun run deploy
+      - run: bunx wrangler deploy --tag "$GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      # Check the deployed API version and private-endpoint authentication without spending weather quota.
+      # Verify the exact deployed commit without spending weather quota.
       - run: bun test test/smoke.test.ts
         env:
-          WORKER_URL: https://ride-on-api.barclaysd.workers.dev
+          WORKER_URL: https://api.ride-on.cc
+          EXPECTED_REVISION: ${{ github.sha }}

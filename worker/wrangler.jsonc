@@ -6,6 +6,7 @@
   "routes": [{ "pattern": "api.ride-on.cc", "custom_domain": true }],
   "compatibility_date": "2026-10-09",
   "compatibility_flags": ["nodejs_compat"],
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "secrets": {
     "required": [
       "MET_OFFICE_API_KEY",

@@ -60,14 +60,16 @@ bun run lint:fix
 
 ## Deployment
 
-The API is deployed at `https://ride-on-api.barclaysd.workers.dev`; `/health` reports its version. Production D1
+The API is deployed at `https://api.ride-on.cc`; `/health` reports its API version, algorithm version and deployed Git revision. Production D1
 and its weather/authentication secrets are configured. Apple and Google login use `AUTH_CONFIG_JSON`; see the authentication guide. Apple Weather uses a separate `APPLE_WEATHER_CONFIG_JSON` secret; see `../docs/apple-weather.md`. See `../docs/api.md` for the
 verified deployment state and commands. Local development stays on the original
 local database through `preview_database_id: "ROUTES_DB"`.
 
-Automatic deployment remains gated by `API_MVP_DEPLOYMENT_READY=true`; it is
-currently unset. Verify the GitHub deployment token's Workers and D1 permissions
-before enabling it. Use `bun run deploy` only when deployment is in scope. Required
+Worker changes merged to main deploy automatically after the workflow checks pass
+and D1 migrations apply. The workflow tags the release with its Git revision and
+verifies it through quota-free health/authentication smoke checks. Manual workflow
+retries also require main. The GitHub `CLOUDFLARE_API_TOKEN` needs Workers deployment
+and D1 migration access. Use `bun run deploy` only when deployment is in scope. Required
 secrets are `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY`, `APPLE_WEATHER_CONFIG_JSON` and `AUTH_CONFIG_JSON`; no
 Strava secrets are used. The configured CPU ceiling is 5 seconds; full collection
 workloads require Workers Paid limits. Do not infer production load capacity from

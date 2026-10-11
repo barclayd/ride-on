@@ -6,6 +6,7 @@ import { AppError } from './errors.ts';
 import { resolveAccess } from './identity/access.ts';
 import { authConfig } from './identity/config.ts';
 import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
+import { ALGORITHM_VERSION } from './recommendations/engine.ts';
 import {
   defaultSettings,
   mergeSettings,
@@ -121,7 +122,14 @@ export const createApp = (
     if (c.req.method === 'OPTIONS') return c.body(null, 403);
     await next();
   });
-  app.get('/health', (c) => c.json({ ok: true, version: '0.14.0' }));
+  app.get('/health', (c) =>
+    c.json({
+      ok: true,
+      version: '0.14.0',
+      algorithmVersion: ALGORITHM_VERSION,
+      revision: c.env.CF_VERSION_METADATA?.tag || null,
+    }),
+  );
   app.route('/', identityRoutes());
   for (const path of [
     '/rides',
