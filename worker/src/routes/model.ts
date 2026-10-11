@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { geometrySchema } from '../rides/geometry.ts';
 import { coordinateSchema } from '../weather/validation.ts';
 
 export const routeSchema = z.object({
@@ -7,6 +8,7 @@ export const routeSchema = z.object({
   name: z.string().min(1).max(160),
   createdAt: z.iso.datetime(),
   sourceHash: z.string(),
+  geometry: geometrySchema.nullable().optional(),
   distanceM: z.number().positive(),
   ascentM: z.number().nonnegative().nullable(),
   originalPointCount: z.number().int().positive(),
@@ -43,6 +45,7 @@ export const routeSummary = ({
   ascentM,
   originalPointCount,
   warnings,
+  geometry,
 }: Route) => ({
   id,
   name,
@@ -51,4 +54,5 @@ export const routeSummary = ({
   ascentM,
   originalPointCount,
   warnings,
+  geometryStatus: geometry ? 'available' : 'unavailable',
 });

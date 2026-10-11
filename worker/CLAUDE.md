@@ -6,6 +6,7 @@ providers and deterministic route/departure ranking. The legacy `/classify` and
 remain separate; adapt them after the API algorithm has been calibrated.
 
 Read `../docs/api.md` for contracts, defaults, setup, validation and limitations.
+Read `../docs/ride-history.md` for ride logging, geometry enrichment and repetition scoring.
 Read `../docs/planning-api.md` for multi-day searches, presets and coverage.
 Read `../docs/weather-providers.md` for verified weather mappings and provider rules.
 
@@ -46,6 +47,7 @@ bun run lint:fix
 - `src/identity/`: Better Auth Google/Apple/passkeys, session-only access, stable owner bindings and PKCE browser handoff. See `../docs/authentication.md`.
 - `src/body.ts`, `request.ts`, `errors.ts`: bounded input and errors.
 - `src/routes/`: GPX normalization, replaceable source adapters, versioned source imports, paginated owner-scoped D1 persistence and saved shortlists. Imports never select rides; recommendations always take explicit route IDs.
+- `src/rides/`: owner-scoped history, immutable geometry, idempotent logging and bounded overlap assessment.
 - `src/recommendations/`: strict preference resolution, daylight/time-window planning and pure scoring.
 - `src/users/`: owner-bound saved settings, schema versions and atomic optimistic updates.
 - `src/weather/`: generic contracts, Apple Weather and Met Office adapters, provider presets, source policy and KV-compatible cache.

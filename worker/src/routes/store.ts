@@ -172,7 +172,8 @@ export const createD1RouteStore = (db: D1Database): RouteStore => ({
         record.source.externalId,
       )
       .run();
-    return result.meta.changes === 1;
+    // D1 includes changes made by geometry/history triggers in this count.
+    return result.meta.changes > 0;
   },
   replaceImported: async (ownerId, record, expectedVersion) => {
     const result = await db
@@ -189,6 +190,7 @@ export const createD1RouteStore = (db: D1Database): RouteStore => ({
         expectedVersion,
       )
       .run();
-    return result.meta.changes === 1;
+    // D1 includes changes made by geometry/history triggers in this count.
+    return result.meta.changes > 0;
   },
 });
