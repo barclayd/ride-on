@@ -1056,7 +1056,12 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     '/map/journey/101',
   );
   await expect(module.locator('.ro-window')).toHaveText(/ · Daylight hours$/);
-  // The 11b tile: clock line, then temperature · wind · rain chips (9° is under the 10° comfort minimum).
+  // The 14a tile: Best pick on the top border, distance and time, chips (9° is under the 10° comfort minimum), then the score.
+  await expect(module.locator('.ro-ride .ro-flags')).toHaveText('Best pick');
+  await expect(module.locator('.ro-ride .ro-facts > span')).toHaveText('51 km');
+  const meter = module.getByRole('meter', { name: 'Conditions score' });
+  await expect(meter).toHaveAttribute('aria-valuenow', '84');
+  await expect(meter).toContainText('Conditions84/100');
   await expect(module.locator('.ro-ride .ro-when')).toHaveText(
     /^\w{3} \d{1,2} \w{3}·\d\d:\d\d → ~\d\d:\d\d$/,
   );
@@ -1195,7 +1200,9 @@ test('Journeys page: a passed window asks for new dates, then rescores', async (
     `${shortDate(day(-1))}, 08:00–14:00 has passed.`,
   );
   await expect(tile).toHaveAttribute('data-blank', 'false');
-  await expect(tile.locator('.ro-score')).toContainText('Conditions 84/100');
+  await expect(
+    tile.getByRole('meter', { name: 'Conditions score' }),
+  ).toHaveAttribute('aria-valuenow', '84');
   await expect(page.locator('#jr_101 .ro-chip')).toHaveText(
     /^\w{3} \d{1,2} · \d\d:\d\d$/,
   );

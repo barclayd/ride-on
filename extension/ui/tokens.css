@@ -768,7 +768,10 @@ a.ro-name:hover {
   font: 400 12px var(--ro-serif);
   color: var(--ro-muted);
 }
-/* Journeys tile (11b) */
+/* Journeys tile (14a, chips from 11b) */
+.ro-module .ro-grid {
+  gap: 24px 14px; /* the taller row gap leaves room for the flag tabs */
+}
 .ro-module .ro-ride {
   position: relative;
   border-color: var(--ro-border);
@@ -780,31 +783,54 @@ a.ro-name:hover {
   background: #f7faef;
   border-color: #b9d98a;
 }
-.ro-module .ro-pill {
-  font: 600 12px var(--ro-sans);
-  padding: 3px 9px;
+/* Flags sit on the top border and take no space inside the tile. */
+.ro-flags {
+  position: absolute;
+  top: -11px;
+  left: 16px;
+  display: flex;
+  gap: 6px;
 }
-.ro-module .ro-pill:is(.ro-flag, .ro-not-recommended) {
-  font-weight: 700;
+.ro-flags .ro-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+}
+.ro-flags .ro-pill.ro-flag {
+  padding-left: 7px;
+}
+.ro-module .ro-ride-head > .ro-ride-title {
+  flex: 1;
+}
+.ro-module .ro-ride .ro-close {
+  margin: 0 -4px 0 0;
+  font-size: 18px;
 }
 .ro-module .ro-ride .ro-name {
   font: 700 19px / 1.25 var(--ro-sans);
   color: var(--ro-olive-900);
 }
-.ro-module .ro-ride-title > span:not(.ro-name, .ro-tag) {
-  font-size: 14px;
+.ro-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font: 600 14px / 18px var(--ro-sans);
+  color: var(--ro-ink);
 }
-.ro-module .ro-ride .ro-when {
-  font: 600 15px / 20px var(--ro-sans);
-}
+.ro-facts > span,
 .ro-when.ro-slot > span {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.ro-when svg {
+.ro-facts svg {
   flex: none;
   color: var(--ro-muted);
+}
+.ro-rule {
+  height: 1px;
+  background: var(--ro-tint-2);
 }
 .ro-when b {
   font-weight: inherit;
@@ -839,19 +865,39 @@ a.ro-name:hover {
 .ro-chips li[data-warn="true"] svg {
   color: #b4692a;
 }
-.ro-module .ro-score {
+/* Bottom of the tile, so scores line up across a row. */
+.ro-meter {
   margin-top: auto;
-  gap: 12px;
-  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ro-meter > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font: 600 13px var(--ro-sans);
   color: var(--ro-olive-ink);
 }
-.ro-module .ro-score strong {
-  font-weight: 600;
+.ro-meter > span > span {
+  font: 400 13px var(--ro-serif);
+  color: var(--ro-muted);
 }
-.ro-module .ro-score > div {
-  height: 5px;
+.ro-meter strong {
+  font: 700 15px var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-meter > div {
+  height: 6px;
   background: var(--ro-tint-2);
   border-radius: 3px;
+  overflow: hidden;
+}
+.ro-meter > div > div {
+  height: 100%;
+  background: var(--ro-lime);
+  border-radius: 3px;
+  transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--ro-i) * 80ms);
 }
 
 /* Banners and passed dates */
@@ -979,15 +1025,12 @@ a.ro-name:hover {
 }
 
 /* Journeys tiles: a scored tile's size throughout; data fades in over static placeholders */
-.ro-module .ro-ride-head {
-  min-height: 19px;
-}
 .ro-slot {
   display: grid;
 }
 .ro-slot > *,
-.ro-module .ro-pills,
-.ro-module .ro-score > span {
+.ro-flags,
+.ro-meter > span > span {
   transition: opacity 0.3s calc(var(--ro-i) * 80ms);
 }
 .ro-slot > * {
@@ -999,7 +1042,7 @@ a.ro-name:hover {
   opacity: 0;
 }
 .ro-when.ro-slot {
-  min-height: 20px;
+  min-height: 18px;
 }
 .ro-when.ro-slot > i {
   align-self: center;
@@ -1016,21 +1059,12 @@ a.ro-name:hover {
   height: 24px;
   border-radius: 999px;
 }
-.ro-module .ro-score {
-  min-height: 18px;
-}
-.ro-module .ro-score > span {
-  min-width: 44px;
-}
-.ro-module .ro-score > div > div {
-  transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--ro-i) * 80ms);
-}
 .ro-ride[data-blank="true"] .ro-slot > i {
   opacity: 1;
 }
 .ro-ride[data-blank="true"] .ro-slot > :not(i),
-.ro-ride[data-blank="true"] .ro-pills,
-.ro-ride[data-blank="true"] .ro-score > span {
+.ro-ride[data-blank="true"] .ro-flags,
+.ro-ride[data-blank="true"] .ro-meter > span > span {
   opacity: 0;
 }
 
@@ -1889,7 +1923,7 @@ a.ro-name:hover {
   .ro-checkin-track > *,
   .ro-thumb,
   .ro-days-control label,
-  .ro-module .ro-score > div > div {
+  .ro-meter > div > div {
     transition: none;
   }
 }
