@@ -919,6 +919,44 @@ export const windowName = (w: NextWindow) => {
     : `Next ${longWeekday(w.date)}${part}`;
 };
 
+// The Rides tab heading: Tomorrow morning, Saturday, This weekend.
+export const windowLabel = (
+  planning: Planning,
+  [start, end]: [string, string],
+  today: string,
+) => {
+  const preset = planning.days.kind === 'preset' && planning.days.preset;
+  const day =
+    start !== end
+      ? preset === 'weekend'
+        ? 'This weekend'
+        : preset === 'next'
+          ? 'Next 5 days'
+          : 'Your dates'
+      : start === today
+        ? 'Today'
+        : start === addDays(today, 1)
+          ? 'Tomorrow'
+          : longWeekday(start);
+  // A part of the day reads well after one day only: Tomorrow morning, not Next 5 days morning.
+  return start === end && planning.time.mode === 'custom'
+    ? day + partOf(planning.time)
+    : day;
+};
+
+// "Updated just now", then "Updated 5 minutes ago".
+export const updatedText = (at: string, now: Date) => {
+  const minutes = Math.floor((now.getTime() - Date.parse(at)) / 60_000);
+  if (minutes < 1) return 'Updated just now';
+  const [n, unit] =
+    minutes < 60
+      ? [minutes, 'minute' as const]
+      : minutes < 1440
+        ? [Math.floor(minutes / 60), 'hour' as const]
+        : [Math.floor(minutes / 1440), 'day' as const];
+  return `Updated ${new Intl.RelativeTimeFormat('en-GB').format(-n, unit)}`;
+};
+
 // Line 2 of a window card: its dates and times.
 export const windowWhen = (
   w: NextWindow,

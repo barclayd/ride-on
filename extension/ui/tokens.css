@@ -172,12 +172,6 @@ fieldset {
     no-repeat right 12px center / 12px 8px;
   color: var(--ro-ink);
 }
-.ro-loading {
-  transition: opacity 0.2s;
-}
-.ro-loading[data-loading="true"] {
-  opacity: 0.6;
-}
 
 /* Page: Tracked routes module */
 .ro-module {
@@ -595,15 +589,23 @@ fieldset {
   color: var(--ro-olive-700);
 }
 
-/* Ride card (popup and page) */
+/* Ride card: the Rides tab (15a), with the Journeys tile's changes below (14a) */
+.ro-rides {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .ro-ride {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   background: #fff;
-  border: 1px solid var(--ro-border-2);
-  border-radius: 10px;
-  padding: 12px 14px;
+  border: 1px solid var(--ro-border);
+  border-radius: 12px;
+  padding: 14px 16px 16px;
+  transition:
+    background-color 0.45s,
+    border-color 0.45s;
 }
 .ro-ride.ro-flag-best {
   background: #f6fbea;
@@ -627,7 +629,7 @@ fieldset {
 }
 .ro-ride-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
 .ro-pills {
@@ -681,19 +683,31 @@ fieldset {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   font: 800 11px var(--ro-sans);
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+  transition:
+    width 0.3s,
+    margin-right 0.3s,
+    opacity 0.3s,
+    background-color 0.3s;
+}
+/* Out of the top 3: the medal shrinks away, taking the head's gap with it. */
+.ro-medal[data-on="false"] {
+  width: 0;
+  margin-right: -8px;
+  opacity: 0;
 }
 .ro-gold .ro-medal {
-  background: linear-gradient(145deg, #f6dc7a, #d4a52a);
+  background: #e3bd4a;
   color: #4a3606;
 }
 .ro-silver .ro-medal {
-  background: linear-gradient(145deg, #eef1f4, #a9b2bc);
+  background: #bcc4cc;
   color: #2f3842;
 }
 .ro-bronze .ro-medal {
-  background: linear-gradient(145deg, #efc29a, #b8743e);
+  background: #d0935e;
   color: #3f2310;
 }
 .ro-ride .ro-close {
@@ -703,6 +717,7 @@ fieldset {
   margin: -2px -4px 0 0;
 }
 .ro-ride-title {
+  flex: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -710,21 +725,15 @@ fieldset {
   min-width: 0;
 }
 .ro-ride .ro-name {
-  font: 600 15px / 1.25 var(--ro-sans);
-  white-space: normal;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 700 17px / 1.25 var(--ro-sans);
+  color: var(--ro-olive-900);
   text-decoration: none;
 }
 a.ro-name:hover {
   text-decoration: underline;
-}
-.ro-ride-title > span:not(.ro-name, .ro-tag) {
-  flex: none;
-  font: 400 12px var(--ro-serif);
-  color: var(--ro-muted);
-}
-.ro-ride .ro-when {
-  font: 700 13px var(--ro-sans);
-  color: var(--ro-ink);
 }
 .ro-trades {
   display: flex;
@@ -744,25 +753,6 @@ a.ro-name:hover {
   color: #6b5516;
   border-radius: 6px;
   padding: 5px 8px;
-}
-.ro-score {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font: 400 12px var(--ro-serif);
-  color: var(--ro-olive-900);
-  white-space: nowrap;
-}
-.ro-score > div {
-  flex: 1;
-  height: 4px;
-  background: var(--ro-tint);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.ro-score > div > div {
-  height: 100%;
-  background: var(--ro-lime);
 }
 .ro-no-score {
   font: 400 12px var(--ro-serif);
@@ -800,16 +790,12 @@ a.ro-name:hover {
 .ro-flags .ro-pill.ro-flag {
   padding-left: 7px;
 }
-.ro-module .ro-ride-head > .ro-ride-title {
-  flex: 1;
-}
 .ro-module .ro-ride .ro-close {
   margin: 0 -4px 0 0;
   font-size: 18px;
 }
 .ro-module .ro-ride .ro-name {
-  font: 700 19px / 1.25 var(--ro-sans);
-  color: var(--ro-olive-900);
+  font-size: 19px;
 }
 .ro-facts {
   display: flex;
@@ -853,6 +839,12 @@ a.ro-name:hover {
   border-radius: 999px;
   background: #eef4e2;
   color: var(--ro-olive-ink);
+  animation: ro-fade-in 0.3s;
+}
+@keyframes ro-fade-in {
+  from {
+    opacity: 0;
+  }
 }
 .ro-chips svg {
   flex: none;
@@ -865,27 +857,57 @@ a.ro-name:hover {
 .ro-chips li[data-warn="true"] svg {
   color: #b4692a;
 }
-/* Bottom of the tile, so scores line up across a row. */
 .ro-meter {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+/* Bottom of the tile, so scores line up across a row. */
+.ro-module .ro-meter {
+  margin-top: auto;
+}
 .ro-meter > span {
   display: flex;
-  justify-content: space-between;
   align-items: baseline;
+  gap: 8px;
   font: 600 13px var(--ro-sans);
   color: var(--ro-olive-ink);
 }
-.ro-meter > span > span {
+.ro-meter > span > :first-child {
+  flex: 1;
+}
+.ro-meter > span > :last-child {
   font: 400 13px var(--ro-serif);
   color: var(--ro-muted);
 }
 .ro-meter strong {
   font: 700 15px var(--ro-sans);
+  font-variant-numeric: tabular-nums;
   color: var(--ro-ink);
+}
+/* How far the last refresh moved the score: in for 400ms, out after 30s. */
+.ro-delta {
+  align-self: center;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font: 700 10.5px var(--ro-sans);
+  background: #eef4e2;
+  color: #3a4520;
+  animation: ro-delta 30.4s linear forwards;
+}
+.ro-delta[data-down="true"] {
+  background: #fbefe2;
+  color: #8a4b17;
+}
+@keyframes ro-delta {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  1.3%,
+  98.7% {
+    opacity: 1;
+  }
 }
 .ro-meter > div {
   height: 6px;
@@ -897,7 +919,11 @@ a.ro-name:hover {
   height: 100%;
   background: var(--ro-lime);
   border-radius: 3px;
-  transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--ro-i) * 80ms);
+  transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)
+    calc(var(--ro-i, 0) * 80ms);
+}
+.ro-panel .ro-meter > div > div {
+  transition-timing-function: cubic-bezier(0.65, 0, 0.25, 1);
 }
 
 /* Banners and passed dates */
@@ -1030,8 +1056,8 @@ a.ro-name:hover {
 }
 .ro-slot > *,
 .ro-flags,
-.ro-meter > span > span {
-  transition: opacity 0.3s calc(var(--ro-i) * 80ms);
+.ro-meter > span > :last-child {
+  transition: opacity 0.3s calc(var(--ro-i, 0) * 80ms);
 }
 .ro-slot > * {
   grid-area: 1 / 1;
@@ -1064,7 +1090,7 @@ a.ro-name:hover {
 }
 .ro-ride[data-blank="true"] .ro-slot > :not(i),
 .ro-ride[data-blank="true"] .ro-flags,
-.ro-ride[data-blank="true"] .ro-meter > span > span {
+.ro-ride[data-blank="true"] .ro-meter > span > :last-child {
   opacity: 0;
 }
 
@@ -1923,8 +1949,65 @@ a.ro-name:hover {
   .ro-checkin-track > *,
   .ro-thumb,
   .ro-days-control label,
-  .ro-meter > div > div {
+  .ro-meter > div > div,
+  .ro-ride,
+  .ro-medal {
     transition: none;
+  }
+  .ro-chips li {
+    animation: none;
+  }
+}
+/* Rides tab heading (15a): the window, then a refresh button. */
+.ro-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px;
+}
+.ro-heading > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ro-heading > div > :first-child {
+  font: 700 14px var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-heading > div > :last-child {
+  font: 400 12px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-refresh {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ro-border-input);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ro-olive-900);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.ro-refresh:hover:enabled {
+  background: var(--ro-page);
+}
+.ro-refresh:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* Two turns a loop while the forecast loads; none with reduced motion (the component checks). */
+.ro-spin {
+  animation: ro-spin 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes ro-spin {
+  to {
+    transform: rotate(720deg);
   }
 }
 /* Units card (design 12a): the segmented look on native radios. */

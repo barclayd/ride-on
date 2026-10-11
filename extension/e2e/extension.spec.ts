@@ -70,12 +70,14 @@ let rides: Ride[];
 let providerDown: boolean; // every forecast failed, as with a mis-chosen provider
 let sunshineUncertain: boolean;
 let replays: Map<string, Ride>;
+let scores: Record<string, number>; // a route's score, in place of 84 then 44
 
 const reset = () => {
   calls = [];
   providerDown = false;
   sunshineUncertain = false;
   replays = new Map();
+  scores = {};
   user = {
     id: 'u1',
     version: 1,
@@ -280,33 +282,35 @@ const recommendations = (body: any) => {
       (r) => r.routeId === routeId && r.riddenOn >= addDays(day(0), -28),
     );
   const rankings = date
-    ? selection.routeIds.map((routeId, i) => ({
-        routeId,
-        routeName: routes[routeId].name,
-        distanceKm: routes[routeId].distanceM / 1000,
-        distanceFit: null,
-        estimatedDurationMinutes: 180,
-        daylight: { start: `${date}T06:15:00Z`, end: `${date}T17:20:00Z` },
-        effectiveWindow: {
-          start: `${date}T06:15:00Z`,
-          end: `${date}T17:20:00Z`,
-        },
-        status: 'assessed',
-        departuresUnknown: 0,
-        departuresStandardsUnknown: 0,
-        best: {
-          ...best(date, i, 84 - i * 40), // a second route scores 44: Not recommended
-          recentRides: recent(routeId)
-            ? { status: 'assessed', penaltyPoints: 3 }
-            : {
-                status: variety ? 'no_recent_history' : 'disabled',
-                penaltyPoints: 0,
-              },
-        },
-        issues: [],
-        warnings: [],
-        verdict: { status: 'meets', code: 'meets' },
-      }))
+    ? selection.routeIds
+        .map((routeId, i) => ({
+          routeId,
+          routeName: routes[routeId].name,
+          distanceKm: routes[routeId].distanceM / 1000,
+          distanceFit: null,
+          estimatedDurationMinutes: 180,
+          daylight: { start: `${date}T06:15:00Z`, end: `${date}T17:20:00Z` },
+          effectiveWindow: {
+            start: `${date}T06:15:00Z`,
+            end: `${date}T17:20:00Z`,
+          },
+          status: 'assessed',
+          departuresUnknown: 0,
+          departuresStandardsUnknown: 0,
+          best: {
+            ...best(date, i, scores[routeId] ?? 84 - i * 40), // a second route scores 44: Not recommended
+            recentRides: recent(routeId)
+              ? { status: 'assessed', penaltyPoints: 3 }
+              : {
+                  status: variety ? 'no_recent_history' : 'disabled',
+                  penaltyPoints: 0,
+                },
+          },
+          issues: [],
+          warnings: [],
+          verdict: { status: 'meets', code: 'meets' },
+        }))
+        .sort((a, b) => b.best.score - a.best.score)
     : [];
   return {
     generatedAt: new Date().toISOString(),
@@ -565,9 +569,10 @@ test('Rides tab opens first with one request for the planned days', async ({
   const card = page.locator('.ro-ride').first();
   await expect(card).toContainText('Hilly Loop');
   await expect(card.locator('.ro-medal')).toHaveText('1');
-  // Best pick only: no pill for meeting the preferences, the score says it.
-  await expect(card.locator('.ro-pill')).toHaveText(['Best pick']);
-  await expect(card.locator('.ro-score')).toContainText('Conditions 84/100');
+  // The medal says it's the best pick; no pill for meeting the preferences either.
+  await expect(card.locator('.ro-pill')).toHaveCount(0);
+  await expect(card.locator('.ro-meter')).toHaveText('Conditions84/100');
+  await expect(page.locator('.ro-heading')).toContainText('Next 5 days');
   await expect(
     page.getByRole('link', { name: 'Powered by Met Office data' }),
   ).toHaveAttribute('href', 'https://www.metoffice.gov.uk/');
@@ -583,6 +588,41 @@ test('Rides tab opens first with one request for the planned days', async ({
   await page.screenshot({ path: test.info().outputPath('rides.png') });
 });
 
+test('a refresh shows how scores changed, then moves the rides into order', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  routes.r102 = coast();
+  selection.routeIds = ['r101', 'r102'];
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  const cards = page.locator('.ro-ride');
+  await expect(cards.first()).toContainText('Hilly Loop');
+  await expect(page.locator('.ro-heading')).toContainText('Updated just now');
+  scores = { r102: 90 };
+  await page.getByRole('button', { name: 'Refresh forecast' }).click();
+  // Step 1, in place: the score changes on the second card.
+  await expect(cards.nth(1).locator('.ro-delta')).toHaveText('▲ 46');
+  await expect(cards.nth(1)).toContainText('Coast & Back');
+  // Step 2: it moves to the top and takes the gold medal.
+  await expect(cards.first()).toContainText('Coast & Back');
+  await expect(cards.first().locator('.ro-medal')).toHaveText('1');
+  await expect(cards.first().locator('.ro-meter')).toHaveAttribute(
+    'aria-valuenow',
+    '90',
+  );
+  await expect(cards.nth(1).locator('.ro-medal')).toHaveText('2');
+  await expect(page.locator('.ro-rides > [aria-live]')).toHaveText(
+    'Forecast updated. Coast & Back is now top, then Hilly Loop.',
+  );
+  await expect(cards.first().locator('.ro-meter strong')).toHaveText('90');
+  await expect(
+    page.getByRole('button', { name: 'Refresh forecast' }),
+  ).toBeEnabled();
+  await page.screenshot({ path: test.info().outputPath('reordered.png') });
+});
+
 test('a scored ride explains uncertain sunshine in the popup and on Journeys', async ({
   context,
   worker,
@@ -596,7 +636,7 @@ test('a scored ride explains uncertain sunshine in the popup and on Journeys', a
   await expect(card.locator('.ro-coverage')).toHaveText(
     'Sunshine is uncertain for this ride.',
   );
-  await expect(card.locator('.ro-score')).toContainText('Conditions 84/100');
+  await expect(card.locator('.ro-meter')).toHaveText('Conditions84/100');
   await expectPanelFits(page);
   await page.screenshot({
     path: test.info().outputPath('uncertain-sunshine.png'),
@@ -1091,10 +1131,6 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     '',
   );
   await expect(page.locator('#jr_102 ride-on-tags')).toBeHidden();
-  await expect(module.locator('.ro-grid')).toHaveAttribute(
-    'data-loading',
-    'false',
-  );
   await page.screenshot({
     path: test.info().outputPath('journeys.png'),
     fullPage: true,

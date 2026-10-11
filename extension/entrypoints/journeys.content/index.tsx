@@ -1,6 +1,6 @@
 import { type ComponentChildren, render } from 'preact';
 import { createPortal } from 'preact/compat';
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { fetchJourney, fetchJourneyGpx } from '../../lib/cycletravel';
@@ -13,8 +13,8 @@ import {
   ErrorChip,
   iconUrl,
   injectFonts,
+  Ranked,
   RouteTile,
-  reducedMotion,
   riddenFor,
   Tags,
   useView,
@@ -74,9 +74,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
   // Once the window has passed, picking new dates confirms in the strip until the page is next loaded.
   const passed = useRef(false);
   const asked = useRef<ComponentChildren>(null); // the expired half, frozen while it fades out
-  const [ranked, setRanked] = useState(false);
-  const grid = useRef<HTMLDivElement>(null);
-  const before = useRef(new Map<string, DOMRect>());
+  const filled = useRef(false); // the new dates' scores have arrived
   const signedIn = view?.state.auth === 'signed-in';
   const routes = view?.state.routes ?? {};
   const tracked = new Map<string, string>();
@@ -144,52 +142,11 @@ const Page = ({ rows }: { rows: Row[] }) => {
     !view.state.loading &&
     recs?.range?.start === view.range[0] &&
     recs.range.end === view.range[1];
-  // Placeholders until the new dates' scores arrive, so nothing old flashes up.
+  if (phase === 'confirmed' && fresh) filled.current = true;
+  // Placeholders until the new dates' scores arrive, so nothing old flashes up; they then fill in place
+  // and Ranked moves the tiles into order.
   const blank =
-    phase === 'expired' || (phase === 'confirmed' && !ranked && !fresh);
-  const reduce = reducedMotion();
-
-  // The scores fade in, then the tiles move into ranked order.
-  useEffect(() => {
-    if (phase !== 'confirmed' || blank || ranked) return;
-    const timer = setTimeout(
-      () => {
-        for (const tile of grid.current?.querySelectorAll<HTMLElement>(
-          '.ro-ride',
-        ) ?? [])
-          before.current.set(
-            tile.dataset.route ?? '',
-            tile.getBoundingClientRect(),
-          );
-        setRanked(true);
-      },
-      reduce ? 0 : 750,
-    );
-    return () => clearTimeout(timer);
-  }, [phase, blank, ranked, reduce]);
-
-  // FLIP: each tile slides from where it was; those moving forward pass over the rest.
-  useLayoutEffect(() => {
-    if (!ranked || reduce) return;
-    const old = [...before.current.keys()];
-    const tiles = grid.current?.querySelectorAll<HTMLElement>('.ro-ride') ?? [];
-    tiles.forEach((tile, i) => {
-      const id = tile.dataset.route ?? '';
-      const from = before.current.get(id);
-      if (!from) return;
-      const to = tile.getBoundingClientRect();
-      const [dx, dy] = [from.left - to.left, from.top - to.top];
-      if (!dx && !dy) return;
-      tile.style.zIndex = i < old.indexOf(id) ? '2' : '1';
-      tile.animate(
-        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
-        { duration: 700, easing: 'cubic-bezier(.65,0,.25,1)' },
-      ).onfinish = () => {
-        tile.style.zIndex = '';
-      };
-    });
-    before.current.clear();
-  }, [ranked, reduce]);
+    phase === 'expired' || (phase === 'confirmed' && !filled.current);
 
   if (!view) return null;
   if (!signedIn)
@@ -239,14 +196,17 @@ const Page = ({ rows }: { rows: Row[] }) => {
   const count = tracked.size;
   const full = count >= MAX_TRACKED;
   const cardByRoute = new Map(view.cards.map((card) => [card.routeId, card]));
-  const routeIds = view.state.selection?.routeIds ?? [];
-  // Blank tiles in tracked order; after new dates, scores fill in place before the ranked move.
+  // Blank tiles in tracked order.
   const cards = blank
-    ? buildResults(routeIds, routes, null, [], view.timeZone, view.state.units)
-        .cards
-    : phase === 'confirmed' && !ranked && !reduce
-      ? routeIds.flatMap((id) => cardByRoute.get(id) ?? [])
-      : view.cards;
+    ? buildResults(
+        view.state.selection?.routeIds ?? [],
+        routes,
+        null,
+        [],
+        view.timeZone,
+        view.state.units,
+      ).cards
+    : view.cards;
   const href = (route: RouteSummary | undefined) =>
     route?.source ? `/map/journey/${route.source.externalId}` : '';
   const openWhen = () => send({ type: 'openPopup', tab: 'when' });
@@ -336,12 +296,11 @@ const Page = ({ rows }: { rows: Row[] }) => {
         onProvider={() => send({ type: 'openPopup', tab: 'prefs' })}
       />
       {cards.length > 0 && (
-        <div
-          ref={grid}
-          class="ro-grid ro-loading"
-          data-loading={view.state.loading && !blank}
-        >
-          {cards.map((card, i) => (
+        <Ranked
+          cards={cards}
+          window={JSON.stringify([view.range, view.state.planning.time])}
+          class="ro-grid"
+          render={(card, i, _, change) => (
             <RouteTile
               key={card.routeId}
               view={view}
@@ -349,9 +308,10 @@ const Page = ({ rows }: { rows: Row[] }) => {
               href={href(routes[card.routeId])}
               blank={blank}
               index={i}
+              change={change}
             />
-          ))}
-        </div>
+          )}
+        />
       )}
       <CoverageWarn view={view} />
       {/* ponytail: weather attribution is popup-only by choice, though the cards show weather. */}
