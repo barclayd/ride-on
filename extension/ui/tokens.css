@@ -214,18 +214,8 @@ fieldset {
 }
 .ro-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-@media (max-width: 900px) {
-  .ro-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 560px) {
-  .ro-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 14px;
 }
 .ro-strip {
   display: flex;
@@ -777,20 +767,90 @@ a.ro-name:hover {
   font: 400 12px var(--ro-serif);
   color: var(--ro-muted);
 }
+/* Journeys tile (11b) */
 .ro-module .ro-ride {
   position: relative;
-  border-radius: 8px;
-  padding: 14px 16px;
-  gap: 8px;
+  border-color: var(--ro-border);
+  border-radius: 12px;
+  padding: 16px 18px 18px;
+  gap: 12px;
+}
+.ro-module .ro-ride.ro-flag-best {
+  background: #f7faef;
+  border-color: #b9d98a;
+}
+.ro-module .ro-pill {
+  font: 600 12px var(--ro-sans);
+  padding: 3px 9px;
+}
+.ro-module .ro-pill.ro-flag {
+  font-weight: 700;
 }
 .ro-module .ro-ride .ro-name {
-  font-size: 16px;
+  font: 700 19px / 1.25 var(--ro-sans);
+  color: var(--ro-olive-900);
+}
+.ro-module .ro-ride-title > span:not(.ro-name, .ro-tag) {
+  font-size: 14px;
 }
 .ro-module .ro-ride .ro-when {
-  font-size: 14px;
+  font: 600 15px / 20px var(--ro-sans);
+}
+.ro-when.ro-slot > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ro-when svg {
+  flex: none;
+  color: var(--ro-muted);
+}
+.ro-when b {
+  font-weight: inherit;
+  color: #a9b0a0;
+}
+.ro-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 600 13px / 16px var(--ro-sans);
+}
+.ro-chips li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 4px 7px;
+  border-radius: 999px;
+  background: #eef4e2;
+  color: var(--ro-olive-ink);
+}
+.ro-chips svg {
+  flex: none;
+  color: var(--ro-olive-700);
+}
+.ro-chips li[data-warn="true"] {
+  background: var(--ro-warn-bg);
+  color: var(--ro-warn-fg);
+}
+.ro-chips li[data-warn="true"] svg {
+  color: #b4692a;
 }
 .ro-module .ro-score {
   margin-top: auto;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--ro-olive-ink);
+}
+.ro-module .ro-score strong {
+  font-weight: 600;
+}
+.ro-module .ro-score > div {
+  height: 5px;
+  background: var(--ro-tint-2);
+  border-radius: 3px;
 }
 
 /* Banners and passed dates */
@@ -938,21 +998,22 @@ a.ro-name:hover {
   opacity: 0;
 }
 .ro-when.ro-slot {
-  min-height: 18px;
+  min-height: 20px;
 }
 .ro-when.ro-slot > i {
   align-self: center;
   width: 62%;
   height: 10px;
 }
+/* One chip row's height, so the tile doesn't grow when the chips arrive. */
 .ro-conditions.ro-slot {
-  min-height: 34px;
+  min-height: 24px;
 }
 .ro-conditions.ro-slot > i {
   align-self: start;
   width: 80%;
-  height: 8px;
-  margin-top: 4px;
+  height: 24px;
+  border-radius: 999px;
 }
 .ro-module .ro-score {
   min-height: 18px;
@@ -966,7 +1027,7 @@ a.ro-name:hover {
 .ro-ride[data-blank="true"] .ro-slot > i {
   opacity: 1;
 }
-.ro-ride[data-blank="true"] .ro-slot > span,
+.ro-ride[data-blank="true"] .ro-slot > :not(i),
 .ro-ride[data-blank="true"] .ro-pills,
 .ro-ride[data-blank="true"] .ro-score > span {
   opacity: 0;

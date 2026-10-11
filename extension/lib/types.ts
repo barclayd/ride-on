@@ -1,5 +1,5 @@
 // Live API contracts (v0.12.0): worker/src/recommendations/input.ts, docs/api.md and docs/ride-history.md.
-// Fields the extension needs but the API lacks are in docs/extension-api-brief-v2.md and -v3.md.
+// Fields the extension needs but the API lacks are in docs/extension-api-brief-v2.md, -v3.md and -v4.md.
 
 export type Climbing = 'flatter' | 'neutral' | 'hillier';
 export type Distance = { minKm: number; maxKm: number };
@@ -113,7 +113,28 @@ export type Conditions = {
   averageTailwindKph: number;
   averageCrosswindKph: number;
   maximumPrecipitationProbability: number;
+  // docs/extension-api-brief-v4.md; absent before it ships and on older saved plans.
+  windDistanceFractions?: {
+    headwind: number;
+    tailwind: number;
+    crosswind: number;
+  };
+  precipitationSummary?: PrecipitationSummary;
 };
+export type PrecipitationSummary =
+  | 'dry'
+  | 'possible'
+  | 'drizzle'
+  | 'light_showers'
+  | 'showers'
+  | 'heavy_showers'
+  | 'light_rain'
+  | 'rain'
+  | 'heavy_rain'
+  | 'sleet'
+  | 'hail'
+  | 'snow'
+  | 'thunder';
 export type Departure = {
   date: string;
   departureAt: string;
