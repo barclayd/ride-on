@@ -273,11 +273,10 @@ const Page = ({ rows }: { rows: Row[] }) => {
 
 export default defineContentScript({
   matches: ['https://cycle.travel/user/journeys*'],
-  main() {
+  main(ctx) {
     const toolbar = document.querySelector('.toolbar');
     const header = document.querySelector('header.page_header');
     if (!toolbar && !header) return;
-    injectFonts();
     const pageStyle = document.createElement('style');
     pageStyle.textContent = PAGE_CSS;
     document.head.append(pageStyle);
@@ -286,6 +285,7 @@ export default defineContentScript({
     const moduleHost = document.createElement('ride-on-module');
     if (toolbar) toolbar.before(moduleHost);
     else header?.after(moduleHost);
+    const added: Element[] = [injectFonts(), pageStyle, moduleHost];
     const rows = [
       ...document.querySelectorAll<HTMLElement>('li.journey_row'),
     ].map((element) => {
@@ -297,6 +297,7 @@ export default defineContentScript({
       const name = element.querySelector('a.journey_name');
       if (name) name.after(tags);
       else host.before(tags);
+      added.push(host, tags);
       return {
         id: element.id.replace(/^jr_/, ''),
         element,
@@ -304,7 +305,18 @@ export default defineContentScript({
         tags: shadowMount(tags),
       };
     });
-    render(<Page rows={rows} />, shadowMount(moduleHost));
+    const mount = shadowMount(moduleHost);
+    render(<Page rows={rows} />, mount);
     send({ type: 'refresh' });
+    // Safari injects again into open pages (on enable, on site access), and WXT then invalidates
+    // the older copy: it takes its UI with it, so only the newest shows.
+    ctx.onInvalidated(() => {
+      render(null, mount);
+      for (const { element } of rows) {
+        element.removeAttribute('data-ride-on-tracked');
+        element.removeAttribute('data-ride-on-ridden');
+      }
+      for (const element of added) element.remove();
+    });
   },
 });
