@@ -232,6 +232,57 @@ describe('BPF CoverageJSON contract', () => {
 });
 
 describe('BPF transport and cache', () => {
+  test('new route points reuse the same forecast site across hours and provider instances', async () => {
+    let clock = new Date('2026-10-09T19:55:00Z');
+    let calls = 0;
+    const saved = new Map<string, string>();
+    const provider = () =>
+      createMetOfficeBpf({
+        apiKey: 'fake',
+        now: () => clock,
+        cache: {
+          get: async (key) => saved.get(key) ?? null,
+          put: async (key, value) => {
+            saved.set(key, value);
+          },
+        },
+        fetch: async (url) => {
+          calls++;
+          return Response.json(
+            url.endsWith('/locations')
+              ? bpfSites()
+              : bpfFixture({
+                  probabilities: url.includes('uk-spot-probabilities'),
+                }),
+          );
+        },
+      });
+    const signal = new AbortController().signal;
+    await provider().getForecast(request, signal);
+    expect(calls).toBe(3); // Catalogue plus two forecast collections.
+    clock = new Date('2026-10-09T20:05:00Z');
+    const nearby = {
+      id: 'new-route-point',
+      coordinate: { latitude: 51.201, longitude: -1 },
+    };
+    const reused = present(
+      (
+        await provider().getForecast(
+          { ...request, locations: [nearby] },
+          signal,
+        )
+      )[0],
+    );
+    expect(calls).toBe(3);
+    if (reused.status === 'unavailable')
+      throw new Error('Expected cached site');
+    expect(reused.location.requested).toEqual(nearby);
+    expect(reused.location.distanceFromRequestedM).toBeGreaterThan(100);
+    expect(reused.provenance.retrievedAt).toBe('2026-10-09T19:55:00.000Z');
+    clock = new Date('2026-10-10T01:55:00Z');
+    await provider().getForecast({ ...request, maxAgeSeconds: 10800 }, signal);
+    expect(calls).toBe(5); // Freshness tightens; the catalogue is still reused.
+  });
   test('coalesces nearby samples at one site, uses header-only auth and caches retrieval freshness separately', async () => {
     let calls = 0;
     const provider = createMetOfficeBpf({

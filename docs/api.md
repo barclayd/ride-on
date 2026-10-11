@@ -706,24 +706,30 @@ for the entire comparison, with no field mixing or silent outside fallback.
 New profiles and requests without a profile default to strict `apple-weather`.
 Existing saved choices remain unchanged, including Dan's strict Met Office policy.
 
-Quality limits: hourly resolution, retrieval age at most six hours for the Apple
-default (or model age for a saved/selected model-run policy), resolved
+Quality limits: hourly resolution, retrieval refresh after three hours for today,
+six hours for tomorrow or twelve hours for dates two or more days away in the
+rider's timezone (model-run policies also retain their six-hour model-age limit), resolved
 weather location within 10 km of the query and evaluated section. Weather points
 are sampled along the route every 10 km. These are engineering starting policies,
 not a claim of kilometre-scale forecast accuracy.
 
-KV stores normalized evidence for 20 minutes, keyed by provider/product/adapter,
-coordinates, required descriptors, provider-horizon range and quality limits. Retrieval and
+KV retains normalized evidence for 12 hours, keyed by provider/product/adapter,
+coordinates, required descriptors, provider-horizon length, freshness basis and
+spatial/temporal quality limits. Retrieval and
 the selected freshness basis and any provider-declared `provenance.expiresAt` are
 checked on every hit. Attribution may include `logo: { lightUrl, darkUrl }` and
 `notice`; preserve and display these along with the legal link for Apple weather.
 Changing only preferences or speed
 can reuse the same horizon snapshot across dates and windows. Registered providers
-use a rolling whole-hour anchor; expiry, a new anchor, or changed required
-measurements (for example enabling cloud scoring) may cause new calls. Concurrent
+use stable horizon keys; a clock-hour rollover does not invalidate cached data.
+The nearest selected date controls refresh timing, independent of preview dates;
+previews with evidence too old for their date remain unassessable until refreshed.
+Expiry or changed required measurements (for example enabling cloud scoring) may cause new calls. Concurrent
 cold requests are not globally coalesced. See [planning and caching](planning-api.md). Global Spot coalesces identical coordinates. BPF coalesces samples
-that resolve to the same forecast site within each comparison and caches its site
-catalogue for 24 hours. Failed reads/writes do not turn into fabricated
+that resolve to the same forecast site across comparisons and caches its site
+catalogue for 24 hours. Adding a route only fetches sites without compatible fresh
+evidence. The `weather:v2:` key prefix separates these snapshots from the previous
+range-based cache. Failed reads/writes do not turn into fabricated
 weather. Concurrent requests can still fetch the same missing key: this MVP has
 no distributed quota counter or request coalescer.
 

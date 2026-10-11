@@ -626,9 +626,9 @@ integration(
     assert.deepEqual(repaired.weather.cache, { hits: 5, misses: 1 });
     assert.equal(h.requests.length, initialCalls + 1);
     await h.restart({ TEST_NOW: '2026-10-09T12:21:00.000Z' });
-    const expired = await recommend(h, [route.id]);
-    assert.deepEqual(expired.weather.cache, { hits: 0, misses: 6 });
-    assert.equal(expired.recommendedRouteId, route.id);
+    const retained = await recommend(h, [route.id]);
+    assert.deepEqual(retained.weather.cache, { hits: 6, misses: 0 });
+    assert.equal(retained.recommendedRouteId, route.id);
     await h.restart({ TEST_NOW: '2026-10-09T18:01:00.000Z' });
     const stale = await recommend(h, [route.id]);
     assert.equal(stale.recommendedRouteId, null);

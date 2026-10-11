@@ -4,7 +4,12 @@ import { prepareHistory } from '../rides/overlap.ts';
 import { readHistory } from '../rides/store.ts';
 import type { Route } from '../routes/model.ts';
 import type { Env } from '../types.ts';
-import { type ForecastCache, withForecastCache } from '../weather/cache.ts';
+import {
+  FORECAST_RETENTION_SECONDS,
+  type ForecastCache,
+  isFreshForecast,
+  withForecastCache,
+} from '../weather/cache.ts';
 import {
   weatherProviderForSource,
   weatherProviderIdForPolicy,
@@ -21,6 +26,7 @@ import {
 import { getForecastForPolicy } from '../weather/source-policy.ts';
 import { planDepartures } from './daylight.ts';
 import { recommendRides, requiredWeatherFor } from './engine.ts';
+import { forecastRefreshSeconds } from './freshness.ts';
 import type { RecommendationInput } from './input.ts';
 import { daySummary } from './multi-day.ts';
 
@@ -36,6 +42,8 @@ export type ComparisonContext = {
   signal: AbortSignal;
   now: () => Date;
   startedAt: Date;
+  /** Preview dates reuse evidence without forcing a refresh for an unselected day. */
+  refreshDates?: readonly string[];
   dependencies: {
     cache?: ForecastCache;
     providers?: Readonly<Record<string, ForecastProvider>>;
@@ -47,8 +55,28 @@ export const evaluateComparisons = async (
   routes: readonly Route[],
   inputs: readonly RecommendationInput[],
   input: RecommendationInput,
-  { env, ownerId, signal, now, startedAt, dependencies }: ComparisonContext,
+  {
+    env,
+    ownerId,
+    signal,
+    now,
+    startedAt,
+    refreshDates = inputs.map((i) => i.date),
+    dependencies,
+  }: ComparisonContext,
 ) => {
+  const refreshAfterSeconds = forecastRefreshSeconds(
+    refreshDates,
+    startedAt,
+    input.timeZone,
+  );
+  const requestedQuality = {
+    ...quality,
+    maxAgeSeconds:
+      input.forecast.freshnessBasis === 'retrieval-time'
+        ? refreshAfterSeconds
+        : quality.maxAgeSeconds,
+  };
   const plans = inputs.flatMap((dayInput) =>
     routes.map((route) => ({
       route,
@@ -113,6 +141,8 @@ export const evaluateComparisons = async (
       id,
       withForecastCache(provider, cache, {
         now,
+        ttlSeconds: refreshAfterSeconds,
+        retentionSeconds: FORECAST_RETENTION_SECONDS,
         forecastHorizonHours: forecastHorizonHours(id),
         onRead: (hit) => {
           if (hit) cacheReads.hits++;
@@ -149,7 +179,7 @@ export const evaluateComparisons = async (
         locations,
         range,
         required: requiredWeatherFor(input),
-        ...quality,
+        ...requestedQuality,
         freshnessBasis: input.forecast.freshnessBasis,
       }
     : null;
@@ -162,11 +192,40 @@ export const evaluateComparisons = async (
       )
     : null;
   const results = selected?.results ?? [];
+  const forecastCheckedAt = now().getTime();
   const comparisons = inputs.map((dayInput) => {
+    const dayTtl = forecastRefreshSeconds(
+      [dayInput.date],
+      startedAt,
+      dayInput.timeZone,
+    );
+    // An older snapshot may be fine for a distant selection but too old for a
+    // same-day preview. Keep that preview unknown until the rider selects it.
+    const dayResults = results.map((result) =>
+      result.status === 'unavailable' ||
+      isFreshForecast(
+        result,
+        { ...requestedQuality, freshnessBasis: input.forecast.freshnessBasis },
+        forecastCheckedAt,
+        dayTtl,
+      )
+        ? result
+        : {
+            ...result,
+            status: 'partial' as const,
+            issues: [
+              ...result.issues,
+              {
+                code: 'stale-data' as const,
+                message: 'The cached forecast is too old for this ride date.',
+              },
+            ],
+          },
+    );
     const result = recommendRides(
       routes,
       dayInput,
-      results,
+      dayResults,
       startedAt.getTime(),
       quality.maxLocationDistanceM,
       3,
@@ -179,7 +238,7 @@ export const evaluateComparisons = async (
         routes,
         dayInput,
         result,
-        results,
+        dayResults,
         requiredWeatherFor(dayInput),
         startedAt.getTime(),
         quality.maxLocationDistanceM,
@@ -204,7 +263,11 @@ export const evaluateComparisons = async (
       selectedProvider: weatherProviderForSource(selected?.source.providerId),
       selectedSource: selected?.source ?? null,
       attempts: selected?.attempts ?? [],
-      quality: { ...quality, freshnessBasis: input.forecast.freshnessBasis },
+      quality: {
+        ...requestedQuality,
+        freshnessBasis: input.forecast.freshnessBasis,
+        refreshAfterSeconds,
+      },
       descriptors: request?.required ?? [],
       range,
       cache: cacheReads,
