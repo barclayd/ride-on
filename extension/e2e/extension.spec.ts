@@ -212,7 +212,10 @@ const nextWindows = (after: { window: unknown }) => {
     window: w,
     effectiveWindow: null,
     recommendationKind: kind === 'tomorrow' ? 'best_available' : 'best_pick',
-    warnings: kind === 'tomorrow' ? ['Showers likely after 13:00'] : [],
+    warnings:
+      kind === 'tomorrow'
+        ? ['ASCENT_IS_UNSMOOTHED_ESTIMATE', 'Showers likely after 13:00']
+        : ['ASCENT_IS_UNSMOOTHED_ESTIMATE'],
     best: { ...best(date, 0, score), routeId: 'r101', routeName: 'Hilly Loop' },
   });
   return {
@@ -1006,6 +1009,7 @@ test('ended window: check-in, a different route, then the next windows', async (
   ).toHaveText('Tomorrow');
   await expect(windows.nth(0)).toContainText('Best available');
   await expect(windows.nth(0)).toContainText('Showers likely after 13:00');
+  await expect(windows).not.toContainText(['ASCENT_IS_UNSMOOTHED_ESTIMATE']);
   await expect(windows.nth(0)).toHaveAttribute('data-best', 'false');
   await expect(windows.nth(1)).toHaveAttribute('data-best', 'true');
   await expect(windows.nth(1)).toContainText('Best · 86');
@@ -1447,4 +1451,40 @@ test('Journeys page: after an extension update, the page follows the new copy', 
     `${datesLabel([day(2), day(3), day(4), day(5)])} · Daylight hours`,
   );
   await expect(page.locator('ride-on-module')).toHaveCount(1);
+});
+
+// A real reload (unlike the CustomEvent above) takes the old copy's extension APIs with it.
+test('a real extension reload leaves one copy on Journeys, without errors', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  await fakeCycleTravel(context);
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys?page=1');
+  await expect(page.locator('ride-on-module .ro-window')).toHaveText(
+    /Daylight/,
+  );
+  const retired = page.waitForEvent('console', (m) =>
+    m.text().includes('context invalidated'),
+  );
+  const ext = await context.newPage();
+  await ext.goto('chrome://extensions');
+  const dev = 'chrome.developerPrivate';
+  await ext.evaluate(
+    `${dev}.updateProfileConfiguration({ inDeveloperMode: true })
+      .then(() => ${dev}.updateExtensionConfiguration({ extensionId: '${extensionId}', errorCollection: true }))
+      .then(() => ${dev}.reload('${extensionId}', { failQuietly: true }))`,
+  );
+  await retired;
+  await expect(page.locator('ride-on-module')).toHaveCount(1);
+  await expect(page.locator('ride-on-module .ro-window')).toHaveText(
+    /Daylight/,
+  );
+  expect(
+    await ext.evaluate(
+      `${dev}.getExtensionInfo('${extensionId}').then((i) => i.runtimeErrors.map((e) => e.message))`,
+    ),
+  ).toEqual([]);
 });

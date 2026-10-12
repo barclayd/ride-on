@@ -187,7 +187,10 @@ export const onStateChange = (listener: (state: State) => void) => {
     if (changes.state) listener(withDefaults(changes.state.newValue as State));
   };
   browser.storage.local.onChanged.addListener(handle);
-  return () => browser.storage.local.onChanged.removeListener(handle);
+  // A page's copy outlives an extension update, which takes its APIs and listeners with it.
+  return () =>
+    browser.runtime?.id &&
+    browser.storage.local.onChanged.removeListener(handle);
 };
 
 export type Message =

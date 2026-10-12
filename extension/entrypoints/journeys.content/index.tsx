@@ -423,7 +423,7 @@ export default defineContentScript({
         element.removeAttribute('data-ride-on-ridden');
       }
       for (const element of added) element.remove();
-      browser.runtime.onMessage.removeListener(alive);
+      browser.runtime?.onMessage.removeListener(alive);
     });
   },
 });
