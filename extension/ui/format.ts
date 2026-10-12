@@ -277,6 +277,7 @@ export const conditionChips = (
   c: Conditions,
   comfort?: Preferences['temperature'],
   u: Units = METRIC,
+  windComfort?: Preferences['wind'],
 ): Chip[] => {
   const low = Math.round(c.temperatureC.minimum);
   const high = Math.round(c.temperatureC.maximum);
@@ -314,6 +315,16 @@ export const conditionChips = (
         : `Wind ${shown}`,
       warn: !!kind && kind !== 'tailwind',
     },
+    ...(c.maximumGustKph !== undefined
+      ? [
+          {
+            icon: 'wind' as const,
+            text: `Gusts ${speed(c.maximumGustKph, u)}`,
+            label: `Maximum gusts during the ride ${speed(c.maximumGustKph, u)}`,
+            warn: c.maximumGustKph > (windComfort?.comfortableGustKph ?? 35),
+          },
+        ]
+      : []),
     rain
       ? {
           icon: 'wet',
@@ -626,6 +637,7 @@ export type Draft = {
   comfortMaxC: number;
   headKph: number;
   crossKph: number;
+  gustComfortKph: number;
   floorOn: boolean;
   floorMode: 'fixed' | 'monthly';
   floorFixedC: number;
@@ -647,6 +659,7 @@ export const draftFrom = (p: Preferences, local: LocalPrefs): Draft => {
     comfortMaxC: p.temperature.comfortMaxC,
     headKph: p.wind.comfortableHeadwindKph,
     crossKph: p.wind.comfortableCrosswindKph,
+    gustComfortKph: p.wind.comfortableGustKph ?? 35,
     floorOn: !!floor,
     floorMode: floor?.kind ?? local.floorMode,
     floorFixedC: floor?.kind === 'fixed' ? floor.valueC : local.floorFixedC,
@@ -671,6 +684,7 @@ export const draftPatch = (d: Draft): PreferencesPatch => ({
   wind: {
     comfortableHeadwindKph: d.headKph,
     comfortableCrosswindKph: d.crossKph,
+    comfortableGustKph: d.gustComfortKph,
   },
   minimumStandards: {
     minimumTemperature: !d.floorOn

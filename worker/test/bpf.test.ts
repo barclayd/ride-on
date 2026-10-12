@@ -44,6 +44,50 @@ const normalize = (
   );
 
 describe('BPF CoverageJSON contract', () => {
+  test('recovers time-first values with mislabelled axes for temperatures, gusts and probabilities', () => {
+    const fixtures = [bpfFixture(), bpfFixture({ probabilities: true })];
+    const gust = present(
+      fixtures[0]?.coverages.find((c) => c.id.includes('Gust')),
+    );
+    present(gust.ranges[gust.id]).values = [2, 4, 9].flatMap((value) =>
+      Array.from({ length: 25 }, (_, h) => value + h / 10),
+    );
+    for (const fixture of fixtures)
+      for (const coverage of fixture.coverages) {
+        const range = present(coverage.ranges[coverage.id]);
+        const original = [...range.values];
+        const count = present(range.shape[0]);
+        // Observed v2 fault: values transpose, advertised axisNames/shape do not.
+        range.values = Array.from({ length: 25 }, (_, h) =>
+          Array.from({ length: count }, (_, p) => original[p * 25 + h] ?? null),
+        ).flat();
+      }
+    const result = normalize(fixtures[0], fixtures[1]);
+    expect(result.status).toBe('complete');
+    if (result.status === 'unavailable') throw new Error('Expected evidence');
+    expect(result.provenance.source.adapterVersion).toBe('2');
+    expect(result.series[0]?.samples[12]?.value).toBeCloseTo(14);
+    expect(result.series[3]?.samples[12]?.value).toBeCloseTo(5.2);
+    expect(result.series[3]?.samples[13]?.value).toBeCloseTo(5.3);
+    expect(result.series[5]?.samples[12]?.value).toBe(0.08);
+    expect(result.series[5]?.samples[13]?.value).toBeCloseTo(0.081);
+    // Probability responses prove their own packing; they need not share the
+    // percentile response's upstream serialization defect.
+    const mixed = normalize(fixtures[0], bpfFixture({ probabilities: true }));
+    expect(mixed.status).toBe('complete');
+    if (mixed.status === 'unavailable') throw new Error('Expected evidence');
+    expect(mixed.series[5]?.samples[13]?.value).toBeCloseTo(0.081);
+  });
+
+  test('ambiguous packing stays unavailable rather than selecting plausible weather', () => {
+    const fixture = bpfFixture({
+      value: (_field, _hour, selection) => Number(selection),
+    });
+    expect(normalize(fixture)).toMatchObject({
+      status: 'unavailable',
+      issues: [{ code: 'invalid-response' }],
+    });
+  });
   test('a partial first hour still requires the interval overlapping the request start', () => {
     const fixture = bpfFixture();
     const gust = present(

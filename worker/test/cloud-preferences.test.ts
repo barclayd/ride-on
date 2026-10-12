@@ -119,7 +119,8 @@ test('dominant tailwind beats equal-speed crosswind; calm rides remain comfortab
   const weather = forecastsFor(
     routes,
     (quantity, _hour, route) => {
-      if (quantity === 'wind-speed') return route.id === calm.id ? 1 : 5;
+      if (quantity === 'wind-speed') return route.id === calm.id ? 0 : 5;
+      if (quantity === 'wind-gust') return route.id === calm.id ? 2 : 5;
       // The oblique crosswind has a small positive tail component: it is still not helpful.
       if (quantity === 'wind-from-direction')
         return route.id === tail.id ? 180 : 100;

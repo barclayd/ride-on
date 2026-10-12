@@ -183,9 +183,8 @@ export const defaultSettings: Settings = {
   riding: { averageSpeedKph: 20, departureStepMinutes: 30 },
   preferences: {
     temperature: { comfortMinC: 16, comfortMaxC: 24 },
-    // Forecast winds are measured at 10 m, well above what a rider feels, and studies find wind
-    // only deters riding above Beaufort 5 (29–38 km/h). So the penalties start at a gentle
-    // breeze and peak at 35 km/h headwind, 40 crosswind (Beaufort 6) and 65 km/h gusts.
+    // Personal comfort settings shape gradual wind penalties; separate minimum
+    // standards express conditions the rider wants to avoid.
     wind: {
       comfortableHeadwindKph: 15,
       comfortableCrosswindKph: 20,

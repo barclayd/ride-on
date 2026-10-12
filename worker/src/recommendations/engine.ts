@@ -22,8 +22,9 @@ import {
   type RecommendationInput,
   resolveMinimumTemperature,
 } from './input.ts';
+import { windComfort } from './wind-comfort.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.10';
+export const ALGORITHM_VERSION = 'comfort-v0.11';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -323,18 +324,12 @@ const assessCandidate = (
           0,
         ) / 10,
       );
-    const wind =
-      1 -
-      clamp(
-        0.45 *
-          clamp((headwindKph - preferences.wind.comfortableHeadwindKph) / 20) +
-          0.35 *
-            preferences.wind.crosswindSensitivity *
-            clamp(
-              (crosswindKph - preferences.wind.comfortableCrosswindKph) / 20,
-            ) +
-          0.2 * clamp((gustKph - preferences.wind.comfortableGustKph) / 30),
-      );
+    const wind = windComfort(
+      headwindKph,
+      crosswindKph,
+      gustKph,
+      preferences.wind,
+    );
     const dryness =
       1 -
       clamp(

@@ -163,7 +163,7 @@ quality limit, also checked against each evaluated route section.
 | `lwePrecipitationRate` | p50 m/s → mm/hour by multiplying by 3,600,000 |
 | `probabilityOfLweThicknessOfPrecipitationAmountAboveThresholdSumPt01h` | fraction for precipitation amount > 0 metres over the previous hour; normalized threshold 0 mm |
 
-CoverageJSON dimensions are decoded from `axisNames` and `shape`; array order is
+Before API v0.18.0, CoverageJSON dimensions were decoded from `axisNames` and `shape`; array order was
 not assumed. Parameter keys, units, selected statistics, coordinates and interval
 bounds are checked. Missing medians or invalid fractions remain missing. Native
 hour bounds are retained. The wind-direction axis happens to label its single
@@ -386,3 +386,14 @@ bun --env-file=.dev.vars scripts/probe-weather.ts request.json report.json
 The script writes diagnostic metadata, not raw forecast values, and is separate
 from `bun run check` and CI. The key stays in `.dev.vars`, which is gitignored and
 has owner-only permissions. The committed example contains a placeholder only.
+
+
+### BPF v2 packing correction (12 October 2026)
+
+Live percentile responses advertised `[percentiles, t]` but packed all percentiles for one hour together. Following the advertised order selected the wrong hour/statistic, corrupting temperatures, winds and gusts. A Horsham single-hour request independently matched the time-first interpretation of both short and 121-hour responses. Captured Richmond data decoded to roughly 20°C and 31 mph gusts, consistent with the public forecast. This was not a Celsius/feels-like or mph/km/h conversion issue.
+
+Adapter version **2** checks the declared and time-first interpretations against increasing percentile values or decreasing exceedance probabilities across each required numeric coverage in an envelope. It accepts a unique valid interpretation, or equivalent selected values; conflicting or ambiguous evidence becomes `invalid-response`, never plausible invented weather. Numeric evidence cannot be borrowed across the percentile/probability envelopes. Native time bounds and unit checks remain mandatory; one-value categorical symbols and direction means retain their existing semantics. Optional/unrequested fields are not used to infer packing.
+
+The adapter version changes both route-point and site cache keys, so already-normalized corrupt snapshots are bypassed without bulk deleting other providers’ caches. Retention and Today/Tomorrow/later refresh intervals remain unchanged. This can require one replacement fetch per needed site; subsequent requests reuse it. The original raw arrays are not present in old normalized caches, so they cannot be repaired by rearranging the cached medians.
+
+Validation uses synthetic fixtures for both layouts, ambiguous/malformed data and interval semantics, plus offline replay of the captured single-hour and multi-hour probes. The probability layout protection is tested synthetically; an attempted additional live probability probe was rate-limited, so no live probability-layout verification is claimed.

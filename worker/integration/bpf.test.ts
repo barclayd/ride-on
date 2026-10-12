@@ -113,7 +113,7 @@ integration(
     assert.equal(ride.best.conditions.cloudCoverFraction?.mean, 0.1);
     assert.equal(ride.best.conditions.averageWindSpeedKph, 7.2);
     assert.equal(ride.best.conditions.maximumGustKph, 14.4);
-    assert.equal(ride.best.conditions.maximumPrecipitationProbability, 0.08);
+    assert.equal(ride.best.conditions.maximumPrecipitationProbability, 0.081);
     assert.equal(ride.best.conditions.temperatureC.minimum, 14);
     assert.ok(
       ride.best.rideHours.every(

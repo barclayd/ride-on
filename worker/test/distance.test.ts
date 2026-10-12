@@ -115,9 +115,14 @@ test('distance and flatter preferences combine to favour a short recovery route 
   );
   expect(result.recommendedRouteId).toBe(recovery.id);
   expect(result.rankings[0]?.estimatedDurationMinutes).toBe(60);
-  expect(result.rankings[1]?.best?.score).toBe(80);
-  expect(result.rankings[0]?.best?.score).toBe(97.5);
-  expect(result.rankings[0]?.best?.weatherScore).toBe(100);
+  const weatherScore = present(
+    result.rankings[0]?.best ?? undefined,
+  ).weatherScore;
+  expect(result.rankings[1]?.best?.score).toBeCloseTo(0.8 * weatherScore, 1);
+  expect(result.rankings[0]?.best?.score).toBeCloseTo(
+    0.8 * weatherScore + 17.5,
+    1,
+  );
   const switched = recommendRides(
     routes,
     inputFor(routes, {
@@ -220,8 +225,12 @@ test('omitting or clearing distance preserves climbing-only scores; adding unrel
       now.getTime(),
     );
     expect(cleared.rankings[0]?.best).toEqual(omitted.rankings[0]?.best);
-    expect(cleared.rankings[0]?.best?.score).toBe(
-      preference === 'flatter' ? 90 : 100,
+    const best = present(cleared.rankings[0]?.best ?? undefined);
+    expect(best.score).toBeCloseTo(
+      preference === 'neutral'
+        ? best.weatherScore
+        : 0.9 * best.weatherScore + (preference === 'flatter' ? 0 : 10),
+      1,
     );
     expect(cleared.rankings[0]?.best?.factors.distance).toBeNull();
   }
