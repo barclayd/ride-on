@@ -96,15 +96,16 @@ test('planned dates resolve like the API', () => {
   const today = '2026-10-14';
   expect(planningDates({ kind: 'preset', preset: 'today' }, today)).toEqual([
     today,
-    today,
   ]);
   expect(planningDates({ kind: 'preset', preset: 'tomorrow' }, today)).toEqual([
     '2026-10-15',
-    '2026-10-15',
   ]);
-  // Next 5 days starts tomorrow; the background sends it to the API as this range.
+  // Next 5 days starts tomorrow; the background sends it to the API as these dates.
   expect(planningDates({ kind: 'preset', preset: 'next' }, today)).toEqual([
     '2026-10-15',
+    '2026-10-16',
+    '2026-10-17',
+    '2026-10-18',
     '2026-10-19',
   ]);
   expect(planningDates({ kind: 'preset', preset: 'weekend' }, today)).toEqual([
@@ -114,39 +115,44 @@ test('planned dates resolve like the API', () => {
   // On Sunday the weekend is what's left of it.
   expect(
     planningDates({ kind: 'preset', preset: 'weekend' }, '2026-10-18'),
-  ).toEqual(['2026-10-18', '2026-10-18']);
+  ).toEqual(['2026-10-18']);
   const range = (start: string, end: string) =>
     ({ kind: 'range', start, end }) as const;
+  const dates = (...dates: string[]) => ({ kind: 'dates', dates }) as const;
   expect(planningDates(range('2026-10-01', '2026-10-13'), today)).toBeNull();
   expect(planningDates(range('2026-10-12', '2026-10-15'), today)).toEqual([
     today,
     '2026-10-15',
   ]);
-  // Days tap on and off; the API takes consecutive days.
-  expect(toggleDay(null, '2026-10-14')).toEqual(
-    range('2026-10-14', '2026-10-14'),
-  );
-  expect(toggleDay(['2026-10-15', '2026-10-15'], '2026-10-17')).toEqual(
-    range('2026-10-15', '2026-10-17'),
+  expect(
+    planningDates(dates('2026-10-13', '2026-10-15', '2026-10-17'), today),
+  ).toEqual(['2026-10-15', '2026-10-17']);
+  expect(planningDates(dates('2026-10-12', '2026-10-13'), today)).toBeNull();
+  // Days tap on and off, and gaps stay gaps.
+  expect(toggleDay(null, '2026-10-14')).toEqual(dates('2026-10-14'));
+  expect(toggleDay(['2026-10-15'], '2026-10-17')).toEqual(
+    dates('2026-10-15', '2026-10-17'),
   );
   expect(toggleDay(['2026-10-15', '2026-10-17'], '2026-10-13')).toEqual(
-    range('2026-10-13', '2026-10-17'),
+    dates('2026-10-13', '2026-10-15', '2026-10-17'),
   );
-  expect(toggleDay(['2026-10-15', '2026-10-15'], '2026-10-15')).toBeNull();
-  expect(toggleDay(['2026-10-14', '2026-10-16'], '2026-10-14')).toEqual(
-    range('2026-10-15', '2026-10-16'),
+  expect(
+    toggleDay(['2026-10-14', '2026-10-15', '2026-10-16'], '2026-10-15'),
+  ).toEqual(dates('2026-10-14', '2026-10-16'));
+  expect(toggleDay(['2026-10-15'], '2026-10-15')).toBeNull();
+  // Runs read as spans; the month shows where it changes.
+  expect(datesLabel(['2026-10-17'])).toBe('Sat 17 Oct');
+  expect(datesLabel(['2026-10-17', '2026-10-18'])).toBe('Sat 17 – Sun 18 Oct');
+  expect(datesLabel(['2026-10-31', '2026-11-01'])).toBe(
+    'Sat 31 Oct – Sun 1 Nov',
   );
-  expect(toggleDay(['2026-10-14', '2026-10-16'], '2026-10-16')).toEqual(
-    range('2026-10-14', '2026-10-15'),
+  expect(datesLabel(['2026-10-13', '2026-10-17'])).toBe('Tue 13 & Sat 17 Oct');
+  expect(
+    datesLabel(['2026-10-12', '2026-10-13', '2026-10-15', '2026-10-17']),
+  ).toBe('Mon 12 – Tue 13, Thu 15 & Sat 17 Oct');
+  expect(datesLabel(['2026-10-30', '2026-11-01'])).toBe(
+    'Fri 30 Oct & Sun 1 Nov',
   );
-  expect(toggleDay(['2026-10-13', '2026-10-18'], '2026-10-14')).toEqual(
-    range('2026-10-15', '2026-10-18'),
-  );
-  expect(toggleDay(['2026-10-13', '2026-10-15'], '2026-10-14')).toEqual(
-    range('2026-10-13', '2026-10-13'),
-  );
-  expect(datesLabel('2026-10-17', '2026-10-18')).toBe('Sat 17 – Sun 18 Oct');
-  expect(datesLabel('2026-10-31', '2026-11-01')).toBe('Sat 31 Oct – Sun 1 Nov');
 });
 
 test('day tiles and the coverage note come from the API', () => {
@@ -287,7 +293,7 @@ const recs = (
     : null,
   rankings,
   unranked,
-  range: { start: '2026-10-14', end: '2026-10-14' },
+  range: { start: '2026-10-14', end: '2026-10-14', dates: ['2026-10-14'] },
   expired: false,
   days,
   weather: { retrieval: { latestAt: '2026-10-14T08:50:00Z' }, attribution },
@@ -608,7 +614,7 @@ test('the view: strip, selected days and weather', () => {
     'Not yet',
     'Not yet',
   ]);
-  expect(view.range).toEqual(['2026-10-14', '2026-10-14']);
+  expect(view.range).toEqual(['2026-10-14']);
   expect(view.selected.map((d) => d.date)).toEqual(['2026-10-14']);
   expect(view.datesText).toBe('Wed 14 Oct');
   expect(view.retrieved).toBe('09:50');
@@ -628,7 +634,7 @@ test('the view: strip, selected days and weather', () => {
 test('the shown window, its end and its picks', () => {
   const shown = shownOf(shownState, NOW);
   if (!shown) throw new Error('no window');
-  expect(shown.dates).toEqual(['2026-10-14', '2026-10-14']);
+  expect(shown.dates).toEqual(['2026-10-14']);
   // The earlier of 14:00 BST and sunset.
   expect(shown.endsAt).toBe('2026-10-14T13:00:00.000Z');
   expect(shown.picks.map((p) => [p.routeId, p.date, p.rank])).toEqual([
@@ -839,7 +845,7 @@ test('next windows', () => {
   };
   expect(windowName(week)).toBe('Best in the next 6 days');
   expect(windowWhen(week, today, today, TZ)).toBe(
-    `Any daylight, ${datesLabel('2026-10-15', '2026-10-20')}`,
+    'Any daylight, Thu 15 – Tue 20 Oct',
   );
   expect(windowBest(week, TZ)).toBe('Richmond, Sat 17 Oct 09:00 · 15° dry');
 });
@@ -945,7 +951,7 @@ test('Rides tab heading: the window, then how old the forecast is', () => {
     ({ mode: 'custom', start, end }) as const;
   const day = { kind: 'preset', preset: 'tomorrow' } as const;
   const today = '2026-10-11';
-  const tomorrow: [string, string] = ['2026-10-12', '2026-10-12'];
+  const tomorrow = ['2026-10-12'];
   expect(
     windowLabel({ days: day, time: custom('07:00', '11:00') }, tomorrow, today),
   ).toBe('Tomorrow morning');

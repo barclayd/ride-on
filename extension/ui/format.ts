@@ -70,10 +70,19 @@ export const hours = (at: string, timeZone: string) => {
 };
 export const duration = (minutes: number) =>
   `${Math.floor(minutes / 60)}h ${String(Math.round(minutes % 60)).padStart(2, '0')}m`;
-const join = (names: string[]) =>
-  names.length > 2
-    ? `${names[0]} to ${names[names.length - 1]}`
-    : names.join(' and ');
+// "Tuesday to Friday" for a run of days, else "Tuesday, Wednesday and Friday".
+const join = (dates: string[]) => {
+  const names = dates.map(longWeekday);
+  const last = names.pop() ?? '';
+  const run =
+    dates.length > 2 &&
+    dates.every((date, i) => i === 0 || addDays(dates[i - 1], 1) === date);
+  return run
+    ? `${names[0]} to ${last}`
+    : names.length
+      ? `${names.join(', ')} and ${last}`
+      : last;
+};
 
 export const qualityColour = (score: number) =>
   score >= 75 ? '#8bc61f' : score >= 60 ? '#c9b458' : '#d98b4a';
@@ -88,50 +97,69 @@ const instant = (date: string, time: string, timeZone: string) => {
   return new Date(2 * guess.getTime() - local).toISOString();
 };
 
+// The days from start to end, inclusive.
+export const span = (start: string, end: string) => {
+  const dates: string[] = [];
+  for (let date = start; date <= end; date = addDays(date, 1)) dates.push(date);
+  return dates;
+};
+
 // The planned dates as the API resolves them (worker/src/recommendations/planning.ts); null once passed.
-// Next 5 days starts tomorrow here; the API's starts today, so the background sends it as a range.
+// Next 5 days starts tomorrow here; the API's starts today, so the background sends it as dates.
 export const planningDates = (
   planned: Days,
   today: string,
-): [string, string] | null => {
-  if (planned.kind === 'range')
-    return planned.end < today
-      ? null
-      : [planned.start < today ? today : planned.start, planned.end];
-  if (planned.preset === 'today') return [today, today];
-  if (planned.preset === 'tomorrow')
-    return [addDays(today, 1), addDays(today, 1)];
-  if (planned.preset === 'next') return [addDays(today, 1), addDays(today, 5)];
+): string[] | null => {
+  if (planned.kind !== 'preset') {
+    const dates = (
+      planned.kind === 'dates'
+        ? planned.dates
+        : span(planned.start, planned.end)
+    ).filter((date) => date >= today);
+    return dates.length ? dates : null;
+  }
+  if (planned.preset === 'today') return [today];
+  if (planned.preset === 'tomorrow') return [addDays(today, 1)];
+  if (planned.preset === 'next')
+    return span(addDays(today, 1), addDays(today, 5));
   const day = noon(today).getUTCDay(); // 0 is Sunday
-  if (day === 0) return [today, today];
+  if (day === 0) return [today];
   const saturday = addDays(today, 6 - day);
   return [saturday, addDays(saturday, 1)];
 };
 
-// Tap a day to add or remove it. The API takes consecutive days, so adding one fills any gap,
-// and removing one from the middle drops the shorter side too. Null: the only day stays on.
+// Tap a day to add or remove it; gaps stay gaps. Null: the only day stays on.
 export const toggleDay = (
-  selected: [string, string] | null,
+  selected: string[] | null,
   date: string,
 ): Days | null => {
-  const range = (start: string, end: string) =>
-    ({ kind: 'range', start, end }) as const;
-  if (!selected) return range(date, date);
-  const [start, end] = selected;
-  if (date < start) return range(date, end);
-  if (date > end) return range(start, date);
-  if (start === end) return null;
-  // Keep the longer side (the earlier on a tie); an end day just drops off.
-  return Date.parse(date) - Date.parse(start) >=
-    Date.parse(end) - Date.parse(date)
-    ? range(start, addDays(date, -1))
-    : range(addDays(date, 1), end);
+  const dates = selected?.includes(date)
+    ? selected.filter((d) => d !== date)
+    : [...(selected ?? []), date].sort();
+  return dates.length ? { kind: 'dates', dates } : null;
 };
 
-export const datesLabel = (start: string, end: string) =>
-  start === end
-    ? shortDate(start)
-    : `${month(start) === month(end) ? `${weekday(start)} ${dayOfMonth(start)}` : shortDate(start)} – ${shortDate(end)}`;
+// Runs of days read as spans and the month shows where it changes: "Tue 13 – Thu 15 & Sat 17 Oct".
+export const datesLabel = (dates: string[]) => {
+  const runs: [string, string][] = [];
+  for (const date of dates) {
+    const run = runs.at(-1);
+    if (run && addDays(run[1], 1) === date) run[1] = date;
+    else runs.push([date, date]);
+  }
+  const day = (date: string, next?: string) =>
+    next && month(next) === month(date)
+      ? `${weekday(date)} ${dayOfMonth(date)}`
+      : shortDate(date);
+  const parts = runs.map(([start, end], i) => {
+    const next = runs[i + 1]?.[0];
+    return start === end
+      ? day(start, next)
+      : `${day(start, end)} – ${day(end, next)}`;
+  });
+  const last = parts.pop() ?? '';
+  return parts.length ? `${parts.join(', ')} & ${last}` : last;
+};
 
 export const timeText = (
   planning: Planning,
@@ -145,7 +173,7 @@ export const timeText = (
       : 'Daylight hours';
 
 const unavailable = (dates: string[]) =>
-  `${join(dates.map(longWeekday))}${dates.length > 1 ? "'s forecasts aren't" : "'s forecast isn't"} available yet`;
+  `${join(dates)}${dates.length > 1 ? "'s forecasts aren't" : "'s forecast isn't"} available yet`;
 const notYet = (selected: DaySummary[]) =>
   selected
     .filter((d) => d.availabilityReason === 'outside_forecast_horizon')
@@ -157,8 +185,7 @@ export const coverageText = (selected: DaySummary[], timeZone: string) => {
   const none = notYet(selected);
   if (!partial && !none.length) return null;
   const parts = [];
-  if (full.length)
-    parts.push(`${join(full.map((d) => longWeekday(d.date)))} available`);
+  if (full.length) parts.push(`${join(full.map((d) => d.date))} available`);
   if (partial) {
     const until = partial.until && clock(partial.until, timeZone);
     parts.push(
@@ -742,9 +769,7 @@ export const viewOf = (state: State, now: Date) => {
   const today = localDate(now, timeZone);
   // An ended window reads as passed until new dates are picked.
   const range = expired ? null : planningDates(planning.days, today);
-  const selected = range
-    ? (recs?.days ?? []).filter((d) => d.date >= range[0] && d.date <= range[1])
-    : [];
+  const selected = (recs?.days ?? []).filter((d) => range?.includes(d.date));
   const results = buildResults(
     range ? (state.selection?.routeIds ?? []) : [],
     state.routes,
@@ -755,11 +780,13 @@ export const viewOf = (state: State, now: Date) => {
   );
   const weather = expired ? state.next?.weather : recs?.weather;
   const at = weather?.retrieval.latestAt;
-  const passed: [string, string] | null =
+  const passed =
     expired?.dates ??
-    (planning.days.kind === 'range'
-      ? [planning.days.start, planning.days.end]
-      : null);
+    (planning.days.kind === 'dates'
+      ? planning.days.dates
+      : planning.days.kind === 'range'
+        ? span(planning.days.start, planning.days.end)
+        : null);
   return {
     timeZone,
     today,
@@ -777,11 +804,7 @@ export const viewOf = (state: State, now: Date) => {
     range,
     passed,
     selected,
-    datesText: range
-      ? datesLabel(...range)
-      : passed
-        ? datesLabel(...passed)
-        : '',
+    datesText: datesLabel(range ?? passed ?? []),
     timeText: timeText(
       expired ? { ...planning, time: expired.time } : planning,
       results.daylight,
@@ -808,7 +831,7 @@ export const shownOf = (state: State, now: Date): Shown | null => {
     time.mode === 'custom' ? instant(last, time.end, recs.timeZone) : null,
   ].flatMap((at) => (at ? [Date.parse(at)] : []));
   return {
-    dates: [recs.range.start, last],
+    dates: recs.range.dates,
     time,
     endsAt: ends.length
       ? new Date(Math.min(...ends)).toISOString()
@@ -940,24 +963,25 @@ export const windowName = (w: NextWindow) => {
 // The Rides tab heading: Tomorrow morning, Saturday, This weekend.
 export const windowLabel = (
   planning: Planning,
-  [start, end]: [string, string],
+  dates: string[],
   today: string,
 ) => {
   const preset = planning.days.kind === 'preset' && planning.days.preset;
-  const day =
-    start !== end
-      ? preset === 'weekend'
-        ? 'This weekend'
-        : preset === 'next'
-          ? 'Next 5 days'
-          : 'Your dates'
-      : start === today
-        ? 'Today'
-        : start === addDays(today, 1)
-          ? 'Tomorrow'
-          : longWeekday(start);
+  const [start] = dates;
+  const one = dates.length === 1;
+  const day = !one
+    ? preset === 'weekend'
+      ? 'This weekend'
+      : preset === 'next'
+        ? 'Next 5 days'
+        : 'Your dates'
+    : start === today
+      ? 'Today'
+      : start === addDays(today, 1)
+        ? 'Tomorrow'
+        : longWeekday(start);
   // A part of the day reads well after one day only: Tomorrow morning, not Next 5 days morning.
-  return start === end && planning.time.mode === 'custom'
+  return one && planning.time.mode === 'custom'
     ? day + partOf(planning.time)
     : day;
 };
@@ -983,7 +1007,7 @@ export const windowWhen = (
   timeZone: string,
 ) => {
   if (w.kind === 'best_next_days')
-    return `Any daylight, ${datesLabel(addDays(today, 1), addDays(today, 6))}`;
+    return `Any daylight, ${datesLabel(span(addDays(today, 1), addDays(today, 6)))}`;
   const times =
     w.window !== 'daylight'
       ? `${w.window.start}–${w.window.end}`

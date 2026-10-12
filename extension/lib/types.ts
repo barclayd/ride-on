@@ -216,7 +216,7 @@ export type Recommendations = {
   recommendation: { routeId: string; kind: RecommendationKind } | null;
   rankings: RouteResult[];
   unranked: RouteResult[];
-  range: { start: string; end: string } | null; // null when expired or nothing forecast yet
+  range: { start: string; end: string; dates: string[] } | null; // null when expired or nothing forecast yet
   expired: boolean;
   days: DaySummary[];
   weather: Weather;

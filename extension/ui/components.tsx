@@ -346,7 +346,7 @@ export const RouteTile = (props: {
   const panel = medal !== undefined;
   const rank = medal ?? 3;
   // The Rides tab's heading has the date, unless the window spans days.
-  const dated = !panel || view.range?.[0] !== view.range?.[1];
+  const dated = !panel || (view.range?.length ?? 0) > 1;
   const notRecommended = card.score !== null && card.score < 50;
   return (
     <div

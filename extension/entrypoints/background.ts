@@ -189,10 +189,9 @@ const recRequest = (state: State) => {
     : undefined;
   // The API's "next" preset starts today; Next 5 days starts tomorrow, so it goes as dates.
   const today = localDate(new Date(), user.settings.timeZone);
-  const [start, end] = planningDates(planning.days, today) ?? [today, today];
   const days =
     planning.days.kind === 'preset' && planning.days.preset === 'next'
-      ? { kind: 'range' as const, start, end }
+      ? { kind: 'dates' as const, dates: planningDates(planning.days, today) }
       : planning.days;
   const body = {
     routeIds: selection.routeIds,
@@ -203,9 +202,10 @@ const recRequest = (state: State) => {
   };
   return {
     body,
-    // Drop persisted scores calculated before the forecast/scoring correction.
+    // Drop persisted scores from before the forecast/scoring correction, or without range.dates.
     key: JSON.stringify([
       'comfort-v0.11',
+      'api-0.19',
       body,
       user.id,
       user.version,
@@ -270,7 +270,7 @@ const suggest = async () => {
     const next = await api<NextWindows>('/recommendations/next-windows', {
       body: {
         routeIds: selection.routeIds,
-        after: { date: expired.dates[1], window: windowOf(expired.time) },
+        after: { date: expired.dates.at(-1), window: windowOf(expired.time) },
         ...(preferences && { preferences }),
       },
     });

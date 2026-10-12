@@ -140,8 +140,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
   const fresh =
     !!view?.range &&
     !view.state.loading &&
-    recs?.range?.start === view.range[0] &&
-    recs.range.end === view.range[1];
+    JSON.stringify(recs?.range?.dates) === JSON.stringify(view.range);
   if (phase === 'confirmed' && fresh) filled.current = true;
   // Placeholders until the new dates' scores arrive, so nothing old flashes up; they then fill in place
   // and Ranked moves the tiles into order.
