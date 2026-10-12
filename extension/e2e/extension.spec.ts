@@ -13,6 +13,7 @@ import type { Ride, RidePlan, RouteSummary, User } from '../lib/types';
 import {
   addDays,
   applyPatch,
+  datesLabel,
   longWeekday,
   newest,
   planningDates,
@@ -1395,4 +1396,37 @@ test('Journeys page: injected twice, it shows once', async ({
     'data-ride-on-tracked',
     '',
   );
+});
+
+test('Journeys page: after an extension update, the page follows the new copy', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  await fakeCycleTravel(context);
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys');
+  const window = page.locator('ride-on-module .ro-window');
+  await expect(window).toHaveText(/ · Daylight hours$/);
+
+  // Playwright can't update an unpacked extension, so retire the page's copy the way a new
+  // copy would, then restart the background as an update does.
+  await worker.evaluate(
+    `chrome.tabs.query({ url: 'https://cycle.travel/*' }).then(([tab]) => chrome.scripting.executeScript({ target: { tabId: tab.id }, func: (name) => document.dispatchEvent(new CustomEvent(name, { detail: { contentScriptName: 'journeys', messageId: 'update' } })), args: [chrome.runtime.id + ':journeys:wxt:content-script-started'] }))`,
+  );
+  await expect(page.locator('ride-on-module')).toHaveCount(0);
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  const cdp = await context.newCDPSession(popup);
+  await cdp.send('ServiceWorker.enable');
+  await cdp.send('ServiceWorker.stopAllWorkers');
+  await popup.reload();
+  await expect(page.locator('ride-on-module')).toHaveCount(1);
+  await popup.getByRole('tab', { name: 'When' }).click();
+  await popup.locator('.ro-day').nth(1).click();
+  await expect(window).toHaveText(
+    `${datesLabel(day(2), day(5))} · Daylight hours`,
+  );
+  await expect(page.locator('ride-on-module')).toHaveCount(1);
 });

@@ -10,7 +10,7 @@ export default defineConfig({
     define: { __API_URL__: JSON.stringify(apiUrl) },
     oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
   }),
-  manifest: ({ browser, mode }) => ({
+  manifest: ({ browser }) => ({
     name: 'Ride On',
     description:
       'Pick the best of your saved cycle.travel routes, and the best time to ride it.',
@@ -30,14 +30,11 @@ export default defineConfig({
       // Safari counts its storage database's size on disk, which grows with every state write,
       // and refuses writes past ~5 MB long before the state itself (~120 KB) gets near it.
       'unlimitedStorage',
-      // e2e only: re-injects the content script, as Safari does into open pages.
-      ...(mode === 'e2e' ? ['scripting'] : []),
+      // Re-injects the Journeys script into pages left on an old copy by an update.
+      'scripting',
     ],
-    // Safari asks per site, so list cycle.travel for the popup's permission request (e2e: for scripting).
-    host_permissions:
-      browser === 'safari' || mode === 'e2e'
-        ? [`${apiUrl}/*`, 'https://cycle.travel/*']
-        : [`${apiUrl}/*`],
+    // For scripting; Safari asks per site, so this also lists cycle.travel for the popup's request.
+    host_permissions: [`${apiUrl}/*`, 'https://cycle.travel/*'],
     action: { default_title: 'Ride On' },
     web_accessible_resources: [
       {

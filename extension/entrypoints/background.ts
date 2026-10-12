@@ -157,6 +157,28 @@ const windowOf = (time: Planning['time']) =>
     ? ('daylight' as const)
     : { start: time.start, end: time.end };
 
+// An extension update leaves open Journeys pages running the old copy, which no longer hears
+// state changes, and neither browser injects the new one. Inject it wherever no copy answers;
+// WXT then retires the old copy and its UI.
+const revive = async () => {
+  const tabs = await browser.tabs.query({
+    url: 'https://cycle.travel/user/journeys*',
+  });
+  for (const { id } of tabs) {
+    if (id === undefined) continue;
+    const alive = await browser.tabs
+      .sendMessage(id, { type: 'alive' })
+      .catch(() => false);
+    if (!alive)
+      await browser.scripting
+        .executeScript({
+          target: { tabId: id },
+          files: ['/content-scripts/journeys.js'],
+        })
+        .catch(() => {});
+  }
+};
+
 // One request across the planned days; previewDays fills the day strip. The key adds what the
 // API reads besides the body: the saved profile and ride history.
 const recRequest = (state: State) => {
@@ -731,6 +753,7 @@ export default defineBackground(() => {
       search: null,
     })),
   );
+  revive().catch(() => {});
   browser.runtime.onMessage.addListener(
     (message: Message, _sender, sendResponse) => {
       handle(message).then(
