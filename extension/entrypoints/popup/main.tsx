@@ -1116,6 +1116,23 @@ const PrefsTab = ({ view }: { view: View }) => {
       ),
     },
     {
+      label: 'Hotter than',
+      on: draft.heatOn,
+      toggle: () => edit({ heatOn: !draft.heatOn }),
+      text: temp(draft.heatC),
+      stepper: (
+        <Stepper
+          label="hotter than"
+          text={temp(draft.heatC)}
+          value={draft.heatC}
+          min={15}
+          max={40}
+          step={1}
+          onChange={(heatC) => edit({ heatC })}
+        />
+      ),
+    },
+    {
       label: 'Rain chance above',
       on: draft.rainOn,
       toggle: () => edit({ rainOn: !draft.rainOn }),
@@ -1277,7 +1294,7 @@ const PrefsTab = ({ view }: { view: View }) => {
         )}
       </section>
       <section class="ro-card ro-limits">
-        <span class="ro-label">Minimum conditions</span>
+        <span class="ro-label">Skip rides when</span>
         {limits.map((limit, i) => (
           <div key={limit.label} class="ro-limit">
             <div class="ro-switch-row">

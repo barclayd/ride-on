@@ -571,9 +571,9 @@ export const Ranked = (props: {
 
 const BANNERS: Record<Exclude<Banner, 'provider'>, string> = {
   nomatch:
-    'None of these rides meets all your minimum conditions. Here are the best available options.',
+    'Each of these rides goes past one of your limits. Here are the best available options.',
   incomplete:
-    "We couldn't confirm a ride that meets your minimum conditions because some forecasts are unavailable.",
+    "We couldn't confirm a ride within your limits because some forecasts are unavailable.",
   distance:
     'None of your selected rides is within your preferred distance range. These are the best options at other distances.',
 };

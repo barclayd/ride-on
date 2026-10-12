@@ -317,3 +317,22 @@ test('an unresolved alternative prevents a false none-meet conclusion even when 
     result.rankings[0]?.best?.standards.failures[0]?.sections.length,
   ).toBeGreaterThan(0);
 });
+
+test('a maximum temperature rules out departures that get too hot', async () => {
+  const route = await makeRoute();
+  const input = inputFor([route], {
+    preferences: { minimumStandards: { maximumTemperatureC: 25 } },
+  });
+  const result = recommendRides(
+    [route],
+    input,
+    forecastsFor([route], (quantity) =>
+      quantity === 'air-temperature' ? 30 : defaultValue(quantity),
+    ),
+    now.getTime(),
+  );
+  const failure = result.rankings[0]?.best?.standards.failures[0];
+  expect(failure?.standard).toBe('maximumTemperatureC');
+  expect(failure?.actual).toBe(30);
+  expect(result.minimumStandardsStatus).toBe('none_meet');
+});

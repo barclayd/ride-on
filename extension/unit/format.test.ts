@@ -466,6 +466,7 @@ const local: LocalPrefs = {
   floorMode: 'fixed',
   floorFixedC: 3,
   floorMonthsC: [0, 0, 2, 4, 6, 8, 10, 10, 7, 5, 2, 0],
+  heatC: 28,
   rainPct: 50,
   gustKph: 45,
 };
@@ -492,6 +493,7 @@ test('preferences draft round-trips through a PATCH', () => {
   ]);
   expect(patch.minimumStandards).toEqual({
     minimumTemperature: { kind: 'fixed', valueC: 2 },
+    maximumTemperatureC: null,
     maximumPrecipitationProbability: null,
     maximumGustKph: null,
   });
@@ -502,6 +504,10 @@ test('preferences draft round-trips through a PATCH', () => {
   const monthly = draftPatch({ ...draft, floorOn: true, floorMode: 'monthly' });
   const floor = monthly.minimumStandards?.minimumTemperature;
   expect(floor?.kind === 'monthly' && floor.valuesC['7']).toBe(10);
+  expect(
+    draftPatch({ ...draft, heatOn: true }).minimumStandards
+      ?.maximumTemperatureC,
+  ).toBe(28);
   expect(applyPatch(prefs, { distance: null }).distance).toBeNull();
 });
 

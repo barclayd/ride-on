@@ -66,6 +66,7 @@ const weights = z.strictObject({
 });
 const minimumStandards = z.strictObject({
   minimumTemperature: temperatureFloor.optional(),
+  maximumTemperatureC: z.number().min(-50).max(60).optional(),
   maximumGustKph: z.number().min(0).max(150).optional(),
   maximumPrecipitationProbability: z.number().min(0).max(1).optional(),
   maximumPrecipitationRateMmH: z.number().min(0).max(100).optional(),
@@ -104,6 +105,10 @@ const preferenceOverrides = z.strictObject({
   minimumStandards: z
     .strictObject({
       minimumTemperature: temperatureFloor.nullable().optional(),
+      maximumTemperatureC: minimumStandards.shape.maximumTemperatureC
+        .unwrap()
+        .nullable()
+        .optional(),
       maximumGustKph: minimumStandards.shape.maximumGustKph
         .unwrap()
         .nullable()
