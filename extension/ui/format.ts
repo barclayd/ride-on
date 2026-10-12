@@ -6,7 +6,6 @@ import type {
   LocalPrefs,
   Pick,
   Planning,
-  Preset,
   Search,
   Shown,
   State,
@@ -89,13 +88,6 @@ const instant = (date: string, time: string, timeZone: string) => {
   return new Date(2 * guess.getTime() - local).toISOString();
 };
 
-export const PRESETS: [Preset, string][] = [
-  ['today', 'Today'],
-  ['tomorrow', 'Tomorrow'],
-  ['weekend', 'Weekend'],
-  ['next', 'Next 5 days'],
-];
-
 // The planned dates as the API resolves them (worker/src/recommendations/planning.ts); null once passed.
 // Next 5 days starts tomorrow here; the API's starts today, so the background sends it as a range.
 export const planningDates = (
@@ -116,18 +108,25 @@ export const planningDates = (
   return [saturday, addDays(saturday, 1)];
 };
 
-// Click a day: one day, or a range when a different day follows a single-day pick.
-export const pickDay = (
+// Tap a day to add or remove it. The API takes consecutive days, so adding one fills any gap,
+// and removing one from the middle drops the shorter side too. Null: the only day stays on.
+export const toggleDay = (
   selected: [string, string] | null,
   date: string,
-): Days =>
-  selected && selected[0] === selected[1] && selected[0] !== date
-    ? {
-        kind: 'range',
-        start: date < selected[0] ? date : selected[0],
-        end: date > selected[0] ? date : selected[0],
-      }
-    : { kind: 'range', start: date, end: date };
+): Days | null => {
+  const range = (start: string, end: string) =>
+    ({ kind: 'range', start, end }) as const;
+  if (!selected) return range(date, date);
+  const [start, end] = selected;
+  if (date < start) return range(date, end);
+  if (date > end) return range(start, date);
+  if (start === end) return null;
+  // Keep the longer side (the earlier on a tie); an end day just drops off.
+  return Date.parse(date) - Date.parse(start) >=
+    Date.parse(end) - Date.parse(date)
+    ? range(start, addDays(date, -1))
+    : range(addDays(date, 1), end);
+};
 
 export const datesLabel = (start: string, end: string) =>
   start === end
