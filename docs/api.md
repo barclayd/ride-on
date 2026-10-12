@@ -751,17 +751,17 @@ breakdown and standards failures for an accurate scoring explanation.
 
 ### Wind comfort calibration v0.11
 
-Scores remain personal comfort values, not probabilities or a ranking percentile. There is no starting bonus tied to the width of a rider’s preferences. Calm, dry rides in the rider’s temperature comfort band can still reach 100. Temperature, rain, sunshine, distance and climbing curves are unchanged in this release.
+Scores remain personal comfort values, not probabilities or a ranking percentile. There is no starting bonus tied to the width of a rider’s preferences. Calm, dry rides in the rider’s temperature comfort band can still reach 100. The same temperature earns the same comfort score year-round: season is context, not an extra bonus. Temperature, rain, sunshine, distance and climbing curves are unchanged in this release.
 
 Wind now loses comfort gradually before the rider’s preferred speed and more strongly beyond it. All speeds below are km/h. Let `approach(v, ideal, comfort)` be zero at or below `min(ideal, comfort)`, increasing linearly to one at `comfort` (using a minimum 1 km/h transition span when comfort is at/below ideal). Clamp each fraction to 0–1:
 
 - Headwind loss: `0.15 × approach(head, 5, headComfort) + 0.45 × clamp((head − headComfort) / 20)`.
-- Crosswind loss: `0.20 × min(1, sensitivity) × approach(cross, 5, crossComfort) + 0.35 × sensitivity × clamp((cross − crossComfort) / 20)`. Sensitivity zero still disables crosswind discomfort.
-- Gust loss: `0.10 × approach(gust, 10, gustComfort) + 0.45 × clamp((gust − gustComfort) / 30)`.
+- Crosswind loss: `0.15 × min(1, sensitivity) × approach(cross, 5, crossComfort) + 0.35 × sensitivity × clamp((cross − crossComfort) / 20)^1.5`. Excess discomfort grows progressively: just over comfort has a small effect, while larger exceedances still matter strongly. Sensitivity zero still disables crosswind discomfort.
+- Gust loss: `0.08 × approach(gust, 10, gustComfort) + 0.30 × clamp((gust − gustComfort) / 40)`.
 
 Wind comfort is `1 − clamp(head loss + cross loss + gust loss)`. These are versioned calibration choices, not physical safety limits. Gust maxima are taken over native forecast intervals; gusts are not treated as sustained wind or assigned a direction the provider does not supply. Each section contributes its own wind discomfort. The existing 75% distance mean / 25% worst-section blend makes persistent exposure count more than a brief affected section.
 
-The agreed synthetic reference is a two-hour, warm, sunny, dry ride with 10 mph crosswinds and 30 mph gusts. With head/cross comfort 16 km/h, gust comfort 25 km/h, sensitivity 5, and weights temperature/wind/dryness/sunshine 0.15/0.40/0.20/0.25, it scores about **74/100**, within the agreed 70–75 band. It remains below a separate 55 km/h maximum-gust limit. This is not a newly measured score for Richmond or Horsham. Other riders’ settings produce different scores.
+The agreed synthetic reference is a two-hour, 20°C, sunny, dry ride with 10–11 mph crosswinds and 30–31 mph gusts. With head/cross comfort 16 km/h, gust comfort 25 km/h, sensitivity 5, and weights temperature/wind/dryness/sunshine 0.15/0.40/0.20/0.25, it scores about **81–84/100**, within the agreed 80–85 band. It remains below a separate 55 km/h maximum-gust limit. This is not a newly measured score for Richmond or Horsham. Other riders’ settings produce different scores.
 
 Suggested reading: 95–100 almost ideal; 85–94 very comfortable; 70–84 good with noticeable compromises; 50–69 rideable with meaningful discomfort; below 50 a poor preference match. These bands are guidance, not guarantees or safety classifications. A best available ride need not score highly.
 

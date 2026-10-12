@@ -21,13 +21,15 @@ export const windComfort = (
     0.45 * clamp((headwindKph - p.comfortableHeadwindKph) / 20);
   const cross =
     Math.min(1, p.crosswindSensitivity) *
-      0.2 *
+      0.15 *
       approach(crosswindKph, 5, p.comfortableCrosswindKph) +
     0.35 *
       p.crosswindSensitivity *
-      clamp((crosswindKph - p.comfortableCrosswindKph) / 20);
+      // Build excess discomfort progressively: a wind just above comfort
+      // should have a small effect; a large exceedance still matters strongly.
+      clamp((crosswindKph - p.comfortableCrosswindKph) / 20) ** 1.5;
   const gust =
-    0.1 * approach(gustKph, 10, p.comfortableGustKph) +
-    0.45 * clamp((gustKph - p.comfortableGustKph) / 30);
+    0.08 * approach(gustKph, 10, p.comfortableGustKph) +
+    0.3 * clamp((gustKph - p.comfortableGustKph) / 40);
   return 1 - clamp(head + cross + gust);
 };

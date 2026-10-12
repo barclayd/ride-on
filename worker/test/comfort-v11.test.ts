@@ -14,14 +14,14 @@ import {
 } from './fixtures/rides.ts';
 
 // Agreed calibration case: two dry, warm hours with 10 mph crosswinds and
-// 30 mph gusts feel rideable with noticeable compromises (70–75), not ideal.
+// 30 mph gusts feel good with noticeable compromises (80–85), not ideal.
 const wind = {
   comfortableHeadwindKph: 16,
   comfortableCrosswindKph: 16,
   comfortableGustKph: 25,
   crosswindSensitivity: 5,
 };
-test('warm dry crosswind/gust case earns 70–75 without failing the separate gust limit', async () => {
+test('warm dry crosswind/gust cases earn 80–85 without failing the separate gust limit', async () => {
   const route = await makeRoute({ distanceM: 40_000 });
   // Use a 40 km synthetic northbound route with uniform section lengths.
   const distance = route.legs.at(-1)?.toM ?? 1;
@@ -46,30 +46,39 @@ test('warm dry crosswind/gust case earns 70–75 without failing the separate gu
       minimumStandards: { maximumGustKph: 55 },
     },
   });
-  const weather = forecastsFor(
-    [scaled],
-    (q) =>
-      q === 'air-temperature'
-        ? 20
-        : q === 'wind-speed'
-          ? (10 * 1.609344) / 3.6
-          : q === 'wind-gust'
-            ? (30 * 1.609344) / 3.6
-            : q === 'wind-from-direction'
-              ? 270
-              : q === 'sky-condition'
-                ? skyConditions.sunny
-                : 0,
-    requiredWeatherFor(input),
-  );
+  const forecast = (crosswindMph: number, gustMph: number) =>
+    forecastsFor(
+      [scaled],
+      (q) =>
+        q === 'air-temperature'
+          ? 20
+          : q === 'wind-speed'
+            ? (crosswindMph * 1.609344) / 3.6
+            : q === 'wind-gust'
+              ? (gustMph * 1.609344) / 3.6
+              : q === 'wind-from-direction'
+                ? 270
+                : q === 'sky-condition'
+                  ? skyConditions.sunny
+                  : 0,
+      requiredWeatherFor(input),
+    );
+  const weather = forecast(10, 30);
   const best = present(
     recommendRides([scaled], input, weather, now.getTime()).rankings[0]?.best ??
       undefined,
   );
-  expect(best.score).toBeGreaterThanOrEqual(70);
-  expect(best.score).toBeLessThanOrEqual(75);
+  expect(best.score).toBeGreaterThanOrEqual(80);
+  expect(best.score).toBeLessThanOrEqual(85);
   expect(best.standards.status).toBe('meets');
   expect(best.score).toBeLessThan(90);
+  const stronger = present(
+    recommendRides([scaled], input, forecast(11, 31), now.getTime()).rankings[0]
+      ?.best ?? undefined,
+  );
+  expect(stronger.score).toBeGreaterThanOrEqual(80);
+  expect(stronger.score).toBeLessThanOrEqual(85);
+  expect(stronger.score).toBeLessThan(best.score);
   const lowerLimit = {
     ...input,
     preferences: {
