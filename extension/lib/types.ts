@@ -33,6 +33,11 @@ export type Preferences = {
   minimumStandards: MinimumStandards;
   recentRides?: RecentRides; // materialised by v0.11; absent on older responses
 };
+// Derived by the API from the saved weights; 'custom' when they match no preset (planning-api.md).
+export type Levels = {
+  sunshine: 'dont-mind' | 'nice' | 'important' | 'custom';
+  rain: 'dont-mind' | 'light-ok' | 'avoid' | 'custom';
+};
 export type WeatherSource =
   | { mode: 'strict'; providerId: string }
   | { mode: 'ordered-fallback'; providerIds: string[] };
@@ -61,6 +66,7 @@ export type User = {
   displayName: string;
   // The public picker choice; null for an advanced fallback/custom policy.
   weatherProviderId: string | null;
+  preferenceLevels?: Levels; // absent on users saved before 0.19
   settings: {
     timeZone: string;
     preferences: Preferences;
@@ -82,6 +88,9 @@ export type PreferencesPatch = {
 };
 export type SettingsPatch = {
   preferences?: PreferencesPatch;
+  preferenceLevels?: {
+    [K in keyof Levels]?: Exclude<Levels[K], 'custom'>;
+  };
   weatherProviderId?: string;
 };
 

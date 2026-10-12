@@ -33,6 +33,7 @@ import {
 } from '../lib/types';
 import {
   applyPatch,
+  DEFAULT_LEVELS,
   ended,
   localDate,
   logged,
@@ -578,11 +579,30 @@ const handle = async (message: Message) => {
       }));
     case 'savePreferences':
       return savePreferences(message.preferences);
-    case 'setWeather': {
-      await update(() => ({ syncing: true, syncError: null }));
+    case 'setWeather':
+    case 'setLevels': {
+      await update((state) => ({
+        syncing: true,
+        syncError: null,
+        // Levels show at once; patchUser replaces them with the API's.
+        ...(message.type === 'setLevels' &&
+          state.user && {
+            user: {
+              ...state.user,
+              preferenceLevels: {
+                ...(state.user.preferenceLevels ?? DEFAULT_LEVELS),
+                ...message.levels,
+              },
+            },
+          }),
+      }));
       try {
         // ponytail: always saved to the profile; a for-this-search choice waits on the brief.
-        await patchUser({ weatherProviderId: message.providerId });
+        await patchUser(
+          message.type === 'setWeather'
+            ? { weatherProviderId: message.providerId }
+            : { preferenceLevels: message.levels },
+        );
       } catch (error) {
         return update(() => ({
           syncing: false,

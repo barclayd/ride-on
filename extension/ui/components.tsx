@@ -438,12 +438,17 @@ export const RouteTile = (props: {
           <ul class="ro-chips">
             {conditionChips(
               card.best.conditions,
-              view.state.user?.settings.preferences.temperature,
               view.state.units,
-              view.state.user?.settings.preferences.wind,
+              view.state.user?.settings.preferences,
+              view.state.user?.preferenceLevels,
             ).map((chip) => (
               // Keyed by text: a changed chip fades in afresh.
-              <li key={chip.text} aria-label={chip.label} data-warn={chip.warn}>
+              <li
+                key={chip.text}
+                aria-label={chip.label}
+                data-warn={chip.warn}
+                data-good={chip.good}
+              >
                 <Icon name={chip.icon} size={16} />
                 {chip.text}
               </li>

@@ -11,6 +11,7 @@ import type {
   DaySummary,
   Departure,
   Failure,
+  Levels,
   NextWindow,
   Preferences,
   Recommendations,
@@ -484,8 +485,6 @@ const prefs: Preferences = {
   minimumStandards: { maximumGustKph: 40, maximumPrecipitationRateMmH: 2 },
 };
 const local: LocalPrefs = {
-  sunshine: 'Nice to have',
-  rain: 'Prefer dry',
   floorMode: 'fixed',
   floorFixedC: 3,
   floorMonthsC: [0, 0, 2, 4, 6, 8, 10, 10, 7, 5, 2, 0],
@@ -556,9 +555,9 @@ test('gust chips use ride maxima, personal comfort and selected units; older res
     maximumPrecipitationProbability: 0,
     maximumGustKph: 49.9,
   };
-  const chips = conditionChips(c, prefs.temperature, regionUnits('en-GB'), {
-    ...prefs.wind,
-    comfortableGustKph: 25,
+  const chips = conditionChips(c, regionUnits('en-GB'), {
+    temperature: prefs.temperature,
+    wind: { ...prefs.wind, comfortableGustKph: 25 },
   });
   expect(chips[0]?.text).toBe('20°C');
   expect(chips[2]).toMatchObject({
@@ -567,9 +566,8 @@ test('gust chips use ride maxima, personal comfort and selected units; older res
     warn: true,
   });
   expect(
-    conditionChips(c, undefined, undefined, {
-      ...prefs.wind,
-      comfortableGustKph: 55,
+    conditionChips(c, undefined, {
+      wind: { ...prefs.wind, comfortableGustKph: 55 },
     })[2]?.warn,
   ).toBe(false);
   expect(conditionChips({ ...c, maximumGustKph: undefined })).toHaveLength(3);
@@ -861,9 +859,9 @@ test('condition chips: temperature, wind, rain, amber where it lowers the score'
   };
   const comfort = { comfortMinC: 8, comfortMaxC: 20 };
   const chips = (c: Partial<Conditions>) =>
-    conditionChips({ ...calm, ...c }, comfort).map(
+    conditionChips({ ...calm, ...c }, undefined, { temperature: comfort }).map(
       (chip) =>
-        `${chip.icon} ${chip.text} | ${chip.label}${chip.warn ? ' !' : ''}`,
+        `${chip.icon} ${chip.text} | ${chip.label}${chip.warn ? ' !' : ''}${chip.good ? ' +' : ''}`,
     );
 
   // Calm: speed only, even with fractions; no summary yet and a low chance reads dry.
@@ -876,16 +874,28 @@ test('condition chips: temperature, wind, rain, amber where it lowers the score'
     'wind 3 km/h | Wind 3 km/h',
     'dry Dry | Dry, no rain',
   ]);
-  // Mostly tailwind is fine; mostly crosswind or headwind is amber; no majority names nothing.
-  const windy = (f: Record<'headwind' | 'tailwind' | 'crosswind', number>) =>
-    chips({ averageWindSpeedKph: 12, windDistanceFractions: f })[1];
-  expect(windy({ headwind: 0.1, tailwind: 0.6, crosswind: 0.3 })).toBe(
-    'wind 12 km/h tailwind | Tailwind 12 km/h',
+  // Amber when the speed shown beats the rider's comfort for its direction (15 head, 20 cross here);
+  // a mix is held to the headwind comfort; tailwinds never.
+  const windy = (
+    f: Record<'headwind' | 'tailwind' | 'crosswind', number>,
+    kph = 18,
+  ) => chips({ averageWindSpeedKph: kph, windDistanceFractions: f })[1];
+  expect(windy({ headwind: 0.1, tailwind: 0.6, crosswind: 0.3 }, 30)).toBe(
+    'wind 30 km/h tailwind | Tailwind 30 km/h',
   );
   expect(windy({ headwind: 0.2, tailwind: 0.2, crosswind: 0.6 })).toBe(
-    'wind 12 km/h crosswind | Crosswind 12 km/h !',
+    'wind 18 km/h crosswind | Crosswind 18 km/h',
+  );
+  expect(windy({ headwind: 0.2, tailwind: 0.2, crosswind: 0.6 }, 22)).toBe(
+    'wind 22 km/h crosswind | Crosswind 22 km/h !',
+  );
+  expect(windy({ headwind: 0.6, tailwind: 0.2, crosswind: 0.2 })).toBe(
+    'wind 18 km/h headwind | Headwind 18 km/h !',
   );
   expect(windy({ headwind: 0.4, tailwind: 0.3, crosswind: 0.3 })).toBe(
+    'wind 18 km/h | Wind 18 km/h !',
+  );
+  expect(windy({ headwind: 0.4, tailwind: 0.3, crosswind: 0.3 }, 12)).toBe(
     'wind 12 km/h | Wind 12 km/h',
   );
   // Before the API ships fractions, the speed alone.
@@ -930,24 +940,58 @@ test('condition chips: temperature, wind, rain, amber where it lowers the score'
       ...more,
     })[2];
   expect(sky({ sunny: 0.6, overcast: 0.4 })).toBe(
-    'sun Sunny | Dry, sun on 60% of the route',
+    'sun Sunny | Dry, sun on 60% of the route +',
   );
   expect(sky({ sunny: 0.2, sunnyIntervals: 0.3, cloudy: 0.5 })).toBe(
-    'sun Sunny spells | Dry, sun on 50% of the route',
+    'sun Sunny spells | Dry, sun on 50% of the route +',
   );
   expect(sky({ sunnyIntervals: 0.3, cloudy: 0.3, overcast: 0.4 })).toBe(
-    'cloud Overcast | Dry, overcast on 70% of the route !',
+    'cloud Overcast | Dry, overcast on 70% of the route',
   );
   expect(sky({ cloudy: 1 })).toBe(
-    'cloud Cloudy | Dry, cloudy on 100% of the route !',
+    'cloud Cloudy | Dry, cloudy on 100% of the route',
   );
   expect(sky({ obscured: 0.7, cloudy: 0.3 })).toBe(
-    'fog Fog | Dry, fog or mist on 70% of the route !',
+    'fog Fog | Dry, fog or mist on 70% of the route',
   );
   expect(sky({})).toBe('dry Dry | Dry, no rain');
   expect(sky({ sunny: 1 }, { precipitationSummary: 'showers' })).toBe(
     'wet Showers | Rain: showers !',
   );
+
+  // Preference levels: cloud is amber only when sunshine is Important; rain never when they don't mind;
+  // a bare chance only above their rain limit.
+  const leveled = (
+    more: Partial<Conditions>,
+    levels: Levels,
+    prefs: Partial<Preferences> = {},
+  ) => conditionChips({ ...calm, ...more }, undefined, prefs, levels)[2];
+  const overcast = {
+    skyConditionDistanceFractions: {
+      sunny: 0,
+      sunnyIntervals: 0,
+      cloudy: 0,
+      overcast: 1,
+      obscured: 0,
+    },
+  };
+  expect(
+    leveled(overcast, { sunshine: 'important', rain: 'light-ok' }).warn,
+  ).toBe(true);
+  expect(leveled(overcast, { sunshine: 'nice', rain: 'light-ok' }).warn).toBe(
+    false,
+  );
+  const dontMind = { sunshine: 'nice', rain: 'dont-mind' } as const;
+  expect(leveled({ precipitationSummary: 'rain' }, dontMind).warn).toBe(false);
+  const preferDry = { sunshine: 'nice', rain: 'light-ok' } as const;
+  expect(leveled({ precipitationSummary: 'rain' }, preferDry).warn).toBe(true);
+  const chance = { maximumPrecipitationProbability: 0.3 };
+  const limit = (p: number) => ({
+    minimumStandards: { maximumPrecipitationProbability: p },
+  });
+  expect(leveled(chance, preferDry).warn).toBe(true);
+  expect(leveled(chance, preferDry, limit(0.4)).warn).toBe(false);
+  expect(leveled(chance, preferDry, limit(0.2)).warn).toBe(true);
 });
 
 test('units: region defaults and display conversion', () => {
@@ -971,14 +1015,15 @@ test('units: region defaults and display conversion', () => {
     windDistanceFractions: { headwind: 0.1, tailwind: 0.1, crosswind: 0.8 },
   } as Conditions;
   expect(
-    conditionChips(c, { comfortMinC: 10, comfortMaxC: 22 }, us).map(
-      (chip) => `${chip.text}${chip.warn ? ' !' : ''}`,
-    ),
+    conditionChips(c, us, {
+      temperature: { comfortMinC: 10, comfortMaxC: 22 },
+      wind: { comfortableHeadwindKph: 15, comfortableCrosswindKph: 5 },
+    }).map((chip) => `${chip.text}${chip.warn ? ' !' : ''}`),
   ).toEqual(['50–52°F', '9 mph crosswind !', 'Dry']);
   // The 10 km/h threshold holds whatever the unit: 9 km/h is 6 mph, unnamed.
-  expect(
-    conditionChips({ ...c, averageWindSpeedKph: 9 }, undefined, us)[1].text,
-  ).toBe('6 mph');
+  expect(conditionChips({ ...c, averageWindSpeedKph: 9 }, us)[1].text).toBe(
+    '6 mph',
+  );
   expect(conditionsText(c, us)).toBe('50–52° · crosswind 9 mph · dry');
 });
 

@@ -86,6 +86,7 @@ const reset = () => {
     version: 1,
     displayName: 'Test Rider',
     weatherProviderId: 'met-office',
+    preferenceLevels: { sunshine: 'nice', rain: 'light-ok' },
     settings: {
       timeZone: 'Europe/London',
       weather: { mode: 'strict', providerId: 'met-office-bpf' }, // an existing profile
@@ -361,6 +362,10 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
       ...user,
       version: user.version + 1,
       weatherProviderId: choice ?? user.weatherProviderId,
+      preferenceLevels: {
+        ...user.preferenceLevels,
+        ...body.settings.preferenceLevels,
+      },
       settings: {
         ...user.settings,
         weather: choice
@@ -976,6 +981,21 @@ test('Preferences: search-only distance, then PATCH carries supported fields onl
   });
   await expect.poll(() => recCalls().length).toBeGreaterThan(before);
   await expect(picker).toHaveValue('apple-weather');
+
+  // Sunshine and rain are saved to the profile, so they reach the score.
+  const sunshine = page.getByRole('group', { name: 'Sunshine' });
+  await expect(
+    sunshine.getByRole('button', { name: 'Nice to have' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await sunshine.getByRole('button', { name: 'Important' }).click();
+  await expect.poll(() => patches().length).toBe(4);
+  expect(patches()[3].body).toEqual({
+    expectedVersion: 4,
+    settings: { preferenceLevels: { sunshine: 'important' } },
+  });
+  await expect(
+    sunshine.getByRole('button', { name: 'Important' }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await page.locator('.ro-sign-out').scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath('apple-weather.png') });
 });
@@ -1249,6 +1269,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   ]);
   await expect(chips.nth(0)).toHaveAttribute('data-warn', 'true');
   await expect(chips.nth(1)).toHaveAttribute('aria-label', 'Tailwind 15 km/h');
+  await expect(chips.nth(3)).toHaveAttribute('data-good', 'true');
   await expect(chips.nth(2)).toHaveAttribute('data-warn', 'true');
   await expect(chips.nth(3)).toHaveAttribute('data-warn', 'false');
   await expect(

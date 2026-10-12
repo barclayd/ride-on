@@ -11,6 +11,7 @@ import type {
   RideSummary,
   RouteSummary,
   Selection,
+  SettingsPatch,
   User,
   WeatherProvider,
 } from './types';
@@ -43,8 +44,6 @@ export type Search = {
 
 // ponytail: the API can't store these yet (docs/extension-api-brief-v2.md), so they live in this browser.
 export type LocalPrefs = {
-  sunshine: "Don't mind" | 'Nice to have' | 'Important';
-  rain: "Don't mind" | 'Prefer dry';
   // Last values of each limit, so switching one off and on again loses nothing.
   floorMode: 'fixed' | 'monthly';
   floorFixedC: number;
@@ -54,8 +53,6 @@ export type LocalPrefs = {
   gustKph: number;
 };
 export const DEFAULT_LOCAL: LocalPrefs = {
-  sunshine: 'Nice to have',
-  rain: 'Prefer dry',
   floorMode: 'fixed',
   floorFixedC: 3,
   floorMonthsC: [0, 0, 2, 4, 6, 8, 10, 10, 7, 5, 2, 0],
@@ -167,8 +164,6 @@ export const initialState: State = {
 
 const withDefaults = (state: Partial<State> | undefined): State => {
   const local = { ...DEFAULT_LOCAL, ...state?.local };
-  // ponytail: 'Strongly prefer dry' was dropped; older saves show as 'Prefer dry'. Delete once no such install remains.
-  if (local.rain !== "Don't mind") local.rain = 'Prefer dry';
   return {
     ...initialState,
     units: regionUnits(navigator.language),
@@ -207,6 +202,10 @@ export type Message =
   | { type: 'setLocal'; local: Partial<LocalPrefs> }
   | { type: 'savePreferences'; preferences: PreferencesPatch }
   | { type: 'setWeather'; providerId: string }
+  | {
+      type: 'setLevels';
+      levels: NonNullable<SettingsPatch['preferenceLevels']>;
+    }
   | { type: 'import'; journey: JourneyGpx; track: boolean }
   | { type: 'untrack'; routeId: string }
   | { type: 'openPopup'; tab: Tab }

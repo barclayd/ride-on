@@ -34,6 +34,7 @@ import {
   clock,
   convert,
   coverageText,
+  DEFAULT_LEVELS,
   type Draft,
   dayOfMonth,
   degrees,
@@ -977,6 +978,7 @@ const UnitSwitch = <K extends keyof Units>(props: {
 
 const PrefsTab = ({ view }: { view: View }) => {
   const { user, local, units: u } = view.state;
+  const levels = user?.preferenceLevels ?? DEFAULT_LEVELS;
   // Edits sit on top of the synced profile until the background echoes them back.
   const [edits, setEdits] = useState<Partial<Draft>>({});
   const [windOpen, setWindOpen] = useState(false);
@@ -1127,14 +1129,14 @@ const PrefsTab = ({ view }: { view: View }) => {
           <span class="ro-label">Sunshine</span>
           <Segmented
             label="Sunshine"
-            value={local.sunshine}
+            value={levels.sunshine === 'custom' ? null : levels.sunshine}
             onChange={(sunshine) =>
-              send({ type: 'setLocal', local: { sunshine } })
+              send({ type: 'setLevels', levels: { sunshine } })
             }
             options={[
-              { value: "Don't mind", label: "Don't mind" },
-              { value: 'Nice to have', label: 'Nice to have' },
-              { value: 'Important', label: 'Important' },
+              { value: 'dont-mind', label: "Don't mind" },
+              { value: 'nice', label: 'Nice to have' },
+              { value: 'important', label: 'Important' },
             ]}
           />
         </div>
@@ -1142,11 +1144,18 @@ const PrefsTab = ({ view }: { view: View }) => {
           <span class="ro-label">Rain</span>
           <Segmented
             label="Rain"
-            value={local.rain}
-            onChange={(rain) => send({ type: 'setLocal', local: { rain } })}
+            // ponytail: 'Strongly prefer dry' (avoid) was dropped from the design; it shows as Prefer dry.
+            value={
+              levels.rain === 'custom'
+                ? null
+                : levels.rain === 'dont-mind'
+                  ? 'dont-mind'
+                  : 'light-ok'
+            }
+            onChange={(rain) => send({ type: 'setLevels', levels: { rain } })}
             options={[
-              { value: "Don't mind", label: "Don't mind" },
-              { value: 'Prefer dry', label: 'Prefer dry' },
+              { value: 'dont-mind', label: "Don't mind" },
+              { value: 'light-ok', label: 'Prefer dry' },
             ]}
           />
         </div>

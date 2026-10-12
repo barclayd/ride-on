@@ -15,6 +15,7 @@ import type {
   DaySummary,
   Departure,
   Failure,
+  Levels,
   NextWindow,
   Preferences,
   PreferencesPatch,
@@ -297,14 +298,18 @@ export type Chip = {
   icon: 'temperature' | 'wind' | 'dry' | 'wet' | 'sun' | 'cloud' | 'fog';
   text: string;
   label: string;
-  warn: boolean;
+  warn: boolean; // amber: against what the rider asked for
+  good?: boolean; // what they asked for
 };
+// The API's defaults, for users that predate them (planning-api.md).
+export const DEFAULT_LEVELS: Levels = { sunshine: 'nice', rain: 'light-ok' };
 export const conditionChips = (
   c: Conditions,
-  comfort?: Preferences['temperature'],
   u: Units = METRIC,
-  windComfort?: Preferences['wind'],
+  prefs: Partial<Preferences> = {},
+  levels: Levels = DEFAULT_LEVELS,
 ): Chip[] => {
+  const { temperature: comfort, wind: windComfort } = prefs;
   const low = Math.round(c.temperatureC.minimum);
   const high = Math.round(c.temperatureC.maximum);
   const [from, to] = [degrees(low, u), degrees(high, u)];
@@ -339,7 +344,13 @@ export const conditionChips = (
       label: kind
         ? `${kind[0].toUpperCase()}${kind.slice(1)} ${shown}`
         : `Wind ${shown}`,
-      warn: !!kind && kind !== 'tailwind',
+      // The speed shown against the comfort for its direction; a mix includes some headwind.
+      warn:
+        kind !== 'tailwind' &&
+        c.averageWindSpeedKph >
+          (kind === 'crosswind'
+            ? (windComfort?.comfortableCrosswindKph ?? 20)
+            : (windComfort?.comfortableHeadwindKph ?? 15)),
     },
     ...(c.maximumGustKph !== undefined
       ? [
@@ -356,13 +367,19 @@ export const conditionChips = (
           icon: 'wet',
           text: rain,
           label: rain === chance ? chance : `Rain: ${rain.toLowerCase()}`,
-          warn: true,
+          // A bare chance is held to the rider's rain limit, when they've set one.
+          warn:
+            levels.rain !== 'dont-mind' &&
+            (rain !== chance ||
+              c.maximumPrecipitationProbability >
+                (prefs.minimumStandards?.maximumPrecipitationProbability ?? 0)),
         }
-      : skyChip(c),
+      : skyChip(c, levels.sunshine),
   ];
 };
-// A dry ride names its sky. The API only sends sky shares while sunshine is weighed, so cloud lowered the score: amber.
-const skyChip = (c: Conditions): Chip => {
+// A dry ride names its sky; the API only sends sky shares while sunshine is weighed.
+// Sun is what the rider asked for; cloud is amber only when sunshine is Important.
+const skyChip = (c: Conditions, sunshine: Levels['sunshine']): Chip => {
   const f = c.skyConditionDistanceFractions;
   const sun = f ? f.sunny + f.sunnyIntervals : 0;
   const cloud = f ? f.cloudy + f.overcast : 0;
@@ -374,6 +391,7 @@ const skyChip = (c: Conditions): Chip => {
       text: f.sunny >= f.sunnyIntervals ? 'Sunny' : 'Sunny spells',
       label: `Dry, sun ${on(sun)}`,
       warn: false,
+      good: true,
     };
   if (f && cloud && cloud >= fog) {
     const text = f.overcast >= f.cloudy ? 'Overcast' : 'Cloudy';
@@ -381,7 +399,7 @@ const skyChip = (c: Conditions): Chip => {
       icon: 'cloud',
       text,
       label: `Dry, ${text.toLowerCase()} ${on(cloud)}`,
-      warn: true,
+      warn: sunshine === 'important',
     };
   }
   if (fog)
@@ -389,7 +407,7 @@ const skyChip = (c: Conditions): Chip => {
       icon: 'fog',
       text: 'Fog',
       label: `Dry, fog or mist ${on(fog)}`,
-      warn: true,
+      warn: sunshine === 'important',
     };
   return { icon: 'dry', text: 'Dry', label: 'Dry, no rain', warn: false };
 };
