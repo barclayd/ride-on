@@ -857,6 +857,14 @@ a.ro-name:hover {
 .ro-chips li[data-warn="true"] svg {
   color: #b4692a;
 }
+/* What the rider asked for, e.g. sun when sunshine matters to them. */
+.ro-chips li[data-good="true"] {
+  background: #d9edb2;
+  color: var(--ro-olive-900);
+}
+.ro-chips li[data-good="true"] svg {
+  color: var(--ro-olive-900);
+}
 .ro-meter {
   display: flex;
   flex-direction: column;
