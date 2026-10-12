@@ -174,7 +174,23 @@ test('stronger crosswinds worsen comfort monotonically, sensitivity is bounded, 
     expect(best.conditions.assistedDistanceFraction).toBe(
       direction === 180 ? 1 : 0,
     );
-    if (direction === 180) expect(best.factors.wind).toBe(100);
+    if (direction === 180) {
+      const still = forecastsFor(
+        [route],
+        (q) =>
+          q === 'wind-speed'
+            ? 0
+            : q === 'sky-condition'
+              ? skyConditions.sunny
+              : defaultValue(q),
+        requiredWeatherFor(input),
+      );
+      const stillBest = present(
+        recommendRides([route], input, still, now.getTime()).rankings[0]
+          ?.best ?? undefined,
+      );
+      expect(best.factors.wind).toBe(stillBest.factors.wind);
+    }
   }
   expect(inputFor([route]).preferences.wind.crosswindSensitivity).toBe(1);
   for (const value of [-1, 10.01, 'high', null]) {

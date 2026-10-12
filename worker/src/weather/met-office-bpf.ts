@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { haversineKm } from '../geo.ts';
+import { type BpfPacking, bpfOffset, bpfPacking } from './bpf-layout.ts';
 import {
   FORECAST_RETENTION_SECONDS,
   type ForecastCache,
@@ -36,7 +37,7 @@ export const BPF_ENDPOINT =
 const source = {
   providerId: 'met-office-bpf',
   productId: 'uk-blended-probabilistic-v2',
-  adapterVersion: '1',
+  adapterVersion: '2',
 } as const;
 const probabilityField =
   'probabilityOfLweThicknessOfPrecipitationAmountAboveThresholdSumPt01h';
@@ -211,8 +212,12 @@ const unknownRun = problem(
   'This product does not expose a model-run timestamp; retrieval freshness cannot verify model age.',
 );
 
-/** Decode the advertised dimensions rather than assuming percentile/time array order. */
-const decode = (raw: z.infer<typeof envelope>, mapping: Mapping) => {
+/** Validate dimensions and decode using the independently checked packing. */
+const decode = (
+  raw: z.infer<typeof envelope>,
+  mapping: Mapping,
+  packing: BpfPacking = 'declared',
+) => {
   const matches = raw.coverages.filter((c) => c.id === mapping.field);
   if (!matches.length) return null;
   if (matches.length !== 1) throw new Error('Duplicate coverage');
@@ -309,11 +314,13 @@ const decode = (raw: z.infer<typeof envelope>, mapping: Mapping) => {
   if (mapping.period && bounds?.length !== times.length * 2)
     throw new Error('Missing interval bounds');
   const samples: ForecastSample[] = times.map((at, timeIndex) => {
-    let offset = 0;
-    for (const [i, name] of range.axisNames.entries())
-      offset =
-        offset * (range.shape[i] ?? 1) +
-        (name === 't' ? timeIndex : name === selectionAxis ? selected : 0);
+    const offset = bpfOffset(
+      range,
+      selectionAxis,
+      timeIndex,
+      selected,
+      packing,
+    );
     const rawValue = range.values[offset];
     const fraction = probability || mapping.field === 'cloudAreaFraction';
     const direction = mapping.field === 'windFromDirection10mMean';
@@ -363,6 +370,40 @@ export const normaliseBpf = (
     return unavailable(requested, unknownRun);
   try {
     const envelopes = payloads.map((raw) => envelope.parse(raw));
+    const packings = new Map(
+      envelopes.map((raw) => [
+        raw,
+        bpfPacking(
+          raw.coverages.flatMap((candidate) => {
+            const mapping = mappings.find(
+              (m) =>
+                m.field === candidate.id &&
+                request.required.some(
+                  (d) => descriptorKey(d) === descriptorKey(m.descriptor),
+                ),
+            );
+            if (!mapping || mapping.descriptor.kind === 'category') return [];
+            const coverage = coverageSchema.parse(candidate);
+            const probability = mapping.descriptor.kind === 'probability';
+            const selectionAxis = probability
+              ? `${mapping.field}Values`
+              : 'percentiles';
+            const selections = coverage.domain.axes[selectionAxis]?.values;
+            const range = coverage.ranges[mapping.field];
+            if (!selections || !range) return [];
+            return [
+              {
+                range,
+                selectionAxis,
+                selections,
+                timeCount: coverage.domain.axes.t?.values.length ?? 0,
+                probability,
+              },
+            ];
+          }),
+        ),
+      ]),
+    );
     const issues: ProviderIssue[] = [unknownRun];
     const decoded = request.required.flatMap((descriptor) => {
       const mapping = mappings.find(
@@ -381,7 +422,9 @@ export const normaliseBpf = (
         e.coverages.some((c) => c.id === mapping.field),
       );
       if (containing.length > 1) throw new Error('Duplicate variable');
-      const result = containing[0] ? decode(containing[0], mapping) : null;
+      const result = containing[0]
+        ? decode(containing[0], mapping, packings.get(containing[0]))
+        : null;
       if (!result) {
         issues.push(
           problem(

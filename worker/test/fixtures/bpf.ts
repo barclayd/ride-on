@@ -46,12 +46,18 @@ export const bpfFixture = (
     ((field: string, _hour: number, selection: string) => {
       if (field === 'weatherCodePt01h') return 3;
       if (field === 'airTemperature1p5m')
-        return selection === '50' ? 287.15 : 280;
-      if (field === 'cloudAreaFraction') return selection === '50' ? 0.1 : 0.9;
+        return selection === '50'
+          ? 287.15
+          : selection === '10'
+            ? 280 + (_hour % 2)
+            : 295 + (_hour % 2);
+      if (field === 'cloudAreaFraction')
+        return selection === '50' ? 0.1 : selection === '10' ? 0 : 0.9;
       if (field === 'windFromDirection10mMean') return 180;
       if (field === 'windSpeed10m') return 2;
       if (field === 'windSpeedOfGust10mMaximumPt01h') return 4;
-      if (field === probability) return selection === '>0.0' ? 0.08 : 0.01;
+      if (field === probability)
+        return (selection === '>0.0' ? 0.08 : 0.01) + (_hour % 2) * 0.001;
       return 0;
     });
   return {

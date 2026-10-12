@@ -123,6 +123,7 @@ const CONDITIONS = {
   averageTailwindKph: 12,
   averageCrosswindKph: 4,
   maximumPrecipitationProbability: 0.05,
+  maximumGustKph: 48,
   windDistanceFractions: { headwind: 0.1, tailwind: 0.7, crosswind: 0.2 },
   precipitationSummary: 'dry' as const,
 };
@@ -383,7 +384,7 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
     routes[id] = {
       id,
       name: body.name,
-      distanceM: 64_000,
+      distanceM: routes[id]?.distanceM ?? 64_000,
       source: body.source,
       version,
       updatedAt: new Date().toISOString(),
@@ -687,6 +688,42 @@ test('reopening reuses fresh scores; a stale forecast or the refresh button rank
   await expect(page.locator('.ro-heading')).not.toContainText('Updating');
   await page.getByRole('button', { name: 'Refresh forecast' }).click();
   await expect.poll(() => recCalls().length).toBe(3);
+  await expect(page.locator('.ro-heading')).not.toContainText('Updating');
+  await page.close();
+  // Simulate upgrading with a fresh ranking stored by the previous extension.
+  await worker.evaluate(`chrome.storage.local.get('state').then(({ state }) => {
+    state.recsKey = JSON.stringify(JSON.parse(state.recsKey).slice(1));
+    return chrome.storage.local.set({ state });
+  })`);
+  await (await reopen()).close();
+  expect(recCalls()).toHaveLength(4);
+  await (await reopen()).close();
+  expect(recCalls()).toHaveLength(4);
+});
+
+test('gust comfort saves separately and appears alongside the ride wind', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  await expect(page.locator('.ro-ride').first()).toContainText('Gusts 48 km/h');
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await page.getByRole('button', { name: /Wind preferences/ }).click();
+  const gust = page.getByRole('slider', { name: 'Gust comfort' });
+  await gust.fill('25');
+  await expect
+    .poll(
+      () => patches().at(-1)?.body.settings.preferences.wind.comfortableGustKph,
+    )
+    .toBe(25);
+  expect(
+    patches().at(-1)?.body.settings.preferences.minimumStandards.maximumGustKph,
+  ).toBeNull();
+  await expect(page.locator('.ro-sync')).toHaveText('Synced');
+  await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('gust-comfort.png') });
 });
 
 test('a scored ride explains uncertain sunshine in the popup and on Journeys', async ({
@@ -1116,7 +1153,7 @@ const fakeCycleTravel = (context: BrowserContext) =>
             name: journey[1] === '101' ? 'Hilly Loop' : 'Coast & Back',
             polyline: '_p~iF~ps|U_ulLnnqC_mqNvxq`@', // 3 points, precision 5
             legacy: true,
-            distance: 64_000,
+            distance: journey[1] === '101' ? 51_000 : 64_000,
             updated_at: 1_760_000_000,
             full_osrm_url: 'https://routing-uk.cycle.travel/route?x=1',
           },
@@ -1161,10 +1198,16 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     /^\w{3} \d{1,2} \w{3}·\d\d:\d\d → ~\d\d:\d\d$/,
   );
   const chips = module.locator('.ro-chips li');
-  await expect(chips).toHaveText(['9–14°C', '15 km/h tailwind', 'Dry']);
+  await expect(chips).toHaveText([
+    '9–14°C',
+    '15 km/h tailwind',
+    'Gusts 48 km/h',
+    'Dry',
+  ]);
   await expect(chips.nth(0)).toHaveAttribute('data-warn', 'true');
   await expect(chips.nth(1)).toHaveAttribute('aria-label', 'Tailwind 15 km/h');
-  await expect(chips.nth(2)).toHaveAttribute('data-warn', 'false');
+  await expect(chips.nth(2)).toHaveAttribute('data-warn', 'true');
+  await expect(chips.nth(3)).toHaveAttribute('data-warn', 'false');
   await expect(
     module.getByRole('button', { name: 'Stop tracking Hilly Loop' }),
   ).toBeVisible();
@@ -1249,7 +1292,12 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
   const journeys = await context.newPage();
   await journeys.goto('https://cycle.travel/user/journeys');
   const chips = journeys.locator('ride-on-module .ro-chips li');
-  await expect(chips).toHaveText(['48–57°F', '9 mph tailwind', 'Dry']);
+  await expect(chips).toHaveText([
+    '48–57°F',
+    '9 mph tailwind',
+    'Gusts 30 mph',
+    'Dry',
+  ]);
   await expect(chips.nth(1)).toHaveAttribute('aria-label', 'Tailwind 9 mph');
 });
 

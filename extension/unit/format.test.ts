@@ -511,6 +511,47 @@ test('preferences draft round-trips through a PATCH', () => {
   expect(applyPatch(prefs, { distance: null }).distance).toBeNull();
 });
 
+test('gust comfort persists independently of the maximum-gust cutoff', () => {
+  const draft = draftFrom(
+    { ...prefs, wind: { ...prefs.wind, comfortableGustKph: 25 } },
+    local,
+  );
+  expect(draft.gustComfortKph).toBe(25);
+  const patch = draftPatch({ ...draft, gustComfortKph: 30 });
+  expect(patch.wind?.comfortableGustKph).toBe(30);
+  expect(patch.minimumStandards?.maximumGustKph).toBe(40);
+  expect(draftFrom(applyPatch(prefs, patch), local).gustComfortKph).toBe(30);
+});
+
+test('gust chips use ride maxima, personal comfort and selected units; older results remain readable', () => {
+  const c: Conditions = {
+    temperatureC: { minimum: 19.6, maximum: 19.9 },
+    averageWindSpeedKph: 16,
+    averageHeadwindKph: 0,
+    averageCrosswindKph: 16,
+    averageTailwindKph: 0,
+    maximumPrecipitationProbability: 0,
+    maximumGustKph: 49.9,
+  };
+  const chips = conditionChips(c, prefs.temperature, regionUnits('en-GB'), {
+    ...prefs.wind,
+    comfortableGustKph: 25,
+  });
+  expect(chips[0]?.text).toBe('20°C');
+  expect(chips[2]).toMatchObject({
+    text: 'Gusts 31 mph',
+    label: 'Maximum gusts during the ride 31 mph',
+    warn: true,
+  });
+  expect(
+    conditionChips(c, undefined, undefined, {
+      ...prefs.wind,
+      comfortableGustKph: 55,
+    })[2]?.warn,
+  ).toBe(false);
+  expect(conditionChips({ ...c, maximumGustKph: undefined })).toHaveLength(3);
+});
+
 test('recentRides patches keep the lookback', () => {
   const recent = {
     ...prefs,

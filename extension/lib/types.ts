@@ -23,7 +23,11 @@ export type RecentRides = {
 };
 export type Preferences = {
   temperature: { comfortMinC: number; comfortMaxC: number };
-  wind: { comfortableHeadwindKph: number; comfortableCrosswindKph: number };
+  wind: {
+    comfortableHeadwindKph: number;
+    comfortableCrosswindKph: number;
+    comfortableGustKph?: number;
+  };
   climbing: { preference: Climbing };
   distance: Distance | null;
   minimumStandards: MinimumStandards;
@@ -115,6 +119,7 @@ export type Conditions = {
   averageTailwindKph: number;
   averageCrosswindKph: number;
   maximumPrecipitationProbability: number;
+  maximumGustKph?: number;
   // docs/extension-api-brief-v4.md; absent before it ships and on older saved plans.
   windDistanceFractions?: {
     headwind: number;

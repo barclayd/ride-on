@@ -240,7 +240,7 @@ integration(
       departureStepMinutes: 30,
       window: 'daylight',
     });
-    assert.equal(ride.best.score, 100);
+    assert.ok(ride.best.score > 99 && ride.best.score <= 100);
     assert.equal(ride.departuresUnknown, 0);
     assert.ok(
       Date.parse(ride.best.departureAt) >= Date.parse(ride.daylight.start),

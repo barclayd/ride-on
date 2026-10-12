@@ -181,7 +181,14 @@ const recRequest = (state: State) => {
   };
   return {
     body,
-    key: JSON.stringify([body, user.id, user.version, state.rides[0]?.id]),
+    // Drop persisted scores calculated before the forecast/scoring correction.
+    key: JSON.stringify([
+      'comfort-v0.11',
+      body,
+      user.id,
+      user.version,
+      state.rides[0]?.id,
+    ]),
   };
 };
 

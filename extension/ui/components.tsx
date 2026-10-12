@@ -429,6 +429,7 @@ export const RouteTile = (props: {
               card.best.conditions,
               view.state.user?.settings.preferences.temperature,
               view.state.units,
+              view.state.user?.settings.preferences.wind,
             ).map((chip) => (
               // Keyed by text: a changed chip fades in afresh.
               <li key={chip.text} aria-label={chip.label} data-warn={chip.warn}>

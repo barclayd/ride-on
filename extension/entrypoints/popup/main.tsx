@@ -1256,17 +1256,24 @@ const PrefsTab = ({ view }: { view: View }) => {
             <span class="ro-label">Wind preferences</span>
             <span class="ro-hint">
               Headwind up to {speed(draft.headKph, u)} · crosswind up to{' '}
-              {speed(draft.crossKph, u)}
+              {speed(draft.crossKph, u)} · gusts up to{' '}
+              {speed(draft.gustComfortKph, u)}
             </span>
           </span>
           <span aria-hidden="true">›</span>
         </button>
         {windOpen && (
           <div class="ro-divided">
+            <p class="ro-hint">
+              Light winds score best. Comfort falls gradually towards these
+              speeds, then more strongly above them. Gust comfort affects your
+              score; the separate gust limit below controls which rides to skip.
+            </p>
             {(
               [
                 ['Headwind comfort', 'headKph'],
                 ['Crosswind comfort', 'crossKph'],
+                ['Gust comfort', 'gustComfortKph'],
               ] as const
             ).map(([label, key]) => (
               <div key={key} class="ro-pref-group">
@@ -1278,7 +1285,7 @@ const PrefsTab = ({ view }: { view: View }) => {
                   class="ro-range"
                   type="range"
                   min={5}
-                  max={50}
+                  max={key === 'gustComfortKph' ? 100 : 50}
                   value={draft[key]}
                   aria-label={label}
                   aria-valuetext={speed(draft[key], u)}
