@@ -27,6 +27,9 @@ export default defineConfig({
     permissions: [
       ...(browser === 'safari' ? [] : ['identity']),
       'storage',
+      // Safari counts its storage database's size on disk, which grows with every state write,
+      // and refuses writes past ~5 MB long before the state itself (~120 KB) gets near it.
+      'unlimitedStorage',
       // e2e only: re-injects the content script, as Safari does into open pages.
       ...(mode === 'e2e' ? ['scripting'] : []),
     ],
