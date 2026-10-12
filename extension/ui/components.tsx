@@ -270,8 +270,29 @@ const useCount = (to: number | null) => {
   return value;
 };
 
-// How far a refresh moved a score; shown for 30 seconds (15a).
+// How far a score moved since the rider last looked (15a). It stays until newer scores replace it
+// or the popup closes: a timer could hide it before it's read (WCAG 2.2.1).
 export type Change = { by: number; at: number };
+
+// The scores last on screen, so a return to the Rides tab, or a reopened popup (`remember`), badges what
+// changed meanwhile. ±1 is forecast noise: no badge.
+type Seen = {
+  window: string;
+  cards: Pick<Card, 'routeId' | 'score'>[];
+  changes: Record<string, Change>;
+};
+let seen: Seen | undefined;
+const recall = (): Seen | undefined => {
+  try {
+    // A closed popup's badges were seen.
+    return {
+      ...JSON.parse(localStorage.getItem('ro-seen') ?? ''),
+      changes: {},
+    };
+  } catch {
+    return undefined;
+  }
+};
 
 const Meter = (props: {
   score: number | null;
@@ -437,6 +458,7 @@ export const Ranked = (props: {
   cards: Card[];
   window: string; // change badges compare forecasts for the same window only
   class: string;
+  remember?: boolean; // keep what was seen across popup reopenings
   render: (
     card: Card,
     index: number,
@@ -446,10 +468,24 @@ export const Ranked = (props: {
 }) => {
   const { cards } = props;
   const list = useRef<HTMLDivElement>(null);
-  const [order, setOrder] = useState(() => cards.map((c) => c.routeId));
-  const [changes, setChanges] = useState<Record<string, Change>>({});
+  const [prior] = useState(() => {
+    seen ??= props.remember ? recall() : undefined;
+    return seen?.window === props.window ? seen : undefined;
+  });
+  // First paint shows the old order and scores, so returning animates the change like a refresh.
+  const [order, setOrder] = useState(() => {
+    const ids = cards.map((c) => c.routeId);
+    const was = prior?.cards.map((c) => c.routeId) ?? [];
+    return was.length === ids.length && ids.every((id) => was.includes(id))
+      ? was
+      : ids;
+  });
+  const [settled, setSettled] = useState(!prior);
+  const [changes, setChanges] = useState(prior?.changes ?? {});
   const [said, setSaid] = useState('');
-  const last = useRef({ window: props.window, cards });
+  const last = useRef<Omit<Seen, 'changes'>>(
+    prior ?? { window: props.window, cards },
+  );
   const before = useRef(new Map<string, DOMRect>());
   const tiles = () =>
     list.current?.querySelectorAll<HTMLElement>(':scope > [data-route]') ?? [];
@@ -457,6 +493,7 @@ export const Ranked = (props: {
   useEffect(() => {
     const was = last.current;
     last.current = { window: props.window, cards };
+    setSettled(true);
     const ids = cards.map((c) => c.routeId);
     // A route tracked or dropped: no motion.
     if (ids.length !== order.length || ids.some((id) => !order.includes(id))) {
@@ -470,25 +507,24 @@ export const Ranked = (props: {
     const changed = Object.fromEntries(
       cards.flatMap((c) => {
         const from = old.get(c.routeId);
-        return from != null && c.score !== null && from !== c.score
+        return from != null && c.score !== null && Math.abs(c.score - from) > 1
           ? [[c.routeId, { by: c.score - from, at }]]
           : [];
       }),
     );
     const any = Object.keys(changed).length > 0;
-    const stop = new AbortController();
     // New dates or times aren't a forecast change; a refresh that changed nothing keeps the badges.
-    const badge = () =>
-      setChanges((current) =>
-        was.window !== props.window ? {} : any ? changed : current,
-      );
-    // A hidden tab's badges start their 30 seconds once it's back on screen.
-    if (document.hidden)
-      document.addEventListener('visibilitychange', badge, {
-        once: true,
-        signal: stop.signal,
-      });
-    else badge();
+    const next = was.window !== props.window ? {} : any ? changed : changes;
+    setChanges(next);
+    const scores = cards.map(({ routeId, score }) => ({ routeId, score }));
+    seen = { window: props.window, cards: scores, changes: next };
+    if (props.remember)
+      try {
+        localStorage.setItem(
+          'ro-seen',
+          JSON.stringify({ window: props.window, cards: scores }),
+        );
+      } catch {}
     if (still && (moved || any) && !document.hidden)
       list.current?.animate([{ opacity: 0.4 }, { opacity: 1 }], 150);
     const timers = moved
@@ -518,7 +554,6 @@ export const Ranked = (props: {
       : [];
     return () => {
       for (const timer of timers) clearTimeout(timer);
-      stop.abort();
     };
   }, [cards.map((c) => `${c.routeId}:${c.score}`).join()]);
 
@@ -546,6 +581,7 @@ export const Ranked = (props: {
   }, [order]);
 
   const byId = new Map(cards.map((c) => [c.routeId, c]));
+  const old = new Map(prior?.cards.map((c) => [c.routeId, c.score]));
   const shown = [
     ...order.filter((id) => byId.has(id)),
     ...cards.map((c) => c.routeId).filter((id) => !order.includes(id)),
@@ -554,7 +590,10 @@ export const Ranked = (props: {
   return (
     <div ref={list} class={props.class}>
       {shown.map((id, i) => {
-        const card = byId.get(id) as Card;
+        const now = byId.get(id) as Card;
+        const card = settled
+          ? now
+          : { ...now, score: old.get(id) ?? now.score };
         return props.render(
           card,
           i,
