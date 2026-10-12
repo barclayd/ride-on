@@ -406,6 +406,15 @@ export default defineContentScript({
     const mount = shadowMount(moduleHost);
     render(<Page rows={rows} />, mount);
     send({ type: 'refresh' });
+    // The background asks after an update; a copy that doesn't answer gets replaced.
+    const alive = (
+      message: unknown,
+      _: unknown,
+      reply: (r: boolean) => void,
+    ) => {
+      if ((message as { type?: string })?.type === 'alive') reply(true);
+    };
+    browser.runtime.onMessage.addListener(alive);
     // Safari injects again into open pages (on enable, on site access), and WXT then invalidates
     // the older copy: it takes its UI with it, so only the newest shows.
     ctx.onInvalidated(() => {
@@ -415,6 +424,7 @@ export default defineContentScript({
         element.removeAttribute('data-ride-on-ridden');
       }
       for (const element of added) element.remove();
+      browser.runtime.onMessage.removeListener(alive);
     });
   },
 });
