@@ -2,6 +2,10 @@
 
 Proposed against API **0.18.0**, algorithm **comfort-v0.11**. For the API agent.
 
+Implemented in API **0.19.0**, retaining algorithm **comfort-v0.11**. The API
+contract is documented in [planning-api.md](planning-api.md); the extension
+follow-up below remains separate.
+
 The extension's When tab is now just the seven-day strip. Riders tap days on and
 off. A rider who can ride on Tuesday or Saturday should get Tuesday and Saturday,
 not Tuesday to Saturday. Today `days` only takes a preset or a

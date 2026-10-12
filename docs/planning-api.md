@@ -1,6 +1,6 @@
 # Multi-day planning and preference presets
 
-API **v0.10.0**, algorithm **comfort-v0.8**. This is the implemented contract;
+API **v0.19.0**, algorithm **comfort-v0.11**. This is the implemented contract;
 [brief v2](extension-api-brief-v2.md) remains a record of proposals. The short
 [design decisions](extension-api-v2-decisions.md) explain the deliberate differences.
 Existing single-date requests, owner/session isolation, provider selection,
@@ -9,8 +9,13 @@ scoring weights and standards-first ordering remain supported. No D1 migration.
 ## Search dates and optional preview
 
 `POST /recommendations` accepts exactly one of `date` or `days`. Both/neither is
-400. `days` is a preset (`today`, `tomorrow`, `weekend`, `next`) or an inclusive
-range of one to seven consecutive dates. Dates use the effective IANA timezone.
+400. `days` accepts a preset (`today`, `tomorrow`, `weekend`, `next`), an inclusive
+`{kind: "range", start, end}` of one to seven consecutive dates, or
+`{kind: "dates", dates: ["2026-10-13", "2026-10-17"]}` for separate days.
+An explicit list must contain one to seven valid dates in strictly ascending
+order, without duplicates, with at most six calendar days between first and last.
+Invalid lists return 400 with a field error. Gaps are never filled. Dates use the
+effective IANA timezone.
 
 ```json
 {
@@ -27,7 +32,8 @@ Saturday–Sunday, current Saturday–Sunday on Saturday, or Sunday alone on Sun
 These resolve calendar intent first; dates demonstrably beyond returned forecast
 coverage are excluded from a multi-date selection, not replaced with other dates.
 A provider error remains an explicit unavailable result, not an inferred horizon.
-A range partly in the past retains its remaining dates. A fully expired range
+A range or explicit list partly in the past retains only its remaining dates.
+A fully expired range or explicit list
 returns `expired: true`, `range: null`, empty rankings/unranked/days and no weather
 calls, even when preview was requested. There is never a fallback to `next`.
 
@@ -42,8 +48,14 @@ return 400 before weather calls. Overnight custom windows remain unsupported.
 Response additions:
 
 - `date`: the legacy requested date, or null for a multi-date search.
-- `range`: resolved `{start, end, preset, fallback: false}`, or null when expired
-  or all selected dates are demonstrably beyond available forecast coverage.
+- `range`: resolved `{start, end, dates, preset, fallback: false}`, or null when expired
+  or all dates requested through `days` are demonstrably beyond forecast coverage.
+  Every non-null range includes `dates`: the exact selected dates, matching
+  `days[].selected === true`. Multi-date selections reflect past-date and coverage
+  resolution; legacy single-date requests retain their requested date. The field
+  is present for presets, ranges, explicit lists and legacy requests. `start`/`end`
+  are the first/last selected dates and may enclose unselected days; clients should
+  use `dates` for selection and labels. `preset` is null for explicit lists/ranges.
 - `expired`: distinguishes expired selections from future/unavailable forecasts.
 - `previewRange`: requested preview calendar range, or null.
 - `days`: the sorted evaluated union. Use `previewRange` for the seven-tile strip;
@@ -134,6 +146,8 @@ Route additions:
 
 Patch `planning.days` and/or `planning.window`; each supplied subvalue replaces
 that whole subvalue. Use the existing window shape: `"daylight"` or `{start,end}`.
+Saved days accept the same preset, range and separate-date variants and validation
+as recommendation requests.
 There is no additional `time.mode` representation. Older stored profiles read
 these defaults without rewriting the database or changing their version.
 `settings.display.unit` is `km` or `mi`, default `km`. It affects presentation only;
@@ -237,7 +251,8 @@ Neither timestamp is the model-run time. Per-location provenance remains. Displa
 
 ## Validation and performance
 
-Unit and MSW 3 tests cover date validation, timezones/DST, presets, expiry, saved
+Unit and MSW 3 tests cover date validation, timezones/DST, presets, separate-day
+selection without gap filling, expiry, saved
 planning/display, custom levels and conflicts, actual scoring changes, partial
 coverage/gaps, missing elevation, standard breaches, multi-day ordering, provider
 errors and cache reuse across dates, windows and Worker restart.

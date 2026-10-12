@@ -32,6 +32,32 @@ export const planningDaysSchema = z.discriminatedUnion('kind', [
       },
       { message: 'Select one to seven consecutive calendar days.' },
     ),
+  z
+    .strictObject({
+      kind: z.literal('dates'),
+      dates: z.array(z.iso.date()).min(1).max(7),
+    })
+    .refine(
+      (d) =>
+        d.dates.every((date, i) => i === 0 || date > (d.dates[i - 1] ?? '')),
+      {
+        path: ['dates'],
+        message: 'Dates must be strictly ascending with no duplicates.',
+      },
+    )
+    .refine(
+      (d) => {
+        // ISO date-only strings are UTC: the span is independent of DST.
+        // Missing/invalid dates are reported by the array/date schemas above.
+        const span =
+          Date.parse(d.dates.at(-1) ?? '') - Date.parse(d.dates[0] ?? '');
+        return !Number.isFinite(span) || span <= 6 * 86_400_000;
+      },
+      {
+        path: ['dates'],
+        message: 'Select dates within a seven-calendar-day span.',
+      },
+    ),
 ]);
 export const planningSchema = z.strictObject({
   days: planningDaysSchema,
@@ -67,27 +93,36 @@ export const resolvePlanningDays = (
   if (days.kind === 'range') {
     start = Temporal.PlainDate.from(days.start);
     end = Temporal.PlainDate.from(days.end);
-  } else if (days.preset === 'tomorrow') start = end = today.add({ days: 1 });
-  else if (days.preset === 'next') end = today.add({ days: 4 });
-  else if (days.preset === 'weekend') {
+  } else if (days.kind === 'preset' && days.preset === 'tomorrow')
+    start = end = today.add({ days: 1 });
+  else if (days.kind === 'preset' && days.preset === 'next')
+    end = today.add({ days: 4 });
+  else if (days.kind === 'preset' && days.preset === 'weekend') {
     start =
       today.dayOfWeek === 7
         ? today
         : today.add({ days: (6 - today.dayOfWeek + 7) % 7 });
     end = start.dayOfWeek === 7 ? start : start.add({ days: 1 });
   }
-  const expired = Temporal.PlainDate.compare(end, today) < 0;
-  if (Temporal.PlainDate.compare(start, today) < 0) start = today;
+  const dates = (
+    days.kind === 'dates'
+      ? days.dates
+      : datesBetween(start.toString(), end.toString())
+  ).filter((date) => date >= today.toString());
+  const first = dates[0],
+    last = dates.at(-1);
   return {
-    range: expired
-      ? null
-      : {
-          start: start.toString(),
-          end: end.toString(),
-          preset: days.kind === 'preset' ? days.preset : null,
-          fallback: false,
-        },
-    expired,
-    dates: expired ? [] : datesBetween(start.toString(), end.toString()),
+    range:
+      first && last
+        ? {
+            start: first,
+            end: last,
+            dates,
+            preset: days.kind === 'preset' ? days.preset : null,
+            fallback: false,
+          }
+        : null,
+    expired: dates.length === 0,
+    dates,
   };
 };
