@@ -1,6 +1,7 @@
 # Ground conditions: phased delivery plan
 
-Status: phase 1 implemented; release verification in progress. Agreed direction: estimate the effect of wet ground on
+Status: phase 1 implemented (12 October 2026); phase 2 is next.
+Agreed direction: estimate the effect of wet ground on
 unpaved riding, with an explanation and uncertainty. Do not infer that a route is
 impassable from rainfall alone. This plan does not enable scoring changes.
 
