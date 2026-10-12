@@ -6,6 +6,11 @@ import {
   routeSourceSchema,
 } from './sources.ts';
 import type { RouteRecord, RouteStore } from './store.ts';
+import {
+  bindSurfaceEvidence,
+  type SurfaceInput,
+  sameSurfaceEvidence,
+} from './surface.ts';
 
 const conflict = () =>
   new AppError(
@@ -19,6 +24,7 @@ export const importSourceRoute = async (
     ownerId: string;
     source: RouteSource;
     gpx: string;
+    surface?: SurfaceInput;
     name?: string;
     expectedVersion?: number;
     importedAt: string;
@@ -42,6 +48,17 @@ export const importSourceRoute = async (
     }),
   );
   const current = await store.findSource(input.ownerId, source);
+  if (input.surface) {
+    route.surface = bindSurfaceEvidence(
+      input.surface,
+      route,
+      source.providerId,
+      input.importedAt,
+    );
+  } else if (current?.route.sourceHash === route.sourceHash) {
+    // Older clients may rename or refresh a route without knowing about surfaces.
+    route.surface = current.route.surface;
+  }
   if (!current) {
     if (input.expectedVersion !== undefined) throw conflict();
     const record: RouteRecord = {
@@ -56,7 +73,9 @@ export const importSourceRoute = async (
     const winner = await store.findSource(input.ownerId, source);
     if (
       winner?.route.sourceHash === route.sourceHash &&
-      winner.route.name === route.name
+      winner.route.name === route.name &&
+      (input.surface === undefined ||
+        sameSurfaceEvidence(winner.route.surface, route.surface))
     )
       return { outcome: 'unchanged', record: winner };
     throw conflict();
@@ -70,9 +89,12 @@ export const importSourceRoute = async (
     current.route.sourceHash === route.sourceHash &&
     current.route.name === route.name
   ) {
-    if (current.route.geometry || !route.geometry)
+    if (
+      (current.route.geometry || !route.geometry) &&
+      sameSurfaceEvidence(current.route.surface, route.surface)
+    )
       return { outcome: 'unchanged', record: current };
-    // Even identical source bytes can enrich legacy geometry, but only with an
+    // Even identical source bytes can enrich geometry or surfaces, but only with an
     // explicit version to avoid changing a route behind another client's back.
     if (input.expectedVersion === undefined) throw conflict();
   }

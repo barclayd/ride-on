@@ -17,6 +17,7 @@ import {
   readState,
   type State,
 } from '../lib/state';
+import { surfaceSeenKey } from '../lib/surface';
 import {
   MAX_TRACKED,
   type NextWindows,
@@ -504,13 +505,17 @@ const importJourney = async (journey: JourneyGpx) => {
       (route) => route.source?.externalId === journey.externalId,
     );
   const known = findRoute((await readState()).routes);
-  if (known && (await seen())[journey.externalId] === journey.updatedAt)
+  if (
+    known &&
+    (await seen())[surfaceSeenKey(journey.externalId)] === journey.updatedAt
+  )
     return known;
   const send = (existing?: RouteSummary) =>
     api<{ route: RouteSummary }>('/route-imports', {
       body: {
         source: { providerId: 'cycle-travel', externalId: journey.externalId },
         gpx: journey.gpx,
+        surface: journey.surface,
         name: journey.name,
         expectedVersion: existing?.version,
       },
@@ -526,7 +531,10 @@ const importJourney = async (journey: JourneyGpx) => {
     route = (await send(findRoute(routes))).route;
   }
   await browser.storage.local.set({
-    seen: { ...(await seen()), [journey.externalId]: journey.updatedAt },
+    seen: {
+      ...(await seen()),
+      [surfaceSeenKey(journey.externalId)]: journey.updatedAt,
+    },
   });
   await update((state) => ({ routes: { ...state.routes, [route.id]: route } }));
   return route;

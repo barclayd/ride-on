@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import { METRIC, regionUnits, type Units } from '../ui/format';
+import type { SurfaceInput } from './surface';
 import type {
   Attribution,
   Climbing,
@@ -221,6 +222,7 @@ export type JourneyGpx = {
   name: string;
   gpx: string;
   updatedAt: number; // cycle.travel's updated_at, to spot edits
+  surface?: SurfaceInput;
 };
 
 export const send = (message: Message): Promise<{ error?: string }> =>

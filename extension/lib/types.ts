@@ -1,5 +1,6 @@
 // Live API contracts (v0.12.0): worker/src/recommendations/input.ts, docs/api.md and docs/ride-history.md.
 // Fields the extension needs but the API lacks are in docs/extension-api-brief-v2.md, -v3.md and -v4.md.
+import type { SurfaceInput } from './surface';
 
 export type Climbing = 'flatter' | 'neutral' | 'hillier';
 export type Distance = { minKm: number; maxKm: number };
@@ -101,6 +102,17 @@ export type RouteSummary = {
   source: { providerId: string; externalId: string } | null;
   version: number;
   updatedAt: string;
+  surfaceSummary?: {
+    status: 'complete' | 'partial' | 'unavailable';
+    pavedM: number;
+    unpavedM: number;
+    nonCyclingM: number;
+    unknownM: number;
+    classifiedFraction: number;
+    unpavedFraction: number | null;
+    source: SurfaceInput['source'] | null;
+    capturedAt: string | null;
+  };
 };
 export type Selection = {
   version: number;

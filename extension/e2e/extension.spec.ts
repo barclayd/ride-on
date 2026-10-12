@@ -9,6 +9,7 @@ import {
   type Page,
   type Worker,
 } from '@playwright/test';
+import { encodePolyline } from '../lib/cycletravel';
 import type { Ride, RidePlan, RouteSummary, User } from '../lib/types';
 import {
   addDays,
@@ -1214,8 +1215,21 @@ const fakeCycleTravel = (context: BrowserContext) =>
         return route.fulfill({
           json: {
             name: journey[1] === '101' ? 'Hilly Loop' : 'Coast & Back',
-            polyline: '_p~iF~ps|U_ulLnnqC_mqNvxq`@', // 3 points, precision 5
+            polyline: encodePolyline(
+              [
+                [51, -1],
+                [51.03, -1],
+                [51.06, -1],
+              ],
+              5,
+            ),
             legacy: true,
+            version: 2,
+            directions: [
+              [3336, 0, 13],
+              [3336, 1, 15],
+              [0, 2, 0],
+            ],
             distance: journey[1] === '101' ? 51_000 : 64_000,
             updated_at: 1_760_000_000,
             full_osrm_url: 'https://routing-uk.cycle.travel/route?x=1',
@@ -1315,7 +1329,45 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     name: 'Coast & Back',
   });
   expect(imported?.body.gpx).toContain('<ele>20</ele>');
+  expect(imported?.body.surface).toMatchObject({
+    source: { providerId: 'cycle-travel', formatVersion: 2, mappingVersion: 1 },
+    sections: [
+      { surface: 'paved', sourceCode: 'mode:13' },
+      { surface: 'unpaved', sourceCode: 'mode:15' },
+    ],
+  });
   expect(selection.routeIds).toEqual(['r101', 'r102']);
+});
+
+test('existing tracked journeys get surface evidence once without another ranking request', async ({
+  context,
+  worker,
+}) => {
+  await signIn(worker);
+  // A marker written by the previous extension must not prevent the first enrichment.
+  await worker.evaluate(
+    "chrome.storage.local.set({ seen: { '101': 1760000000 } })",
+  );
+  await fakeCycleTravel(context);
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys');
+  await expect
+    .poll(() => calls.filter((c) => c.path === '/route-imports').length)
+    .toBe(1);
+  await page.waitForLoadState('networkidle');
+  const imported = calls.find((c) => c.path === '/route-imports');
+  expect(imported?.body).toMatchObject({
+    expectedVersion: 1,
+    surface: { schemaVersion: 1 },
+  });
+  expect(routes.r101.version).toBe(2);
+  expect(selection.routeIds).toEqual(['r101']);
+  expect(calls.filter((c) => c.path === '/recommendations')).toHaveLength(1);
+  await page.reload();
+  await expect(page.locator('ride-on-module .ro-ride')).toHaveCount(1);
+  await page.waitForLoadState('networkidle');
+  expect(calls.filter((c) => c.path === '/route-imports')).toHaveLength(1);
+  expect(calls.filter((c) => c.path === '/recommendations')).toHaveLength(1);
 });
 
 test('Preferences: Units switch temperature and wind everywhere, locally', async ({

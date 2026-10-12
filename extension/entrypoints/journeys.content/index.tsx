@@ -5,6 +5,7 @@ import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { fetchJourney, fetchJourneyGpx } from '../../lib/cycletravel';
 import { send } from '../../lib/state';
+import { surfaceSeenKey } from '../../lib/surface';
 import { MAX_TRACKED, type RouteSummary } from '../../lib/types';
 import {
   Banners,
@@ -116,7 +117,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
         {}) as Record<string, number>;
       for (const externalId of tracked.keys()) {
         const journey = await fetchJourney(externalId);
-        if (seen[externalId] === journey.updated_at) continue;
+        if (seen[surfaceSeenKey(externalId)] === journey.updated_at) continue;
         const gpx = await fetchJourneyGpx(externalId, journey);
         const result = await send({
           type: 'import',

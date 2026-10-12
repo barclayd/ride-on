@@ -14,6 +14,7 @@ API v0.16.0 adds a `maximumTemperatureC` [minimum standard](#personal-minimum-st
 API v0.17.0 adds `weather.refreshAt` to recommendations: when the cached forecast behind them goes stale, so clients can reuse a ranking until then.
 API v0.18.0 corrects Met Office BPF array decoding and introduces `comfort-v0.11`: gradual wind discomfort and stronger gust penalties. See [wind comfort calibration](#wind-comfort-calibration-v011).
 API v0.19.0 adds [separate planning days](planning-api.md#search-dates-and-optional-preview): `days: {kind: "dates", dates}` and `range.dates` on every non-null range. Scoring remains `comfort-v0.11`.
+API v0.20.0 adds [located surface evidence](#route-surface-evidence) for cycle.travel imports. This is phase 1 of the [ground-conditions plan](ground-conditions-plan.md); scoring remains `comfort-v0.11`.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -221,9 +222,9 @@ Returns `{ "outcome": "created", "route": { ...summary, "source": { ... },
 `Location: /routes/<id>`. Identity is unique per authenticated owner, source and
 external ID; the same ID on different sites or for different users is independent.
 
-- An identical GPX and effective name returns HTTP 200 with `outcome: "unchanged"`.
+- An identical GPX, effective name and supplied surface evidence returns HTTP 200 with `outcome: "unchanged"`.
   The route ID, timestamps and version stay unchanged, including concurrent retries.
-- To change the GPX or name, send the same source identity with `expectedVersion`
+- To change the GPX, name or surface evidence, send the same source identity with `expectedVersion`
   equal to the current route version. Returns HTTP 200 with `outcome: "updated"`
   and an incremented version. The route ID and creation time are preserved;
   direction, distance and weather sampling are rebuilt from the new geometry.
@@ -254,6 +255,82 @@ GET /routes?sourceProviderId=cycle-travel&sourceExternalId=12345
 Existing uploads remain valid after migration, with `source: null`, `version: 1`
 and `updatedAt` equal to their original creation time. Another owner's route returns
 404, and another owner's pagination cursor is rejected.
+
+## Route surface evidence
+
+`POST /route-imports` accepts an optional `surface` object for `cycle-travel`.
+It is client-supplied classification evidence from the saved journey, not an
+independent survey or a wetness assessment. No rainfall or scoring change is
+enabled. The extension reads the existing journey response's directions; it
+does not make a new routing or weather request for surfaces.
+
+Example for a GPX whose geometric length is 1,000 metres:
+
+```json
+{
+  "schemaVersion": 1,
+  "source": {
+    "providerId": "cycle-travel",
+    "method": "route-instructions",
+    "formatVersion": 2,
+    "mappingVersion": 1
+  },
+  "geometryDistanceM": 1000,
+  "sections": [
+    { "fromM": 0, "toM": 600, "surface": "paved", "sourceCode": "mode:13" },
+    { "fromM": 600, "toM": 1000, "surface": "unpaved", "sourceCode": "mode:15" }
+  ]
+}
+```
+
+Positions are cumulative metres along the original GPX, before simplification.
+Intervals must be ascending, non-overlapping, positive in length and within
+`geometryDistanceM`; gaps remain unknown. The GPX length must agree within 1 m
+(rounding tolerance, scaled to the server's distance). Maximum 5,000 sections,
+400 km, existing 6 MB JSON/5 MB GPX limits. Schema errors return `400 BAD_REQUEST`;
+source/length/range mismatches return `422 INVALID_SURFACE_EVIDENCE` without
+changing the stored route. The server adds its GPX `sourceHash` and a `capturedAt`
+retrieval timestamp. This ties evidence to these uploaded bytes; it does not
+verify the client's material claims against the external site.
+
+Surface values are `paved`, `compacted`, `gravel`, `rough-unpaved`, `earth`, `dirt`,
+`grass`, `sand`, `unpaved`, `unknown` and `non-cycling`. Raw category codes are
+retained, without road names. Version 1 explicit materials are retained; version
+2 broad modes do not imply soil or drainage. Paved footpaths/cycleways stay paved,
+unsurveyed roads stay unknown, and ferries/identified bus and rail legs are
+non-cycling. Unfamiliar/malformed direction formats cause the extension to omit
+surface evidence, preserving normal GPX import.
+
+Every route summary now includes `surfaceSummary`:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `complete`, `partial` or `unavailable` classification coverage |
+| `pavedM`, `unpavedM`, `nonCyclingM`, `unknownM` | Metres across the whole route; gaps contribute to unknown |
+| `classifiedFraction` | Known paved/unpaved/non-cycling share of total distance, 0–1 |
+| `unpavedFraction` | Total-route unpaved share, 0–1; **null** whenever coverage is incomplete |
+| `source`, `capturedAt` | Evidence provenance and retrieval time, or null |
+
+`GET /routes/<id>/surface` returns `{routeId, version, surface, summary}`. `surface`
+contains the stored evidence and sections, or null; `summary` has the same shape
+as `surfaceSummary`. Authentication and owner isolation match route reads.
+Old GPX imports report unavailable coverage and their full distance as unknown.
+Unknown source codes may still have stored evidence even with unavailable coverage.
+
+Surface-only enrichment needs the current `expectedVersion`, increments the route
+version once, and preserves ID, creation time, shortlist and geometry/history
+identity when the GPX bytes match. Identical retries keep timestamps and version.
+Omitting `surface` with unchanged GPX bytes preserves any existing evidence,
+including name-only edits by older clients. Changing the GPX without supplying
+new evidence discards the old surfaces. There is no explicit clear operation in
+v1. A first-import race with different supplied evidence returns a conflict.
+
+The extension upgrades its local import marker once per tracked journey/source
+update. It reuses the normal journey/GPX refresh, including its elevation request;
+the enrichment itself does not rerank or fetch weather. Journeys without supported
+surface data are also marked attempted, avoiding repeated imports on every visit.
+Users receive this behavior after installing the updated extension. Future adapter
+changes must advance the marker/mapping version if re-enrichment is required.
 
 ## Saved shortlist
 

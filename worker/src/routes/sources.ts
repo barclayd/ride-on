@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { validateInput } from '../request.ts';
 import { importGpx } from './gpx.ts';
 import type { Route } from './model.ts';
+import { surfaceInputSchema } from './surface.ts';
 
 export const routeSourceSchema = z.strictObject({
   providerId: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/),
@@ -11,6 +12,7 @@ export type RouteSource = z.infer<typeof routeSourceSchema>;
 export const importRouteSchema = z.strictObject({
   source: routeSourceSchema,
   gpx: z.string().min(1).max(5_000_000),
+  surface: surfaceInputSchema.optional(),
   name: z.string().trim().min(1).max(160).optional(),
   expectedVersion: z
     .number()

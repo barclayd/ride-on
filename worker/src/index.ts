@@ -49,6 +49,7 @@ import {
   type RouteStore,
   storedRouteSummary,
 } from './routes/store.ts';
+import { surfaceSummary } from './routes/surface.ts';
 import type { Bindings, Env } from './types.ts';
 import {
   createD1UserStore,
@@ -125,7 +126,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.19.0',
+      version: '0.20.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -325,6 +326,21 @@ export const createApp = (
     if (!record)
       throw new AppError(404, 'ROUTE_NOT_FOUND', 'The route was not found.');
     return c.json({ route: storedRouteSummary(record) });
+  });
+  app.get('/routes/:id/surface', async (c) => {
+    const id = validateInput(z.uuid(), c.req.param('id'));
+    const record = await store(c.env).get(c.get('ownerId'), id);
+    if (!record)
+      throw new AppError(404, 'ROUTE_NOT_FOUND', 'The route was not found.');
+    return c.json({
+      routeId: id,
+      version: record.version,
+      surface:
+        record.route.surface?.sourceHash === record.route.sourceHash
+          ? record.route.surface
+          : null,
+      summary: surfaceSummary(record.route),
+    });
   });
   app.post('/routes', async (c) => {
     const contentType = c.req.header('Content-Type') ?? '';
