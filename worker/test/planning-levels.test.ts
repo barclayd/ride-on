@@ -92,6 +92,90 @@ test('API requires one date selection and bounded opt-in previews', () => {
       .previewDays,
   ).toBeUndefined();
 });
+test('separate dates must be real, ordered, unique and within one seven-day span', () => {
+  for (const dates of [
+    [],
+    Array.from({ length: 8 }, (_, i) => `2026-10-${10 + i}`),
+    ['2026-10-13', '2026-10-13'],
+    ['2026-10-17', '2026-10-13'],
+    ['2026-10-10', '2026-10-17'],
+    ['not-a-date'],
+    ['2026-02-30'],
+  ]) {
+    const selection = { kind: 'dates', dates };
+    expect(planningDaysSchema.safeParse(selection).success).toBe(false);
+    expect(
+      settingsPatchSchema.safeParse({ planning: { days: selection } }).success,
+    ).toBe(false);
+  }
+  for (const dates of [
+    ['2026-10-13'],
+    ['2026-10-13', '2026-10-17'],
+    ['2026-10-23', '2026-10-29'], // six days, across the autumn clock change
+    ['2026-12-29', '2027-01-04'],
+    Array.from({ length: 7 }, (_, i) => `2026-10-${10 + i}`),
+  ])
+    expect(planningDaysSchema.parse({ kind: 'dates', dates }).kind).toBe(
+      'dates',
+    );
+});
+test('separate dates clip by local today without filling gaps or substituting days', () => {
+  const selected = {
+    kind: 'dates' as const,
+    dates: ['2026-10-08', '2026-10-10', '2026-10-13'],
+  };
+  const result = resolvePlanningDays(selected, 'Europe/London', now);
+  expect(result).toEqual({
+    dates: ['2026-10-10', '2026-10-13'],
+    expired: false,
+    range: {
+      start: '2026-10-10',
+      end: '2026-10-13',
+      dates: ['2026-10-10', '2026-10-13'],
+      preset: null,
+      fallback: false,
+    },
+  });
+  expect(selected.dates).toEqual(['2026-10-08', '2026-10-10', '2026-10-13']);
+  expect(
+    resolvePlanningDays(
+      { kind: 'dates', dates: ['2026-10-01', '2026-10-03'] },
+      'Europe/London',
+      now,
+    ),
+  ).toEqual({ range: null, expired: true, dates: [] });
+  const midnight = resolvePlanningDays(
+    { kind: 'dates', dates: ['2026-10-09', '2026-10-10'] },
+    'Europe/London',
+    new Date('2026-10-09T23:30:00Z'),
+  );
+  expect(midnight.range?.dates).toEqual(['2026-10-10']);
+  expect(midnight.range?.start).toBe('2026-10-10');
+  expect(midnight.range?.end).toBe('2026-10-10');
+});
+test('every planning kind exposes its exact resolved dates in range.dates', () => {
+  for (const [selection, dates] of [
+    [{ kind: 'preset', preset: 'tomorrow' }, ['2026-10-10']],
+    [
+      { kind: 'range', start: '2026-10-08', end: '2026-10-10' },
+      ['2026-10-09', '2026-10-10'],
+    ],
+    [
+      { kind: 'dates', dates: ['2026-10-10', '2026-10-13'] },
+      ['2026-10-10', '2026-10-13'],
+    ],
+    [{ kind: 'dates', dates: ['2026-10-10'] }, ['2026-10-10']],
+  ] as const) {
+    const resolved = resolvePlanningDays(
+      planningDaysSchema.parse(selection),
+      'Europe/London',
+      now,
+    );
+    expect(resolved.expired).toBe(false);
+    expect(resolved.range?.dates).toEqual([...dates]);
+    expect(resolved.dates).toEqual([...dates]);
+  }
+});
 test('levels preserve calibrated and custom weights, conflict atomically, and do not remove standards', () => {
   expect(preferenceLevels({ sunshine: 0.25, dryness: 0.2 })).toEqual({
     sunshine: 'important',

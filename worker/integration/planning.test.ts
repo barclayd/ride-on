@@ -20,7 +20,10 @@ const config = JSON.stringify({
   privateKey: await exportPKCS8(keys.privateKey),
 });
 type Fixture = ReturnType<typeof appleWeatherFixture>;
-const apple = (change?: (data: Fixture, longitude: number) => void) =>
+const apple = (
+  change?: (data: Fixture, longitude: number) => void,
+  now = APPLE_NOW,
+) =>
   http.get(
     'https://weatherkit.apple.com/api/v1/weather/en/:latitude/:longitude',
     ({ params, request }) => {
@@ -33,7 +36,8 @@ const apple = (change?: (data: Fixture, longitude: number) => void) =>
       const data = appleWeatherFixture({
         latitude: Number(params.latitude),
         longitude: Number(params.longitude),
-        start: '2026-10-09T11:00:00Z',
+        start: new Date(Date.parse(now) - 3600000).toISOString(),
+        now,
         hours: 240,
       });
       change?.(data, Number(params.longitude));
@@ -83,6 +87,7 @@ const ranked = z.object({
   routeId: z.string(),
   rank: z.number(),
   best: bestSchema,
+  alternatives: z.array(bestSchema),
   coverage: z.object({
     assessedFraction: z.number().nullable(),
     intervals: z.array(
@@ -94,7 +99,13 @@ const ranked = z.object({
 const response = z.object({
   date: z.string().nullable(),
   expired: z.boolean(),
-  range: z.object({ start: z.string(), end: z.string() }).nullable(),
+  range: z
+    .object({
+      start: z.string(),
+      end: z.string(),
+      dates: z.array(z.iso.date()),
+    })
+    .nullable(),
   recommendation: z
     .object({ routeId: z.string(), kind: z.string() })
     .nullable(),
@@ -112,6 +123,7 @@ const response = z.object({
   days: z.array(
     z.object({
       date: z.string(),
+      selected: z.boolean(),
       availability: z.string(),
       availabilityReason: z.string(),
       until: z.string().nullable(),
@@ -184,7 +196,17 @@ integration(
     const route = await upload(h);
     const result = await recommend(h, [route.id], { previewDays: 7 });
     assert.equal(result.days.length, 7);
-    assert.deepEqual(result.range, { start: '2026-10-09', end: '2026-10-13' });
+    assert.deepEqual(result.range, {
+      start: '2026-10-09',
+      end: '2026-10-13',
+      dates: [
+        '2026-10-09',
+        '2026-10-10',
+        '2026-10-11',
+        '2026-10-12',
+        '2026-10-13',
+      ],
+    });
     assert.equal(first(result.rankings).best.date, '2026-10-11');
     assert.equal(result.recommendation?.routeId, route.id);
     const requests = h.requests.length;
@@ -198,6 +220,7 @@ integration(
       date: '2026-10-10',
     });
     assert.equal(tomorrow.days.length, 1);
+    assert.deepEqual(tomorrow.range?.dates, ['2026-10-10']);
     await h.restart();
     const later = await recommend(h, [route.id], {
       days: { kind: 'range', start: '2026-10-14', end: '2026-10-15' },
@@ -205,11 +228,76 @@ integration(
       preferences: { distance: { minKm: 0, maxKm: 80 } },
     });
     assert.equal(first(later.rankings).best.date, '2026-10-15');
+    assert.deepEqual(later.range?.dates, ['2026-10-14', '2026-10-15']);
     assert.equal(h.requests.length, requests);
     assert.equal(later.weather.cache.misses, 0);
     assert.equal(later.weather.attribution.length, 1);
     assert.equal(later.weather.retrieval.oldestAt, APPLE_NOW);
     assert.equal(later.weather.retrieval.latestAt, APPLE_NOW);
+  },
+);
+integration(
+  'Tuesday and Saturday alone enter rankings and alternatives while seven preview days remain visible',
+  async (h) => {
+    const monday = '2026-10-12T12:00:00.000Z';
+    const dates = ['2026-10-13', '2026-10-17'];
+    await h.restart({ TEST_NOW: monday });
+    h.use(
+      apple((data, longitude) => {
+        for (const row of data.forecastHourly.hours) {
+          const date = row.forecastStart.slice(0, 10);
+          row.temperature =
+            date === dates[0]
+              ? longitude < -0.5
+                ? 14
+                : 12
+              : date === dates[1]
+                ? longitude < -0.5
+                  ? 12
+                  : 14
+                : 20;
+        }
+      }, monday),
+    );
+    const a = await upload(h, 'Tuesday route', -1);
+    const b = await upload(h, 'Saturday route', 0);
+    const result = await recommend(h, [a.id, b.id], {
+      days: { kind: 'dates', dates },
+      previewDays: 7,
+      preferences: {
+        weights: {
+          temperature: 1,
+          wind: 0,
+          dryness: 0,
+          sunshine: 0,
+          clearSkies: 0,
+        },
+      },
+    });
+    assert.deepEqual(result.range, { start: dates[0], end: dates[1], dates });
+    assert.deepEqual(
+      result.days.map((day) => day.date),
+      Array.from({ length: 7 }, (_, i) => `2026-10-${12 + i}`),
+    );
+    assert.deepEqual(
+      result.days.filter((day) => day.selected).map((day) => day.date),
+      dates,
+    );
+    assert.equal(result.rankings.length, 2);
+    assert.deepEqual(
+      new Set(result.rankings.map((r) => r.best.date)),
+      new Set(dates),
+    );
+    for (const ranking of result.rankings) {
+      assert.ok(ranking.alternatives.length > 0);
+      for (const candidate of [ranking.best, ...ranking.alternatives])
+        assert.ok(dates.includes(candidate.date));
+      // Wednesday is more comfortable, but cannot win an unselected day.
+      assert.ok(
+        (result.days.find((day) => day.date === '2026-10-14')?.quality ?? 0) >
+          ranking.best.score,
+      );
+    }
   },
 );
 integration(
@@ -387,14 +475,17 @@ integration(
   'provider failures are not labelled future coverage; expired selections do no work and missing horizons are explicit',
   async (h) => {
     const route = await upload(h);
-    const expired = await recommend(h, [route.id], {
-      days: { kind: 'range', start: '2026-10-01', end: '2026-10-03' },
-      previewDays: 7,
-    });
-    assert.equal(expired.expired, true);
-    assert.equal(expired.range, null);
-    assert.deepEqual(expired.rankings, []);
-    assert.deepEqual(expired.days, []);
+    for (const days of [
+      { kind: 'range', start: '2026-10-01', end: '2026-10-03' },
+      { kind: 'dates', dates: ['2026-10-01', '2026-10-03'] },
+    ]) {
+      const expired = await recommend(h, [route.id], { days, previewDays: 7 });
+      assert.equal(expired.expired, true);
+      assert.equal(expired.range, null);
+      assert.deepEqual(expired.rankings, []);
+      assert.deepEqual(expired.unranked, []);
+      assert.deepEqual(expired.days, []);
+    }
     assert.equal(h.requests.length, 0);
     h.use(
       http.get(
@@ -418,6 +509,13 @@ integration(
       first(future.days).availabilityReason,
       'outside_forecast_horizon',
     );
+    const separateFuture = await recommend(h, [route.id], {
+      days: { kind: 'dates', dates: ['2026-10-25', '2026-10-27'] },
+    });
+    assert.equal(separateFuture.range, null);
+    assert.equal(separateFuture.expired, false);
+    assert.deepEqual(separateFuture.rankings, []);
+    assert.ok(separateFuture.days.every((day) => !day.selected));
   },
 );
 integration(
@@ -479,7 +577,9 @@ integration(
         expectedVersion: user.version,
         settings: {
           preferenceLevels: { sunshine: 'nice' },
-          planning: { days: { kind: 'preset', preset: 'weekend' } },
+          planning: {
+            days: { kind: 'dates', dates: ['2026-10-10', '2026-10-13'] },
+          },
         },
       }),
     });
@@ -487,6 +587,10 @@ integration(
     await h.restart();
     const saved = await readUser(await h.send('/users/me'));
     assert.equal(saved.settings.display.unit, 'mi');
+    assert.deepEqual(saved.settings.planning.days, {
+      kind: 'dates',
+      dates: ['2026-10-10', '2026-10-13'],
+    });
     assert.deepEqual(saved.settings.planning.window, {
       start: '09:00',
       end: '13:00',
@@ -594,6 +698,15 @@ integration(
       { date: '2026-10-10', days: { kind: 'preset', preset: 'next' } },
       { date: '2026-10-10', previewDays: 8 },
       { days: { kind: 'range', start: '2026-10-10', end: '2026-10-17' } },
+      ...[
+        [],
+        Array.from({ length: 8 }, (_, i) => `2026-10-${10 + i}`),
+        ['2026-10-10', '2026-10-10'],
+        ['2026-10-13', '2026-10-10'],
+        ['2026-10-10', '2026-10-17'],
+        ['2026-02-30'],
+        ['not-a-date'],
+      ].map((dates) => ({ days: { kind: 'dates', dates } })),
       {
         days: { kind: 'range', start: '2027-03-28', end: '2027-03-29' },
         riding: { window: { start: '01:30', end: '04:00' } },
@@ -603,6 +716,12 @@ integration(
         body: JSON.stringify({ routeIds: [route.id], ...input }),
       });
       assert.equal(bad.status, 400);
+      if (input.days?.kind === 'dates') {
+        const error = z
+          .object({ error: z.object({ message: z.string() }) })
+          .parse(await bad.json());
+        assert.match(error.error.message, /days\.dates/);
+      }
     }
     assert.equal(h.requests.length, 0);
     const providers = z
@@ -660,6 +779,24 @@ integration(
     assert.equal(r.days.at(-1)?.availabilityReason, 'outside_forecast_horizon');
     assert.equal(r.range?.end, '2026-10-11');
     const calls = h.requests.length;
+    const separate = await recommend(h, [route.id], {
+      ...policy,
+      days: { kind: 'dates', dates: ['2026-10-10', '2026-10-13'] },
+    });
+    assert.deepEqual(separate.range, {
+      start: '2026-10-10',
+      end: '2026-10-10',
+      dates: ['2026-10-10'],
+    });
+    assert.deepEqual(
+      separate.days.filter((day) => day.selected).map((day) => day.date),
+      ['2026-10-10'],
+    );
+    assert.equal(
+      separate.days.at(-1)?.availabilityReason,
+      'outside_forecast_horizon',
+    );
+    assert.equal(separate.days.length, 2);
     await recommend(h, [route.id], {
       ...policy,
       days: undefined,

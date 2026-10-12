@@ -125,7 +125,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.18.0',
+      version: '0.19.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -488,7 +488,13 @@ export const createApp = (
           dates: raw.date ? [raw.date] : [],
           expired: false,
           range: raw.date
-            ? { start: raw.date, end: raw.date, preset: null, fallback: false }
+            ? {
+                start: raw.date,
+                end: raw.date,
+                dates: [raw.date],
+                preset: null,
+                fallback: false,
+              }
             : null,
         };
     const previewDates =
@@ -550,6 +556,7 @@ export const createApp = (
             ...selection.range,
             start: selectedDates[0],
             end: selectedDates.at(-1),
+            dates: selectedDates,
           }
         : null
       : selection.range;
