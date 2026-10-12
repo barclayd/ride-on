@@ -4,7 +4,6 @@ import { browser } from 'wxt/browser';
 import { API_URL } from '../../lib/api';
 import {
   type Planning,
-  type Preset,
   type Provider,
   type Search,
   send,
@@ -44,9 +43,6 @@ import {
   hours,
   monthLabel,
   newest,
-  PRESETS,
-  pickDay,
-  planningDates,
   qualityColour,
   rainText,
   rankText,
@@ -57,6 +53,7 @@ import {
   shortDate,
   speed,
   tempText,
+  toggleDay,
   type Units,
   unitLabel,
   updatedText,
@@ -164,72 +161,17 @@ const width = (from: number, to: number) =>
 
 const toPrefs = () => send({ type: 'setTab', tab: 'prefs' });
 
-type DaysValue = Preset | 'custom';
-
-const Calendar = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.5"
-    stroke-linecap="round"
-    aria-hidden="true"
-  >
-    <rect x="2.5" y="3.5" width="11" height="10" rx="2" />
-    <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" />
-  </svg>
-);
-
-// Exactly one segment is always on. Days that have passed show in amber, then move on to tomorrow.
+// Tap days on and off. Days that have passed show in amber, then move on to tomorrow.
 const Days = (props: {
   view: View;
   set: (change: Partial<Planning>) => void;
 }) => {
   const { view, set } = props;
-  const { planning, expired } = view.state;
-  const [custom, setCustom] = useState(false); // the calendar was tapped: the strip waits for a pick
   const [moved, setMoved] = useState<string | null>(null);
   const [said, setSaid] = useState('');
   const stale = !view.range;
   const dates = view.range ?? view.passed;
-  const segments = [
-    ...PRESETS.map(([value, label]) => {
-      const [start, end] = planningDates(
-        { kind: 'preset', preset: value },
-        view.today,
-      ) ?? [view.today, view.today];
-      const days = view.strip.filter((d) => d.date >= start && d.date <= end);
-      return {
-        value: value as DaysValue,
-        label,
-        matches: dates?.[0] === start && dates[1] === end,
-        disabled:
-          days.every((d) => d.kind === 'none') ||
-          (value === 'today' && expired?.dates[1] === view.today),
-      };
-    }),
-    {
-      value: 'custom' as DaysValue,
-      label: '',
-      matches: false,
-      disabled: false,
-    },
-  ];
-  const matched = segments.filter((s) => s.matches).map((s) => s.value);
-  const selected: DaysValue = custom
-    ? 'custom'
-    : planning.days.kind === 'preset' && matched.includes(planning.days.preset)
-      ? planning.days.preset
-      : (matched[0] ?? 'custom');
-  const at = segments.findIndex((s) => s.value === selected);
 
-  const pick = (value: DaysValue) => {
-    setMoved(null);
-    setCustom(value === 'custom');
-    if (value !== 'custom') set({ days: { kind: 'preset', preset: value } });
-  };
   // Passed days stay up for a moment, then move on to tomorrow, or the first day the forecast covers.
   useEffect(() => {
     if (!stale) return;
@@ -238,7 +180,6 @@ const Days = (props: {
         const later = view.strip.slice(1);
         const day = later.find((d) => d.kind !== 'none');
         if (!day) return;
-        setCustom(false);
         setMoved(view.datesText);
         setSaid(
           `${view.datesText} has passed. Showing ${shortDate(day.date)}.`,
@@ -259,51 +200,17 @@ const Days = (props: {
     <>
       <div class="ro-card-head">
         <span class="ro-label">Days</span>
-        {custom || stale ? (
+        {stale ? (
           <span class="ro-value ro-days-warn">
-            {custom
-              ? 'Pick days'
-              : view.passed?.[1] === view.today
-                ? 'Too late today'
-                : 'Dates passed'}
+            {view.passed?.[1] === view.today
+              ? 'Too late today'
+              : 'Dates passed'}
           </span>
         ) : (
           <span class="ro-value">
             {moved && <s>{moved}</s>} {view.datesText}
           </span>
         )}
-      </div>
-      <div
-        class="ro-days-control"
-        role="radiogroup"
-        aria-label="Days"
-        data-stale={stale}
-      >
-        <div
-          class="ro-thumb"
-          style={
-            at < 4
-              ? {
-                  left: `calc(3px + (100% - 38px) * ${at / 4})`,
-                  width: 'calc((100% - 38px) / 4)',
-                }
-              : { left: 'calc(100% - 35px)', width: '32px' }
-          }
-        />
-        {/* Native radios: arrow keys move between the segments that can be picked. */}
-        {segments.map((s) => (
-          <label key={s.value} title={s.label ? undefined : 'Custom days'}>
-            <input
-              type="radio"
-              name="ro-days"
-              checked={s.value === selected}
-              disabled={s.disabled}
-              aria-label={s.label ? undefined : 'Custom days'}
-              onClick={() => pick(s.value)}
-            />
-            {s.label || <Calendar />}
-          </label>
-        ))}
       </div>
       <span class="ro-sr" aria-live="polite">
         {said}
@@ -317,14 +224,13 @@ const Days = (props: {
             data-kind={day.kind}
             title={day.title}
             aria-pressed={
-              !custom && !!dates && day.date >= dates[0] && day.date <= dates[1]
+              !!dates && day.date >= dates[0] && day.date <= dates[1]
             }
             onClick={() => {
-              setCustom(false);
+              const days = toggleDay(view.range, day.date);
+              if (!days) return;
               setMoved(null);
-              set({
-                days: pickDay(custom ? null : view.range, day.date),
-              });
+              set({ days });
             }}
           >
             <span>{i === 0 ? 'Today' : weekday(day.date)}</span>

@@ -1089,66 +1089,12 @@ a.ro-name:hover {
   opacity: 0;
 }
 
-/* When tab: Days, one segment always on */
+/* When tab: Days */
 .ro-days-warn {
   color: var(--ro-warn-fg);
 }
 .ro-value s {
   color: var(--ro-disabled);
-}
-.ro-days-control {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) 32px;
-  background: var(--ro-tint-2);
-  border-radius: 8px;
-  padding: 3px;
-}
-.ro-thumb {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  border-radius: 6px;
-  background: var(--ro-olive-900);
-  transition:
-    left 0.45s cubic-bezier(0.65, 0, 0.25, 1),
-    width 0.45s cubic-bezier(0.65, 0, 0.25, 1),
-    background 0.3s,
-    box-shadow 0.3s;
-}
-.ro-days-control label {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  padding: 7px 1px;
-  white-space: nowrap;
-  font: 600 11.5px var(--ro-sans);
-  color: var(--ro-slate);
-  transition: color 0.3s;
-}
-.ro-days-control input {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  opacity: 0;
-}
-.ro-days-control label:has(:focus-visible) {
-  outline: 2px solid var(--ro-lime);
-}
-.ro-days-control label:has(:disabled) {
-  color: #a9b0a0;
-}
-.ro-days-control label:has(:checked) {
-  color: #fff;
-}
-.ro-days-control[data-stale="true"] .ro-thumb {
-  background: var(--ro-warn-bg);
-  box-shadow: inset 0 0 0 1px #e6c3a2;
-}
-.ro-days-control[data-stale="true"] label:has(:checked) {
-  color: var(--ro-warn-fg);
 }
 .ro-days[data-stale="true"] .ro-day[aria-pressed="true"] {
   background: var(--ro-warn-bg);
@@ -1920,8 +1866,6 @@ a.ro-name:hover {
   .ro-checkin,
   .ro-checkin-track,
   .ro-checkin-track > *,
-  .ro-thumb,
-  .ro-days-control label,
   .ro-meter > div > div,
   .ro-ride,
   .ro-medal {

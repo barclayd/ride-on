@@ -34,7 +34,6 @@ import {
   ended,
   logged,
   monthLabel,
-  pickDay,
   planFor,
   planningDates,
   rankText,
@@ -46,6 +45,7 @@ import {
   shownOf,
   speed,
   tile,
+  toggleDay,
   updatedText,
   validateRange,
   viewOf,
@@ -122,11 +122,28 @@ test('planned dates resolve like the API', () => {
     today,
     '2026-10-15',
   ]);
-  expect(pickDay(['2026-10-15', '2026-10-15'], '2026-10-14')).toEqual(
+  // Days tap on and off; the API takes consecutive days.
+  expect(toggleDay(null, '2026-10-14')).toEqual(
+    range('2026-10-14', '2026-10-14'),
+  );
+  expect(toggleDay(['2026-10-15', '2026-10-15'], '2026-10-17')).toEqual(
+    range('2026-10-15', '2026-10-17'),
+  );
+  expect(toggleDay(['2026-10-15', '2026-10-17'], '2026-10-13')).toEqual(
+    range('2026-10-13', '2026-10-17'),
+  );
+  expect(toggleDay(['2026-10-15', '2026-10-15'], '2026-10-15')).toBeNull();
+  expect(toggleDay(['2026-10-14', '2026-10-16'], '2026-10-14')).toEqual(
+    range('2026-10-15', '2026-10-16'),
+  );
+  expect(toggleDay(['2026-10-14', '2026-10-16'], '2026-10-16')).toEqual(
     range('2026-10-14', '2026-10-15'),
   );
-  expect(pickDay(['2026-10-14', '2026-10-16'], '2026-10-15')).toEqual(
-    range('2026-10-15', '2026-10-15'),
+  expect(toggleDay(['2026-10-13', '2026-10-18'], '2026-10-14')).toEqual(
+    range('2026-10-15', '2026-10-18'),
+  );
+  expect(toggleDay(['2026-10-13', '2026-10-15'], '2026-10-14')).toEqual(
+    range('2026-10-13', '2026-10-13'),
   );
   expect(datesLabel('2026-10-17', '2026-10-18')).toBe('Sat 17 – Sun 18 Oct');
   expect(datesLabel('2026-10-31', '2026-11-01')).toBe('Sat 31 Oct – Sun 1 Nov');

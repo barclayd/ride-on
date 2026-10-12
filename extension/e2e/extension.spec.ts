@@ -778,6 +778,18 @@ test('When tab: Days and Time visible; custom times re-query', async ({
   ]);
   await page.screenshot({ path: test.info().outputPath('when.png') });
 
+  // Days tap off and on, with no presets to snap to.
+  const tiles = page.locator('.ro-day');
+  await tiles.nth(1).click(); // Next 5 days loses its first day
+  await expect
+    .poll(() => recCalls().at(-1)?.body.days)
+    .toEqual({ kind: 'range', start: day(2), end: day(5) });
+  await tiles.nth(1).click();
+  await expect
+    .poll(() => recCalls().at(-1)?.body.days)
+    .toEqual({ kind: 'range', start: day(1), end: day(5) });
+  await expect(tiles.nth(1)).toHaveAttribute('aria-pressed', 'true');
+
   await page.getByRole('button', { name: 'Choose times' }).click();
   await expect
     .poll(() => recCalls().at(-1)?.body.riding)
@@ -845,12 +857,13 @@ test('passed dates ask for new ones instead of swapping silently', async ({
   // Amber for a moment, then on to tomorrow, with the old dates struck through.
   const days = page.locator('.ro-card:has(.ro-label:text-is("Days"))');
   await expect(days.locator('.ro-days-warn')).toHaveText('Dates passed');
-  await expect(days.locator('.ro-days-control')).toHaveAttribute(
-    'data-stale',
+  await expect(days.locator('.ro-days')).toHaveAttribute('data-stale', 'true');
+  await page.screenshot({ path: test.info().outputPath('when-stale.png') });
+  await expect(days.locator('.ro-day[aria-pressed="true"]')).toHaveCount(1);
+  await expect(days.locator('.ro-day').nth(1)).toHaveAttribute(
+    'aria-pressed',
     'true',
   );
-  await page.screenshot({ path: test.info().outputPath('when-stale.png') });
-  await expect(page.getByRole('radio', { name: 'Tomorrow' })).toBeChecked();
   await expect(days.locator('.ro-value s')).toContainText('5 Jan');
   await expect(days.locator('.ro-sr')).toContainText('has passed. Showing');
   await page.screenshot({ path: test.info().outputPath('when-moved.png') });
