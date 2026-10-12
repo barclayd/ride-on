@@ -114,6 +114,7 @@ export type State = {
   local: LocalPrefs;
   recs: Recommendations | null; // across the planned days, plus a 7-day preview for the strip
   recsAt: string | null;
+  recsKey: string | null; // the request behind recs; another means they're out of date
   loading: boolean;
   error: string | null;
   syncing: boolean;
@@ -146,6 +147,7 @@ export const initialState: State = {
   local: DEFAULT_LOCAL,
   recs: null,
   recsAt: null,
+  recsKey: null,
   loading: false,
   error: null,
   syncing: false,
@@ -191,7 +193,7 @@ export type Message =
   | { type: 'signIn'; provider: Provider }
   | { type: 'signInRedirect'; url: string }
   | { type: 'signOut' }
-  | { type: 'refresh' }
+  | { type: 'refresh'; force?: boolean }
   | { type: 'setPlanning'; planning: Planning }
   | { type: 'saveDefaultPlanning' }
   | { type: 'setSearch'; search: Search | null }

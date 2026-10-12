@@ -29,7 +29,7 @@ test('health identifies the deployed build without authentication or weather cal
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect((await response.json()) as Record<string, unknown>).toEqual({
       ok: true,
-      version: '0.16.0',
+      version: '0.17.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: tag || null,
     });
@@ -174,11 +174,13 @@ test('upload, list and recommendation endpoints work with a replaceable provider
   const result = (await first.json()) as {
     recommendedRouteId: string;
     riding: { averageSpeedKph: number };
-    weather: { cache: { misses: number } };
+    weather: { cache: { misses: number }; refreshAt: string | null };
   };
   expect(result.recommendedRouteId).toBe(route.id);
   expect(result.riding.averageSpeedKph).toBe(20);
   expect(result.weather.cache.misses).toBe(2);
+  // Tomorrow's forecast, retrieved and run at noon: fresh for six hours.
+  expect(result.weather.refreshAt).toBe('2026-10-09T18:00:00.000Z');
   const second = await send('/recommendations', aliceToken, {
     ...body,
     preferences: { temperature: { comfortMinC: 12 } },

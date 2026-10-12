@@ -7,6 +7,7 @@ import type { Env } from '../types.ts';
 import {
   FORECAST_RETENTION_SECONDS,
   type ForecastCache,
+  forecastStaleAt,
   isFreshForecast,
   withForecastCache,
 } from '../weather/cache.ts';
@@ -193,6 +194,24 @@ export const evaluateComparisons = async (
     : null;
   const results = selected?.results ?? [];
   const forecastCheckedAt = now().getTime();
+  // Until then the same request reuses this evidence, so clients can keep the ranking. Null: ask again.
+  const staleAt = Math.min(
+    ...results.map((result) =>
+      result.status === 'unavailable'
+        ? NaN
+        : forecastStaleAt(
+            result,
+            {
+              ...requestedQuality,
+              freshnessBasis: input.forecast.freshnessBasis,
+            },
+            refreshAfterSeconds,
+          ),
+    ),
+  );
+  const refreshAt = Number.isFinite(staleAt)
+    ? new Date(staleAt).toISOString()
+    : null;
   const comparisons = inputs.map((dayInput) => {
     const dayTtl = forecastRefreshSeconds(
       [dayInput.date],
@@ -268,6 +287,7 @@ export const evaluateComparisons = async (
         freshnessBasis: input.forecast.freshnessBasis,
         refreshAfterSeconds,
       },
+      refreshAt,
       descriptors: request?.required ?? [],
       range,
       cache: cacheReads,
