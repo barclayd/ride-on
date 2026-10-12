@@ -314,7 +314,6 @@ const Page = ({ rows }: { rows: Row[] }) => {
         />
       )}
       <CoverageWarn view={view} />
-      {/* ponytail: weather attribution is popup-only by choice, though the cards show weather. */}
       {rows.map((row) => {
         const routeId = ridden(row.id);
         return (

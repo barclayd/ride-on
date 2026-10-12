@@ -96,7 +96,7 @@ the `notice` explaining that Ride On's derived assessments modify Apple data.
 Forecast location provenance retains this metadata through cache reads. The API
 does not proxy raw WeatherKit forecasts or disclose signing tokens to clients.
 
-The design-3 extension renders provider selection and attribution. Its next API
+The extension renders provider selection. Its attribution footer was removed at Dan's request (12 October 2026), knowing Apple's terms require the mark and legal link. Its next API
 integration should follow [planning and preference presets](planning-api.md).
 
 ## Server configuration

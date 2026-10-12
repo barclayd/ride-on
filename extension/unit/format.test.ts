@@ -554,7 +554,6 @@ test('the view: strip, selected days and weather', () => {
   expect(view.selected.map((d) => d.date)).toEqual(['2026-10-14']);
   expect(view.datesText).toBe('Wed 14 Oct');
   expect(view.retrieved).toBe('09:50');
-  expect(view.attributions).toEqual(attribution);
   expect(view.cards.map((c) => c.routeId)).toEqual(['a', 'b']);
   expect(view.provider).toBe('Your forecast provider');
   expect(
