@@ -1,5 +1,6 @@
 // cycle.travel reads. Runs in the content script, same-origin with the rider's cookies.
 import type { JourneyGpx } from './state';
+import { journeySurface } from './surface';
 
 // Google polyline varints, as cycle.travel's L.PolylineUtil.decodeDeltas.
 export const decodeDeltas = (
@@ -112,6 +113,8 @@ export type Journey = {
   legacy: boolean;
   updated_at: number;
   full_osrm_url: string;
+  directions?: unknown;
+  version?: unknown;
 };
 
 const json = async <T>(response: Response): Promise<T> => {
@@ -153,6 +156,7 @@ export const fetchJourneyGpx = async (
     name,
     gpx: buildGpx(name, points, elevations),
     updatedAt: journey.updated_at,
+    surface: journeySurface(points, journey.directions, journey.version),
   };
 };
 

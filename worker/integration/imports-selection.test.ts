@@ -80,6 +80,203 @@ const select = (
   });
 
 integration(
+  'surface enrichment survives storage, preserves identity and scores, and remains owner scoped',
+  async (h) => {
+    const initial = await readImport(await importRide(h));
+    await select(h, [initial.route.id]);
+    const surfaceUrl = `/routes/${initial.route.id}/surface`;
+    const readSurface = async () =>
+      z
+        .object({
+          routeId: z.uuid(),
+          version: z.number(),
+          surface: z
+            .object({
+              sourceHash: z.string(),
+              capturedAt: z.iso.datetime(),
+              geometryDistanceM: z.number(),
+              source: z.object({
+                providerId: z.literal('cycle-travel'),
+                formatVersion: z.number(),
+                mappingVersion: z.number(),
+              }),
+              sections: z.array(
+                z.object({
+                  fromM: z.number(),
+                  toM: z.number(),
+                  surface: z.string(),
+                  sourceCode: z.string(),
+                }),
+              ),
+            })
+            .nullable(),
+          summary: z.object({
+            status: z.string(),
+            unknownM: z.number(),
+            unpavedFraction: z.number().nullable(),
+          }),
+        })
+        .parse(await (await h.send(surfaceUrl)).json());
+    assert.equal((await readSurface()).summary.status, 'unavailable');
+    assert.equal((await readSurface()).summary.unpavedFraction, null);
+    const surface = {
+      schemaVersion: 1,
+      source: {
+        providerId: 'cycle-travel',
+        method: 'route-instructions',
+        formatVersion: 2,
+        mappingVersion: 1,
+      },
+      geometryDistanceM: initial.route.distanceM,
+      sections: [
+        {
+          fromM: 0,
+          toM: initial.route.distanceM / 2,
+          surface: 'paved',
+          sourceCode: 'mode:13',
+        },
+        {
+          fromM: initial.route.distanceM / 2,
+          toM: initial.route.distanceM,
+          surface: 'unpaved',
+          sourceCode: 'mode:15',
+        },
+      ],
+    };
+    assert.equal((await importRide(h, { surface })).status, 409);
+    const enriched = await readImport(
+      await importRide(h, { surface, expectedVersion: 1 }),
+    );
+    assert.equal(enriched.outcome, 'updated');
+    assert.equal(enriched.route.version, 2);
+    assert.equal(enriched.route.id, initial.route.id);
+    assert.equal(enriched.route.createdAt, initial.route.createdAt);
+    assert.deepEqual(
+      (await readSelection(await h.send('/route-selection'))).routeIds,
+      [initial.route.id],
+    );
+    const evidence = await readSurface();
+    assert.equal(evidence.summary.status, 'complete');
+    assert.equal(evidence.summary.unpavedFraction, 0.5);
+    assert.equal(evidence.surface?.sections.length, 2);
+    assert.ok(evidence.surface?.sourceHash);
+    assert.equal((await h.send(surfaceUrl, { token: BOB_TOKEN })).status, 404);
+    assert.equal((await h.send(surfaceUrl, { token: null })).status, 401);
+    await h.restart();
+    assert.deepEqual(await readSurface(), evidence);
+    const replay = await readImport(
+      await importRide(h, { surface, expectedVersion: 2 }),
+    );
+    assert.equal(replay.outcome, 'unchanged');
+    assert.deepEqual(replay.route, enriched.route);
+    assert.equal(
+      (await importRide(h, { surface, expectedVersion: 1 })).status,
+      409,
+    );
+    assert.equal((await readImport(await importRide(h))).outcome, 'unchanged');
+    assert.deepEqual(await readSurface(), evidence);
+    assert.equal(h.requests.length, 0);
+
+    // Surface evidence must not enter phase-one ranking, nor alter immutable ride geometry.
+    h.use(metOffice());
+    const before = await recommend(h, [initial.route.id]);
+    assert.equal(
+      (
+        await importRide(h, {
+          surface: {
+            ...surface,
+            sections: surface.sections.map((s) => ({
+              ...s,
+              surface: 'rough-unpaved',
+              sourceCode: 'mode:16',
+            })),
+          },
+          expectedVersion: 2,
+        })
+      ).status,
+      200,
+    );
+    const after = await recommend(h, [initial.route.id]);
+    assert.deepEqual(after.rankings, before.rankings);
+    const db = await h.runtime.getD1Database('ROUTES_DB');
+    const geometries = await db
+      .prepare(
+        'SELECT count(*) AS count FROM ride_geometries WHERE owner_id = ?',
+      )
+      .bind('alice')
+      .first<{ count: number }>();
+    assert.equal(geometries?.count, 1);
+    // Name-only changes from older clients preserve evidence; changed source bytes discard it.
+    assert.equal(
+      (await importRide(h, { name: 'Renamed', expectedVersion: 3 })).status,
+      200,
+    );
+    assert.equal((await readSurface()).summary.unpavedFraction, 1);
+    assert.equal(
+      (
+        await importRide(h, {
+          gpx: routeGpx('New geometry', 1),
+          expectedVersion: 4,
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await readSurface()).surface, null);
+    assert.equal((await readSurface()).summary.status, 'unavailable');
+  },
+);
+
+integration(
+  'invalid surface evidence is rejected atomically, including mismatched source and ranges',
+  async (h) => {
+    const initial = await readImport(await importRide(h));
+    const surface = {
+      schemaVersion: 1,
+      source: {
+        providerId: 'cycle-travel',
+        method: 'route-instructions',
+        formatVersion: 2,
+        mappingVersion: 1,
+      },
+      geometryDistanceM: initial.route.distanceM,
+      sections: [
+        {
+          fromM: 0,
+          toM: initial.route.distanceM,
+          surface: 'paved',
+          sourceCode: 'mode:13',
+        },
+      ],
+    };
+    for (const invalid of [
+      { ...surface, geometryDistanceM: 100 },
+      {
+        ...surface,
+        sections: [
+          { ...surface.sections[0], toM: initial.route.distanceM + 10 },
+        ],
+      },
+      { ...surface, sections: [...surface.sections, ...surface.sections] },
+    ])
+      assert.equal(
+        (await importRide(h, { surface: invalid, expectedVersion: 1 })).status,
+        422,
+      );
+    assert.equal(
+      (
+        await importRide(h, {
+          source: { providerId: 'strava', externalId: '77' },
+          surface,
+        })
+      ).status,
+      422,
+    );
+    assert.deepEqual((await list(h)).routes, [initial.route]);
+    assert.equal(h.requests.length, 0);
+  },
+);
+
+integration(
   'provider discovery, imports and source lookup preserve large IDs, ownership and durable identities',
   async (h) => {
     const discovery = await h.send('/route-sources');

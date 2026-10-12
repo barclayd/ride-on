@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { geometrySchema } from '../rides/geometry.ts';
 import { coordinateSchema } from '../weather/validation.ts';
+import { surfaceEvidenceSchema, surfaceSummary } from './surface.ts';
 
 export const routeSchema = z.object({
   schemaVersion: z.literal(1),
@@ -9,6 +10,7 @@ export const routeSchema = z.object({
   createdAt: z.iso.datetime(),
   sourceHash: z.string(),
   geometry: geometrySchema.nullable().optional(),
+  surface: surfaceEvidenceSchema.nullable().optional(),
   distanceM: z.number().positive(),
   ascentM: z.number().nonnegative().nullable(),
   originalPointCount: z.number().int().positive(),
@@ -46,6 +48,8 @@ export const routeSummary = ({
   originalPointCount,
   warnings,
   geometry,
+  surface,
+  sourceHash,
 }: Route) => ({
   id,
   name,
@@ -55,4 +59,5 @@ export const routeSummary = ({
   originalPointCount,
   warnings,
   geometryStatus: geometry ? 'available' : 'unavailable',
+  surfaceSummary: surfaceSummary({ distanceM, sourceHash, surface }),
 });
