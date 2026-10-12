@@ -273,7 +273,7 @@ const daySummary = (i: number, selected: boolean) => {
 const recommendations = (body: any) => {
   const planned = planningDates(body.days, day(0));
   const days = Array.from({ length: 7 }, (_, i) =>
-    daySummary(i, !!planned && day(i) >= planned[0] && day(i) <= planned[1]),
+    daySummary(i, !!planned?.includes(day(i))),
   );
   const ranged = days.filter(
     (d) => d.selected && d.availabilityReason !== 'outside_forecast_horizon',
@@ -327,7 +327,13 @@ const recommendations = (body: any) => {
       : null,
     rankings,
     unranked: [],
-    range: date ? { start: date, end: ranged.at(-1)?.date } : null,
+    range: date
+      ? {
+          start: date,
+          end: ranged.at(-1)?.date,
+          dates: ranged.map((d) => d.date),
+        }
+      : null,
     expired: !planned,
     days,
     weather: weather(),
@@ -583,7 +589,8 @@ test('Rides tab opens first with one request for the planned days', async ({
   expect(recCalls()).toHaveLength(1);
   expect(recCalls()[0].body).toEqual({
     routeIds: ['r101'],
-    days: { kind: 'range', start: day(1), end: day(5) }, // Next 5 days starts tomorrow
+    // Next 5 days starts tomorrow
+    days: { kind: 'dates', dates: [day(1), day(2), day(3), day(4), day(5)] },
     previewDays: 7,
     riding: { window: 'daylight' },
   });
@@ -779,17 +786,28 @@ test('When tab: Days and Time visible; custom times re-query', async ({
   ]);
   await page.screenshot({ path: test.info().outputPath('when.png') });
 
-  // Days tap off and on, with no presets to snap to.
+  // Days tap off and on, with no presets to snap to, and a gap stays a gap.
   const tiles = page.locator('.ro-day');
-  await tiles.nth(1).click(); // Next 5 days loses its first day
+  await tiles.nth(3).click(); // Next 5 days loses a middle day
   await expect
     .poll(() => recCalls().at(-1)?.body.days)
-    .toEqual({ kind: 'range', start: day(2), end: day(5) });
-  await tiles.nth(1).click();
+    .toEqual({ kind: 'dates', dates: [day(1), day(2), day(4), day(5)] });
+  await expect(tiles.nth(3)).toHaveAttribute('aria-pressed', 'false');
+  await expect(
+    page.locator('.ro-card-head:has(.ro-label:text-is("Days")) .ro-value'),
+  ).toHaveText(datesLabel([day(1), day(2), day(4), day(5)]));
+  await expect(page.locator('.ro-card .ro-note')).toHaveText(
+    `${longWeekday(day(1))}, ${longWeekday(day(2))} and ${longWeekday(day(4))} available; ${longWeekday(day(5))}'s forecast only covers the morning.`,
+  );
+  await page.screenshot({ path: test.info().outputPath('when-gap.png') });
+  await tiles.nth(3).click();
   await expect
     .poll(() => recCalls().at(-1)?.body.days)
-    .toEqual({ kind: 'range', start: day(1), end: day(5) });
-  await expect(tiles.nth(1)).toHaveAttribute('aria-pressed', 'true');
+    .toEqual({
+      kind: 'dates',
+      dates: [day(1), day(2), day(3), day(4), day(5)],
+    });
+  await expect(tiles.nth(3)).toHaveAttribute('aria-pressed', 'true');
 
   await page.getByRole('button', { name: 'Choose times' }).click();
   await expect
@@ -1426,7 +1444,7 @@ test('Journeys page: after an extension update, the page follows the new copy', 
   await popup.getByRole('tab', { name: 'When' }).click();
   await popup.locator('.ro-day').nth(1).click();
   await expect(window).toHaveText(
-    `${datesLabel(day(2), day(5))} · Daylight hours`,
+    `${datesLabel([day(2), day(3), day(4), day(5)])} · Daylight hours`,
   );
   await expect(page.locator('ride-on-module')).toHaveCount(1);
 });

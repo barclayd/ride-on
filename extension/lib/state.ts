@@ -22,7 +22,8 @@ export type Preset = 'today' | 'tomorrow' | 'weekend' | 'next';
 // Presets stay relative to today; picked days are absolute and can expire.
 export type Days =
   | { kind: 'preset'; preset: Preset }
-  | { kind: 'range'; start: string; end: string };
+  | { kind: 'range'; start: string; end: string }
+  | { kind: 'dates'; dates: string[] };
 export type Planning = {
   days: Days;
   time: { mode: 'daylight' | 'custom'; start: string; end: string };
@@ -74,7 +75,7 @@ export type Pick = {
 };
 // The window the rider last saw, kept to notice when it has ended.
 export type Shown = {
-  dates: [string, string];
+  dates: string[];
   time: Planning['time'];
   endsAt: string; // UTC instant the last day's window ends
   picks: Pick[];

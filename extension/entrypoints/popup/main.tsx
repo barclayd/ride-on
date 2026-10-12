@@ -202,7 +202,7 @@ const Days = (props: {
         <span class="ro-label">Days</span>
         {stale ? (
           <span class="ro-value ro-days-warn">
-            {view.passed?.[1] === view.today
+            {view.passed?.at(-1) === view.today
               ? 'Too late today'
               : 'Dates passed'}
           </span>
@@ -223,9 +223,7 @@ const Days = (props: {
             class="ro-day"
             data-kind={day.kind}
             title={day.title}
-            aria-pressed={
-              !!dates && day.date >= dates[0] && day.date <= dates[1]
-            }
+            aria-pressed={!!dates?.includes(day.date)}
             onClick={() => {
               const days = toggleDay(view.range, day.date);
               if (!days) return;
@@ -570,7 +568,12 @@ const NextWindows = ({ view }: { view: View }) => {
               <span>{best ? `Best · ${score}` : score}</span>
             </span>
             <span class="ro-next-when">
-              {windowWhen(w, expired.dates[1], view.today, view.timeZone)}
+              {windowWhen(
+                w,
+                expired.dates.at(-1) ?? view.today,
+                view.today,
+                view.timeZone,
+              )}
             </span>
             <span class="ro-next-best">
               {windowBest(w, view.timeZone, view.state.units)}
@@ -584,13 +587,7 @@ const NextWindows = ({ view }: { view: View }) => {
 };
 
 // The window, how fresh its forecast is, and a refresh button (15a).
-const WindowHeading = ({
-  view,
-  range,
-}: {
-  view: View;
-  range: [string, string];
-}) => {
+const WindowHeading = ({ view, range }: { view: View; range: string[] }) => {
   const [asked, setAsked] = useState(false);
   const busy = asked || view.state.loading;
   // Two turns per loop; it stops at the end of a loop once the data is in.
