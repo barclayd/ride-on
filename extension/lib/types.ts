@@ -127,6 +127,11 @@ export type Conditions = {
     crosswind: number;
   };
   precipitationSummary?: PrecipitationSummary;
+  // Share of route distance under each forecast symbol; null unless sunshine is weighed and every symbol is known.
+  skyConditionDistanceFractions?: Record<
+    'sunny' | 'sunnyIntervals' | 'cloudy' | 'overcast' | 'obscured',
+    number
+  > | null;
 };
 export type PrecipitationSummary =
   | 'dry'

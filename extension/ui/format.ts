@@ -294,7 +294,7 @@ const WET: Record<string, string> = {
   thunder: 'Thunderstorms',
 };
 export type Chip = {
-  icon: 'temperature' | 'wind' | 'dry' | 'wet';
+  icon: 'temperature' | 'wind' | 'dry' | 'wet' | 'sun' | 'cloud' | 'fog';
   text: string;
   label: string;
   warn: boolean;
@@ -358,8 +358,40 @@ export const conditionChips = (
           label: rain === chance ? chance : `Rain: ${rain.toLowerCase()}`,
           warn: true,
         }
-      : { icon: 'dry', text: 'Dry', label: 'Dry, no rain', warn: false },
+      : skyChip(c),
   ];
+};
+// A dry ride names its sky. The API only sends sky shares while sunshine is weighed, so cloud lowered the score: amber.
+const skyChip = (c: Conditions): Chip => {
+  const f = c.skyConditionDistanceFractions;
+  const sun = f ? f.sunny + f.sunnyIntervals : 0;
+  const cloud = f ? f.cloudy + f.overcast : 0;
+  const fog = f?.obscured ?? 0;
+  const on = (x: number) => `on ${Math.round(x * 100)}% of the route`;
+  if (f && sun && sun >= cloud && sun >= fog)
+    return {
+      icon: 'sun',
+      text: f.sunny >= f.sunnyIntervals ? 'Sunny' : 'Sunny spells',
+      label: `Dry, sun ${on(sun)}`,
+      warn: false,
+    };
+  if (f && cloud && cloud >= fog) {
+    const text = f.overcast >= f.cloudy ? 'Overcast' : 'Cloudy';
+    return {
+      icon: 'cloud',
+      text,
+      label: `Dry, ${text.toLowerCase()} ${on(cloud)}`,
+      warn: true,
+    };
+  }
+  if (fog)
+    return {
+      icon: 'fog',
+      text: 'Fog',
+      label: `Dry, fog or mist ${on(fog)}`,
+      warn: true,
+    };
+  return { icon: 'dry', text: 'Dry', label: 'Dry, no rain', warn: false };
 };
 
 const FAILURES: Record<
