@@ -441,6 +441,7 @@ const assessCandidate = (
     );
   }
   for (const [standard, field] of [
+    ['maximumTemperatureC', 'temperatureC'],
     ['maximumGustKph', 'gustKph'],
     ['maximumPrecipitationProbability', 'precipitationProbability'],
     ['maximumPrecipitationRateMmH', 'precipitationRateMmH'],

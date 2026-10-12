@@ -10,6 +10,7 @@ API v0.12.0 adds [planned ride snapshots, next-window suggestions and route-hist
 API v0.13.0 adds the [Safari extension sign-in](authentication.md#safari-extensions) landing page and CORS.
 API v0.14.0 presents [one Met Office provider choice](weather-provider-choices.md) alongside Apple Weather.
 API v0.15.0 adds [wind and precipitation descriptions](#condition-chip-summaries) and [saved display units](#display-units). Scoring remains `comfort-v0.10`.
+API v0.16.0 adds a `maximumTemperatureC` [minimum standard](#personal-minimum-standards) for rides that get too hot.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -632,6 +633,7 @@ No minimum standards are invented by default. Set any combination of:
 
 - `minimumTemperature: { "kind": "fixed", "valueC": 12 }`
 - `minimumTemperature: { "kind": "monthly", "valuesC": { "1": 0, "6": 16 }, "fallbackC": null }`
+- `maximumTemperatureC: 28`
 - `maximumGustKph: 40`
 - `maximumPrecipitationProbability: 0.2` (fraction, not percent)
 - `maximumPrecipitationRateMmH: 0.5`

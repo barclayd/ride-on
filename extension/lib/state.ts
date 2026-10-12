@@ -48,6 +48,7 @@ export type LocalPrefs = {
   floorMode: 'fixed' | 'monthly';
   floorFixedC: number;
   floorMonthsC: number[];
+  heatC: number;
   rainPct: number;
   gustKph: number;
 };
@@ -57,6 +58,7 @@ export const DEFAULT_LOCAL: LocalPrefs = {
   floorMode: 'fixed',
   floorFixedC: 3,
   floorMonthsC: [0, 0, 2, 4, 6, 8, 10, 10, 7, 5, 2, 0],
+  heatC: 28,
   rainPct: 50,
   gustKph: 45,
 };

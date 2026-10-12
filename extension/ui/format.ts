@@ -329,6 +329,8 @@ const FAILURES: Record<
   Standard,
   (f: Failure, timeZone: string, u: Units) => string
 > = {
+  maximumTemperatureC: (f, _, u) =>
+    `Reaches ${degrees(f.actual, u)}° (your limit ${degrees(f.limit, u)}°)`,
   maximumGustKph: (f, _, u) =>
     `Gusts reach ${speed(f.actual, u)} (your limit ${speed(f.limit, u)})`,
   maximumPrecipitationProbability: (f) =>
@@ -458,9 +460,7 @@ export const buildResults = (
         coverage:
           [
             ...(state === 'incomplete'
-              ? [
-                  "Partial assessment: some minimum conditions couldn't be checked.",
-                ]
+              ? ["Partial assessment: some limits couldn't be checked."]
               : []),
             ...(b.sunshineAssessment &&
             b.sunshineAssessment.status !== 'complete'
@@ -630,6 +630,8 @@ export type Draft = {
   floorMode: 'fixed' | 'monthly';
   floorFixedC: number;
   floorMonthsC: number[];
+  heatOn: boolean;
+  heatC: number;
   rainOn: boolean;
   rainPct: number;
   gustOn: boolean;
@@ -654,6 +656,8 @@ export const draftFrom = (p: Preferences, local: LocalPrefs): Draft => {
             (v, i) => floor.valuesC[String(i + 1)] ?? floor.fallbackC ?? v,
           )
         : local.floorMonthsC,
+    heatOn: m.maximumTemperatureC !== undefined,
+    heatC: m.maximumTemperatureC ?? local.heatC,
     rainOn: rain !== undefined,
     rainPct: rain !== undefined ? Math.round(rain * 100) : local.rainPct,
     gustOn: m.maximumGustKph !== undefined,
@@ -680,6 +684,7 @@ export const draftPatch = (d: Draft): PreferencesPatch => ({
             ),
             fallbackC: null,
           },
+    maximumTemperatureC: d.heatOn ? d.heatC : null,
     maximumPrecipitationProbability: d.rainOn ? d.rainPct / 100 : null,
     maximumGustKph: d.gustOn ? d.gustKph : null,
   },
@@ -689,6 +694,7 @@ export const draftLocal = (d: Draft): Partial<LocalPrefs> => ({
   floorMode: d.floorMode,
   floorFixedC: d.floorFixedC,
   floorMonthsC: d.floorMonthsC,
+  heatC: d.heatC,
   rainPct: d.rainPct,
   gustKph: d.gustKph,
 });

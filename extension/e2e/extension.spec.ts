@@ -809,6 +809,7 @@ test('Preferences: search-only distance, then PATCH carries supported fields onl
   ]);
   expect(body.settings.preferences.minimumStandards).toEqual({
     minimumTemperature: null,
+    maximumTemperatureC: null,
     maximumPrecipitationProbability: null,
     maximumGustKph: 45,
   });

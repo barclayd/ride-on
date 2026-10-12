@@ -12,6 +12,7 @@ export type TemperatureFloor =
     };
 export type MinimumStandards = {
   minimumTemperature?: TemperatureFloor;
+  maximumTemperatureC?: number;
   maximumGustKph?: number;
   maximumPrecipitationProbability?: number;
   maximumPrecipitationRateMmH?: number;
@@ -96,6 +97,7 @@ export type Selection = {
 
 export type Standard =
   | 'minimumTemperatureC'
+  | 'maximumTemperatureC'
   | 'maximumGustKph'
   | 'maximumPrecipitationProbability'
   | 'maximumPrecipitationRateMmH';
