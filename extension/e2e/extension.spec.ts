@@ -620,6 +620,42 @@ test('a refresh shows how scores changed, then moves the rides into order', asyn
   await page.screenshot({ path: test.info().outputPath('reordered.png') });
 });
 
+test('badges show what changed since the rides were last on screen', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  const meter = page.locator('.ro-ride').first().locator('.ro-meter');
+  await expect(meter).toHaveText('Conditions84/100');
+  const rescore = async (score: number, mode: string) => {
+    await page.getByRole('tab', { name: 'Preferences' }).click();
+    scores = { r101: score };
+    const before = recCalls().length;
+    await page.getByRole('button', { name: mode }).click();
+    await expect.poll(() => recCalls().length).toBe(before + 1);
+  };
+
+  // Rescored while Preferences was open: back on Rides, the badge says how far.
+  await rescore(70, 'Prefer variety');
+  await page.getByRole('tab', { name: 'Rides' }).click();
+  await expect(meter.locator('.ro-delta')).toHaveText('▼ 14');
+  await expect(meter.locator('strong')).toHaveText('70');
+
+  // Rescored, then the popup closed: reopening still shows the change.
+  await rescore(80, 'Happy to repeat');
+  await page.close();
+  const again = await openPopup(context, extensionId);
+  const badge = again.locator('.ro-ride .ro-delta');
+  await expect(badge).toHaveText('▲ 10');
+  await again.close();
+  // Seen, so the next visit is clear.
+  const third = await openPopup(context, extensionId);
+  await expect(third.locator('.ro-ride .ro-meter strong')).toHaveText('80');
+  await expect(third.locator('.ro-delta')).toHaveCount(0);
+});
+
 test('a scored ride explains uncertain sunshine in the popup and on Journeys', async ({
   context,
   worker,

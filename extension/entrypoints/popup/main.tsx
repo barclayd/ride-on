@@ -775,6 +775,7 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
           cards={view.cards}
           window={JSON.stringify([view.range, view.state.planning.time])}
           class="ro-rides"
+          remember
           render={(card, _, medal, change) => (
             <RouteTile
               key={card.routeId}
