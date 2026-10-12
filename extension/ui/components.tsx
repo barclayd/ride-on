@@ -174,6 +174,17 @@ const ICONS: Record<
       <path d="M5.5 11.5l-.7 2M8.5 11.5l-.7 2M11.5 11.5l-.7 2" />
     </>
   ),
+  sun: (
+    <>
+      <circle cx="8" cy="8" r="2.8" />
+      <path d="M8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" />
+    </>
+  ),
+  // The wet cloud, without its rain, dropped to the middle.
+  cloud: (
+    <path d="M4.5 12a3 3 0 0 1 .4-6 4 4 0 0 1 7.4 1.2A2.5 2.5 0 0 1 12 12z" />
+  ),
+  fog: <path d="M3 5h10M2 8h12M4 11h8" />,
 };
 const Icon = (props: { name: keyof typeof ICONS; size: number }) => (
   <svg

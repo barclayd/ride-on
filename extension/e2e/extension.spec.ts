@@ -124,6 +124,13 @@ const CONDITIONS = {
   averageTailwindKph: 12,
   averageCrosswindKph: 4,
   maximumPrecipitationProbability: 0.05,
+  skyConditionDistanceFractions: {
+    sunny: 0.2,
+    sunnyIntervals: 0.5,
+    cloudy: 0.3,
+    overcast: 0,
+    obscured: 0,
+  },
   maximumGustKph: 48,
   windDistanceFractions: { headwind: 0.1, tailwind: 0.7, crosswind: 0.2 },
   precipitationSummary: 'dry' as const,
@@ -1238,7 +1245,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     '9–14°C',
     '15 km/h tailwind',
     'Gusts 48 km/h',
-    'Dry',
+    'Sunny spells',
   ]);
   await expect(chips.nth(0)).toHaveAttribute('data-warn', 'true');
   await expect(chips.nth(1)).toHaveAttribute('aria-label', 'Tailwind 15 km/h');
@@ -1332,7 +1339,7 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
     '48–57°F',
     '9 mph tailwind',
     'Gusts 30 mph',
-    'Dry',
+    'Sunny spells',
   ]);
   await expect(chips.nth(1)).toHaveAttribute('aria-label', 'Tailwind 9 mph');
 });

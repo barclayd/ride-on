@@ -912,6 +912,42 @@ test('condition chips: temperature, wind, rain, amber where it lowers the score'
   expect(chips({ maximumPrecipitationProbability: 0.35 })[2]).toBe(
     'wet 35% chance of rain | 35% chance of rain !',
   );
+
+  // Dry: the sky, when the API sends its shares; wet still wins.
+  const sky = (
+    f: Partial<NonNullable<Conditions['skyConditionDistanceFractions']>>,
+    more: Partial<Conditions> = {},
+  ) =>
+    chips({
+      skyConditionDistanceFractions: {
+        sunny: 0,
+        sunnyIntervals: 0,
+        cloudy: 0,
+        overcast: 0,
+        obscured: 0,
+        ...f,
+      },
+      ...more,
+    })[2];
+  expect(sky({ sunny: 0.6, overcast: 0.4 })).toBe(
+    'sun Sunny | Dry, sun on 60% of the route',
+  );
+  expect(sky({ sunny: 0.2, sunnyIntervals: 0.3, cloudy: 0.5 })).toBe(
+    'sun Sunny spells | Dry, sun on 50% of the route',
+  );
+  expect(sky({ sunnyIntervals: 0.3, cloudy: 0.3, overcast: 0.4 })).toBe(
+    'cloud Overcast | Dry, overcast on 70% of the route !',
+  );
+  expect(sky({ cloudy: 1 })).toBe(
+    'cloud Cloudy | Dry, cloudy on 100% of the route !',
+  );
+  expect(sky({ obscured: 0.7, cloudy: 0.3 })).toBe(
+    'fog Fog | Dry, fog or mist on 70% of the route !',
+  );
+  expect(sky({})).toBe('dry Dry | Dry, no rain');
+  expect(sky({ sunny: 1 }, { precipitationSummary: 'showers' })).toBe(
+    'wet Showers | Rain: showers !',
+  );
 });
 
 test('units: region defaults and display conversion', () => {
