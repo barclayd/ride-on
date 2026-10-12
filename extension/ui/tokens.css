@@ -1616,28 +1616,6 @@ a.ro-name:hover {
   background: #f2eedc;
   color: #6b5516;
 }
-.ro-attribution {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font: 400 11px var(--ro-sans);
-  color: var(--ro-muted);
-}
-.ro-attribution > span {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-.ro-attribution a {
-  flex: none;
-  color: inherit;
-}
-.ro-attribution img {
-  display: block;
-  height: 14px;
-}
-
 /* Design 4: ride tags, check-in, next windows, History, recently ridden */
 .ro-tag {
   flex: none;

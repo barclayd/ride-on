@@ -775,7 +775,6 @@ export const viewOf = (state: State, now: Date) => {
       timeZone,
     ),
     retrieved: at ? clock(at, timeZone) : null,
-    attributions: weather?.attribution ?? [],
     provider:
       state.providers.find((p) => p.id === user?.weatherProviderId)?.name ??
       'Your forecast provider',

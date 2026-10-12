@@ -573,9 +573,6 @@ test('Rides tab opens first with one request for the planned days', async ({
   await expect(card.locator('.ro-pill')).toHaveCount(0);
   await expect(card.locator('.ro-meter')).toHaveText('Conditions84/100');
   await expect(page.locator('.ro-heading')).toContainText('Next 5 days');
-  await expect(
-    page.getByRole('link', { name: 'Powered by Met Office data' }),
-  ).toHaveAttribute('href', 'https://www.metoffice.gov.uk/');
   await expectPanelFits(page);
   await expect(page.locator('.ro-sync')).toHaveCount(0);
   expect(recCalls()).toHaveLength(1);
@@ -831,15 +828,6 @@ test('Preferences: search-only distance, then PATCH carries supported fields onl
   });
   await expect.poll(() => recCalls().length).toBeGreaterThan(before);
   await expect(picker).toHaveValue('apple-weather');
-  const logo = page.getByRole('img', { name: 'Apple Weather' });
-  await expect(logo).toHaveAttribute('src', /Apple_Weather_blk/);
-  await expect(page.locator('.ro-attribution a').first()).toHaveAttribute(
-    'href',
-    APPLE_LEGAL,
-  );
-  await expect(page.locator('.ro-attribution')).toContainText(
-    'derived from and modify Apple Weather data',
-  );
   await page.locator('.ro-sign-out').scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath('apple-weather.png') });
 });
@@ -885,9 +873,6 @@ test('ended window: check-in, a different route, then the next windows', async (
   await expect(windows.nth(1)).toContainText('Best · 86');
   await expect(windows.nth(2)).toContainText('Best in the next 6 days');
   await expect(windows.nth(2)).toContainText('Hilly Loop');
-  await expect(
-    page.getByRole('link', { name: 'Powered by Met Office data' }),
-  ).toBeVisible();
   expect(recCalls()).toEqual([]);
   await expectPanelFits(page);
   await page.screenshot({ path: test.info().outputPath('checkin.png') });

@@ -13,7 +13,6 @@ import {
 import type { Climbing } from '../../lib/types';
 import {
   AppleMark,
-  Attribution,
   Banners,
   CloseButton,
   CoverageWarn,
@@ -754,7 +753,6 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
         <button type="button" class="ro-link ro-choose" onClick={onChoose}>
           Choose my own dates ›
         </button>
-        <Attribution view={view} />
       </>
     );
   return (
@@ -792,7 +790,6 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
         />
       )}
       <CoverageWarn view={view} />
-      <Attribution view={view} />
     </>
   );
 };
@@ -1395,7 +1392,6 @@ const PrefsTab = ({ view }: { view: View }) => {
           Forecast retrieved
           <span>{view.retrieved ? `${view.retrieved} today` : '—'}</span>
         </div>
-        <Attribution view={view} />
       </section>
       <section class="ro-card ro-units">
         <span class="ro-label">Units</span>

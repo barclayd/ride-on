@@ -606,22 +606,6 @@ export const CoverageWarn = ({ view }: { view: View }) =>
     </span>
   ) : null;
 
-// Required wherever a provider's data shows (Apple: trademark logo, legal link, derived-data notice).
-// ponytail: light logo only; use logo.darkUrl if a dark theme lands.
-export const Attribution = ({ view }: { view: View }) =>
-  view.attributions.length > 0 ? (
-    <div class="ro-attribution">
-      {view.attributions.map((a) => (
-        <span key={a.url}>
-          <a href={a.url} target="_blank" rel="noreferrer">
-            {a.logo ? <img src={a.logo.lightUrl} alt={a.text} /> : a.text}
-          </a>
-          {a.notice && <span>{a.notice}</span>}
-        </span>
-      ))}
-    </div>
-  ) : null;
-
 // A suggested window: its day, at its times.
 export const chooseWindow = (view: View, w: NextWindow) =>
   send({
