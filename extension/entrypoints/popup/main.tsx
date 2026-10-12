@@ -552,6 +552,9 @@ const NextWindows = ({ view }: { view: View }) => {
       {windows.map((w) => {
         const score = Math.round(w.best.score);
         const best = w.kind === next.recommendedKind;
+        // ponytail: route warnings mix GPX ingestion codes (ASCENT_IS_UNSMOOTHED_ESTIMATE) with
+        // sentences; show the first sentence, map codes to copy if one ever needs saying.
+        const note = w.warnings.find((x) => !/^[A-Z_]+$/.test(x));
         return (
           <button
             key={w.kind}
@@ -578,7 +581,7 @@ const NextWindows = ({ view }: { view: View }) => {
             <span class="ro-next-best">
               {windowBest(w, view.timeZone, view.state.units)}
             </span>
-            {w.warnings[0] && <span class="ro-next-when">{w.warnings[0]}</span>}
+            {note && <span class="ro-next-when">{note}</span>}
           </button>
         );
       })}
