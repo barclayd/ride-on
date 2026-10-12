@@ -343,9 +343,9 @@ Defaults and optional settings are shown below. These comfort values are
   "preferences": {
     "temperature": { "comfortMinC": 16, "comfortMaxC": 24 },
     "wind": {
-      "comfortableHeadwindKph": 10,
-      "comfortableCrosswindKph": 15,
-      "comfortableGustKph": 25,
+      "comfortableHeadwindKph": 15,
+      "comfortableCrosswindKph": 20,
+      "comfortableGustKph": 35,
       "crosswindSensitivity": 1
     },
     "weights": { "temperature": 0.3, "wind": 0.2, "dryness": 0.5, "clearSkies": 0, "sunshine": 0 },
