@@ -18,29 +18,39 @@ export type ForecastCache = Readonly<{
 const range = z.object({ start: utcInstant, end: utcInstant });
 export const FORECAST_RETENTION_SECONDS = 12 * 3600;
 
-/** Retaining evidence does not make it fresh for every requested ride date. */
-export const isFreshForecast = (
+type Fresh = [
   result: Exclude<LocationForecastResult, { status: 'unavailable' }>,
   request: Pick<ForecastRequest, 'maxAgeSeconds' | 'freshnessBasis'>,
+];
+const freshnessAt = (...[result, request]: Fresh) =>
+  Date.parse(
+    (request.freshnessBasis === 'retrieval-time'
+      ? result.provenance.retrievedAt
+      : result.provenance.forecastRunAt) ?? '',
+  );
+
+/** When evidence stops being fresh: retrieval TTL, provider expiry or model age, whichever comes first (NaN without a run time). */
+export const forecastStaleAt = (
+  ...[result, request, ttlSeconds]: [...Fresh, number]
+) =>
+  Math.min(
+    Date.parse(result.provenance.retrievedAt) + ttlSeconds * 1000,
+    result.provenance.expiresAt === undefined
+      ? Infinity
+      : Date.parse(result.provenance.expiresAt),
+    freshnessAt(result, request) + request.maxAgeSeconds * 1000,
+  );
+
+/** Retaining evidence does not make it fresh for every requested ride date. */
+export const isFreshForecast = (
+  result: Fresh[0],
+  request: Fresh[1],
   now: number,
   ttlSeconds: number,
-) => {
-  const age = now - Date.parse(result.provenance.retrievedAt);
-  const freshnessAt =
-    request.freshnessBasis === 'retrieval-time'
-      ? result.provenance.retrievedAt
-      : result.provenance.forecastRunAt;
-  const runAge = freshnessAt ? now - Date.parse(freshnessAt) : NaN;
-  return (
-    age >= 0 &&
-    age < ttlSeconds * 1000 &&
-    (result.provenance.expiresAt === undefined ||
-      Date.parse(result.provenance.expiresAt) > now) &&
-    Number.isFinite(runAge) &&
-    runAge < request.maxAgeSeconds * 1000 &&
-    runAge >= -300_000
-  );
-};
+) =>
+  now >= Date.parse(result.provenance.retrievedAt) &&
+  now < forecastStaleAt(result, request, ttlSeconds) &&
+  now - freshnessAt(result, request) >= -300_000;
 /** Validated cacheable evidence; offline calibration uses the same snapshot shape. */
 const forecastSnapshotSchema = z.object({
   status: z.enum(['complete', 'partial']),

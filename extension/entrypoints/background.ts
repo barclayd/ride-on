@@ -157,14 +157,11 @@ const windowOf = (time: Planning['time']) =>
     ? ('daylight' as const)
     : { start: time.start, end: time.end };
 
-// One request across the planned days; previewDays fills the day strip.
-let recommendation = 0;
-const recommend = async () => {
-  const id = ++recommendation;
-  const state = await readState();
+// One request across the planned days; previewDays fills the day strip. The key adds what the
+// API reads besides the body: the saved profile and ride history.
+const recRequest = (state: State) => {
   const { user, selection, planning } = state;
-  if (!user || !selection?.routeIds.length)
-    return update(() => ({ recs: null, loading: false, shown: null }));
+  if (!user || !selection?.routeIds.length) return null;
   const preferences = state.search
     ? searchPatch(state.search, state.unit)
     : undefined;
@@ -175,21 +172,41 @@ const recommend = async () => {
     planning.days.kind === 'preset' && planning.days.preset === 'next'
       ? { kind: 'range' as const, start, end }
       : planning.days;
+  const body = {
+    routeIds: selection.routeIds,
+    days,
+    previewDays: 7,
+    riding: { window: windowOf(planning.time) },
+    ...(preferences && { preferences }),
+  };
+  return {
+    body,
+    key: JSON.stringify([body, user.id, user.version, state.rides[0]?.id]),
+  };
+};
+
+// The scores on screen still hold: same request, and the API's forecast hasn't gone stale.
+const current = (state: State) =>
+  !!state.recsKey &&
+  state.recsKey === recRequest(state)?.key &&
+  Date.now() < Date.parse(state.recs?.weather.refreshAt ?? '');
+
+let recommendation = 0;
+const recommend = async () => {
+  const id = ++recommendation;
+  const request = recRequest(await readState());
+  if (!request)
+    return update(() => ({ recs: null, loading: false, shown: null }));
   await update(() => ({ loading: true }));
   try {
     const recs = await api<Recommendations>('/recommendations', {
-      body: {
-        routeIds: selection.routeIds,
-        days,
-        previewDays: 7,
-        riding: { window: windowOf(planning.time) },
-        ...(preferences && { preferences }),
-      },
+      body: request.body,
     });
     if (id !== recommendation) return;
     await show({
       recs,
       recsAt: new Date().toISOString(),
+      recsKey: request.key,
       loading: false,
       error: null,
     });
@@ -345,7 +362,8 @@ const loadProviders = () =>
     .then((r) => r.providers)
     .catch(() => []);
 
-const refresh = async () => {
+// Opening the panel or page reuses current scores; the refresh button forces a new ranking.
+const refresh = async (force = false) => {
   if (!(await getToken())) {
     // Only a lost token signs out; keep a sign-in error or an in-flight sign-in on screen.
     if ((await readState()).auth === 'signed-in') await signOutLocally();
@@ -383,9 +401,10 @@ const refresh = async () => {
         : null,
   }));
   const tags = loadSummaries().catch(() => {}); // tags only; the panel works without them
-  const { shown, expired } = await readState();
+  const state = await readState();
+  const { shown, expired } = state;
   if (!expired && shown && ended(shown, new Date())) await expire(true);
-  else await rank();
+  else if (force || expired || !current(state)) await rank();
   await tags;
 };
 
@@ -500,7 +519,7 @@ const handle = async (message: Message) => {
       await api('/api/auth/sign-out', { body: {} }).catch(() => {});
       return signOutLocally();
     case 'refresh':
-      return refresh();
+      return refresh(message.force);
     case 'setPlanning':
       await update(() => ({
         planning: message.planning,

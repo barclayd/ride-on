@@ -187,6 +187,7 @@ export type StandardsStatus =
   | 'no_feasible_departure';
 export type Weather = {
   retrieval: { latestAt: string | null };
+  refreshAt?: string | null; // v0.17: the forecast behind these scores goes stale then; null, ask again
   attribution: Attribution[];
 };
 // One forecast day, selected or preview.

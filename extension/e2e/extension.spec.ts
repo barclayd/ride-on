@@ -71,6 +71,7 @@ let providerDown: boolean; // every forecast failed, as with a mis-chosen provid
 let sunshineUncertain: boolean;
 let replays: Map<string, Ride>;
 let scores: Record<string, number>; // a route's score, in place of 84 then 44
+let freshFor: number; // hours until the forecast behind the scores goes stale
 
 const reset = () => {
   calls = [];
@@ -78,6 +79,7 @@ const reset = () => {
   sunshineUncertain = false;
   replays = new Map();
   scores = {};
+  freshFor = 3;
   user = {
     id: 'u1',
     version: 1,
@@ -180,6 +182,7 @@ const SHOWN = {
 
 const weather = () => ({
   retrieval: { latestAt: new Date().toISOString() },
+  refreshAt: new Date(Date.now() + freshFor * 3_600_000).toISOString(),
   attribution:
     PROVIDERS.find((p) => p.id === user.weatherProviderId)?.attribution ?? [],
 });
@@ -654,6 +657,36 @@ test('badges show what changed since the rides were last on screen', async ({
   const third = await openPopup(context, extensionId);
   await expect(third.locator('.ro-ride .ro-meter strong')).toHaveText('80');
   await expect(third.locator('.ro-delta')).toHaveCount(0);
+});
+
+test('reopening reuses fresh scores; a stale forecast or the refresh button ranks again', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  const reopen = async () => {
+    const summaries = calls.filter((c) => c.path === '/rides/summaries');
+    const page = await openPopup(context, extensionId);
+    await expect(page.locator('.ro-ride').first()).toContainText('Hilly Loop');
+    // The rank decision comes before the summaries request lands.
+    await expect
+      .poll(() => calls.filter((c) => c.path === '/rides/summaries').length)
+      .toBeGreaterThan(summaries.length);
+    await page.waitForTimeout(300);
+    return page;
+  };
+  freshFor = -1; // stale as soon as it arrives
+  await (await reopen()).close();
+  expect(recCalls()).toHaveLength(1);
+  freshFor = 3;
+  await (await reopen()).close();
+  expect(recCalls()).toHaveLength(2);
+  const page = await reopen();
+  expect(recCalls()).toHaveLength(2);
+  await expect(page.locator('.ro-heading')).not.toContainText('Updating');
+  await page.getByRole('button', { name: 'Refresh forecast' }).click();
+  await expect.poll(() => recCalls().length).toBe(3);
 });
 
 test('a scored ride explains uncertain sunshine in the popup and on Journeys', async ({

@@ -11,6 +11,7 @@ API v0.13.0 adds the [Safari extension sign-in](authentication.md#safari-extensi
 API v0.14.0 presents [one Met Office provider choice](weather-provider-choices.md) alongside Apple Weather.
 API v0.15.0 adds [wind and precipitation descriptions](#condition-chip-summaries) and [saved display units](#display-units). Scoring remains `comfort-v0.10`.
 API v0.16.0 adds a `maximumTemperatureC` [minimum standard](#personal-minimum-standards) for rides that get too hot.
+API v0.17.0 adds `weather.refreshAt` to recommendations: when the cached forecast behind them goes stale, so clients can reuse a ranking until then.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -664,7 +665,7 @@ The response includes:
 | `message`, `best.drawbacks` | Readable conclusion and trade-offs. |
 | `savedUser`, `resolvedPreferences`, `resolvedMinimumTemperature`, `riding` | Saved profile identity/version, exact effective settings and seasonal limit origin. |
 | `algorithmVersion`, `generatedAt`, `assumptions` | How and when the assessment was made. |
-| `weather` | Requested/selected provider, attempts, per-location provenance/issues, range, quality limits and cache hits/misses. |
+| `weather` | Requested/selected provider, attempts, per-location provenance/issues, range, quality limits, cache hits/misses and `refreshAt`: the earliest retrieval-TTL, provider-expiry or model-age limit among the forecasts used, or `null` when any location was unavailable (ask again). The same request returns the same ranking until then, barring profile, route or ride-history changes. |
 
 A route known to meet every configured standard takes priority over a higher
 scoring route that does not. Otherwise the highest comfort score is returned as

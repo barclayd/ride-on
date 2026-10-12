@@ -718,7 +718,7 @@ const WindowHeading = ({
         disabled={busy || spin}
         onClick={() => {
           setAsked(true);
-          send({ type: 'refresh' }).finally(() => setAsked(false));
+          send({ type: 'refresh', force: true }).finally(() => setAsked(false));
         }}
       >
         <svg
