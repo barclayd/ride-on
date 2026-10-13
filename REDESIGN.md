@@ -1,5 +1,8 @@
 # Landmarks-standard redesign checklist
 
+> Superseded: the app UI is being rebuilt from the Claude Design canvas. See
+> [`docs/redesign/README.md`](docs/redesign/README.md). Kept for history.
+
 Derived from Apple's WWDC 2025 sample "Landmarks: Building an app with Liquid Glass"
 (https://developer.apple.com/documentation/SwiftUI/Landmarks-Building-an-app-with-Liquid-Glass)
 plus a full audit of this app against it. Work lands as small PRs; tick items as they merge.
