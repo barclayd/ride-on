@@ -24,6 +24,11 @@ final class UnitFormatTests: XCTestCase {
         XCTAssertEqual(UnitFormat.elevation(m: 380, system: .metric, locale: fr), "380\u{202F}m")
     }
 
+    func testTemperatureRangeDropsTheUnitLetter() {
+        XCTAssertEqual(UnitFormat.temperatureRange(c: 9...14, locale: gb), "9–14°")
+        XCTAssertEqual(UnitFormat.temperatureRange(c: 9...14, locale: us), "48–57°")
+    }
+
     func testSpeedRespectsUnitSystem() {
         XCTAssertEqual(UnitFormat.speed(kph: 25, system: .metric, locale: gb), "25 km/h")
         XCTAssertEqual(UnitFormat.speed(kph: 25, system: .imperial, locale: us), "16 mph")

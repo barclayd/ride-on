@@ -25,3 +25,10 @@ public extension View {
             .background(.secondary.opacity(0.15), in: .capsule)
     }
 }
+
+public extension View {
+    /// DESIGN-SYSTEM.md §2: content sits on solid cards, never glass.
+    func card() -> some View {
+        background(.cardBackground, in: .rect(cornerRadius: 26))
+    }
+}

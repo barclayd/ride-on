@@ -6,23 +6,23 @@ import Foundation
 /// anything that wants to render tab chrome (labels, selection state)
 /// without depending on the UI packages themselves.
 public enum AppTab: String, CaseIterable, Identifiable, Sendable {
-    case ride, routes, you
+    case rides, routes, preferences
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
-        case .ride: "Ride"
+        case .rides: "Rides"
         case .routes: "Routes"
-        case .you: "You"
+        case .preferences: "Preferences"
         }
     }
 
     public var systemImage: String {
         switch self {
-        case .ride: "bicycle"
+        case .rides: "bicycle"
         case .routes: "map"
-        case .you: "person.crop.circle"
+        case .preferences: "slider.horizontal.3"
         }
     }
 }

@@ -46,7 +46,7 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 |---|---|---|
 | Tab bar (Rides, Routes, Preferences) | System glass; shrinks to the selected tab's icon on scroll | `TabView` + `.tabBarMinimizeBehavior(.onScrollDown)` |
 | Toolbars | System glass. At most 3 groups. Icons only, each with an accessibility label. Related actions share one capsule (share + more) | `.toolbar`, `ToolbarItemGroup`, `ToolbarSpacer` |
-| Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .topBarLeading)` + `.sheet` |
+| Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
 | Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero share button `.glassEffect(.clear.interactive())` |
 | Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
 | Pushed screens' back button | 44pt glass circle, chevron only | stock `NavigationStack` back button |
@@ -137,7 +137,8 @@ before adding a custom component in code.
    capsule ("9–14°", "15 km/h tailwind", "Gusts 28 km/h", "Sunny spells"). Max 4 per row.
 3. **`DayStrip`** — "Your Window": one bar per day in the window, height = that day's best
    score, the selected day tinted, rain-out days shown as a symbol and a stub. A day with no
-   ride isn't tappable. `Chart { BarMark }` with a footnote summarising the window.
+   ride isn't tappable. An `HStack` of one `Button` per day (each a VoiceOver element with the
+   selected trait), with a footnote summarising the window.
 4. **`DeparturePicker`** — Ride detail's start-time choice: the best departure plus the next
    three in the window, each a tile with day, time and score. A `Picker` with a custom style;
    VoiceOver reads it as a radio group. Choosing one updates everything below it.
@@ -196,7 +197,7 @@ glass transitions use `.materialize`.
 
 | Screen | What's on it |
 |---|---|
-| **Rides** (tab) | `RideHero` for the best pick in the window → conditions card ("✓ Meets your preferences", last ridden, `ConditionChip`s, score with bar and change badge) → "Your Window" `DayStrip` → "Other Tracked Routes" rows (map thumbnail, name, departure → return · distance, conditions or "Below your minimums", score) → "Doesn't Fit Your Window" → Apple Weather attribution, "Updated 08:12. Pull down to refresh." Toolbar: window capsule (leading), "+" track a route (trailing). Pull to refresh. |
+| **Rides** (tab) | `RideHero` for the best pick in the window → conditions card ("✓ Meets your preferences", last ridden, `ConditionChip`s, score with bar and change badge) → "Your Window" `DayStrip` → "Other Tracked Routes" rows (route thumbnail, name, departure → return · distance, conditions or "Below your minimums", score) → "Doesn't Fit Your Window" → Apple Weather attribution, "Updated 08:12. Pull down to refresh." Toolbar: window capsule (leading), "+" track a route (trailing). Pull to refresh. |
 | **Ride detail** (push, zoom from hero) | Shorter `RideHero` → verdict card (`ScoreGauge`, verdict, change since last update, last ridden, one or two notes) → "Departure" `DeparturePicker` → "Forecast on the Ride" hourly grid (time, sky, temperature, wind, gusts, rain chance) → "Along the Route" `RouteProfile` → "Why It Scored 86" `FactorRow`s → Add to Calendar, Open in cycle.travel (accent list buttons) → Apple Weather attribution. Toolbar: back (leading), share + more in one capsule (trailing). |
 | **Window sheet** | Large detent (the days list plus Hours need the height). Grabber, Cancel (glass circle, `xmark`) leading, centred "Ride Window", Done (tinted circle, `checkmark`) trailing. Quick picks (Tomorrow, This Weekend, Next 5 Days) → "Days" multi-select list, each day showing its best route and score, sky and temperature → "Hours": segmented Daylight / Custom, Leave After and Back By (`DatePicker(.hourAndMinute)` when Custom). |
 | **Window passed** | Rides when the saved window is in the past. No hero, so the toolbar is regular glass and the capsule shows the stale range. `ContentUnavailableView` ("Your Window Has Passed", one sentence, "Choose Dates" as the one `.borderedProminent` button) → "Quick Picks" rows with each range's best route and score. |

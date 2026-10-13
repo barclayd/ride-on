@@ -1,0 +1,332 @@
+import SwiftUI
+import UniformTypeIdentifiers
+import Models
+import Engine
+import DesignSystem
+import SharedUI
+
+/// The Rides tab (docs/redesign/README.md §1): the window's best ride as a hero, its conditions,
+/// the window's days, then every other tracked route.
+public struct RidesView: View {
+    var board: RideBoard
+    @State private var selectedDay: Date
+    @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    public init(board: RideBoard) {
+        self.board = board
+        let bestDay = board.days.first { $0.best == board.picks.first } ?? board.days.first
+        _selectedDay = State(initialValue: bestDay?.date ?? board.window.start)
+    }
+
+    /// The selected day's best ride; the window's best when nothing is selected.
+    private var hero: RideBoard.Pick? {
+        board.days.first { $0.date == selectedDay }?.best ?? board.picks.first
+    }
+
+    public var body: some View {
+        ScrollView {
+            // ponytail: no picks is the Window passed screen, built with the Ride Window sheet (PR 4).
+            if let hero {
+                VStack(spacing: 16) {
+                    RideHero(pick: hero, eyebrow: hero == board.picks.first ? "Best pick" : "Best that day") {
+                        ShareLink(item: RouteGPX(route: hero.route), preview: SharePreview(hero.route.name)) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(8)
+                                .frame(minWidth: 48, minHeight: 48)
+                                .glassEffect(.clear.interactive(), in: .circle)
+                        }
+                        .accessibilityLabel("Send route to a bike computer")
+                    }
+
+                    Group {
+                        conditionsCard(hero)
+                        section("Your Window") { windowCard }
+                        let others = board.picks.filter { $0.route.id != hero.route.id }
+                        if !others.isEmpty {
+                            section("Other Tracked Routes") { rows(others, content: pickRow) }
+                        }
+                        if !board.unfit.isEmpty {
+                            section("Doesn't Fit Your Window") { rows(board.unfit, content: unfitRow) }
+                        }
+                        footer
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.bottom, 140)
+            }
+        }
+        .ignoresSafeArea(edges: .top)
+        .background(.groupedBackground)
+        // ponytail: nothing to refresh until the board comes from POST /recommendations.
+        .refreshable {}
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                // ponytail: opens the Ride Window sheet once it exists (PR 4).
+                Button {} label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "calendar")
+                        Text(windowTitle).monospacedDigit()
+                        Image(systemName: "chevron.up.chevron.down").font(.caption.weight(.semibold))
+                    }
+                }
+                .accessibilityLabel("Ride window, \(windowTitle)")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                // ponytail: no-op until tracking a route is redesigned.
+                Button("Track a route", systemImage: "plus") {}
+            }
+        }
+    }
+
+    // MARK: Conditions
+
+    private func conditionsCard(_ pick: RideBoard.Pick) -> some View {
+        let conditions = pick.conditions
+        return VStack(alignment: .leading, spacing: 14) {
+            let verdict = HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if pick.meetsMinimums {
+                    Image(systemName: "checkmark")
+                    Text("Meets your preferences")
+                } else {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text("Below your minimums")
+                }
+            }
+            let lastRidden = pick.lastRidden.map {
+                Text("Last ridden \($0.formatted(.dateTime.day().month(.abbreviated)))")
+                    .font(.footnote.weight(.regular))
+                    .foregroundStyle(Color.secondary)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) { verdict; Spacer(); lastRidden }
+                VStack(alignment: .leading, spacing: 4) { verdict; lastRidden }
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(pick.meetsMinimums ? AnyShapeStyle(.tint) : AnyShapeStyle(.belowMinimums))
+
+            FlowLayout {
+                ConditionChip(UnitFormat.temperatureRange(c: conditions.temperatureC), systemImage: "thermometer.medium", tint: .orange)
+                ConditionChip("\(UnitFormat.speed(kph: conditions.windKph, system: unitSystem)) \(conditions.wind.rawValue)", systemImage: "wind", tint: .blue)
+                ConditionChip("Gusts \(UnitFormat.speed(kph: conditions.gustKph, system: unitSystem))")
+                ConditionChip(conditions.sky.title, systemImage: conditions.sky.systemImage, tint: conditions.sky.tint)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                let title = Text("Conditions").font(.subheadline.weight(.semibold))
+                let score = HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if let change = pick.change, change != 0 {
+                        Text("\(change > 0 ? "▲" : "▼") \(abs(change))")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tint)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(.tint.opacity(0.15), in: .capsule)
+                            .accessibilityLabel("\(change > 0 ? "Up" : "Down") \(abs(change)) since the last forecast")
+                    }
+                    Text("\(Text("\(pick.score)").font(.title2.bold()))\(Text("/100").font(.footnote.weight(.medium)).foregroundStyle(.secondary))")
+                        .monospacedDigit()
+                        .accessibilityLabel("\(pick.score) out of 100")
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) { title; Spacer(); score }
+                    VStack(alignment: .leading, spacing: 4) { title; score }
+                }
+                ProgressView(value: Double(pick.score), total: 100)
+                    .tint(pick.meetsMinimums ? Color.accentColor : .gray)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.top, 16)
+        .padding([.horizontal, .bottom], 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+
+    // MARK: Window
+
+    private var windowCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            DayStrip(days: board.days, selection: $selectedDay)
+            Text(windowFootnote)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+        }
+        .padding([.horizontal, .top], 10)
+        .padding(.bottom, 12)
+        .card()
+    }
+
+    private var windowTitle: String {
+        let last = board.window.end.addingTimeInterval(-1)
+        let style = Date.FormatStyle.dateTime.weekday(.abbreviated).day()
+        return "\(board.window.start.formatted(style)) – \(last.formatted(style))"
+    }
+
+    private var windowFootnote: String {
+        let washouts = board.days.filter { $0.best == nil && $0.sky == .rain }
+            .map { "\($0.date.formatted(.dateTime.weekday(.wide))) has rain from dawn to dusk." }
+        return (["Best ride each day."] + washouts).joined(separator: " ")
+    }
+
+    // MARK: Rows
+
+    private func rows<Item: Identifiable, Row: View>(_ items: [Item], @ViewBuilder content: @escaping (Item) -> Row) -> some View {
+        VStack(spacing: 0) {
+            ForEach(items) { item in
+                if item.id != items.first?.id {
+                    Divider().padding(.leading, 80)
+                }
+                content(item)
+                    .padding(.vertical, 12)
+                    .padding(.leading, 12)
+                    .padding(.trailing, 16)
+            }
+        }
+        .card()
+    }
+
+    // ponytail: rows open Ride detail once it exists (PR 3).
+    private func pickRow(_ pick: RideBoard.Pick) -> some View {
+        let day = pick.start.formatted(.dateTime.weekday(.abbreviated))
+        let start = pick.start.formatted(.clockTime)
+        let finish = pick.finish.formatted(.clockTime)
+        let distance = UnitFormat.distance(km: pick.route.distanceKm, system: unitSystem, fractionDigits: 0)
+        return row(pick.route, tint: pick.meetsMinimums ? .accentColor : .gray) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(pick.route.name).font(.headline)
+                Text("\(day) \(start) → ~\(finish) · \(distance)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                if pick.meetsMinimums {
+                    Text("\(UnitFormat.temperatureRange(c: pick.conditions.temperatureC)) · \(pick.conditions.wind.title) · \(pick.conditions.sky.title)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Label("Below your minimums", systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.belowMinimums)
+                }
+            }
+        } trailing: {
+            Text(pick.score, format: .number)
+                .font(.title3.bold())
+                .monospacedDigit()
+                .foregroundStyle(pick.meetsMinimums ? .primary : .tertiary)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("rides-route-row")
+    }
+
+    private func unfitRow(_ unfit: RideBoard.Unfit) -> some View {
+        let distance = UnitFormat.distance(km: unfit.route.distanceKm, system: unitSystem, fractionDigits: 0)
+        return row(unfit.route, tint: .gray) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(unfit.route.name).font(.headline)
+                Text("\(distance) · about \(Self.hoursMinutes(unfit.rideDuration)). Your window allows \(Self.hoursMinutes(unfit.windowAllows)).")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        } trailing: {}
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Thumbnail, text, trailing score. At accessibility sizes the text drops below the
+    /// thumbnail so it gets the card's full width (DESIGN-SYSTEM.md §8).
+    @ViewBuilder
+    private func row(_ route: RideBoard.RouteSummary, tint: Color, @ViewBuilder text: () -> some View, @ViewBuilder trailing: () -> some View) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    thumbnail(route, tint: tint)
+                    Spacer(minLength: 0)
+                    trailing()
+                }
+                text()
+            }
+        } else {
+            HStack(spacing: 12) {
+                thumbnail(route, tint: tint)
+                text()
+                Spacer(minLength: 0)
+                trailing()
+            }
+        }
+    }
+
+    private func thumbnail(_ route: RideBoard.RouteSummary, tint: Color) -> some View {
+        RouteMap(route.coordinates, style: .thumbnail, tint: tint)
+            .frame(width: 56, height: 56)
+            .clipShape(.rect(cornerRadius: 12))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    /// "7h 05m": `Duration.UnitsFormatStyle` can't zero-pad minutes alone.
+    private static func hoursMinutes(_ interval: TimeInterval) -> String {
+        let minutes = Int(interval / 60)
+        return "\(minutes / 60)h " + String(format: "%02dm", minutes % 60)
+    }
+
+    // MARK: Chrome
+
+    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.title3.bold())
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+                .accessibilityAddTraits(.isHeader)
+            content()
+        }
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            WeatherAttributionFooter()
+            Text("Updated \(board.generatedAt.formatted(.clockTime)). Pull down to refresh.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
+    }
+}
+
+private extension RideBoard.Sky {
+    var tint: Color {
+        switch self {
+        case .sunny, .sunnySpells: .yellow
+        case .cloudy: .secondary
+        case .rain: .rain
+        }
+    }
+}
+
+/// The hero's share item: the route as a GPX file a bike computer app can import.
+private struct RouteGPX: Transferable {
+    var route: RideBoard.RouteSummary
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: UTType(importedAs: "com.topografix.gpx")) { gpx in
+            GPXWriter.data(name: gpx.route.name, coordinates: gpx.route.coordinates)
+        }
+        .suggestedFileName { "\($0.route.name).gpx" }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        RidesView(board: .sample)
+    }
+}
