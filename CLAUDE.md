@@ -128,12 +128,13 @@ Testing strategy).
 ## Design system
 
 `DESIGN-SYSTEM.md` is not optional guidance — it's the spec. In particular:
-- §2 Materials: Liquid Glass is chrome only (tab bar, toolbars, sheets, floating pills), never content.
-- §3 Color: semantic system colors for UI; the only custom palette is `ConditionPalette`
-  (temperature ramp); ambiance gradients come from `AmbianceStyle`, computed from real
-  forecast + time of day, never a stock illustration.
-- §6: the custom component inventory is closed at 8 components — don't add a 9th without
-  updating the doc first.
+- §1: Ride On recommends routes, it doesn't navigate — no Directions CTA anywhere.
+- §2 Materials: Liquid Glass is the functional layer only (tab bar, toolbars, sheets, the
+  window capsule), never content. Regular glass by default; clear glass only over the hero map.
+- §3 Colour: semantic system colours for UI, green accent in the asset catalog; the only
+  custom palette is `ConditionPalette` (temperature ramp). `AmbianceStyle` is onboarding-only.
+- §6: the custom component inventory is closed — don't add a component without adding it
+  to the doc first.
 - §7 Motion: use the tokens in `app/Packages/DesignSystem/Sources/DesignSystem/Motion.swift`,
   don't hand-roll `.animation()` calls.
 
