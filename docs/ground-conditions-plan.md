@@ -1,6 +1,7 @@
 # Ground conditions: phased delivery plan
 
-Status: phase 1 implemented (12 October 2026); phase 2 is next.
+Status: phases 1 and 2 implemented (13 October 2026). Phase 2 is experimental
+evidence collection; phase 3 is next. Scores remain unchanged.
 Agreed direction: estimate the effect of wet ground on
 unpaved riding, with an explanation and uncertainty. Do not infer that a route is
 impassable from rainfall alone. This plan does not enable scoring changes.
@@ -22,7 +23,7 @@ impassable from rainfall alone. This plan does not enable scoring changes.
   describes the surface under the wheels; do not reuse historical rain as an
   additional rain-comfort penalty.
 
-## Phase 1 — Surface evidence (current)
+## Phase 1 — Surface evidence
 
 Deliverables:
 
@@ -56,7 +57,7 @@ uses the existing GPX/elevation import flow; it does not rerank the collection.
 Validation covers synthetic formats and browser imports, persistence across an
 API restart, owner isolation, malformed evidence, idempotency, unchanged scores
 and no additional forecast requests. A signed-in live journey payload has not
-been captured as a test fixture. Before phase 2, spot-check the reported coverage
+been captured as a test fixture. Before automatic ground assessment is enabled, spot-check the reported coverage
 and section boundaries against familiar paved and mixed-surface saved journeys
 using the released extension. This is a compatibility check, not wetness calibration.
 
@@ -106,6 +107,58 @@ Acceptance and tasks:
 - Measure actual billable usage as well as HTTP requests. Multi-location batches
   can count as multiple calls. Confirm the commercial plan before launch.
 - Preserve source attribution separately for ride weather and ground estimates.
+
+### Phase 2 implementation and remaining validation
+
+API v0.21.0 adds an explicit, authenticated `POST /ground-evidence` diagnostic.
+It gathers hourly evidence only for unpaved or unresolved sections, using the
+surface intervals from phase 1. Existing recommendation and preference paths do
+not call it. See [the evidence API and operating notes](ground-evidence-api.md).
+
+- [x] Provider-neutral evidence contract, with an Open-Meteo `ukmo_seamless`
+  adapter, 28 days of background data and the available seven-calendar-day
+  forecast horizon. Report 24-hour, 3-, 7-, 14- and 28-day totals separately.
+- [x] Preserve rainfall, total precipitation, snow, reference ET₀ and temperature;
+  missing values, incomplete periods and stale evidence remain explicit.
+- [x] Share a date-based cache across routes using a versioned 0.05° request
+  lattice; retain the provider-returned grid coordinate. Do not call this lattice
+  the model's native grid. Recent dates refresh after 3/6/12 hours, relative to
+  retrieval; older modelled history is retained for 90 days.
+- [x] Bound each request to 12 cells, expose omitted route distances, coordinate
+  concurrent refreshes and enforce a shared daily budget. Count HTTP attempts and
+  conservatively estimate weighted usage. Actual provider billing is **unknown**:
+  the free endpoint does not report it. Confirm against account metering before
+  paid/commercial operation; do not equate the estimate with measured billing.
+- [x] Add a separate, explicit Environment Agency calibration tool. Validate
+  gauge units, period, identity, duplicates, coverage and recency. Never blend
+  these observations silently into modelled evidence.
+- [x] Test owner isolation, cache reuse and restarts, partial forecasts, failure
+  paths, time boundaries, concurrency, budgets and missing observations.
+- [x] Confirm non-commercial operation with Dan (13 October 2026). The free
+  endpoint is a prototype choice, not commercial-use authorization.
+- [ ] Complete the phase 1 signed-in surface spot-check before automatic use.
+  The local Cloudflare account could not read production D1 on 13 October;
+  synthetic persistence/import tests pass. This does not block the opt-in
+  evidence diagnostic, but it remains a rollout checkpoint.
+- [ ] Establish rainfall accuracy across multiple routes, seasons and storms;
+  confirm the EA timestamp convention before treating hour-boundary comparisons
+  as exact. Soil moisture/drainage enrichment is deferred.
+
+A bounded live diagnostic on 13 October near a public London coordinate used
+five HTTP requests (four EA, one Open-Meteo). The nearest gauge was inactive; a
+nearby alternative supplied 11 complete daily comparisons in the 14-day window.
+Those days totalled 7.4 mm observed versus 11.7 mm modelled rainfall, with identical
+sums under both EA interval-edge interpretations. This confirms the integration
+and the need to express uncertainty; it does **not** calibrate mud risk or prove
+accuracy on any of Dan's routes. Live payloads are not committed as fixtures.
+
+Research: [Open-Meteo forecast parameters and accumulation units](https://open-meteo.com/en/docs),
+[UK Met Office model coverage](https://open-meteo.com/en/docs/ukmo-api),
+[Open-Meteo usage and non-commercial terms](https://open-meteo.com/en/pricing),
+and [EA rainfall metadata and update limitations](https://environment.data.gov.uk/flood-monitoring/doc/rainfall).
+The UKMO adapter's `rain` is rainfall accumulation; its unsupported `showers`
+field is not added or interpreted as zero. This was checked against
+[Open-Meteo's UKMO field mapping](https://github.com/open-meteo/open-meteo/blob/main/Sources/App/UKMO/UkmoVariable.swift).
 
 ## Phase 3 — Experimental wetness model
 

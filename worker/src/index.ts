@@ -3,6 +3,10 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
 import { readBoundedBody } from './body.ts';
 import { AppError } from './errors.ts';
+import { createGroundCache } from './ground/cache.ts';
+import { requestSchema as groundRequestSchema } from './ground/contracts.ts';
+import { openMeteoGroundProvider } from './ground/open-meteo.ts';
+import { collectGroundEvidence } from './ground/service.ts';
 import { resolveAccess } from './identity/access.ts';
 import { authConfig } from './identity/config.ts';
 import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
@@ -126,7 +130,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.20.0',
+      version: '0.21.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -143,6 +147,7 @@ export const createApp = (
     '/recommendations',
     '/recommendations/*',
     '/weather-providers',
+    '/ground-evidence',
     '/users',
     '/users/*',
   ])
@@ -156,6 +161,30 @@ export const createApp = (
       await next();
     });
   app.route('/', rideRoutes(now));
+  app.post('/ground-evidence', async (c) => {
+    const input = await readJsonBody(c, groundRequestSchema);
+    const routes = await store(c.env).getMany(c.get('ownerId'), input.routeIds);
+    if (routes.length !== input.routeIds.length)
+      throw new AppError(
+        404,
+        'ROUTE_NOT_FOUND',
+        'One or more routes were not found.',
+      );
+    if (c.env.GROUND_EVIDENCE_MODE !== 'non-commercial')
+      throw new AppError(
+        503,
+        'GROUND_EVIDENCE_DISABLED',
+        'Ground evidence is not enabled.',
+      );
+    return c.json(
+      await collectGroundEvidence(
+        routes,
+        createGroundCache(c.env.ROUTES_DB),
+        openMeteoGroundProvider,
+        now(),
+      ),
+    );
+  });
   app.get('/weather-providers', (c) =>
     c.json({
       defaultPolicy: defaultSettings.weather,

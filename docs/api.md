@@ -14,7 +14,7 @@ API v0.16.0 adds a `maximumTemperatureC` [minimum standard](#personal-minimum-st
 API v0.17.0 adds `weather.refreshAt` to recommendations: when the cached forecast behind them goes stale, so clients can reuse a ranking until then.
 API v0.18.0 corrects Met Office BPF array decoding and introduces `comfort-v0.11`: gradual wind discomfort and stronger gust penalties. See [wind comfort calibration](#wind-comfort-calibration-v011).
 API v0.19.0 adds [separate planning days](planning-api.md#search-dates-and-optional-preview): `days: {kind: "dates", dates}` and `range.dates` on every non-null range. Scoring remains `comfort-v0.11`.
-API v0.20.0 adds [located surface evidence](#route-surface-evidence) for cycle.travel imports. This is phase 1 of the [ground-conditions plan](ground-conditions-plan.md); scoring remains `comfort-v0.11`.
+API v0.21.0 adds the experimental [ground-evidence diagnostic](ground-evidence-api.md), following v0.20.0 [located surface evidence](#route-surface-evidence). These are phases 1–2 of the [ground-conditions plan](ground-conditions-plan.md); scoring remains `comfort-v0.11`.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
