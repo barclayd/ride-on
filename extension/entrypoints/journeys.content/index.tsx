@@ -68,7 +68,7 @@ const Tick = () => (
 );
 
 const Page = ({ rows }: { rows: Row[] }) => {
-  const view = useView();
+  const view = useView(import.meta.env.SAFARI);
   const [busy, setBusy] = useState(new Set<string>());
   const [notice, setNotice] = useState<string | null>(null);
   const synced = useRef(false);

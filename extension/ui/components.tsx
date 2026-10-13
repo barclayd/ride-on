@@ -43,13 +43,27 @@ export const injectFonts = () => {
 
 export type View = { state: State } & ReturnType<typeof viewOf>;
 
-export const useView = (): View | null => {
+export const useView = (poll = false): View | null => {
   const [state, setState] = useState<State | null>(null);
   useEffect(() => {
     const stop = onStateChange(setState);
     readState().then((read) => setState((current) => current ?? read));
-    return stop;
-  }, []);
+    if (!poll) return stop;
+    // Safari's content scripts can't count on storage events (a copy it re-injects never gets
+    // one), so they ask: the small stamp once a second while visible, the state when it moves.
+    let stamp: unknown;
+    const timer = setInterval(async () => {
+      if (document.hidden || !browser.runtime?.id) return;
+      const next = (await browser.storage.local.get('stamp')).stamp;
+      if (next === stamp) return;
+      stamp = next;
+      setState(await readState());
+    }, 1000);
+    return () => {
+      clearInterval(timer);
+      stop();
+    };
+  }, [poll]);
   return state && { state, ...viewOf(state, new Date()) };
 };
 
