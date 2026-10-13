@@ -18,13 +18,15 @@ import { assessClimbing, CLIMBING_SHARE } from './climbing.ts';
 import { conditionsSchema } from './conditions.ts';
 import { planDepartures } from './daylight.ts';
 import { assessDistance, DISTANCE_SHARE } from './distance.ts';
+import { forecastDetailsFor } from './forecast-details.ts';
 import {
   type RecommendationInput,
   resolveMinimumTemperature,
 } from './input.ts';
+import { compileTemperature } from './temperature.ts';
 import { windComfort } from './wind-comfort.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.11';
+export const ALGORITHM_VERSION = 'comfort-v0.12';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -111,7 +113,10 @@ export const sampleAt = (
 ): number | null => compileSeries(samples)(at);
 type PreparedWeather = ReadonlyMap<
   string,
-  readonly ReturnType<typeof compileSeries>[]
+  {
+    values: readonly ReturnType<typeof compileSeries>[];
+    temperature: ReturnType<typeof compileTemperature>;
+  }
 >;
 
 type Observation = {
@@ -120,6 +125,9 @@ type Observation = {
   fromM: number;
   toM: number;
   temperatureC: number;
+  temperatureRange: NonNullable<
+    ReturnType<ReturnType<typeof compileTemperature>['range']>
+  >;
   windSpeedKph: number;
   cloudCoverFraction: number | null;
   skyCondition: number | null;
@@ -194,8 +202,12 @@ const summarize = (rows: readonly Observation[]) => {
       : null,
     distanceKm: round(distance / 1000),
     temperatureC: {
-      minimum: round(Math.min(...rows.map((row) => row.temperatureC))),
-      maximum: round(Math.max(...rows.map((row) => row.temperatureC))),
+      minimum: round(
+        Math.min(...rows.map((row) => row.temperatureRange.minimum.value)),
+      ),
+      maximum: round(
+        Math.max(...rows.map((row) => row.temperatureRange.maximum.value)),
+      ),
     },
     maximumHeadwindKph: round(
       Math.max(0, ...rows.map((row) => row.headwindKph)),
@@ -280,10 +292,15 @@ const assessCandidate = (
       missing.add('forecast-too-far-from-route');
       continue;
     }
-    const values =
-      prepared.get(leg.weatherLocationId)?.map((lookup) => lookup(at)) ?? [];
+    const weather = prepared.get(leg.weatherLocationId);
+    const values = weather?.values.map((lookup) => lookup(at)) ?? [];
+    const temperatureC = weather?.temperature.at(at);
+    const temperatureRange = weather?.temperature.range(
+      departure + (durationMs * leg.fromM) / route.distanceM,
+      departure + (durationMs * leg.toM) / route.distanceM,
+    );
     const [
-      temperatureC,
+      ,
       speedMs,
       direction,
       gustMs,
@@ -301,6 +318,7 @@ const assessCandidate = (
         : null;
     if (
       temperatureC == null ||
+      !temperatureRange ||
       speedMs == null ||
       direction == null ||
       gustMs == null ||
@@ -351,6 +369,7 @@ const assessCandidate = (
       fromM: leg.fromM,
       toM: leg.toM,
       temperatureC,
+      temperatureRange,
       windSpeedKph: speedMs * 3.6,
       cloudCoverFraction,
       skyCondition,
@@ -398,7 +417,14 @@ const assessCandidate = (
   const standards = preferences.minimumStandards;
   const floor = resolveMinimumTemperature(input);
   // Compare raw observations, not rounded presentation values.
-  const minimum = Math.min(...rows.map((row) => row.temperatureC));
+  const temperatureRows = (kind: 'minimum' | 'maximum') =>
+    rows.map((row) => ({
+      ...row,
+      at: row.temperatureRange[kind].at,
+      temperatureC: row.temperatureRange[kind].value,
+    }));
+  const minimumRows = temperatureRows('minimum');
+  const minimum = Math.min(...minimumRows.map((row) => row.temperatureC));
   const recordFailure = (
     standard: string,
     limit: number,
@@ -414,7 +440,9 @@ const assessCandidate = (
       at: iso(worst.at),
       date: input.date,
       timeZone: input.timeZone,
-      positionKm: round((worst.fromM + worst.toM) / 2000),
+      positionKm: round(
+        (route.distanceM * (worst.at - departure)) / durationMs / 1000,
+      ),
       affectedDistanceKm: round(
         affected.reduce((sum, row) => sum + row.distanceM, 0) / 1000,
       ),
@@ -431,8 +459,8 @@ const assessCandidate = (
       'minimumTemperatureC',
       limit,
       minimum,
-      rows.filter((row) => row.temperatureC < limit),
-      rows.find((row) => row.temperatureC === minimum),
+      minimumRows.filter((row) => row.temperatureC < limit),
+      minimumRows.find((row) => row.temperatureC === minimum),
     );
   }
   for (const [standard, field] of [
@@ -442,13 +470,17 @@ const assessCandidate = (
     ['maximumPrecipitationRateMmH', 'precipitationRateMmH'],
   ] as const) {
     const limit = standards[standard];
+    const observations =
+      field === 'temperatureC' ? temperatureRows('maximum') : rows;
     if (limit !== undefined)
       recordFailure(
         standard,
         limit,
-        Math.max(...rows.map((row) => row[field])),
-        rows.filter((row) => row[field] > limit),
-        rows.reduce((worst, row) => (row[field] > worst[field] ? row : worst)),
+        Math.max(...observations.map((row) => row[field])),
+        observations.filter((row) => row[field] > limit),
+        observations.reduce((worst, row) =>
+          row[field] > worst[field] ? row : worst,
+        ),
       );
   }
   const standardsStatus = failures.length
@@ -633,10 +665,21 @@ export const recommendRides = (
       );
       return [
         id,
-        [...requiredWeatherFor(input), precipitationTypeDescriptor].map(
-          (descriptor) =>
+        {
+          temperature: compileTemperature(
+            byDescriptor.get(
+              descriptorKey(
+                requiredWeatherFor(input)[0] ?? descriptors.airTemperature,
+              ),
+            ) ?? [],
+          ),
+          values: [
+            ...requiredWeatherFor(input),
+            precipitationTypeDescriptor,
+          ].map((descriptor) =>
             compileSeries(byDescriptor.get(descriptorKey(descriptor)) ?? []),
-        ),
+          ),
+        },
       ];
     }),
   );
@@ -725,8 +768,28 @@ export const recommendRides = (
       departuresStandardsUnknown: assessed.filter(
         (candidate) => candidate.standards.status === 'unknown',
       ).length,
-      best: assessed[0] ?? null,
-      alternatives: assessed.slice(1, 1 + alternativeLimit),
+      best: assessed[0]
+        ? {
+            ...assessed[0],
+            forecastDetails: forecastDetailsFor(
+              route,
+              assessed[0],
+              forecasts,
+              requiredWeatherFor(input),
+            ),
+          }
+        : null,
+      alternatives: assessed
+        .slice(1, 1 + alternativeLimit)
+        .map((candidate) => ({
+          ...candidate,
+          forecastDetails: forecastDetailsFor(
+            route,
+            candidate,
+            forecasts,
+            requiredWeatherFor(input),
+          ),
+        })),
       issues: candidates.length
         ? [
             ...new Set([

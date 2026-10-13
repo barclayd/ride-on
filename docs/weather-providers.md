@@ -351,8 +351,10 @@ normal or silently change a rider's policy when the reference is missing.
 
 `POST /recommendations` now models progress at the request speed (default 20 km/h),
 searches daylight departures, and evaluates six normalized measures along each
-ride. Temperature/rate and short wind means use nearest hourly validity within
-30 minutes; gust maxima and occurrence probabilities use their native periods.
+ride. Temperature uses linear interpolation between adjacent hourly readings,
+including departure and finish for its range and personal limits. Other instant
+values and short wind means use nearest hourly validity within 30 minutes;
+full-hour means, gust maxima and occurrence probabilities use their native periods.
 The API returns assumptions, provenance and explicit missing coverage.
 
 The local ignored API report (`evaluation/api-live-check.json`) covers six uploaded GPX

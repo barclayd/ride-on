@@ -169,6 +169,7 @@ export type PrecipitationSummary =
   | 'snow'
   | 'thunder';
 export type Departure = {
+  forecastDetails?: ForecastDetails;
   sunshineAssessment?: {
     status: 'complete' | 'partial' | 'unavailable';
     unknownDistanceFraction: number;
@@ -186,6 +187,24 @@ export type Departure = {
     status: 'disabled' | 'no_recent_history' | 'assessed' | 'unavailable';
     penaltyPoints: number;
   };
+};
+type ForecastStatistic =
+  | { kind: 'deterministic' | 'ensemble-mean' }
+  | { kind: 'percentile'; percentile: number };
+export type ForecastDetails = {
+  temperatureMethod: 'linear-interpolation';
+  locations: {
+    source: { providerId: string; productId: string; adapterVersion: string };
+    sourceLocationId: string | null;
+    coordinate: { latitude: number; longitude: number };
+    retrievedAt: string;
+    forecastRunAt: string | null;
+    temperatureStatistic: ForecastStatistic | null;
+    gustStatistic: ForecastStatistic | null;
+    routePeriods: { start: string; end: string }[];
+    temperatures: { at: string; celsius: number | null }[];
+    gusts: { start: string; end: string; maximumKph: number | null }[];
+  }[];
 };
 export type Window = { start: string; end: string };
 export type RouteResult = {

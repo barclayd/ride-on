@@ -42,6 +42,33 @@ const conditions = z.object({
   maximumPrecipitationRateMmH: z.number(),
   assistedDistanceFraction: z.number().min(0).max(1),
 });
+const statistic = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('deterministic') }),
+  z.object({ kind: z.literal('ensemble-mean') }),
+  z.object({ kind: z.literal('percentile'), percentile: z.number() }),
+]);
+const period = z.object({ start: z.iso.datetime(), end: z.iso.datetime() });
+const forecastDetails = z.object({
+  temperatureMethod: z.literal('linear-interpolation'),
+  locations: z
+    .array(
+      z.object({
+        source: z.object({ providerId: z.string(), productId: z.string() }),
+        sourceLocationId: z.string().nullable(),
+        coordinate: z.object({ latitude: z.number(), longitude: z.number() }),
+        retrievedAt: z.iso.datetime(),
+        forecastRunAt: z.iso.datetime().nullable(),
+        temperatureStatistic: statistic.nullable(),
+        gustStatistic: statistic.nullable(),
+        routePeriods: z.array(period),
+        temperatures: z.array(
+          z.object({ at: z.iso.datetime(), celsius: z.number().nullable() }),
+        ),
+        gusts: z.array(period.extend({ maximumKph: z.number().nullable() })),
+      }),
+    )
+    .min(1),
+});
 const candidate = z.object({
   departureAt: z.iso.datetime(),
   finishAt: z.iso.datetime(),
@@ -52,6 +79,7 @@ const candidate = z.object({
     distance: z.number().min(0).max(100).nullable(),
   }),
   conditions,
+  forecastDetails,
   standards: z.object({
     status: z.enum(['meets', 'below', 'unknown', 'not_configured']),
     failures: z.array(

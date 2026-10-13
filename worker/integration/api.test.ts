@@ -345,7 +345,8 @@ integration(
     const route = await upload(h);
     const result = await recommend(h, [route.id]);
     const best = first(result.rankings).best;
-    assert.equal(best.departureAt, '2026-10-10T11:30:00.000Z');
+    // 11:30 now interpolates to 12°C; fully warm conditions start at noon.
+    assert.equal(best.departureAt, '2026-10-10T12:00:00.000Z');
     assert.deepEqual(best.conditions.temperatureC, {
       minimum: 18,
       maximum: 18,

@@ -15,6 +15,7 @@ API v0.17.0 adds `weather.refreshAt` to recommendations: when the cached forecas
 API v0.18.0 corrects Met Office BPF array decoding and introduces `comfort-v0.11`: gradual wind discomfort and stronger gust penalties. See [wind comfort calibration](#wind-comfort-calibration-v011).
 API v0.19.0 adds [separate planning days](planning-api.md#search-dates-and-optional-preview): `days: {kind: "dates", dates}` and `range.dates` on every non-null range. Scoring remains `comfort-v0.11`.
 API v0.22.0 adds the opt-in [experimental ground assessment](ground-assessment-api.md), using v0.21.0 [cached ground evidence](ground-evidence-api.md) and v0.20.0 [located surfaces](#route-surface-evidence). Phase 3 model mechanics are implemented; [real-world calibration](ground-calibration.md) is pending. The [phased plan](ground-conditions-plan.md) keeps scoring unchanged at `comfort-v0.11`.
+API v0.23.0 adds temperature interpolation and ride-scoped forecast details (`comfort-v0.12`); see below.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -757,6 +758,34 @@ change that conclusion. If another route/departure lacks evidence, or a month
 rule is unresolved, return `unknown` instead. No feasible departure is distinct
 from bad weather. Missing data never becomes zero rain or zero wind.
 
+### Temperature timing and forecast details (v0.23.0)
+
+`comfort-v0.12` linearly interpolates instantaneous air temperature between adjacent
+hourly readings at each route-section arrival time. Overall ranges and temperature
+standards also include each section's entry, exit and any hourly extrema inside it,
+so departure and finish temperatures are included. Distance-weighted comfort still
+uses section midpoints. Missing brackets, gaps greater than one hour and period
+means remain unknown; the engine never extrapolates. Gust maxima, wind, precipitation
+and categorical symbols retain their existing sampling and native periods.
+
+Best and retained alternative departures include `forecastDetails`, an explanation
+scoped to the locations and times used for that ride. Each location supplies source
+identity, actual forecast coordinates/site ID, `retrievedAt`, nullable
+`forecastRunAt`, selected temperature/gust statistics, `routePeriods`, hourly
+`temperatures` (`at`, nullable `celsius`) bracketing those periods and overlapping
+`gusts` (`start`, `end`, nullable `maximumKph`). Repeated uses of the same snapshot
+and site are grouped. Gust period bounds remain complete even at a partial-hour
+start or finish. The details reuse the selected cached evidence without provider
+calls; they do not expose whole-horizon or arbitrary-location forecasts.
+
+The extension's Forecast details disclosure appears on both popup and Journeys
+cards. It labels retrieval as **Fetched**, keeps an unknown forecast-run time
+unknown, and shows the actual product and statistic behind the provider choice.
+Hourly source temperatures are distinguished from interpolated ride temperatures.
+Older responses without details remain readable; persisted ranking keys are bumped
+to discard recommendations computed before this algorithm change. Saved ride plans
+remain historical snapshots.
+
 ### Condition chip summaries
 
 Every newly computed conditions object includes the following two fields. They
@@ -873,8 +902,10 @@ preserves v0.5 scores and ordering, including active climbing.
 Ties choose the earlier departure, then route ID. These curves, spans and the
 consistency weight are versioned implementation choices for review and calibration.
 
-Instant forecasts and ten-minute wind means use the nearest hourly validity,
-within 30 minutes. This is an approximation, not a forecast of every minute.
+Temperature uses linear interpolation between adjacent hourly readings, including
+departure and finish when reporting its range and checking personal limits. Other
+instant forecasts and ten-minute wind means use the nearest hourly validity,
+within 30 minutes. These are approximations, not forecasts of every minute.
 Full-hour means use their native interval bounds, including Apple's cloud cover
 and precipitation rate derived from hourly accumulation. This v0.7 addition leaves
 Met Office's short wind means and existing calibration unchanged.

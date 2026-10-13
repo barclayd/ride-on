@@ -1976,3 +1976,93 @@ a.ro-name:hover {
 .ro-unit-switch label:has(:focus-visible) {
   outline: 2px solid var(--ro-lime);
 }
+
+/* Native disclosure shared by Chrome/Safari and the popup/Journeys tiles. */
+.ro-forecast {
+  border-block-start: 1px solid var(--ro-border);
+  padding-block-start: 8px;
+  min-inline-size: 0;
+  font: 500 12px / 1.45 var(--ro-sans);
+  color: var(--ro-muted);
+}
+.ro-forecast > summary {
+  cursor: pointer;
+  color: var(--ro-olive-900);
+  padding-block: 5px;
+  font-weight: 600;
+}
+.ro-forecast > summary:focus-visible {
+  outline: 2px solid var(--ro-lime);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.ro-forecast-body {
+  display: grid;
+  gap: 12px;
+  padding-block: 8px 2px;
+  overflow-wrap: anywhere;
+}
+.ro-forecast p,
+.ro-forecast dl {
+  margin: 0;
+}
+.ro-forecast-source {
+  color: var(--ro-olive-900);
+  font-weight: 700;
+}
+.ro-forecast label {
+  display: grid;
+  gap: 4px;
+}
+.ro-forecast select {
+  inline-size: 100%;
+  min-inline-size: 0;
+  border: 1px solid var(--ro-border-input);
+  border-radius: 6px;
+  padding: 6px;
+  background: white;
+}
+.ro-forecast dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px 10px;
+}
+.ro-forecast dt {
+  font-weight: 600;
+}
+.ro-forecast dd {
+  margin: 0;
+}
+.ro-forecast table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.ro-forecast caption {
+  text-align: start;
+  font-weight: 700;
+  color: var(--ro-olive-900);
+  margin-block-end: 5px;
+}
+.ro-forecast th,
+.ro-forecast td {
+  text-align: start;
+  padding: 5px 0;
+  border-block-end: 1px solid var(--ro-border);
+}
+.ro-forecast th:first-child {
+  padding-inline-end: 8px;
+}
+.ro-forecast tbody th {
+  font-weight: 500;
+}
+.ro-forecast td {
+  white-space: nowrap;
+}
+.ro-forecast-credit a {
+  color: var(--ro-olive-900);
+}
+.ro-forecast-credit img {
+  max-inline-size: 110px;
+  block-size: auto;
+}

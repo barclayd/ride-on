@@ -204,6 +204,34 @@ const best = (date: string, i: number, score: number) => ({
   score,
   standards: { status: 'not_configured', failures: [] },
   conditions: CONDITIONS,
+  forecastDetails: {
+    temperatureMethod: 'linear-interpolation',
+    locations: [0, 1].map((site) => ({
+      source: {
+        providerId: 'met-office-bpf',
+        productId: 'uk-blended-probabilistic-v2',
+        adapterVersion: '2',
+      },
+      sourceLocationId: site === 0 ? '00353202' : '00353260',
+      coordinate: { latitude: 51.4609 + site * 0.01, longitude: -0.3022 },
+      retrievedAt: `${date}T06:23:00Z`,
+      forecastRunAt: null,
+      temperatureStatistic: { kind: 'percentile', percentile: 50 },
+      gustStatistic: { kind: 'percentile', percentile: 50 },
+      routePeriods: [{ start: `${date}T08:30:00Z`, end: `${date}T10:15:00Z` }],
+      temperatures: [10, 12.5, 15.25, 17].map((value, h) => ({
+        at: `${date}T${String(8 + h).padStart(2, '0')}:00:00Z`,
+        celsius: value + site,
+      })),
+      gusts: [
+        {
+          start: `${date}T10:00:00Z`,
+          end: `${date}T11:00:00Z`,
+          maximumKph: 29.7 + site,
+        },
+      ],
+    })),
+  },
   sunshineAssessment: sunshineUncertain
     ? { status: 'partial', unknownDistanceFraction: 0.4 }
     : null,
@@ -1593,4 +1621,62 @@ test('a real extension reload leaves one copy on Journeys, without errors', asyn
       `${dev}.getExtensionInfo('${extensionId}').then((i) => i.runtimeErrors.map((e) => e.message))`,
     ),
   ).toEqual([]);
+});
+
+test('forecast details disclose source, fetched time, locations and full gust periods without refetching', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  const card = page.locator('.ro-ride').first();
+  const details = card.locator('details.ro-forecast');
+  await expect(details.locator('summary')).toBeVisible();
+  await expect(details.locator('table').first()).toBeHidden();
+  const requestsBefore = calls.filter(
+    (c) => c.path === '/recommendations',
+  ).length;
+  await details.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(details).toHaveAttribute('open', '');
+  await expect(details).toContainText(
+    'Met Office · Blended probabilistic forecast',
+  );
+  await expect(details).toContainText('Fetched');
+  await expect(details).toContainText('Not supplied by provider');
+  await expect(details).toContainText('Site 00353202');
+  await expect(
+    details.getByRole('table', { name: 'Hourly temperatures · median' }),
+  ).toBeVisible();
+  await expect(
+    details.getByRole('columnheader', { name: 'Full forecast period' }),
+  ).toBeVisible();
+  await details.getByLabel('Forecast location').selectOption('1');
+  await expect(details).toContainText('Site 00353260');
+  expect(calls.filter((c) => c.path === '/recommendations').length).toBe(
+    requestsBefore,
+  );
+  await expectPanelFits(page);
+  await page.screenshot({
+    path: test.info().outputPath('forecast-details-popup.png'),
+    fullPage: true,
+  });
+  await details.locator('summary').focus();
+  await page.keyboard.press('Space');
+  await expect(details).not.toHaveAttribute('open');
+
+  await fakeCycleTravel(context);
+  const journeys = await context.newPage();
+  await journeys.goto('https://cycle.travel/user/journeys');
+  const tile = journeys.locator('.ro-ride').first();
+  await tile.locator('summary').click();
+  await expect(tile).toContainText('Fetched');
+  await expect(
+    tile.getByRole('table', { name: 'Hourly gusts · median' }),
+  ).toBeVisible();
+  await journeys.screenshot({
+    path: test.info().outputPath('forecast-details-journeys.png'),
+    fullPage: true,
+  });
 });
