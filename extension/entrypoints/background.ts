@@ -171,10 +171,15 @@ const revive = async () => {
   });
   for (const { id } of tabs) {
     if (id === undefined) continue;
-    const alive = await browser.tabs
-      .sendMessage(id, { type: 'alive' })
-      .catch(() => false);
-    if (!alive)
+    const [check] = await browser.scripting
+      .executeScript({
+        target: { tabId: id },
+        func: () =>
+          (globalThis as { rideOnAlive?: () => boolean }).rideOnAlive?.() ===
+          true,
+      })
+      .catch(() => []);
+    if (!check?.result)
       await browser.scripting
         .executeScript({
           target: { tabId: id },

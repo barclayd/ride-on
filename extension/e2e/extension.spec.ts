@@ -1533,6 +1533,32 @@ test('Journeys page: after an extension update, the page follows the new copy', 
   await expect(page.locator('ride-on-module')).toHaveCount(1);
 });
 
+// The background restarts often (idle workers, Safari's non-persistent page): a live copy must
+// pass its check, or every restart re-injects it and the module flickers.
+test('Journeys page: a background restart leaves a live copy alone', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  await fakeCycleTravel(context);
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys');
+  const module = page.locator('ride-on-module');
+  await expect(module.locator('.ro-window')).toHaveText(/Daylight/);
+  await module.evaluate((e) => e.setAttribute('data-original', ''));
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  const cdp = await context.newCDPSession(popup);
+  await cdp.send('ServiceWorker.enable');
+  await cdp.send('ServiceWorker.stopAllWorkers');
+  await popup.reload();
+  await popup.getByRole('tab', { name: 'When' }).click();
+  await page.waitForTimeout(1000); // revive runs as the worker starts, with nothing to await
+  await expect(page.locator('ride-on-module[data-original]')).toHaveCount(1);
+  await expect(module).toHaveCount(1);
+});
+
 // A real reload (unlike the CustomEvent above) takes the old copy's extension APIs with it.
 test('a real extension reload leaves one copy on Journeys, without errors', async ({
   context,
