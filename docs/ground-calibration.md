@@ -1,7 +1,8 @@
 # Ground-condition calibration
 
-Status: model mechanics and an offline historical comparison tool implemented;
-real-world validation and score calibration remain pending.
+Status: model mechanics, an offline historical comparison tool and a separate
+gauge-quality audit implemented. Real-world validation and score calibration
+remain pending.
 
 ## Collect evidence before tuning
 
@@ -101,12 +102,70 @@ the same snapshots offline. Its provisional predictions were retained before
 tuning. Parameters and production scores remain unchanged; a second ride and
 held-out wet/dry examples are still needed.
 
+## Historical gauge quality audit
+
+Use the Environment Agency [Hydrology API](https://environment.data.gov.uk/hydrology/doc/reference)
+for older observations, separately from the recent Flood Monitoring adapter. Its
+quality/completeness fields have a different contract. The offline audit reads
+saved 15-minute rainfall measure metadata and a readings snapshot; it makes no
+network requests and does not affect the API, caches or scores.
+
+```sh
+cd worker
+bun scripts/audit-ground-gauge.ts \
+  --measure /private/case/measure.json \
+  --readings /private/case/readings.json \
+  --latitude=51.12 --longitude=-0.85 \
+  --through 2026-06-07T15:00:00Z \
+  --out ../evaluation/ground-calibration/example/gauge
+```
+
+Use `--longitude=-0.85` syntax for negative coordinates. Metadata is the saved
+API response with a single measure in `items`. The readings snapshot is
+`{ "url": "<exact request URL>", "retrievedAt": "<actual UTC retrieval time>", "raw": <API response> }`.
+Retain metadata retrieval provenance alongside it. Each input is limited to
+2.1 MB; at most 4,000 readings are permitted. Request a bounded date range plus
+boundary readings; a full page or nonzero page offset is rejected as potentially
+truncated. Save raw evidence privately; never manufacture retrieval dates.
+
+The tool checks measure identity, mm totals, 15-minute period, station distance
+(within 15 km), timestamp grid and duplicates. Only `Good` + `Complete` rows
+with finite values between 0 and the defensive 500 mm per-interval bound and
+consistent optional component flags qualify.
+`Incomplete` zero is unknown, including when `quality` says `Good`. Estimated,
+suspect, unchecked and absent quality are not accepted by this strict validation
+path. This is a conservative calibration rule, not a claim that such observations
+have no other use. Conflicting duplicates invalidate their interval in either order.
+The tool does not assume how component counts/percentages are scaled.
+
+The [dataset metadata](https://www.data.gov.uk/dataset/98a4d46e-23e7-4430-883c-9e5f14645e8f/hydrological-open-data)
+specifies GMT, so unsuffixed archive timestamps are read as UTC, never machine-local
+time or British Summer Time. The timestamp's interval edge has not been established;
+reports show separate start/end hypotheses for the preceding 24 hours, 3, 7, 14
+and 28 days. Totals require every interval to qualify and otherwise remain `null`.
+Even complete totals are conditional until accumulation timing is confirmed; do
+not use a conveniently matching edge as independent validation.
+
+Outputs `gauge-audit.json` and `gauge-audit.md` preserve quality counts, coverage,
+source/retrieval details and input hashes. The June case's three nearby archived
+15-minute series were all marked incomplete at retrieval. They therefore cannot
+verify the modelled weekly rain or establish a dry period. A separately inspected
+daily series was unchecked; it is not silently substituted. Root causes of those
+upstream flags are unverified. Model parameters and scoring remain unchanged.
+
 ## Build a small, varied evaluation set
 
 Seek wet/dry pairs on familiar routes, different materials, stronger/weaker drying,
 summer/winter conditions and forecast lead times. Hold out entire routes and dates
 before adjusting thresholds; nearby overlapping tracks share weather and are not
 independent samples. One mixed ride does not establish seasonal performance.
+
+Record how cases were selected. Riders who avoid gravel after rain supply a biased
+sample of conditions; a ride not taken is not an observation of firm or muddy ground.
+Do not invent a contrasting dry example from seasonal recollection. Collect feedback
+from rides people would choose anyway, without asking them to seek difficult or
+unsafe conditions. Treat unlocated firm stretches as unlocated. Retain unknowns
+and defer score calibration until sufficiently varied, located evidence exists.
 
 Use a section-level class confusion table, distance-weighted error, the rate of
 false-firm estimates on observed muddy/difficult sections, and coverage/unknown
