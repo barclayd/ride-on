@@ -208,6 +208,14 @@ records how to build this example and keep hindcasts separate from forecast
 validation. Familiar-route calibration and the phase 1 surface spot-check remain
 required before phase 4 or automatic use.
 
+An offline historical gauge-quality audit now protects this comparison from false
+zero rainfall: incomplete observations stay unknown even when marked Good. The
+three nearby June archive series checked so far cannot independently validate the
+modelled rain because all 15-minute readings were incomplete. Keep this limitation
+and ride-selection bias in the evaluation record. Collect voluntary feedback from
+normal rides; do not fabricate a dry comparison or enable penalties to bypass the
+remaining calibration gap.
+
 ## Phase 4 — Calibrated scoring and explanations
 
 After agreeing examples with Dan, introduce a versioned ground penalty. Keep
