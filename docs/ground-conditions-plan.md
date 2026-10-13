@@ -199,7 +199,10 @@ missing/stale evidence, ownership and cache reuse. These validate implementation
 not empirical accuracy. The coefficients and class boundaries are provisional.
 
 The first supplied GPX confirms a mixed-condition ride on 7 June 2026, but lacks
-surface classifications and located mud observations. It is retained locally;
+surface classifications. Tentative landmark feedback and a shared cycle.travel
+plan are retained with the private case; neither establishes exact observed
+section intervals. An offline historical comparison now samples actual passage
+times using cached UKMO model history, without changing model parameters. It is retained locally;
 no track geometry is committed. The [calibration protocol](ground-calibration.md)
 records how to build this example and keep hindcasts separate from forecast
 validation. Familiar-route calibration and the phase 1 surface spot-check remain

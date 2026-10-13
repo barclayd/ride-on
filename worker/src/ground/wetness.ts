@@ -1,4 +1,4 @@
-import { dateKey, HOUR, hourFloor } from './contracts.ts';
+import { DAY, dateKey, HOUR, hourFloor } from './contracts.ts';
 import type { collectGroundEvidence } from './service.ts';
 
 export type GroundEvidence = Awaited<ReturnType<typeof collectGroundEvidence>>;
@@ -61,10 +61,11 @@ const advance = (
   );
 
 /** One pass per cell; sections share snapshots. No I/O, clock or route facts. */
-export const wetnessTimeline = (
+const buildTimeline = (
   cell: EvidenceCell,
   issuedAt: number,
   through: number,
+  evidenceAvailableAt: number,
 ) => {
   const start = hourFloor(issuedAt) - WETNESS_MODEL.backgroundHours * HOUR;
   const hours = new Map(cell.hours.map((h) => [Date.parse(h.end), h]));
@@ -83,7 +84,7 @@ export const wetnessTimeline = (
     const hour = hours.get(end);
     const day = days.get(dateKey(end));
     const futureRetrieval =
-      !!day?.retrievedAt && Date.parse(day.retrievedAt) > issuedAt;
+      !!day?.retrievedAt && Date.parse(day.retrievedAt) > evidenceAvailableAt;
     const complete =
       !!day?.retrievedAt &&
       !!hour &&
@@ -125,6 +126,35 @@ export const wetnessTimeline = (
       });
   }
   return snapshots;
+};
+
+/** Live estimates must use only evidence retrieved by their issue time. */
+export const wetnessTimeline = (
+  cell: EvidenceCell,
+  issuedAt: number,
+  through: number,
+) => buildTimeline(cell, issuedAt, through, issuedAt);
+
+/** Offline retrospective mechanism check; never a replay of a known forecast. */
+export const hindcastWetnessTimeline = (
+  cell: EvidenceCell,
+  rideStart: number,
+  through: number,
+  reconstructedAt: number,
+) => {
+  if (
+    ![rideStart, through, reconstructedAt].every(Number.isFinite) ||
+    through < hourFloor(rideStart) ||
+    through > rideStart + 2 * DAY ||
+    reconstructedAt < through
+  )
+    throw new Error('Invalid hindcast time window.');
+  return {
+    purpose: 'hindcast' as const,
+    historicalForecastValidation: false as const,
+    reconstructedAt: new Date(reconstructedAt).toISOString(),
+    timeline: buildTimeline(cell, rideStart, through, reconstructedAt),
+  };
 };
 
 const classify = (
