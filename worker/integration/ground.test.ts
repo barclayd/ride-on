@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HttpResponse, http } from 'msw/http';
+import type { assessGround } from '../src/ground/assessment.ts';
 import type { collectGroundEvidence } from '../src/ground/service.ts';
 import type { Route } from '../src/routes/model.ts';
 import { groundResponse, groundRoute } from '../test/fixtures/ground.ts';
 import { BOB_TOKEN, createHarness, type Harness } from './harness.ts';
 
 type Evidence = Awaited<ReturnType<typeof collectGroundEvidence>>;
+type Assessment = ReturnType<typeof assessGround>;
 const endpoint = 'https://api.open-meteo.com/v1/forecast';
 const integration = (name: string, run: (h: Harness) => Promise<void>) =>
   test(name, { timeout: 30000 }, async () => {
@@ -252,6 +254,12 @@ integration(
     assert.equal(result.coverage.omittedCellIds.length, 1);
     assert.equal(result.routes[0]?.omittedM, 1000);
     assert.equal(result.usage.httpRequests, 12);
+    const assessed = await assessment(h, [route.id]);
+    assert.equal(assessed.usage.httpRequests, 0);
+    assert.equal(assessed.routes[0]?.coverage.omittedCellM, 1000);
+    assert.equal(assessed.routes[0]?.coverage.unknownM, 13000);
+    assert.equal(assessed.routes[0]?.confidence, 'unknown');
+    assert.equal(h.requests.length, 12);
   },
 );
 
@@ -376,5 +384,191 @@ integration(
         .first(),
       null,
     );
+  },
+);
+
+const assessment = async (
+  h: Harness,
+  ids: string[],
+  extra: Record<string, unknown> = {},
+) => {
+  const response = await h.send('/ground-assessment', {
+    body: JSON.stringify({
+      routeIds: ids,
+      departureAt: '2026-10-10T12:00:00Z',
+      ...extra,
+    }),
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  return (await response.json()) as Assessment;
+};
+
+integration(
+  'ground assessment shares evidence cache across departures and restarts, uses saved speed and preserves weather scoring',
+  async (h) => {
+    h.use(fixture());
+    const id = await save(h, groundRoute());
+    await evidence(h, [id]);
+    const profile = await h.send('/users', {
+      body: JSON.stringify({
+        displayName: 'Synthetic',
+        settings: { riding: { averageSpeedKph: 10 } },
+      }),
+    });
+    assert.equal(profile.status, 201);
+    const result = await assessment(h, [id]);
+    assert.equal(result.averageSpeedKph, 10);
+    assert.equal(result.scoringApplied, false);
+    assert.equal(result.calibrationStatus, 'uncalibrated');
+    assert.equal(result.usage.httpRequests, 0);
+    assert.equal(result.routes[0]?.coverage.estimatedM, 1000);
+    assert.equal(result.routes[0]?.sections.length, 2);
+    assert.equal(result.routes[0]?.finishAt, '2026-10-10T12:06:00.000Z');
+    assert.equal(result.routes[0]?.sections[0]?.confidence, 'low');
+    await h.restart();
+    const next = await assessment(h, [id], {
+      averageSpeedKph: 20,
+      departureAt: '2026-10-11T14:00:00Z',
+    });
+    assert.equal(next.averageSpeedKph, 20);
+    assert.equal(next.usage.httpRequests, 0);
+    assert.equal(h.requests.length, 1);
+    const health = (await (await h.send('/health')).json()) as {
+      algorithmVersion: string;
+    };
+    assert.equal(health.algorithmVersion, 'comfort-v0.11');
+  },
+);
+
+integration(
+  'ground assessment validates identity, ownership, date, speed, unknown fields and disabled mode before fetching',
+  async (h) => {
+    const id = await save(h, groundRoute());
+    const body = { routeIds: [id], departureAt: '2026-10-10T12:00:00Z' };
+    for (const [token, status] of [
+      [null, 401],
+      [BOB_TOKEN, 404],
+    ] as const) {
+      assert.equal(
+        (
+          await h.send('/ground-assessment', {
+            body: JSON.stringify(body),
+            token,
+          })
+        ).status,
+        status,
+      );
+    }
+    for (const extra of [
+      { departureAt: '2026-06-07T12:00:00Z' },
+      { departureAt: '2026-10-16T12:00:00Z' },
+      { departureAt: '2026-10-10T12:00:00' },
+      { averageSpeedKph: 0 },
+      { averageSpeedKph: 51 },
+      { preferences: {} },
+      { routeIds: [id, id] },
+    ])
+      assert.equal(
+        (
+          await h.send('/ground-assessment', {
+            body: JSON.stringify({ ...body, ...extra }),
+          })
+        ).status,
+        400,
+      );
+    await h.restart({ GROUND_EVIDENCE_MODE: 'off' });
+    assert.equal(
+      (await h.send('/ground-assessment', { body: JSON.stringify(body) }))
+        .status,
+      503,
+    );
+    assert.equal(h.requests.length, 0);
+  },
+);
+
+integration(
+  'paved ground assessments use no provider; unavailable or stale evidence remains unknown',
+  async (h) => {
+    const paved = await save(h, groundRoute('paved'));
+    const result = await assessment(h, [paved]);
+    assert.equal(result.routes[0]?.status, 'not-applicable');
+    assert.equal(result.routes[0]?.coverage.unknownM, 0);
+    assert.equal(h.requests.length, 0);
+    const gravel = await save(h, groundRoute());
+    h.use(http.get(endpoint, () => new HttpResponse(null, { status: 503 })));
+    const unavailable = await assessment(h, [gravel]);
+    assert.equal(unavailable.routes[0]?.coverage.unknownM, 1000);
+    assert.equal(unavailable.routes[0]?.sections[0]?.condition, null);
+    h.use(fixture());
+    await assessment(h, [gravel]);
+    await h.restart({ TEST_NOW: '2026-10-09T16:00:00Z' });
+    h.use(http.get(endpoint, () => new HttpResponse(null, { status: 503 })));
+    const stale = await assessment(h, [gravel]);
+    assert.equal(stale.routes[0]?.coverage.unknownM, 1000);
+    assert.ok(stale.routes[0]?.sections[0]?.reasons.includes('stale-weather'));
+  },
+);
+
+integration(
+  'partial forecasts only invalidate sections after the gap, preserving forecast provenance and honest coverage',
+  async (h) => {
+    h.use(
+      http.get(endpoint, ({ request }) => {
+        const data = groundResponse(new URL(request.url));
+        const missingAt = Date.parse('2026-10-09T13:00:00Z') / 1000;
+        const index = data.hourly.time.indexOf(missingAt);
+        data.hourly.rain[index] = null;
+        return HttpResponse.json(data);
+      }),
+    );
+    const id = await save(h, groundRoute());
+    const result = await assessment(h, [id], {
+      departureAt: '2026-10-09T12:58:00Z',
+    });
+    const route = result.routes[0];
+    assert.ok(route);
+    assert.equal(route.coverage.estimatedM, 500);
+    assert.equal(route.coverage.unknownM, 500);
+    assert.equal(route.sections[0]?.status, 'estimated');
+    assert.equal(route.sections[1]?.status, 'unknown');
+    assert.equal(route.sections[1]?.condition, null);
+    assert.ok(route.sections[1]?.reasons.includes('incomplete-weather'));
+    assert.equal(result.usage.httpRequests, 1);
+  },
+);
+
+integration(
+  'excessive surface detail is rejected before provider calls',
+  async (h) => {
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const route = groundRoute();
+      route.distanceM = 5000;
+      assert.ok(route.surface);
+      route.surface.geometryDistanceM = 5000;
+      route.surface.sections = Array.from({ length: 5000 }, (_, index) => ({
+        fromM: index,
+        toM: index + 1,
+        surface: 'gravel',
+        sourceCode: 'synthetic',
+      }));
+      route.legs = Array.from({ length: 10 }, (_, index) => ({
+        fromM: index * 500,
+        toM: (index + 1) * 500,
+        coordinate: { latitude: 51.5, longitude: -0.1 },
+        bearingDegrees: 180,
+        weatherLocationId: 's',
+      }));
+      ids.push(await save(h, route));
+    }
+    const response = await h.send('/ground-assessment', {
+      body: JSON.stringify({
+        routeIds: ids,
+        departureAt: '2026-10-10T12:00:00Z',
+      }),
+    });
+    assert.equal(response.status, 400);
+    assert.match(await response.text(), /12000/);
+    assert.equal(h.requests.length, 0);
   },
 );

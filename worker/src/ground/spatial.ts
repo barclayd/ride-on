@@ -11,7 +11,7 @@ export const cellFor = (point: Coordinate): Cell => {
     longitude: (x + 0.5) / 20 - 180,
   };
 };
-export const routeExposure = (route: Route) => {
+export const routeExposure = (route: Route, mergeAdjacent = true) => {
   const evidence =
     route.surface?.sourceHash === route.sourceHash ? route.surface : null;
   const intervals: { fromM: number; toM: number; surface: string }[] = [];
@@ -49,6 +49,7 @@ export const routeExposure = (route: Route) => {
       cells.set(cell.id, cell);
       const previous = sections.at(-1);
       if (
+        mergeAdjacent &&
         previous?.cellId === cell.id &&
         previous.surface === part.surface &&
         previous.toM === fromM

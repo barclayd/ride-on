@@ -1,7 +1,7 @@
 # Ground conditions: phased delivery plan
 
-Status: phases 1 and 2 implemented (13 October 2026). Phase 2 is experimental
-evidence collection; phase 3 is next. Scores remain unchanged.
+Status: phases 1 and 2 implemented; phase 3 model mechanics implemented
+(13 October 2026), with real-world calibration pending. Scores remain unchanged.
 Agreed direction: estimate the effect of wet ground on
 unpaved riding, with an explanation and uncertainty. Do not infer that a route is
 impassable from rainfall alone. This plan does not enable scoring changes.
@@ -164,20 +164,46 @@ field is not added or interpreted as zero. This was checked against
 
 Calculate a rolling moisture index: rain adds wetness; drainage and drying reduce
 it. Use recent rain more strongly while retaining antecedent wetness. Treat this
-as a calibrated proxy, not a literal measurement of trail mud depth.
+as a proxy to calibrate, not a literal measurement of trail mud depth.
 
-- Model ground conditions at each section's expected arrival time, including
+- [x] Model ground conditions at each section's expected arrival time, including
   future rainfall and drying up to that time. Do not count rain after passage.
-- Differentiate known compacted/gravel surfaces from soft earth and grass;
+- [x] Differentiate known compacted/gravel surfaces from soft earth and grass;
   represent unknown material/drainage explicitly. Future soil, shade and terrain
   enrichment requires verified data, not invented defaults presented as facts.
-- Define handling of frozen ground, snow and thaw separately; frozen ground is
+- [x] Define handling of frozen ground, snow and thaw separately; frozen ground is
   not automatically good riding and thaw can worsen mud.
-- Output estimated class, affected distance, coverage, confidence and reasons.
+- [x] Output estimated class, affected distance, coverage, confidence and reasons.
   Missing evidence is unknown, not dry. Run experimentally without ranking changes.
-- Validate wet/dry and summer/winter pairs on familiar routes; collect voluntary
+- [ ] Validate wet/dry and summer/winter pairs on familiar routes; collect voluntary
   post-ride labels (firm, soft, muddy, difficult). Hold out routes/dates when
   checking calibration, and never use later observations in a historical replay.
+
+### Phase 3 implementation and calibration gate
+
+API v0.22.0 adds explicit `POST /ground-assessment`, using the same bounded
+provider cache as phase 2. See the [assessment contract and model assumptions](ground-assessment-api.md).
+The versioned model runs lower/central/upper scenarios with uncertain starting
+wetness and drainage. Surface susceptibility differs for granular and soft
+materials. Bounds are scenario sensitivity, not calibrated probabilities.
+
+Sections retain their own arrival times even within one weather cell. Only
+completed hourly intervals before passage are used; the unassessed partial hour
+is disclosed. Missing, stale and omitted evidence stays unknown. Freeze/thaw and
+snow suppress ordinary liquid-only classification. Affected distance and the
+longest muddy stretch accompany section estimates; there is no ground score yet.
+
+Synthetic unit and real-Worker integration tests verify wet/dry ordering,
+drying, antecedent moisture, mixed materials, passage cutoffs, freeze/thaw,
+missing/stale evidence, ownership and cache reuse. These validate implementation,
+not empirical accuracy. The coefficients and class boundaries are provisional.
+
+The first supplied GPX confirms a mixed-condition ride on 7 June 2026, but lacks
+surface classifications and located mud observations. It is retained locally;
+no track geometry is committed. The [calibration protocol](ground-calibration.md)
+records how to build this example and keep hindcasts separate from forecast
+validation. Familiar-route calibration and the phase 1 surface spot-check remain
+required before phase 4 or automatic use.
 
 ## Phase 4 — Calibrated scoring and explanations
 

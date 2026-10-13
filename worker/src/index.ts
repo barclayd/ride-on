@@ -3,8 +3,12 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
 import { readBoundedBody } from './body.ts';
 import { AppError } from './errors.ts';
+import { assessGround, assessmentWindowError } from './ground/assessment.ts';
 import { createGroundCache } from './ground/cache.ts';
-import { requestSchema as groundRequestSchema } from './ground/contracts.ts';
+import {
+  assessmentRequestSchema,
+  requestSchema as groundRequestSchema,
+} from './ground/contracts.ts';
 import { openMeteoGroundProvider } from './ground/open-meteo.ts';
 import { collectGroundEvidence } from './ground/service.ts';
 import { resolveAccess } from './identity/access.ts';
@@ -130,7 +134,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.21.0',
+      version: '0.22.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -148,6 +152,7 @@ export const createApp = (
     '/recommendations/*',
     '/weather-providers',
     '/ground-evidence',
+    '/ground-assessment',
     '/users',
     '/users/*',
   ])
@@ -161,6 +166,45 @@ export const createApp = (
       await next();
     });
   app.route('/', rideRoutes(now));
+  app.post('/ground-assessment', async (c) => {
+    const input = await readJsonBody(c, assessmentRequestSchema);
+    const routes = await store(c.env).getMany(c.get('ownerId'), input.routeIds);
+    if (routes.length !== input.routeIds.length)
+      throw new AppError(
+        404,
+        'ROUTE_NOT_FOUND',
+        'One or more routes were not found.',
+      );
+    if (c.env.GROUND_EVIDENCE_MODE !== 'non-commercial')
+      throw new AppError(
+        503,
+        'GROUND_EVIDENCE_DISABLED',
+        'Ground evidence is not enabled.',
+      );
+    const user = await users(c.env).get(c.get('ownerId'));
+    const speed =
+      input.averageSpeedKph ??
+      user?.settings.riding.averageSpeedKph ??
+      defaultSettings.riding.averageSpeedKph;
+    const issuedAt = now();
+    const departure = Date.parse(input.departureAt);
+    const error = assessmentWindowError(
+      routes,
+      departure,
+      speed,
+      issuedAt.getTime(),
+    );
+    if (error) throw new AppError(400, 'BAD_REQUEST', error);
+    const evidence = await collectGroundEvidence(
+      routes,
+      createGroundCache(c.env.ROUTES_DB),
+      openMeteoGroundProvider,
+      issuedAt,
+    );
+    return c.json(
+      assessGround(routes, evidence, departure, speed, issuedAt.getTime()),
+    );
+  });
   app.post('/ground-evidence', async (c) => {
     const input = await readJsonBody(c, groundRequestSchema);
     const routes = await store(c.env).getMany(c.get('ownerId'), input.routeIds);

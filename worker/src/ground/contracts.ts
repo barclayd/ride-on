@@ -62,3 +62,7 @@ export const requestSchema = z.strictObject({
     .max(12)
     .refine((ids) => new Set(ids).size === ids.length),
 });
+export const assessmentRequestSchema = requestSchema.extend({
+  departureAt: z.iso.datetime(),
+  averageSpeedKph: z.number().min(5).max(50).optional(),
+});
