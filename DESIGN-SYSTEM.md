@@ -1,19 +1,42 @@
 # Ride On — Design System
 
-iOS 26 / macOS 26 (Tahoe), SwiftUI, Liquid Glass. One codebase, native on both platforms.
-Every screen in the app is built from this document. When in doubt: use the stock component and do nothing custom.
+iOS 26 / macOS 26, SwiftUI, Liquid Glass. Every screen is built from this document. When in
+doubt, use the stock component and do nothing custom.
 
-Sources: Apple HIG (Materials, Layout, Color, Typography, Sheets, Tab Bars, Toolbars, Onboarding, Privacy), WWDC25 sessions 219 / 323 / 356 / 204 / 313, and pattern studies of Apple Sports, Invites, Maps, Weather, and Fitness. Key API references inline.
+Source of truth for visuals: the **Ride On iOS Redesign** design canvas
+(https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T, October 2026), with every screen in light
+and dark. The canvas's Design Language board is this document in picture form.
+
+HIG references: [Materials](https://developer.apple.com/design/human-interface-guidelines/materials),
+[Adopting Liquid Glass](https://developer.apple.com/documentation/TechnologyOverviews/adopting-liquid-glass),
+[Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars),
+[Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars),
+[Sheets](https://developer.apple.com/design/human-interface-guidelines/sheets),
+[Maps](https://developer.apple.com/design/human-interface-guidelines/maps),
+[Color](https://developer.apple.com/design/human-interface-guidelines/color).
 
 ---
 
 ## 1. Principles
 
-1. **Glass is chrome, never content.** Liquid Glass lives only on the navigation/control layer: tab bar, toolbars, sidebar, sheets at partial detents, floating pills. Never on ride cards, maps, charts, or list content. (HIG: "Don't use Liquid Glass in the content layer.")
-2. **Stock components first.** Compiling against the iOS 26 SDK gives toolbars, tab bars, sheets, alerts, menus, and sidebars their glass appearance for free — and their accessibility adaptations (Reduce Transparency/Motion, Increase Contrast) for free. Custom `.glassEffect()` is a last resort and must hand-implement those fallbacks.
-3. **Computed state drives the visuals.** The Apple "tell" isn't glass — it's imagery rendered from real data: Weather's sky is the actual sky, Maps' card order is the actual ETA. Our card ambiance, condition chips, and factor bars are always rendered from the actual forecast + route computation for that ride. No stock "sunny day" illustration assets, ever.
-4. **One concept per screen, one tinted action per screen.** Fitness onboarding grammar; HIG color-on-glass rule.
-5. **Typography over iconography for data.** Apple Sports encodes state in weight/size of SF Pro, not badges. Scores, temperatures, and ETAs are typeset, not iconified.
+1. **Ride On recommends routes; it doesn't navigate.** No Directions or turn-by-turn CTA
+   anywhere. Actions point at riding the route elsewhere: send to a bike computer, add to
+   Calendar, open in cycle.travel.
+2. **Glass is the functional layer, never content.** Liquid Glass is for controls and
+   navigation that float over content: toolbar buttons, the window capsule, the tab bar,
+   sheets. Cards, rows, chips and badges are solid. Glass never sits on glass.
+3. **Stock components first.** The iOS 26 SDK gives toolbars, tab bars, sheets, menus and
+   forms their glass and their accessibility fallbacks for free. Custom `.glassEffect()` is a
+   last resort and must implement those fallbacks by hand.
+4. **Content goes full-bleed under the chrome.** The best pick's map runs edge to edge under
+   the status bar and toolbar, so the glass has something to refract. Everything else is
+   solid cards on the grouped background.
+5. **Computed state drives the visuals.** The hero map is the actual route, the day strip is
+   the actual best score each day, the wind strip is the actual wind along the route. No
+   stock illustrations.
+6. **One tinted action per screen, at most.** Zero is fine (Rides and Ride detail have none).
+7. **Typography over iconography for data.** Scores, temperatures and times are typeset with
+   monospaced digits. A verdict never relies on colour alone: it always has a symbol and words.
 
 ---
 
@@ -21,95 +44,166 @@ Sources: Apple HIG (Materials, Layout, Color, Typography, Sheets, Tab Bars, Tool
 
 | Surface | Treatment | API |
 |---|---|---|
-| Tab bar | System glass, free | `TabView` + `.tabBarMinimizeBehavior(.onScrollDown)` |
-| Toolbars / nav bar | System glass, free; group with spacers | `.toolbar`, `ToolbarSpacer(.fixed/.flexible, placement:)` |
-| Factor-breakdown sheet | System glass at partial detents, free | `.presentationDetents([.fraction(0.35), .medium, .large])` — remove any manual `.presentationBackground` |
-| Mac sidebar | Floating glass panel, free | `NavigationSplitView`; detail uses `.backgroundExtensionEffect()` |
-| Ride tab chrome (day selector, ride-context control) | Day selector: leading `Menu` (bare calendar glyph, inline picker — no nested submenu) over the next 10 forecastable days (the weather provider's confidence bound); large title shows the selected day (Today/Tomorrow/weekday + date + month). Ride context (bike/hours/intent): compact capsule in the nav bar's trailing slot — system toolbar glass, free. Visible label is the two highest-value facts (hours · bike); the full context lives in the editor sheet + a11y label | `.toolbar { ToolbarItem(placement: .primaryAction) { … } }` |
-| Buttons on glass | `.buttonStyle(.glass)`; primary action `.buttonStyle(.glassProminent)` + `.buttonBorderShape(.capsule)` |
-| Content cards (stats, factor rows) | **Not glass.** `.background(.regularMaterial, in: .rect(corners: .concentric))` or opaque secondary background |
+| Tab bar (Rides, Routes, Preferences) | System glass; shrinks to the selected tab's icon on scroll | `TabView` + `.tabBarMinimizeBehavior(.onScrollDown)` |
+| Toolbars | System glass. At most 3 groups. Icons only, each with an accessibility label. Related actions share one capsule (share + more) | `.toolbar`, `ToolbarItemGroup`, `ToolbarSpacer` |
+| Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .topBarLeading)` + `.sheet` |
+| Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero share button `.glassEffect(.clear.interactive())` |
+| Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
+| Pushed screens' back button | 44pt glass circle, chevron only | stock `NavigationStack` back button |
+| Cards, rows, chips, badges | **Not glass.** Solid `secondarySystemGroupedBackground` | `.background(.background.secondary, in: .rect(cornerRadius: 26))` |
 
 Rules:
-- **Regular glass everywhere.** `Glass.clear` only if an element ever floats directly over photographic card media — and then with the HIG 35% dim layer over bright content. Never mix regular and clear in one context.
-- All custom glass elements that can overlap or morph share one `GlassEffectContainer` (glass cannot sample glass).
-- Custom glass must branch on `@Environment(\.accessibilityReduceTransparency)` → opaque `Material` fallback.
+- **Regular glass by default.** Clear glass only over rich media (the hero map), always with a
+  ~35% dark gradient behind it so white glyphs stay legible.
+- **Scroll edge effects, not dividers.** No hairlines under toolbars or between sections; the
+  system edge effect separates scrolling content from chrome.
+- **Group glass that can touch or morph** in one `GlassEffectContainer` (glass can't sample glass).
+- **Tint is for the primary action only.** Toolbars and the tab bar stay monochrome; the
+  selected tab carries the accent.
+- **Accessibility fallbacks** (§8): Reduce Transparency → opaque; Increase Contrast → solid
+  with a border. Custom glass must branch on `accessibilityReduceTransparency` itself.
+- **Map attribution stays visible.** Anywhere a map shows, "Apple Maps" and the Legal link
+  sit at least 10pt from custom content. Using a live `Map` gets this for free.
 
-## 3. Color
+## 3. Colour
 
-- **Semantic system colors only** for UI: `.primary`, `.secondary`, `Color(.systemBackground)` family. Vibrant foreground styles on any material — never hardcoded hex on glass.
-- **Accent**: burnt orange `#BE5103`, defined once in the asset catalog (`AccentColor`) with a lightened dark-mode variant (raw `#BE5103` will sit too dark on dark backgrounds — tune on device, ~`#E06A1B` starting point) and verified for 3:1 contrast as a control tint in both modes. Applied via `.tint()`. On any screen, at most one glass element carries `Glass.tint(accent)` — the primary action.
-- **Condition scale** (the only custom palette): a fixed temperature/severity ramp borrowed from Apple Weather's convention — deep blue < 0°C → light blue → green → yellow → orange → red > 30°C. Used by: condition chips, the 10-day "best day" markers, factor range bars. Defined as `ShapeStyle` tokens in `ConditionPalette.swift`; chips must also differ by SF Symbol, not color alone (Differentiate Without Color).
-- **Ambiance gradients** (Ride cards, onboarding dials): generated at runtime from forecast condition + time of day (sun position → warm top-light; overcast → flat cool grey; rain → darkened blue-grey with particle layer). Implemented as one `AmbianceStyle(condition:date:location:)` factory returning gradient + optional particle effect. Dark-mode aware. This is the app's visual signature — and it's computed, not drawn.
+- **Semantic system colours** for all UI: `.primary`/`.secondary`/`.tertiary` labels,
+  `systemGroupedBackground`, `secondarySystemGroupedBackground` for cards, `.fill.tertiary`
+  for chips, `.separator`. Everything adapts to Dark Mode and Increase Contrast.
+- **Accent**: green, defined once as `AccentColor` in the asset catalog. Light `#248A3D`, dark
+  `#30D158` (the system green pair; the light value is darkened for 4.5:1 on white). Applied
+  via `.tint()`. Text on an accent fill is white in light, black in dark.
+- **Status colours** (always paired with a symbol and words):
+
+  | Meaning | Light | Dark |
+  |---|---|---|
+  | Below your minimums | `#B23A00` | `#FF9F0A` |
+  | Not in contention | `#8E8E93` | `#8E8E93` |
+  | Tailwind | accent | accent |
+  | Crosswind | `#E8A100` | `#FFD60A` |
+  | Headwind | `#C93400` | `#FF453A` |
+  | Rain chance | `#0A66D8` | `#64B5FF` |
+
+- **Temperature ramp** (`ConditionPalette`, the only custom palette): Apple Weather's
+  convention, deep blue below 0° through green to red above 30°. Used by the Ideal
+  Temperature range control and the temperature range bars.
+- **`AmbianceStyle`** gradients are for the onboarding dial screens only. The Rides hero is
+  the route's map, not a gradient.
 
 ## 4. Typography
 
-SF Pro, system text styles only, Dynamic Type always on. No custom fonts, no fixed point sizes.
+SF Pro, system text styles only, Dynamic Type always on. No fixed point sizes in code.
 
-| Role | Style |
-|---|---|
-| Card route name (over media) | `.largeTitle` emphasized (`.bold()`), white with scrim |
-| Screen titles / onboarding titles | `.largeTitle` bold, left-aligned (iOS 26 convention) |
-| Hero numbers (score, temp, ETA) | `.title` / `.title2` emphasized; use monospaced digits `.monospacedDigit()` where values tick |
-| Section headers | `.headline` |
-| Body copy, factor explanations | `.body`; onboarding body is one sentence, sentence case |
-| Chips, captions, attribution | `.footnote` / `.caption` |
+| Role | Style | Example |
+|---|---|---|
+| Screen titles | `.largeTitle` bold, collapsing to inline | Preferences |
+| Hero route name (over the map) | `.largeTitle` bold, white over the scrim | Hilly Loop |
+| Section headers | `.title3` bold, **Title Case** | Other Tracked Routes |
+| Card headlines | `.headline` | Meets your preferences |
+| Body, factor explanations | `.body`, sentence case | Last ridden 29 Sep |
+| Secondary lines | `.subheadline` | 12–14° · Crosswind · Cloudy |
+| Footnotes, attribution | `.footnote` | Updated 08:12. Pull down to refresh. |
+| Times, distances, scores | add `.monospacedDigit()` | 09:00 → ~12:00 · 51 km |
 
-Spacing that scales with type uses `@ScaledMetric(relativeTo:)`. Titles: Title Case, 2–4 words ("Rain or Shine?"). Body: sentence case, plain language. One CTA label — **Continue** — across the entire onboarding.
+Section headers and screen titles are Title Case; everything else is sentence case. Dates are
+en-GB ("Wednesday 14 October", "Wed 14 – Sun 18").
 
 ## 5. Layout & Shape
 
-- **Edge-to-edge content**: scrollable content runs under the tab bar/toolbars; system scroll-edge effect handles legibility (`.scrollEdgeEffectStyle(.soft, for: .bottom)` is the default — don't fight it). Custom bottom bars use `.safeAreaBar(edge: .bottom)`, not `.safeAreaInset`.
-- **Corner radii are never hard-coded.** Nested shapes use `ConcentricRectangle` / `.rect(corners: .concentric)` with `.containerShape(_:)` on the ancestor. Touch targets are capsules on iOS; macOS resolves its own control shapes.
-- **Ride hero card**: full-bleed, ignores horizontal safe areas via `.backgroundExtensionEffect()` where chrome overlaps; text sits on a bottom scrim gradient (black 0% → 45%), Invites-style — data layered *on* the image, never below it.
-- Breakpoints: iPhone = hero + list + tab bar; iPad/Mac = `NavigationSplitView` (sidebar: Ride/Routes/You) with the same hero + list in the detail column and detail panes side-by-side where space allows.
+- **Grouped background** with solid cards, 16pt side margins, 26pt card radius. Nested
+  shapes use `ConcentricRectangle` / `.rect(corners: .concentric)` rather than hard-coded radii.
+- **Minimum target 44pt.** Toolbar circles are 44pt; the hero share button is 48pt.
+- **The hero** (Rides and Ride detail): the map is full-bleed under the status bar and
+  toolbar (`.ignoresSafeArea(edges: .top)` + `.backgroundExtensionEffect()`), with a bottom
+  scrim for the title block and the Maps attribution row along the bottom edge.
+- **Edge-to-edge scrolling** under the tab bar and toolbars; the system scroll edge effect
+  handles legibility. Custom bottom bars use `.safeAreaBar(edge: .bottom)`.
+- Breakpoints: iPhone = tab bar; iPad/Mac = `NavigationSplitView` with the same screens in
+  the detail column.
 
 ## 6. Components (the complete custom inventory)
 
-Anything not listed here is a stock SwiftUI component.
+Anything not listed here is a stock SwiftUI component. The list is closed: add to it here
+before adding a custom component in code.
 
-1. **`RideCard`** — full-bleed hero card for the top-ranked route: `MKMapSnapshotter` image (route polyline drawn on, POI-free `.standard(pointsOfInterest: .excludingAll)`) under `AmbianceStyle` gradient wash + scrim; route name; distance · gain · est-time stats line; `ConditionChipRow` (3 chips — the window lives in the start pill, not a clock chip); `ScoreRing` top-trailing on a thin-material circle, start-window pill top-leading on a matching thin-material capsule (a screen-specific overlay from RideView, not part of the component). Tap opens the breakdown sheet — no swipe-up shortcut: the card sits in a vertical ScrollView where an upward drag is a scroll; `matchedTransitionSource` for zoom into Route Detail.
-2. **`ConditionChip`** — SF Symbol + value in `.footnote` on a condition-tinted glass capsule (tint on the icon + glass wash, text `.primary` — palette-colored text is unreadable over bright map imagery; Reduce Transparency → thick material). Max 4 per card: wind ("10 km/h"), temp+sky, travel ("45m"), duration ("~3h"). Visible text drops the word suffixes so all four fit one row — the symbol carries the meaning; VoiceOver text keeps them ("45 minutes away", "~3h ride").
-3. **`FactorRow`** — one scored factor in the breakdown sheet: symbol, name, the factor's one-line plain-English explanation ("0% chance of rain during the ride."), and a condition-palette status dot. No raw numbers or bars — the sentence is the indicator, the dot is the at-a-glance verdict.
-4. **`ElevationProfile`** — Swift Charts `AreaMark` (distance → elevation), `.interpolationMethod(.monotone)`, gradient fill, `chartXSelection` scrubbing with `RuleMark` + annotation, selection synced to a dot on the route `Map`.
-5. **`SurfaceBar`** — the cycle.travel-style stacked horizontal bar: busy road / paved / unpaved / path percentages, condition-palette-adjacent fixed colors, legend as `.caption` rows.
-6. **`DialScreen`** — onboarding preference screen scaffold: large title, one-sentence body, ONE control (slider for temp range; segmented for sun/rain/wind), `Continue`, page dots. Background is a live `AmbianceStyle` that crossfades (`.animation(.smooth)`) as the selection changes — rain → sun reacts to the tap. Reused verbatim as the Settings editor for each preference (Sports' "onboarding is the settings" model).
-7. **`BestDayBadge`** — the 10-day best-day verdict card, in Route Detail (the Ride tab's breakdown sheet renders the same verdict as plain text under the score ring instead — day + tier reasoning, tappable to jump the day selector): "Best day: Thursday" with the tier letter in a condition-palette circle and a one-phrase tier summary — or, when even the best day grades D, an explicit "Give it a miss" state. In Route Detail the badge is informational. Rendered whenever the scan has run; the scan itself is bounded by how many days the weather provider has forecast confidence for (~10).
-8. **`ScoreRing`** *(small)* — compact tier ring used on list rows and the breakdown header: ring fill is the raw 0–1 score, center shows the `RideTier` letter (S/A/B/C/D — D means "don't ride"), tint from the condition palette.
+1. **`RideHero`** — the best pick for the window, full-bleed: a non-interactive `Map`
+   (`.mapStyle(.imagery)`, route polyline in the accent with a white casing, start marker),
+   a bottom scrim, the title block ("★ Best pick · Wednesday 14 October", route name,
+   "09:00 → ~12:00 · 51 km · 640 m") and the Maps attribution row. On Rides it carries the
+   clear-glass "Send route to a bike computer" button and is the `matchedTransitionSource`
+   for the zoom into Ride detail. Ride detail shows the same map, slightly shorter, so the
+   zoom lands on the same image.
+2. **`ConditionChip`** — SF Symbol + value in `.footnote` on a solid `.fill.tertiary`
+   capsule ("9–14°", "15 km/h tailwind", "Gusts 28 km/h", "Sunny spells"). Max 4 per row.
+3. **`DayStrip`** — "Your Window": one bar per day in the window, height = that day's best
+   score, the selected day tinted, rain-out days shown as a symbol and a stub. A day with no
+   ride isn't tappable. `Chart { BarMark }` with a footnote summarising the window.
+4. **`DeparturePicker`** — Ride detail's start-time choice: the best departure plus the next
+   three in the window, each a tile with day, time and score. A `Picker` with a custom style;
+   VoiceOver reads it as a radio group. Choosing one updates everything below it.
+5. **`FactorRow`** — one of the eight scoring factors: name, score out of 100, a bar
+   (`ProgressView`), one plain-English sentence. Sorted high to low in "Why It Scored 86".
+6. **`RouteProfile`** — "Along the Route": elevation (`AreaMark` + `LineMark`, peak marked)
+   over a wind strip on the same km axis (`RectangleMark` bands: tailwind / crosswind /
+   headwind, with a worded legend). Scrubbing with `chartXSelection`.
+7. **`ScoreGauge`** — the score as a ring (`Gauge(.accessoryCircular)` style) on Ride detail
+   and in widgets. On Rides the score is a plain number with a `ProgressView` bar and a ▲/▼
+   change badge.
+8. **`TemperatureRange`** — Ideal Temperature's two-handle range control on the temperature
+   ramp, plus the Weather-style range bars in "How Your Routes Fit". Custom because SwiftUI
+   has no range slider; each handle gets an adjustable accessibility action.
+9. **`WindEnvelope`** — Comfortable Wind's polar shape (headwind, crosswind each side, any
+   tailwind) with a dashed gust-limit ring. Drawn with `Canvas`; the native `Slider`s below it
+   are the accessible way to set the same values.
+
+Kept until their screens are redesigned: **`DialScreen`** (onboarding, with `AmbianceStyle`)
+and **`SurfaceBar`** (Routes).
 
 ## 7. Motion
 
+Use the tokens in `app/Packages/DesignSystem/Sources/DesignSystem/Motion.swift`; don't
+hand-roll `.animation()` calls.
+
 | Moment | Token |
 |---|---|
-| Ride ranked list scrolling | Plain vertical `ScrollView`; no parallax |
-| Sheet presentation, panel materialize | `.smooth` (0.5s, no bounce) |
-| Tap feedback on glass pills | `Glass.interactive()` (system) + `.snappy` for any accompanying layout change |
-| Card / Routes row → Route Detail | `.navigationTransition(.zoom(sourceID:in:))` with `matchedTransitionSource` (push path only — the Mac/iPad split's detail column swaps in place) |
-| Glass morphs (pill expand/collapse) | `glassEffectID` + `@Namespace` in shared container; `.glassEffectTransition(.matchedGeometry)` |
-| Onboarding page transitions | Spring slide+fade; content staggers in with scale/fade |
-| Ambiance crossfade (dial screens, card weather) | `.smooth(duration: 0.8)` opacity crossfade between gradient states |
-| Async content arrival (Ride's spinner → ranked list, best-day badge) | `.smooth` (`Motion.panelMaterialize`) — never a hard cut |
-| Score-ring fill on appear | `.smooth(duration: 0.8)` (`Motion.ringFill`), tint fixed at the final score |
-| Haptics — stepped sliders (weights, speeds, temp, wind) | `.sensoryFeedback(.selection)` per step |
-| Haptics — dial-screen sky band flip, settings pickers | `.sensoryFeedback(.selection)` (lives in `DialScreen`, covers all dial controls) |
-| Haptics — dial-screen Continue/Save | `.sensoryFeedback(.impact)` |
+| Default, no bounce | `.smooth` |
+| Rides re-rank when the forecast changes | `.snappy`; rows slide to their new rank, ▲/▼ badge shows for a few seconds |
+| Score number changes | `.contentTransition(.numericText())` |
+| Hero → Ride detail | `.navigationTransition(.zoom(sourceID:in:))` with `matchedTransitionSource` on `RideHero` (push path only) |
+| Clear → regular glass as content scrolls under the toolbar | system (scroll edge effect) |
+| Tab bar shrinking on scroll | system (`.tabBarMinimizeBehavior(.onScrollDown)`) |
+| Async content arriving | `.smooth` (`Motion.panelMaterialize`), never a hard cut |
+| Haptics — stepped sliders, range handles, pickers | `.sensoryFeedback(.selection)` per step |
 
-Reduce Motion: zoom transitions fall back to `.automatic`, glass transitions to `.materialize`, ambiance crossfades to instant, ring fills to instant, particles disabled.
+Reduce Motion: the zoom falls back to a cross-fade, re-rank slides become cross-fades,
+glass transitions use `.materialize`.
 
-## 8. Accessibility bar
+## 8. Accessibility
 
-- Dynamic Type through `accessibility5`; card text reflows, chips wrap to two rows, charts get `axChartDescriptor`.
-- Contrast: 4.5:1 body / 3:1 large text over every ambiance gradient — scrim strength is computed, verified in previews for lightest and darkest ambiance.
-- All meaning triple-encoded: color + symbol + text. VoiceOver labels on cards read as a sentence: "Chilterns Loop, recommended. Tailwind home, 19 degrees sunny, 45 minutes away, about 3 hours riding."
-- Reduce Transparency: custom glass falls back to opaque material (see §2).
+- **Dynamic Type** through `accessibility5`: rows reflow, chips wrap, charts get
+  `axChartDescriptor`.
+- **Contrast**: 4.5:1 body / 3:1 large text, including white text over the hero scrim.
+- **Meaning is triple-encoded**: colour + symbol + words ("⚠ Below your minimums",
+  "Tailwind 32 km").
+- **VoiceOver** reads the hero as one sentence: "Hilly Loop, best pick, Wednesday 14 October,
+  09:00 to about 12:00, 51 kilometres, 640 metres climbing, score 86."
+- **Reduce Transparency**: glass becomes opaque (`systemBackground`-family solid).
+  **Increase Contrast**: glass becomes solid with a visible border.
+- Every icon-only control has an accessibility label ("Rides", "Track a route", "Share",
+  "More", "Send route to a bike computer").
 
 ## 9. Screen ↔ pattern map
 
-| Screen | Pattern source |
+| Screen | What's on it |
 |---|---|
-| Ride hero + ranked list | Invites full-bleed hero card; every route ranked below in rows (thumbnail, stats, per-route sky + temp at the day's best window, compact `ScoreRing`); rest-day card takes the hero slot when the top score is poor, list stays. The selected day's ranking is anchored at one shared best start window (searched inside the rider's preferred riding hours, You tab); the hero shows it in a top-leading start-window pill ("10:00–13:00", center-aligned with the `ScoreRing` opposite) that drops down the day's viable starts so the rider can pin the ranking to their own time. Recommended state = `sparkles` icon; overridden = accent `clock.fill` (symbol + color both change) with a "Use Recommended" reset row on top of the menu — picking the recommended time also resets. Overrides are ephemeral and validated against the current candidate list, so day changes / edited hours / elapsed time silently fall back to recommended. The breakdown sheet keeps its clock chip except on Today when the window is effectively now. Hourly weather is fetched per route start; failure → `ContentUnavailableView` + Retry, never a stuck loader |
-| Factor breakdown sheet | Maps peek→medium→large detents; Weather metric-grid cards |
-| Route Detail | Maps place card: map hero, stats, progressive disclosure; zoom transition in |
-| Routes library | Searchable list; Maps' pre-typed search suggestions (chips: Road, Gravel, Under 2h, Not ridden lately); segmented Saved/Ridden toggle |
-| Onboarding | Fitness one-control-per-screen; splash screen = UIOnboarding feature-splash pattern; permissions primed contextually with one-sentence explainer immediately before each system sheet — location asked on first Ride entry, Health before enabling ride matching, never all upfront |
-| You tab | Sports no-settings philosophy: preference rows reopen their DialScreen; priorities panel for engine weights; connections (Strava), about, attribution |
-| Weather attribution | ` Weather` mark + legal link in factor sheet footer and You → About (mandatory, `WeatherService.attribution`) |
+| **Rides** (tab) | `RideHero` for the best pick in the window → conditions card ("✓ Meets your preferences", last ridden, `ConditionChip`s, score with bar and change badge) → "Your Window" `DayStrip` → "Other Tracked Routes" rows (map thumbnail, name, departure → return · distance, conditions or "Below your minimums", score) → "Doesn't Fit Your Window" → Apple Weather attribution, "Updated 08:12. Pull down to refresh." Toolbar: window capsule (leading), "+" track a route (trailing). Pull to refresh. |
+| **Ride detail** (push, zoom from hero) | Shorter `RideHero` → verdict card (`ScoreGauge`, verdict, change since last update, last ridden, one or two notes) → "Departure" `DeparturePicker` → "Forecast on the Ride" hourly grid (time, sky, temperature, wind, gusts, rain chance) → "Along the Route" `RouteProfile` → "Why It Scored 86" `FactorRow`s → Add to Calendar, Open in cycle.travel (accent list buttons) → Apple Weather attribution. Toolbar: back (leading), share + more in one capsule (trailing). |
+| **Window sheet** | Large detent (the days list plus Hours need the height). Grabber, Cancel (glass circle, `xmark`) leading, centred "Ride Window", Done (tinted circle, `checkmark`) trailing. Quick picks (Tomorrow, This Weekend, Next 5 Days) → "Days" multi-select list, each day showing its best route and score, sky and temperature → "Hours": segmented Daylight / Custom, Leave After and Back By (`DatePicker(.hourAndMinute)` when Custom). |
+| **Window passed** | Rides when the saved window is in the past. No hero, so the toolbar is regular glass and the capsule shows the stale range. `ContentUnavailableView` ("Your Window Has Passed", one sentence, "Choose Dates" as the one `.borderedProminent` button) → "Quick Picks" rows with each range's best route and score. |
+| **Preferences** (tab) | `Form` with a large title and subtitle "Changes re-rank your rides straight away." Sections: What Makes a Good Ride (Ideal Temperature and Comfortable Wind push to their screens; Sunshine, Rain, Climbing, Recently Ridden are menus; Distance), Deal-Breakers, Riding (average speed stepper, "Use My Strava Average", departure interval), Units (segmented), Connections (Strava, Apple Health), Account. Plumbing is plain settings rows; taste gets a visual screen. |
+| **Ideal Temperature** (push) | Big range readout, `TemperatureRange`, one-line explanation → "How Your Routes Fit" range bars per route → "Deal-Breakers" steppers. Saves automatically; no Done. |
+| **Comfortable Wind** (push) | `WindEnvelope` → "Limits" sliders (headwind, crosswind, gusts) and crosswind sensitivity → "How Your Routes Fit". Saves automatically. |
+| **Widgets & Lock Screen** | `systemSmall` (score ring, day and time, route, one line of conditions), `systemMedium` (map thumbnail, best pick, times, conditions, runner-up). Lock Screen `accessoryInline`, `accessoryCircular` (score ring + day), `accessoryRectangular`. Tap opens the ride. |
+| **Routes** (tab) | Not yet redesigned: searchable list with suggestion chips, Saved/Ridden segmented toggle. |
+| **Onboarding** | Not yet redesigned: one control per screen (`DialScreen`), permissions primed one sentence before each system prompt, location on first Rides entry, Health before ride matching. |
+| **Weather attribution** | Apple Weather mark + "Other data sources" link (https://developer.apple.com/weatherkit/data-source-attribution/) wherever forecast data shows, via `WeatherService.attribution`. |

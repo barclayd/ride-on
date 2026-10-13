@@ -348,7 +348,7 @@ Routes are built elsewhere (Strava, cycle.travel, Garmin) and imported; Ride On 
 | Speed model | Per-surface cruising speed + climbing penalty; defaults derived from last 3 months of Strava activity streams when connected, else sensible defaults; editable in Settings |
 | Strava policy constraints | 7-day max cache of Strava data; derived personal aggregates (speed model) computed once, stored as our data; GPX exports become user-initiated app-owned imports. Dev mode = 1 athlete, self-serve to 10, Strava review beyond that + branding rules |
 | UX | 3 tabs Today/Routes/You. Today = full-bleed swipeable card stack, condition chips, swipe-up scored breakdown sheet. Condition-adaptive ambiance. Route detail shows "Best day this week" only when one exists. Onboarding: 9 steps, four animated weather-dial screens (temp/sun/rain/wind), Strava/Health early for prefill |
-| Design | `DESIGN-SYSTEM.md` governs all UI. Stock components + Liquid Glass rules; custom component inventory is closed (8 components) |
+| Design | `DESIGN-SYSTEM.md` governs all UI. Stock components + Liquid Glass rules; custom component inventory is closed (DESIGN-SYSTEM.md §6) |
 | Distribution | App Store from day one: privacy policy, App Review, Strava production review, WeatherKit attribution, Strava branding |
 
 ## Prerequisites (Dan)
