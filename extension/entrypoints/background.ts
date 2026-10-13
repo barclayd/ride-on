@@ -50,7 +50,10 @@ let writes = Promise.resolve();
 const update = (patch: (state: State) => Partial<State>) => {
   const write = writes.then(async () => {
     const state = await readState();
-    await browser.storage.local.set({ state: { ...state, ...patch(state) } });
+    await browser.storage.local.set({
+      state: { ...state, ...patch(state) },
+      stamp: crypto.randomUUID(), // what Safari's Journeys pages poll (useView)
+    });
   });
   // One failed write mustn't skip every later one (loading would never clear).
   writes = write.catch(() => {});
