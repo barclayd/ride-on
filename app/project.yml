@@ -57,9 +57,11 @@ targets:
         # remote changes in the background (iOS-only key, ignored on macOS).
         UIBackgroundModes: [remote-notification]
         # Opened GPX/FIT files are imported as copies (app-owned data), never
-        # edited in place. False is the implicit default; declaring it
-        # silences Xcode's "doesn't declare opening in place" warning.
-        LSSupportsOpeningDocumentsInPlace: false
+        # edited in place. Declaring UISupportsDocumentBrowser silences Xcode's
+        # "doesn't declare opening in place" iOS warning; it's a UIKit key, so
+        # macOS ignores it (LSSupportsOpeningDocumentsInPlace = NO fails the
+        # macOS build).
+        UISupportsDocumentBrowser: false
         NSLocationWhenInUseUsageDescription: "Ride On uses your location to find rides near you and estimate travel time."
         NSHealthShareUsageDescription: "Ride On reads your cycling workouts to match them to your saved routes and log rides automatically."
         NSHealthUpdateUsageDescription: "Ride On may save ride data it records back to Health."
