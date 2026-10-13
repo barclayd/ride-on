@@ -9,11 +9,11 @@ import Models
 /// exposes as a per-app °C/°F override.
 public enum UnitFormat {
     /// Ride distance: km (metric) or miles (imperial).
-    public static func distance(km: Double, system: UnitSystem, locale: Locale = .current) -> String {
+    public static func distance(km: Double, system: UnitSystem, fractionDigits: Int = 1, locale: Locale = .current) -> String {
         let measurement = Measurement(value: km, unit: UnitLength.kilometers)
         return (system == .metric ? measurement : measurement.converted(to: .miles))
             .formatted(
-                .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(1)))
+                .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(fractionDigits)))
                     .locale(locale)
             )
     }
@@ -50,6 +50,18 @@ public enum UnitFormat {
             )
     }
 
+    /// A temperature range the way Weather writes it: "9–14°".
+    public static func temperatureRange(c range: ClosedRange<Double>, locale: Locale = .current) -> String {
+        func narrow(_ c: Double) -> String {
+            Measurement(value: c, unit: UnitTemperature.celsius)
+                .formatted(.measurement(width: .narrow, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0))).locale(locale))
+        }
+        // The narrow style still appends "C"/"F" in some locales; Weather drops it.
+        let lower = narrow(range.lowerBound).trimmingCharacters(in: CharacterSet(charactersIn: "°CF"))
+        let upper = narrow(range.upperBound).trimmingCharacters(in: CharacterSet(charactersIn: "CF"))
+        return "\(lower)–\(upper)"
+    }
+
     /// Wind/cruising speed: km/h (metric) or mph (imperial).
     public static func speed(kph: Double, system: UnitSystem, locale: Locale = .current) -> String {
         let measurement = Measurement(value: kph, unit: UnitSpeed.kilometersPerHour)
@@ -70,6 +82,11 @@ public enum UnitFormat {
         strip.formUnion(CharacterSet(charactersIn: ".,"))
         return formatted.trimmingCharacters(in: strip)
     }
+}
+
+public extension FormatStyle where Self == Date.FormatStyle {
+    /// Ride times as the canvas writes them: "09:00" (en-GB), "09:00 AM" (en-US).
+    static var clockTime: Date.FormatStyle { .dateTime.hour(.twoDigits(amPM: .abbreviated)).minute(.twoDigits) }
 }
 
 public extension EnvironmentValues {

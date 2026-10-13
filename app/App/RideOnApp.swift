@@ -103,9 +103,10 @@ private struct RouteEditMenuItem: View {
 @MainActor @ViewBuilder
 private func destination(for tab: AppTab, namespace: Namespace.ID) -> some View {
     switch tab {
-    case .ride: RideView(namespace: namespace)
+    // ponytail: sample data until the API pass (docs/redesign/README.md, "Wiring notes").
+    case .rides: RidesView(board: .sample)
     case .routes: RoutesView(namespace: namespace)
-    case .you: YouView()
+    case .preferences: YouView()
     }
 }
 
@@ -219,7 +220,7 @@ private extension View {
 }
 
 private struct SplitRoot: View {
-    @State private var selection: AppTab? = .ride
+    @State private var selection: AppTab? = .rides
     @State private var selectedRouteID: UUID?
 
     var body: some View {
@@ -245,7 +246,7 @@ private struct SplitRoot: View {
                 NavigationSplitView {
                     sidebar
                 } detail: {
-                    TabPage(tab: selection ?? .ride)
+                    TabPage(tab: selection ?? .rides)
                         .backgroundExtensionEffect()
                 }
             }

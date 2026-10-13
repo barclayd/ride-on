@@ -17,9 +17,9 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 
 | # | Piece | Status | PR |
 |---|---|---|---|
-| 0 | This doc and reference images | ✅ Done | this PR |
-| 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ⬜ | |
-| 2 | Rides screen | ⬜ | |
+| 0 | This doc and reference images | ✅ Done | #154 |
+| 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
+| 2 | Rides screen | ✅ Done (zoom into Ride detail lands with 3, window capsule with 4) | #155 |
 | 3 | Ride detail | ⬜ | |
 | 4 | Ride Window sheet and Window passed | ⬜ | |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ⬜ | |
@@ -51,29 +51,33 @@ Not in scope yet: Routes tab and Onboarding (not redesigned; they keep working a
 
 Top to bottom:
 
-1. **Hero** (`RideHero`, 480pt, edge to edge under the status bar, `.backgroundExtensionEffect()`).
-   Map snapshot of the best pick with the route in accent and a start marker; dark gradient at the
-   bottom.
+1. **Hero** (`RideHero`, at least 480pt, taller when large text needs it; edge to edge under the
+   status bar). A non-interactive satellite `Map` of the best pick with the route in accent on a
+   white casing and a start marker; a dark scrim sized to the title block.
    - "★ Best pick · Wednesday 14 October" (`.subheadline` semibold, white 85%)
    - "Hilly Loop" (`.largeTitle` bold, white)
    - "09:00 → ~12:00 · 51 km · 640 m" (`.body`, monospaced digits)
    - Share button: 48pt clear-glass circle, bottom right, `square.and.arrow.up`, label "Send
      route to a bike computer".
-   - "Apple Maps" (leading) and "Legal" (trailing) attribution row, 11pt, white 72%.
+   - The `Map`'s own "Maps" and "Legal" attribution, bottom leading.
    - Tap anywhere else on the hero: zoom to Ride detail.
 2. **Conditions card** (solid card, 26pt radius).
-   - "✓ Meets your preferences" (accent, `.headline`) · "Last ridden 29 Sep" trailing (secondary).
+   - "✓ Meets your preferences" (accent, `.subheadline` semibold) · "Last ridden 29 Sep" trailing
+     (`.footnote`, secondary). Stacks at large text sizes.
    - `ConditionChip`s: 🌡 9–14° · 15 km/h tailwind · Gusts 28 km/h · ☀ Sunny spells.
-   - Divider-free gap, then "Conditions" (`.headline`) · "▲ 4" badge (accent soft fill) · "86/100".
+   - Hairline divider, then "Conditions" (`.subheadline` semibold) · "▲ 4" badge (accent soft
+     fill) · "86/100" (`.title2` bold over `.footnote`).
    - Progress bar, 6pt, accent fill at 86%.
 3. **"Your Window"** section header, then `DayStrip` in a card: one column per day in the window.
    Wed 86 (selected: accent bar, soft accent background), Thu 79, Fri rain symbol with a short grey
    stub (no ride, not tappable), Sat 64, Sun 71. Bar height tracks score.
    Footnote inside the card: "Best ride each day. Friday has rain from dawn to dusk."
    Tapping a day swaps the hero to that day's best ride.
-4. **"Other Tracked Routes"** card of rows: map thumbnail (64pt, 14pt radius), name (`.headline`),
+4. **"Other Tracked Routes"** card of rows: route thumbnail (56pt, 12pt radius: the route's outline
+   on a plain land fill, not a map, so no labels or Legal link at that size), name (`.headline`),
    "Thu 09:00 → ~13:20 · 77 km", conditions line or "⚠ Below your minimums" in warn colour, score
-   (`.title2` bold, monospaced) and chevron.
+   (`.title3` bold, monospaced) and chevron. At accessibility sizes the text drops below the
+   thumbnail.
    - Potters Bar: Thu 09:00 → ~13:20 · 77 km · "12–14° · Crosswind · Cloudy" · 79
    - Braintree: Wed 09:30 → ~12:30 · 51 km · "Below your minimums" · 61
 5. **"Doesn't Fit Your Window"** card: East Anglia, "112 km · about 7h 05m. Your window allows
@@ -88,14 +92,16 @@ Chrome:
 - Pull to refresh.
 
 Build:
-- [ ] `RideHero` with `MapKit` snapshot (or `Map` with interactions off) + route polyline
-- [ ] Toolbar capsule + "+" with clear → regular glass on scroll
-- [ ] Conditions card with `ConditionChip`s and score bar
-- [ ] `DayStrip`
-- [ ] Other Tracked Routes rows, Doesn't Fit rows
-- [ ] Footer attribution
-- [ ] Zoom transition source on the hero
-- [ ] Light/dark, Dynamic Type, Reduce Transparency checked in previews
+- [x] `RideHero`: `Map` with interactions off + route polyline (`SharedUI/RouteMap.swift`)
+- [x] Toolbar capsule + "+": system glass handles clear → regular on scroll. Both are no-ops
+      until the Ride Window sheet (4) and route tracking exist
+- [x] Conditions card with `ConditionChip`s and score bar
+- [x] `DayStrip`: tapping a day swaps the hero to that day's best
+- [x] Other Tracked Routes rows, Doesn't Fit rows. Rows don't open Ride detail yet (3)
+- [x] Footer attribution
+- [ ] Zoom transition source on the hero (with Ride detail, 3)
+- [x] Light/dark and Dynamic Type through `accessibility5` checked on the simulator
+- [ ] Reduce Transparency
 
 ## 2. Ride detail (push from the hero, zoom transition)
 
