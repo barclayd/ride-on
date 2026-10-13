@@ -49,7 +49,7 @@ export const collectGroundEvidence = async (
   );
   const first = dates[0] as string;
   const last = dates.at(-1) as string;
-  const exposures = routes.map(routeExposure);
+  const exposures = routes.map((route) => routeExposure(route));
   const unique = new Map(
     exposures.flatMap((route) =>
       route.cells.map((cell) => [cell.id, cell] as const),

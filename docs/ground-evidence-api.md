@@ -29,7 +29,8 @@ The response includes:
 
 - `schemaVersion: 1`, `experimental: true`, `scoringApplied: false`.
 - `asOf`: the last completed UTC hour. Trailing totals end here, not at a future
-  departure. The next phase will calculate wetness at each section's arrival.
+  departure. The separate [phase 3 assessment](ground-assessment-api.md) calculates
+  wetness at each section's arrival.
 - `source`: provider `open-meteo`, model policy `ukmo_seamless`, adapter version,
   attribution and `modelRunAt: null`. Retrieval time is not model issuance time.
   UKMO seamless combines UK and global model products; it is not a guaranteed
@@ -66,7 +67,7 @@ missing days have null provenance and null values.
 | `precipitationMm` | Total precipitation water equivalent, including snow; not extra rain to add to `rainMm` |
 | `snowfallCm` | Snowfall amount in cm; never add cm directly to rainfall mm |
 | `referenceEt0Mm` | FAO reference evapotranspiration for well-watered grass; a drying indicator, not measured path evaporation |
-| `temperatureC` | Instantaneous 2 m temperature at `end`, for future freezing/thaw handling |
+| `temperatureC` | Instantaneous 2 m temperature at `end`, for experimental freezing/thaw handling |
 | `basis` | `modelled-past` or `forecast`, determined at retrieval |
 
 Accumulation periods are `(end − 1 hour, end]`. Everything uses UTC elapsed time;
@@ -90,7 +91,7 @@ separate archive/forecast splice and no substitution with zero for missing hours
 
 `totalMm` is null unless the entire window is present; `knownTotalMm` is only the
 sum of available intervals and is null if none exist. Consult day stale flags as
-well as coverage. The 28-day background helps the next phase initialize wetness;
+well as coverage. The 28-day background helps phase 3 initialize wetness;
 it does not establish that ground was dry before that window. No soil, drainage,
 shade or surface-moisture measurements are claimed.
 
