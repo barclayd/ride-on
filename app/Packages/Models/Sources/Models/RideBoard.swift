@@ -30,13 +30,16 @@ public extension RideBoard {
         public var distanceKm: Double
         public var ascentM: Double
         public var coordinates: [Coordinate]
+        /// The saved journey this route came from: `https://cycle.travel/map/journey/{source.externalId}`.
+        public var cycleTravelURL: URL?
 
-        public init(id: UUID = UUID(), name: String, distanceKm: Double, ascentM: Double, coordinates: [Coordinate]) {
+        public init(id: UUID = UUID(), name: String, distanceKm: Double, ascentM: Double, coordinates: [Coordinate], cycleTravelURL: URL? = nil) {
             self.id = id
             self.name = name
             self.distanceKm = distanceKm
             self.ascentM = ascentM
             self.coordinates = coordinates
+            self.cycleTravelURL = cycleTravelURL
         }
     }
 
@@ -118,17 +121,36 @@ public extension RideBoard {
     }
 }
 
+public extension RideBoard.Sky {
+    var title: String {
+        switch self {
+        case .sunny: "Sunny"
+        case .sunnySpells: "Sunny spells"
+        case .cloudy: "Cloudy"
+        case .rain: "Rain"
+        }
+    }
+}
+
+public extension RideBoard.Wind {
+    /// Sentence case: "Tailwind".
+    var title: String { rawValue.capitalized }
+}
+
 // MARK: - Sample
 
 public extension RideBoard {
     /// Tuesday 13 October 2026, window Wed 14 – Sun 18 October (docs/redesign/README.md, "Sample data").
     static let sample: RideBoard = {
         let hilly = RouteSummary(name: "Hilly Loop", distanceKm: 51, ascentM: 640,
-                                 coordinates: loop(center: Coordinate(latitude: 51.79, longitude: -0.66), distanceKm: 51, seed: 0.4))
+                                 coordinates: loop(center: Coordinate(latitude: 51.79, longitude: -0.66), distanceKm: 51, seed: 0.4),
+                                 cycleTravelURL: URL(string: "https://cycle.travel/map/journey/412907"))
         let potters = RouteSummary(name: "Potters Bar", distanceKm: 77, ascentM: 410,
-                                   coordinates: loop(center: Coordinate(latitude: 51.698, longitude: -0.181), distanceKm: 77, seed: 1.7))
+                                   coordinates: loop(center: Coordinate(latitude: 51.698, longitude: -0.181), distanceKm: 77, seed: 1.7),
+                                   cycleTravelURL: URL(string: "https://cycle.travel/map/journey/398114"))
         let braintree = RouteSummary(name: "Braintree", distanceKm: 51, ascentM: 280,
-                                     coordinates: loop(center: Coordinate(latitude: 51.878, longitude: 0.553), distanceKm: 51, seed: 2.9))
+                                     coordinates: loop(center: Coordinate(latitude: 51.878, longitude: 0.553), distanceKm: 51, seed: 2.9),
+                                     cycleTravelURL: URL(string: "https://cycle.travel/map/journey/405532"))
         let eastAnglia = RouteSummary(name: "East Anglia", distanceKm: 112, ascentM: 520,
                                       coordinates: loop(center: Coordinate(latitude: 52.2, longitude: 0.9), distanceKm: 112, seed: 4.2))
 

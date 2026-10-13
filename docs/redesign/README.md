@@ -19,8 +19,8 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 |---|---|---|---|
 | 0 | This doc and reference images | ✅ Done | #154 |
 | 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
-| 2 | Rides screen | ✅ Done (zoom into Ride detail lands with 3, window capsule with 4) | #155 |
-| 3 | Ride detail | ⬜ | |
+| 2 | Rides screen | ✅ Done (window capsule lands with 4) | #155 |
+| 3 | Ride detail | ✅ Done | #157 |
 | 4 | Ride Window sheet and Window passed | ⬜ | |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ⬜ | |
 | 6 | Widgets and Lock Screen | ⬜ | |
@@ -97,9 +97,9 @@ Build:
       until the Ride Window sheet (4) and route tracking exist
 - [x] Conditions card with `ConditionChip`s and score bar
 - [x] `DayStrip`: tapping a day swaps the hero to that day's best
-- [x] Other Tracked Routes rows, Doesn't Fit rows. Rows don't open Ride detail yet (3)
+- [x] Other Tracked Routes rows (open Ride detail), Doesn't Fit rows
 - [x] Footer attribution
-- [ ] Zoom transition source on the hero (with Ride detail, 3)
+- [x] Zoom transition source on the hero and each route row
 - [x] Light/dark and Dynamic Type through `accessibility5` checked on the simulator
 - [ ] Reduce Transparency
 
@@ -154,15 +154,20 @@ more (`ellipsis`) trailing. Clear glass over the hero, regular from about 260–
 inline title "Hilly Loop" fades in at about 290–330pt.
 
 Build:
-- [ ] Hero (reuse `RideHero`, 400pt variant)
-- [ ] Toolbar: back + share/more capsule, inline title on scroll
-- [ ] Verdict card with `ScoreGauge`
-- [ ] `DeparturePicker`; selection swaps the forecast, profile wind strip and factors
-- [ ] Forecast grid
-- [ ] `RouteProfile` (Swift Charts area + wind strip)
-- [ ] `FactorRow` list
-- [ ] Add to Calendar (EventKit, write-only access) and Open in cycle.travel
-- [ ] Zoom destination; Reduce Motion falls back to a cross-fade
+- [x] Hero (reuse `RideHero`, 400pt variant). The hero map ignores touches, so Legal shows but
+      isn't tappable on either screen
+- [x] Toolbar: back + share/more capsule (more holds Add to Calendar and Open in cycle.travel),
+      inline title fades in at 290–330pt. Clear → regular glass is left to the system
+- [x] Verdict card with `ScoreGauge`
+- [x] `DeparturePicker`; selection swaps the forecast, profile wind strip and factors
+- [x] Forecast grid (rows instead of columns at accessibility sizes)
+- [x] `RouteProfile` (Swift Charts area + wind strip, scrubbing)
+- [x] `FactorRow` list
+- [x] Add to Calendar (EventKit, write-only access) and Open in cycle.travel
+- [x] Zoom destination (iOS only; macOS pushes)
+- [x] Light/dark and Dynamic Type through `accessibility5` checked on the simulator
+- [ ] Reduce Motion: the zoom should fall back to a cross-fade (system behaviour, not yet checked)
+- [x] Sample data: `RideDetail.sample(for:on:)` in `Models/RideDetail.swift`, built from any pick
 
 ## 3. Ride Window (sheet)
 

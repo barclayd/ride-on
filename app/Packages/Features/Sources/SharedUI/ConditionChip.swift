@@ -77,15 +77,6 @@ public struct FlowLayout: Layout {
 }
 
 public extension RideBoard.Sky {
-    var title: String {
-        switch self {
-        case .sunny: "Sunny"
-        case .sunnySpells: "Sunny spells"
-        case .cloudy: "Cloudy"
-        case .rain: "Rain"
-        }
-    }
-
     var systemImage: String {
         switch self {
         case .sunny: "sun.max.fill"
@@ -94,11 +85,6 @@ public extension RideBoard.Sky {
         case .rain: "cloud.rain.fill"
         }
     }
-}
-
-public extension RideBoard.Wind {
-    /// Sentence case: "Tailwind".
-    var title: String { rawValue.capitalized }
 }
 
 #Preview {

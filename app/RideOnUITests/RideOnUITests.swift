@@ -43,6 +43,21 @@ final class RideOnUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Friday"].exists)
     }
 
+    func testHeroOpensRideDetailAndADepartureRescoresIt() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world"]
+        app.launch()
+
+        let hero = heroTitle(in: app, startingWith: "Hilly Loop")
+        XCTAssertTrue(hero.waitForExistence(timeout: 5))
+        hero.tap()
+        XCTAssertTrue(app.staticTexts["Why It Scored 86"].waitForExistence(timeout: 5))
+
+        // An hour later scores 82; the factors follow the departure.
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Wednesday' AND label CONTAINS '10:00'")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Why It Scored 82"].waitForExistence(timeout: 5))
+    }
+
     /// The hero's title block is one accessibility element whose label starts with the route name.
     private func heroTitle(in app: XCUIApplication, startingWith name: String) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS 'score'", name)).firstMatch

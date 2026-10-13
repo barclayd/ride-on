@@ -10,6 +10,7 @@ import SharedUI
 public struct RidesView: View {
     var board: RideBoard
     @State private var selectedDay: Date
+    @Namespace private var zoom
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -29,7 +30,15 @@ public struct RidesView: View {
             // ponytail: no picks is the Window passed screen, built with the Ride Window sheet (PR 4).
             if let hero {
                 VStack(spacing: 16) {
-                    RideHero(pick: hero, eyebrow: hero == board.picks.first ? "Best pick" : "Best that day") {
+                    ZStack(alignment: .bottomTrailing) {
+                        NavigationLink(value: hero) {
+                            RideHero(pick: hero, eyebrow: hero == board.picks.first ? "Best pick" : "Best that day")
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .matchedTransitionSource(id: hero.id, in: zoom)
+
+                        // Beside the link, not inside it, so VoiceOver reaches both.
                         ShareLink(item: RouteGPX(route: hero.route), preview: SharePreview(hero.route.name)) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.title3.weight(.semibold))
@@ -39,17 +48,19 @@ public struct RidesView: View {
                                 .glassEffect(.clear.interactive(), in: .circle)
                         }
                         .accessibilityLabel("Send route to a bike computer")
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 38)
                     }
 
                     Group {
                         conditionsCard(hero)
-                        section("Your Window") { windowCard }
+                        RideSection("Your Window") { windowCard }
                         let others = board.picks.filter { $0.route.id != hero.route.id }
                         if !others.isEmpty {
-                            section("Other Tracked Routes") { rows(others, content: pickRow) }
+                            RideSection("Other Tracked Routes") { rows(others, content: pickRow) }
                         }
                         if !board.unfit.isEmpty {
-                            section("Doesn't Fit Your Window") { rows(board.unfit, content: unfitRow) }
+                            RideSection("Doesn't Fit Your Window") { rows(board.unfit, content: unfitRow) }
                         }
                         footer
                     }
@@ -60,6 +71,16 @@ public struct RidesView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(.groupedBackground)
+        // Titled for the detail's back button; the hero is the visible title.
+        .navigationTitle("Rides")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar(removing: .title)
+        .navigationDestination(for: RideBoard.Pick.self) { pick in
+            RideDetailView(board: board, pick: pick)
+                .zoomTransition(from: pick.id, in: zoom)
+        }
         // ponytail: nothing to refresh until the board comes from POST /recommendations.
         .refreshable {}
         .toolbar {
@@ -86,15 +107,7 @@ public struct RidesView: View {
     private func conditionsCard(_ pick: RideBoard.Pick) -> some View {
         let conditions = pick.conditions
         return VStack(alignment: .leading, spacing: 14) {
-            let verdict = HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if pick.meetsMinimums {
-                    Image(systemName: "checkmark")
-                    Text("Meets your preferences")
-                } else {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                    Text("Below your minimums")
-                }
-            }
+            let verdict = Verdict(meetsMinimums: pick.meetsMinimums)
             let lastRidden = pick.lastRidden.map {
                 Text("Last ridden \($0.formatted(.dateTime.day().month(.abbreviated)))")
                     .font(.footnote.weight(.regular))
@@ -119,15 +132,7 @@ public struct RidesView: View {
             VStack(alignment: .leading, spacing: 8) {
                 let title = Text("Conditions").font(.subheadline.weight(.semibold))
                 let score = HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if let change = pick.change, change != 0 {
-                        Text("\(change > 0 ? "▲" : "▼") \(abs(change))")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tint)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(.tint.opacity(0.15), in: .capsule)
-                            .accessibilityLabel("\(change > 0 ? "Up" : "Down") \(abs(change)) since the last forecast")
-                    }
+                    if let change = pick.change, change != 0 { ChangeBadge(change: change) }
                     Text("\(Text("\(pick.score)").font(.title2.bold()))\(Text("/100").font(.footnote.weight(.medium)).foregroundStyle(.secondary))")
                         .monospacedDigit()
                         .accessibilityLabel("\(pick.score) out of 100")
@@ -191,38 +196,42 @@ public struct RidesView: View {
         .card()
     }
 
-    // ponytail: rows open Ride detail once it exists (PR 3).
     private func pickRow(_ pick: RideBoard.Pick) -> some View {
         let day = pick.start.formatted(.dateTime.weekday(.abbreviated))
         let start = pick.start.formatted(.clockTime)
         let finish = pick.finish.formatted(.clockTime)
         let distance = UnitFormat.distance(km: pick.route.distanceKm, system: unitSystem, fractionDigits: 0)
-        return row(pick.route, tint: pick.meetsMinimums ? .accentColor : .gray) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(pick.route.name).font(.headline)
-                Text("\(day) \(start) → ~\(finish) · \(distance)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                if pick.meetsMinimums {
-                    Text("\(UnitFormat.temperatureRange(c: pick.conditions.temperatureC)) · \(pick.conditions.wind.title) · \(pick.conditions.sky.title)")
-                        .font(.footnote)
+        return NavigationLink(value: pick) {
+            row(pick.route, tint: pick.meetsMinimums ? .accentColor : .gray) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(pick.route.name).font(.headline)
+                    Text("\(day) \(start) → ~\(finish) · \(distance)")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
-                } else {
-                    Label("Below your minimums", systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.belowMinimums)
+                        .monospacedDigit()
+                    if pick.meetsMinimums {
+                        Text("\(UnitFormat.temperatureRange(c: pick.conditions.temperatureC)) · \(pick.conditions.wind.title) · \(pick.conditions.sky.title)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Label("Below your minimums", systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.belowMinimums)
+                    }
                 }
+            } trailing: {
+                Text(pick.score, format: .number)
+                    .font(.title3.bold())
+                    .monospacedDigit()
+                    .foregroundStyle(pick.meetsMinimums ? .primary : .tertiary)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
-        } trailing: {
-            Text(pick.score, format: .number)
-                .font(.title3.bold())
-                .monospacedDigit()
-                .foregroundStyle(pick.meetsMinimums ? .primary : .tertiary)
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.tertiary)
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .matchedTransitionSource(id: pick.id, in: zoom)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("rides-route-row")
     }
@@ -280,17 +289,6 @@ public struct RidesView: View {
 
     // MARK: Chrome
 
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.title3.bold())
-                .padding(.horizontal, 4)
-                .padding(.top, 8)
-                .accessibilityAddTraits(.isHeader)
-            content()
-        }
-    }
-
     private var footer: some View {
         VStack(alignment: .leading, spacing: 4) {
             WeatherAttributionFooter()
@@ -313,8 +311,77 @@ private extension RideBoard.Sky {
     }
 }
 
-/// The hero's share item: the route as a GPX file a bike computer app can import.
-private struct RouteGPX: Transferable {
+// MARK: - Shared with Ride detail
+
+/// A titled group of cards.
+struct RideSection<Content: View>: View {
+    var title: String
+    @ViewBuilder var content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.title3.bold())
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+                .accessibilityAddTraits(.isHeader)
+            content
+        }
+    }
+}
+
+/// "✓ Meets your preferences" or "⚠ Below your minimums"; the caller sets font and colour.
+struct Verdict: View {
+    var meetsMinimums: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if meetsMinimums {
+                Image(systemName: "checkmark")
+                Text("Meets your preferences")
+            } else {
+                Image(systemName: "exclamationmark.triangle.fill")
+                Text("Below your minimums")
+            }
+        }
+    }
+}
+
+/// "▲ 4": how far the score moved with the latest forecast.
+struct ChangeBadge: View {
+    var change: Int
+
+    var body: some View {
+        Text("\(change > 0 ? "▲" : "▼") \(abs(change))")
+            .font(.caption.weight(.semibold))
+            .monospacedDigit()
+            .foregroundStyle(.tint)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(.tint.opacity(0.15), in: .capsule)
+            .accessibilityLabel("\(change > 0 ? "Up" : "Down") \(abs(change)) since the last forecast")
+    }
+}
+
+private extension View {
+    /// Ride detail zooms out of the hero or row it opened from (iOS; macOS pushes).
+    @ViewBuilder
+    func zoomTransition(from id: some Hashable, in namespace: Namespace.ID) -> some View {
+        #if os(iOS)
+        navigationTransition(.zoom(sourceID: id, in: namespace))
+        #else
+        self
+        #endif
+    }
+}
+
+/// The share item: the route as a GPX file a bike computer app can import.
+struct RouteGPX: Transferable {
     var route: RideBoard.RouteSummary
 
     static var transferRepresentation: some TransferRepresentation {
