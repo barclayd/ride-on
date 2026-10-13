@@ -10,6 +10,7 @@ Read `../docs/ride-history.md` for ride logging, geometry enrichment and repetit
 Read `../docs/planning-api.md` for multi-day searches, presets and coverage.
 Read `../docs/extension-api-brief-v3.md` for planned snapshots, next-window suggestions and route-history summaries.
 Read `../docs/extension-api-brief-v4.md` for condition-chip summaries and saved display units (implemented in v0.15.0).
+Read `../docs/ground-evidence-api.md` for the opt-in ground evidence diagnostic and non-commercial prototype limits. It does not affect scoring.
 Read `../docs/weather-providers.md` for verified weather mappings and provider rules.
 Read `../docs/weather-provider-choices.md` for the public Apple Weather / Met Office choice; product IDs remain internal presets and legacy API inputs.
 
@@ -53,6 +54,7 @@ bun run lint:fix
 - `src/rides/`: owner-scoped history, immutable geometry, idempotent logging and bounded overlap assessment.
 - `src/recommendations/`: strict preference resolution, daylight/time-window planning and pure scoring.
 - `src/users/`: owner-bound saved settings, schema versions and atomic optimistic updates.
+- `src/ground/`: independent, experimental rainfall/drying evidence, shared D1 cache and bounded public-provider diagnostics; never invoked by recommendations.
 - `src/weather/`: generic contracts, Apple Weather and Met Office adapters, provider presets, source policy and KV-compatible cache.
 - `migrations/`: D1 migrations, applied before deployment.
 - `test/`: deterministic ingestion, HTTP, algorithm, provider and cache tests.
