@@ -129,10 +129,12 @@ before adding a custom component in code.
 1. **`RideHero`** — the best pick for the window, full-bleed: a non-interactive `Map`
    (`.mapStyle(.imagery)`, route polyline in the accent with a white casing, start marker),
    a bottom scrim, the title block ("★ Best pick · Wednesday 14 October", route name,
-   "09:00 → ~12:00 · 51 km · 640 m") and the Maps attribution row. On Rides it carries the
-   clear-glass "Send route to a bike computer" button and is the `matchedTransitionSource`
-   for the zoom into Ride detail. Ride detail shows the same map, slightly shorter, so the
-   zoom lands on the same image.
+   "09:00 → ~12:00 · 51 km · 640 m") and the Maps attribution row. The map ignores touches
+   (taps belong to whatever the hero opens), so the attribution shows but Legal isn't tappable
+   there. On Rides the hero is a `NavigationLink` and the `matchedTransitionSource` for the
+   zoom into Ride detail; the clear-glass "Send route to a bike computer" button is overlaid
+   beside the link, not inside it, so VoiceOver reaches both. Ride detail shows the same map,
+   400pt instead of 480pt, so the zoom lands on the same image.
 2. **`ConditionChip`** — SF Symbol + value in `.footnote` on a solid `.fill.tertiary`
    capsule ("9–14°", "15 km/h tailwind", "Gusts 28 km/h", "Sunny spells"). Max 4 per row.
 3. **`DayStrip`** — "Your Window": one bar per day in the window, height = that day's best
@@ -140,8 +142,9 @@ before adding a custom component in code.
    ride isn't tappable. An `HStack` of one `Button` per day (each a VoiceOver element with the
    selected trait), with a footnote summarising the window.
 4. **`DeparturePicker`** — Ride detail's start-time choice: the best departure plus the next
-   three in the window, each a tile with day, time and score. A `Picker` with a custom style;
-   VoiceOver reads it as a radio group. Choosing one updates everything below it.
+   three in the window, each a tile with day, time and score. Like `DayStrip`, an `HStack` of
+   one `Button` per tile with the selected trait (tiles stack at accessibility sizes), with a
+   selection haptic. Choosing one updates everything below it.
 5. **`FactorRow`** — one of the eight scoring factors: name, score out of 100, a bar
    (`ProgressView`), one plain-English sentence. Sorted high to low in "Why It Scored 86".
 6. **`RouteProfile`** — "Along the Route": elevation (`AreaMark` + `LineMark`, peak marked)

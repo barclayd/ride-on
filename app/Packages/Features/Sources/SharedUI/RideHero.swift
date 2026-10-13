@@ -2,23 +2,21 @@ import SwiftUI
 import Models
 
 /// DESIGN-SYSTEM.md §6 component 1: a ride shown full-bleed on its route's map, with the title
-/// block over a bottom scrim and an optional trailing accessory (the share button on Rides).
-/// At least `height` tall, taller when large text needs the room. The caller places it under the
-/// status bar and toolbar.
-public struct RideHero<Accessory: View>: View {
+/// block over a bottom scrim. At least `height` tall, taller when large text needs the room. The
+/// caller places it under the status bar and toolbar, and overlays anything tappable (the share
+/// button on Rides) bottom trailing, clear of the title's trailing 84pt.
+public struct RideHero: View {
     var pick: RideBoard.Pick
-    /// "Best pick", shown before the date.
-    var eyebrow: String
+    /// "Best pick", shown with a star before the date; `nil` shows the date alone.
+    var eyebrow: String?
     var height: CGFloat
-    var accessory: Accessory
 
     @Environment(\.unitSystem) private var unitSystem
 
-    public init(pick: RideBoard.Pick, eyebrow: String, height: CGFloat = 480, @ViewBuilder accessory: () -> Accessory) {
+    public init(pick: RideBoard.Pick, eyebrow: String?, height: CGFloat = 480) {
         self.pick = pick
         self.eyebrow = eyebrow
         self.height = height
-        self.accessory = accessory()
     }
 
     public var body: some View {
@@ -32,19 +30,17 @@ public struct RideHero<Accessory: View>: View {
             .background(LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom))
             .frame(maxWidth: .infinity, minHeight: height, alignment: .bottom)
             .background {
+                // Art, not a control: taps belong to whatever the hero opens (Rides links it to
+                // Ride detail). The Maps attribution stays visible, just not tappable.
                 RouteMap(pick.route.coordinates, style: .hero, tint: pick.meetsMinimums ? .accentColor : .gray)
                     .id(pick.route.id)
+                    .allowsHitTesting(false)
             }
             .overlay(alignment: .top) {
                 // Dims under the status bar and toolbar so their glyphs stay legible (§2).
                 LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom)
                     .frame(height: 150)
                     .allowsHitTesting(false)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                accessory
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 38)
             }
     }
 
@@ -57,8 +53,12 @@ public struct RideHero<Accessory: View>: View {
 
         return VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Image(systemName: "star.fill")
-                Text("\(eyebrow) · \(date)")
+                if let eyebrow {
+                    Image(systemName: "star.fill")
+                    Text("\(eyebrow) · \(date)")
+                } else {
+                    Text(date)
+                }
             }
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.white.opacity(0.85))
@@ -69,13 +69,7 @@ public struct RideHero<Accessory: View>: View {
         }
         .foregroundStyle(.white)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(pick.route.name), \(eyebrow), \(date), \(start) to about \(finish), \(distance), \(climb) climbing, score \(pick.score)")
-    }
-}
-
-public extension RideHero where Accessory == EmptyView {
-    init(pick: RideBoard.Pick, eyebrow: String, height: CGFloat = 480) {
-        self.init(pick: pick, eyebrow: eyebrow, height: height) { EmptyView() }
+        .accessibilityLabel("\(pick.route.name), \(eyebrow.map { "\($0), " } ?? "")\(date), \(start) to about \(finish), \(distance), \(climb) climbing, score \(pick.score)")
     }
 }
 

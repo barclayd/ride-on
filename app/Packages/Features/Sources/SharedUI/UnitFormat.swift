@@ -50,16 +50,18 @@ public enum UnitFormat {
             )
     }
 
+    /// One temperature the way Weather writes it: "9°".
+    public static func degrees(c: Double, locale: Locale = .current) -> String {
+        Measurement(value: c, unit: UnitTemperature.celsius)
+            .formatted(.measurement(width: .narrow, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0))).locale(locale))
+            // The narrow style still appends "C"/"F" in some locales; Weather drops it.
+            .trimmingCharacters(in: CharacterSet(charactersIn: "CF"))
+    }
+
     /// A temperature range the way Weather writes it: "9–14°".
     public static func temperatureRange(c range: ClosedRange<Double>, locale: Locale = .current) -> String {
-        func narrow(_ c: Double) -> String {
-            Measurement(value: c, unit: UnitTemperature.celsius)
-                .formatted(.measurement(width: .narrow, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0))).locale(locale))
-        }
-        // The narrow style still appends "C"/"F" in some locales; Weather drops it.
-        let lower = narrow(range.lowerBound).trimmingCharacters(in: CharacterSet(charactersIn: "°CF"))
-        let upper = narrow(range.upperBound).trimmingCharacters(in: CharacterSet(charactersIn: "CF"))
-        return "\(lower)–\(upper)"
+        let lower = degrees(c: range.lowerBound, locale: locale).trimmingCharacters(in: CharacterSet(charactersIn: "°"))
+        return "\(lower)–\(degrees(c: range.upperBound, locale: locale))"
     }
 
     /// Wind/cruising speed: km/h (metric) or mph (imperial).

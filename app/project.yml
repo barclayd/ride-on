@@ -65,6 +65,7 @@ targets:
         NSLocationWhenInUseUsageDescription: "Ride On uses your location to find rides near you and estimate travel time."
         NSHealthShareUsageDescription: "Ride On reads your cycling workouts to match them to your saved routes and log rides automatically."
         NSHealthUpdateUsageDescription: "Ride On may save ride data it records back to Health."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Ride On adds the rides you choose to your calendar."
         UTImportedTypeDeclarations:
           - UTTypeIdentifier: com.topografix.gpx
             UTTypeDescription: "GPX Route"
