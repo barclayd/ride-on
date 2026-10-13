@@ -2,6 +2,7 @@
 
 Cycling route recommender. SwiftUI multiplatform (iOS 26 + macOS 26) app + a Cloudflare Worker.
 Full spec: `PLAN.md`. All UI decisions: `DESIGN-SYSTEM.md` — **every screen must follow it**, no exceptions.
+Screen-by-screen visual targets and the SwiftUI rebuild checklist: `docs/redesign/README.md` — update it in every redesign PR.
 
 In this repo, after raising a PR merge it yourself (`gh pr merge --merge`) once it's ready — don't leave PRs open waiting for review.
 
