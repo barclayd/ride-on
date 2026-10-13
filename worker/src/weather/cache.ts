@@ -205,7 +205,7 @@ export const withForecastCache = (
     const now = (options.now ?? (() => new Date()))().getTime();
     const ttl = options.ttlSeconds ?? 1200;
     // Fetch a moving horizon on misses, but never put the current clock in its key.
-    // Keep a preceding hour for nearest-instant arrival sampling.
+    // Keep a preceding hour for temperature interpolation and instant sampling.
     if (options.forecastHorizonHours !== undefined) {
       const start = Math.floor(now / 3_600_000) * 3_600_000 - 3_600_000;
       request = {

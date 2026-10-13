@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { onStateChange, readState, type State, send } from '../lib/state';
 import type { NextWindow } from '../lib/types';
+import { ForecastEvidence } from './forecast-details';
 import {
   type Banner,
   type Card,
@@ -477,6 +478,15 @@ export const RouteTile = (props: {
         <Meter score={card.score} blank={blank} change={props.change} />
       ) : (
         card.state === 'incomplete' && <span class="ro-no-score">No score</span>
+      )}
+      {!blank && card.best?.forecastDetails && (
+        <ForecastEvidence
+          key={card.best.departureAt}
+          details={card.best.forecastDetails}
+          timeZone={view.timeZone}
+          units={view.state.units}
+          attribution={view.state.recs?.weather.attribution ?? []}
+        />
       )}
     </div>
   );

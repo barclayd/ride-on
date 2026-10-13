@@ -179,7 +179,7 @@ describe('weather aligned to ride progress', () => {
       inputFor([route], { riding: { departureStepMinutes: 60 } }),
       forecastsFor([route], (quantity, h, _r, locationIndex) =>
         quantity === 'air-temperature'
-          ? h === 9 + locationIndex
+          ? h === 9 + locationIndex || h === 10 + locationIndex
             ? 20
             : 5
           : defaultValue(quantity),

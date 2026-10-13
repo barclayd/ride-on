@@ -239,7 +239,7 @@ integration(
       apple((data) => {
         data.forecastHourly.hours = data.forecastHourly.hours.filter(
           (row) =>
-            Date.parse(row.forecastStart) < Date.parse('2026-10-10T11:00:00Z'),
+            Date.parse(row.forecastStart) <= Date.parse('2026-10-10T11:00:00Z'),
         );
       }),
     );

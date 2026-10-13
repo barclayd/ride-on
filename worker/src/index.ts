@@ -134,7 +134,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.22.0',
+      version: '0.23.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -748,7 +748,7 @@ export const createApp = (
               'The full ride must also fit inside your requested local-time window. Departure slots are anchored at its start.',
             ]),
         'Conditions are evaluated at the midpoint of each route section of up to 500 metres, using weather locations at most 10 km apart.',
-        'Instant forecasts and short wind means use the nearest hourly validity, up to 30 minutes away. Full-hour means, gusts and precipitation probabilities retain their native period bounds. An hourly precipitation amount is converted to an hourly average rate when supplied by the provider.',
+        'Temperature is interpolated between adjacent hourly readings; its reported range and personal limits include departure, finish and intervening forecast times. Missing readings are not bridged. Other instant forecasts and short wind means use the nearest hourly validity, up to 30 minutes away. Full-hour means, gusts and precipitation probabilities retain their native period bounds. An hourly precipitation amount is converted to an hourly average rate when supplied by the provider.',
         'Comfort weights are provisional. Weather score combines 75% distance-weighted mean comfort and 25% worst sampled comfort; it is not a probability.',
         'Precipitation includes rain, snow and other forms. The highest local hourly probability is not the probability of precipitation anywhere on the whole ride.',
       ],

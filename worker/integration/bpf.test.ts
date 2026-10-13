@@ -115,6 +115,26 @@ integration(
     assert.equal(ride.best.conditions.maximumGustKph, 14.4);
     assert.equal(ride.best.conditions.maximumPrecipitationProbability, 0.081);
     assert.equal(ride.best.conditions.temperatureC.minimum, 14);
+    const details = ride.best.forecastDetails;
+    assert.equal(details.temperatureMethod, 'linear-interpolation');
+    const site = first(details.locations);
+    assert.equal(site.source.productId, 'uk-blended-probabilistic-v2');
+    assert.equal(site.forecastRunAt, null);
+    assert.deepEqual(site.gustStatistic, {
+      kind: 'percentile',
+      percentile: 50,
+    });
+    assert.equal(first(site.gusts).maximumKph, 14.4);
+    assert.equal(
+      Date.parse(first(site.gusts).end) - Date.parse(first(site.gusts).start),
+      3_600_000,
+    );
+    assert.ok(site.temperatures.length >= 2);
+    assert.ok(site.temperatures.every((sample) => sample.celsius === 14));
+    assert.equal(
+      site.retrievedAt,
+      first(result.weather.locations).provenance?.retrievedAt,
+    );
     assert.ok(
       ride.best.rideHours.every(
         (hour) => hour.conditions?.cloudCoverFraction?.mean === 0.1,

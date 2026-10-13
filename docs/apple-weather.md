@@ -51,8 +51,9 @@ format version 1 are validated. Unknown extra fields are tolerated.
 | `conditionCode` | Optional finer precipitation category, independent of sunshine weight; see the [condition-chip mapping](api.md#condition-chip-summaries) |
 
 `forecastStart` begins each period. Hourly means, gusts and probability events retain
-their forward hour bounds. Instants retain the evaluator's existing nearest-hour
-sampling rule. Apple's rate is an hourly average, unlike an instantaneous intensity;
+their forward hour bounds. Temperature is interpolated between adjacent hourly
+readings; other instants retain the nearest-hour sampling rule. Apple's rate is
+an hourly average, unlike an instantaneous intensity;
 the normalized sample records that distinction. Snowfall is not relabelled as rain.
 
 Clear daylight maps to sunny; mostly clear/partly cloudy maps to sunny intervals.
