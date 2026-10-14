@@ -24,9 +24,9 @@ import {
   resolveMinimumTemperature,
 } from './input.ts';
 import { compileTemperature } from './temperature.ts';
-import { windComfort } from './wind-comfort.ts';
+import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.12';
+export const ALGORITHM_VERSION = 'comfort-v0.13';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -137,12 +137,14 @@ type Observation = {
   headwindKph: number;
   crosswindKph: number;
   gustKph: number;
+  adverseGustKph: number;
+  assistance: number;
   precipitationProbability: number;
   precipitationRateMmH: number;
   temperature: number;
   wind: number;
   dryness: number;
-  comfort: number;
+  nonWindComfort: number;
 };
 type Failure = {
   standard: string;
@@ -216,6 +218,12 @@ const summarize = (rows: readonly Observation[]) => {
       Math.max(...rows.map((row) => row.crosswindKph)),
     ),
     maximumGustKph: round(Math.max(...rows.map((row) => row.gustKph))),
+    gustExposure: {
+      directionBasis: 'prevailing-wind-estimate',
+      maximumAdverseKph: round(
+        Math.max(...rows.map((row) => row.adverseGustKph)),
+      ),
+    },
     maximumPrecipitationProbability: Math.max(
       ...rows.map((row) => row.precipitationProbability),
     ),
@@ -342,7 +350,7 @@ const assessCandidate = (
           0,
         ) / 10,
       );
-    const wind = windComfort(
+    const exposure = windExposure(
       headwindKph,
       crosswindKph,
       gustKph,
@@ -379,14 +387,15 @@ const assessCandidate = (
       headwindKph,
       crosswindKph,
       gustKph,
+      adverseGustKph: exposure.adverseGustKph,
+      assistance: exposure.assistance,
       precipitationProbability,
       precipitationRateMmH,
       temperature,
-      wind,
+      wind: exposure.comfort,
       dryness,
-      comfort:
+      nonWindComfort:
         (weights.temperature * temperature +
-          weights.wind * wind +
           weights.dryness * dryness +
           weights.clearSkies * (clearSkies ?? 0) +
           // Unknown sunshine affects preference scoring neutrally; it is not
@@ -492,7 +501,8 @@ const assessCandidate = (
         : 'not_configured';
   const mean = (
     key:
-      | 'comfort'
+      | 'nonWindComfort'
+      | 'assistance'
       | 'temperature'
       | 'wind'
       | 'dryness'
@@ -501,14 +511,28 @@ const assessCandidate = (
   ) =>
     rows.reduce((sum, row) => sum + (row[key] ?? 0) * row.distanceM, 0) /
     route.distanceM;
-  const weatherScore =
+  const windShare = weights.wind / weightTotal;
+  // Wind exposure is proportional to distance (and time at the model's fixed
+  // speed). Preserve the existing worst-section treatment of other factors.
+  const unassistedWeatherScore =
     100 *
-    (0.75 * mean('comfort') +
-      0.25 * Math.min(...rows.map((row) => row.comfort)));
+    (0.75 * mean('nonWindComfort') +
+      0.25 * Math.min(...rows.map((row) => row.nonWindComfort)) +
+      windShare * mean('wind'));
+  // Use raw distance shares for scoring, never rounded display fractions.
+  const usefulAssistedShare =
+    rows.reduce(
+      (sum, row) => sum + (row.assistance > 0 ? row.distanceM : 0),
+      0,
+    ) / route.distanceM;
+  const assistancePoints =
+    100 * windShare * windAssistanceBenefit(mean('assistance'));
+  const weatherScore = Math.min(100, unassistedWeatherScore + assistancePoints);
   const climbingShare = climbing.status === 'assessed' ? CLIMBING_SHARE : 0;
   const distanceShare = distance.comfort === null ? 0 : DISTANCE_SHARE;
+  const weatherShare = 1 - climbingShare - distanceShare;
   const score =
-    (1 - climbingShare - distanceShare) * weatherScore +
+    weatherShare * weatherScore +
     climbingShare * 100 * (climbing.comfort ?? 0) +
     distanceShare * 100 * (distance.comfort ?? 0);
   const rideHours = Array.from(
@@ -525,6 +549,9 @@ const assessCandidate = (
     },
   );
   const recentRides = history.assess(route.id, iso(departure));
+  const finalScore = Math.max(0, score - recentRides.penaltyPoints);
+  const scoreWithoutAssistance =
+    score - weatherShare * Math.max(0, weatherScore - unassistedWeatherScore);
   const drawbacks: string[] = [];
   if (sunshineAssessment && sunshineAssessment.status !== 'complete')
     drawbacks.push(
@@ -554,8 +581,12 @@ const assessCandidate = (
     drawbacks.push('Some sections have headwinds above your comfort setting.');
   if (conditions.maximumCrosswindKph > preferences.wind.comfortableCrosswindKph)
     drawbacks.push('Some sections have crosswinds above your comfort setting.');
-  if (conditions.maximumGustKph > preferences.wind.comfortableGustKph)
-    drawbacks.push('Gusts exceed your comfort setting.');
+  if (
+    rows.some((row) => row.adverseGustKph > preferences.wind.comfortableGustKph)
+  )
+    drawbacks.push(
+      'Estimated opposing or sideways gusts exceed your comfort setting, using the prevailing wind direction.',
+    );
   if (
     conditions.maximumPrecipitationProbability > 0 ||
     conditions.maximumPrecipitationRateMmH > 0
@@ -569,9 +600,17 @@ const assessCandidate = (
     departureAt: iso(departure),
     finishAt: iso(departure + durationMs),
     baseScore: round(score),
-    score: round(Math.max(0, score - recentRides.penaltyPoints)),
+    score: round(finalScore),
     recentRides,
     weatherScore: round(weatherScore),
+    windAssistance: {
+      usefulDistanceFraction: round(usefulAssistedShare),
+      potentialPoints: round(weatherShare * assistancePoints),
+      appliedPoints: round(
+        finalScore -
+          Math.max(0, scoreWithoutAssistance - recentRides.penaltyPoints),
+      ),
+    },
     sunshineAssessment,
     factors: {
       distance:
@@ -604,6 +643,7 @@ export const orderDepartures = (a: Assessed, b: Assessed) =>
   Number(b.standards.status === 'meets') -
     Number(a.standards.status === 'meets') ||
   b.score - a.score ||
+  b.windAssistance.potentialPoints - a.windAssistance.potentialPoints ||
   a.departureAt.localeCompare(b.departureAt);
 
 export const standardsStatusFor = (

@@ -436,7 +436,7 @@ integration(
     const health = (await (await h.send('/health')).json()) as {
       algorithmVersion: string;
     };
-    assert.equal(health.algorithmVersion, 'comfort-v0.12');
+    assert.equal(health.algorithmVersion, 'comfort-v0.13');
   },
 );
 

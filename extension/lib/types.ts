@@ -141,6 +141,10 @@ export type Conditions = {
   averageCrosswindKph: number;
   maximumPrecipitationProbability: number;
   maximumGustKph?: number;
+  gustExposure?: {
+    directionBasis: 'prevailing-wind-estimate';
+    maximumAdverseKph: number;
+  };
   // docs/extension-api-brief-v4.md; absent before it ships and on older saved plans.
   windDistanceFractions?: {
     headwind: number;
@@ -169,6 +173,11 @@ export type PrecipitationSummary =
   | 'snow'
   | 'thunder';
 export type Departure = {
+  windAssistance?: {
+    usefulDistanceFraction: number;
+    potentialPoints: number;
+    appliedPoints: number;
+  };
   forecastDetails?: ForecastDetails;
   sunshineAssessment?: {
     status: 'complete' | 'partial' | 'unavailable';

@@ -134,6 +134,10 @@ const CONDITIONS = {
     obscured: 0,
   },
   maximumGustKph: 48,
+  gustExposure: {
+    directionBasis: 'prevailing-wind-estimate' as const,
+    maximumAdverseKph: 48,
+  },
   windDistanceFractions: { headwind: 0.1, tailwind: 0.7, crosswind: 0.2 },
   precipitationSummary: 'dry' as const,
 };
@@ -203,6 +207,11 @@ const best = (date: string, i: number, score: number) => ({
   finishAt: `${date}T1${1 + i}:00:00Z`,
   score,
   standards: { status: 'not_configured', failures: [] },
+  windAssistance: {
+    usefulDistanceFraction: 0.7,
+    potentialPoints: 1.4,
+    appliedPoints: 1.4,
+  },
   conditions: CONDITIONS,
   forecastDetails: {
     temperatureMethod: 'linear-interpolation',
@@ -1646,6 +1655,13 @@ test('forecast details disclose source, fetched time, locations and full gust pe
   await expect(details).toContainText('Fetched');
   await expect(details).toContainText('Not supplied by provider');
   await expect(details).toContainText('Site 00353202');
+  await expect(details).toContainText('Helpful tailwind on 70% of the route.');
+  await expect(details).toContainText(
+    'Assistance adds 1.4 points to this score.',
+  );
+  await expect(details).toContainText(
+    'Individual gust directions are not supplied',
+  );
   await expect(
     details.getByRole('table', { name: 'Hourly temperatures · median' }),
   ).toBeVisible();

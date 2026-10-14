@@ -483,6 +483,7 @@ export const RouteTile = (props: {
         <ForecastEvidence
           key={card.best.departureAt}
           details={card.best.forecastDetails}
+          departure={card.best}
           timeZone={view.timeZone}
           units={view.state.units}
           attribution={view.state.recs?.weather.attribution ?? []}

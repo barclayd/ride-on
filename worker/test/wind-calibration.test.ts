@@ -189,7 +189,10 @@ test('stronger crosswinds worsen comfort monotonically, sensitivity is bounded, 
         recommendRides([route], input, still, now.getTime()).rankings[0]
           ?.best ?? undefined,
       );
-      expect(best.factors.wind).toBe(stillBest.factors.wind);
+      // With no sustained wind, the gust direction cannot be inferred; the
+      // aligned tailwind can discount gusts that the calm case cannot.
+      expect(best.factors.wind).toBe(100);
+      expect(best.factors.wind).toBeGreaterThanOrEqual(stillBest.factors.wind);
     }
   }
   expect(inputFor([route]).preferences.wind.crosswindSensitivity).toBe(1);

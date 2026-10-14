@@ -49,6 +49,12 @@ export const conditionsSchema = z.strictObject({
   maximumHeadwindKph: nonnegative,
   maximumCrosswindKph: nonnegative,
   maximumGustKph: nonnegative,
+  gustExposure: z
+    .strictObject({
+      directionBasis: z.literal('prevailing-wind-estimate'),
+      maximumAdverseKph: nonnegative,
+    })
+    .optional(),
   maximumPrecipitationProbability: fraction,
   maximumPrecipitationRateMmH: nonnegative,
   assistedDistanceFraction: fraction,
