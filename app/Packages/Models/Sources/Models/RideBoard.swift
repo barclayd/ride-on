@@ -19,9 +19,11 @@ public struct RideBoard: Hashable, Sendable {
     public var unfit: [Unfit]
     /// Ride detail per `Pick.id`; missing ones fall back to `RideDetail.sample`.
     public var details: [String: RideDetail]
+    /// The forecast provider's required attribution; empty means Apple Weather.
+    public var credits: [Credit]
 
     public init(window: DateInterval, generatedAt: Date, picks: [Pick], days: [Day], forecast: [Day] = [], hours: RideWindow.Hours = .daylight,
-                unfit: [Unfit], details: [String: RideDetail] = [:]) {
+                unfit: [Unfit], details: [String: RideDetail] = [:], credits: [Credit] = []) {
         self.window = window
         self.generatedAt = generatedAt
         self.picks = picks
@@ -30,6 +32,20 @@ public struct RideBoard: Hashable, Sendable {
         self.hours = hours
         self.unfit = unfit
         self.details = details
+        self.credits = credits
+    }
+}
+
+public extension RideBoard {
+    /// "Powered by Met Office data", linking to the provider.
+    struct Credit: Hashable, Sendable {
+        public var text: String
+        public var url: URL
+
+        public init(text: String, url: URL) {
+            self.text = text
+            self.url = url
+        }
     }
 }
 

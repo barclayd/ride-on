@@ -307,6 +307,7 @@ public struct RideDetailView: View {
         switch kind {
         case .temperature: "thermometer.medium"
         case .wind: "wind"
+        case .rain: "drop"
         case .other: "info.circle"
         }
     }
@@ -320,7 +321,7 @@ public struct RideDetailView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 4) {
-            WeatherAttributionFooter()
+            WeatherAttributionFooter(board.credits)
             Text("Updated \(board.generatedAt.formatted(.clockTime)).")
                 .font(.caption)
                 .foregroundStyle(.secondary)

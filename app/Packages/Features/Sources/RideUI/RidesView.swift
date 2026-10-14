@@ -299,7 +299,7 @@ public struct RidesView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 4) {
-            WeatherAttributionFooter()
+            WeatherAttributionFooter(board.credits)
             Text("Updated \(board.generatedAt.formatted(.clockTime)). Pull down to refresh.")
                 .font(.caption)
                 .foregroundStyle(.secondary)

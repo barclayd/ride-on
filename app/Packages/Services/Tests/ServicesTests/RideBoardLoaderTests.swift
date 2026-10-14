@@ -9,7 +9,8 @@ final class RideBoardLoaderTests: XCTestCase {
         let long = "0b8f7a54-9e7b-4a3c-8f2e-5d6c7b8a9f02"
         let conditions = { (sky: String, rain: String, head: Double) in """
             {"temperatureC":{"minimum":9,"maximum":14},"averageWindSpeedKph":15,"averageHeadwindKph":\(head),
-             "averageTailwindKph":6,"averageCrosswindKph":4,"maximumGustKph":28,"maximumPrecipitationProbability":0.05,
+             "averageTailwindKph":6,"averageCrosswindKph":4,"maximumHeadwindKph":\(head + 8),"maximumCrosswindKph":6,
+             "maximumGustKph":28,"gustExposure":{"directionBasis":"prevailing-wind-estimate","maximumAdverseKph":22},"maximumPrecipitationProbability":0.05,
              "distanceKm":25,"windDistanceFractions":{"headwind":\(head > 5 ? 0.7 : 0.1),"tailwind":\(head > 5 ? 0.2 : 0.6),"crosswind":0.1},
              "precipitationSummary":"\(rain)","skyConditionDistanceFractions":{"\(sky)":0.8,"cloudy":0.2},"cloudCoverFraction":{"mean":0.4,"maximum":0.6}}
             """ }
@@ -19,10 +20,15 @@ final class RideBoardLoaderTests: XCTestCase {
              "standards":{"status":"meets"},"conditions":\(conditions("sunnyIntervals", "dry", 1)),
              "rideHours":[{"start":"\(at)","end":"2026-10-14T09:00:00.000Z","conditions":\(conditions("sunny", "dry", 1))},
                           {"start":"2026-10-14T09:00:00.000Z","end":"\(finish)","conditions":\(conditions("cloudy", "light_showers", 9))}],
+             "recentRides":{"status":"applied","penaltyPoints":3},
              "drawbacks":["Some sections are cooler than your comfort range.","Gusts exceed your comfort setting.","Cloud covers more than half the sky on average during this ride."]}
             """ }
         let json = """
             {"generatedAt":"2026-10-13T07:12:00.000Z","timeZone":"Europe/London","range":{"dates":["2026-10-14","2026-10-15"]},
+             "resolvedPreferences":{"temperature":{"comfortMinC":10,"comfortMaxC":22},
+               "wind":{"comfortableHeadwindKph":5,"comfortableCrosswindKph":20,"comfortableGustKph":20,"crosswindSensitivity":1}},
+             "weather":{"selectedProvider":{"id":"met-office","name":"Met Office"},
+               "attribution":[{"text":"Powered by Met Office data","url":"https://www.metoffice.gov.uk/"}]},
              "rankings":[{"routeId":"\(route)","routeName":"Hilly Loop","distanceKm":51,"ascentM":640,"estimatedDurationMinutes":180,
                "status":"assessed","best":\(departure("2026-10-14T08:00:00.000Z", "2026-10-14T11:00:00.000Z", 85.6)),
                "alternatives":[\(departure("2026-10-15T08:00:00.000Z", "2026-10-15T11:00:00.000Z", 70))]}],
@@ -59,11 +65,17 @@ final class RideBoardLoaderTests: XCTestCase {
 
         let detail = try XCTUnwrap(board.details[pick.id])
         XCTAssertEqual(detail.departures.map(\.score), [86, 70])
-        XCTAssertEqual(detail.notes.map(\.kind), [.temperature, .wind, .other])
+        let kph = RideBoardLoader.kph
+        XCTAssertEqual(detail.notes.map(\.text), ["Starts at 9°, a degree under your ideal range.", "Headwind for the last 25 km.",
+                                                  "Gusts reach 28 \(kph), over your 20 \(kph) limit.",
+                                                  "You've ridden these roads recently, so it loses 3 points."])
+        XCTAssertEqual(board.credits.map(\.text), ["Powered by Met Office data"])
         let first = try XCTUnwrap(detail.departures.first)
         XCTAssertEqual(first.hours.map(\.sky), [.sunny, .rain])
         XCTAssertEqual(first.wind, [.init(.tailwind, from: 0, to: 25), .init(.headwind, from: 25, to: 50)])
         XCTAssertEqual(first.factors.map(\.name), ["Rain", "Wind", "Temperature", "Sunshine", "Sky"])
+        XCTAssertEqual(first.factors[1].reason, "Tailwind for 60% of the distance. Gusts peak at 28 \(kph), over your 20 \(kph) limit.")
+        XCTAssertEqual(first.factors[2].reason, "9–14° along the way. Your ideal range is 10–22°.")
     }
 
     func testPlanningWindowRoundTrips() throws {

@@ -93,8 +93,11 @@ public enum RideBoardLoader {
                                       conditions: conditions(best.conditions), meetsMinimums: best.standards.status != "below",
                                       lastRidden: lastRidden[id])
             let others = ([result.best].compactMap { $0 } + result.alternatives).filter { $0.departureAt != best.departureAt }
-            details[pick.id] = RideDetail(pick: pick, changeSince: nil, notes: notes(best.drawbacks), elevation: [],
-                                          departures: ([best] + others).prefix(4).map { departure($0, route: route) })
+            let preferences = response.resolvedPreferences
+            details[pick.id] = RideDetail(pick: pick, changeSince: nil,
+                                          notes: preferences.map { notes(best, fit: result.distanceFit, preferences: $0) } ?? notes(best.drawbacks),
+                                          elevation: [],
+                                          departures: ([best] + others).prefix(4).map { departure($0, route: route, preferences: preferences) })
             return pick
         }
 
@@ -121,7 +124,8 @@ public enum RideBoardLoader {
         let start = dates.first ?? calendar.startOfDay(for: response.generatedAt)
         let end = calendar.date(byAdding: .day, value: 1, to: dates.last ?? start) ?? start
         return RideBoard(window: DateInterval(start: start, end: end), generatedAt: response.generatedAt,
-                         picks: picks, days: days, forecast: forecast, unfit: unfit, details: details)
+                         picks: picks, days: days, forecast: forecast, unfit: unfit, details: details,
+                         credits: response.weather?.attribution?.map { RideBoard.Credit(text: $0.text, url: $0.url) } ?? [])
     }
 
     /// Why a day has no ride, or what it's missing (docs/planning-api.md, "Day tiles"). A forecast
@@ -164,6 +168,56 @@ public enum RideBoardLoader {
         return .cloudy
     }
 
+    /// The notes under the verdict, with the rider's own numbers: "Gusts reach 40 km/h, over your 35 km/h limit."
+    /// The same rules as the API's `drawbacks` (worker engine.ts), less the cloud and data-quality caveats.
+    static func notes(_ d: Departure, fit: RouteResult.DistanceFit?, preferences p: Preferences) -> [RideDetail.Note] {
+        let c = d.conditions
+        /// Rounded value and limit, when the rounded value is still over the limit.
+        func over(_ value: Double?, _ limit: Double) -> (value: Int, limit: Int)? {
+            guard let value, Int(value.rounded()) > Int(limit.rounded()) else { return nil }
+            return (Int(value.rounded()), Int(limit.rounded()))
+        }
+        func degrees(_ n: Int) -> String { n == 1 ? "a degree" : "\(n) degrees" }
+        var notes: [RideDetail.Note] = []
+        let low = Int(c.temperatureC.minimum.rounded()), ideal = Int(p.temperature.comfortMinC.rounded())
+        if low < ideal {
+            let starts = d.rideHours.first?.conditions?.temperatureC.minimum == c.temperatureC.minimum
+            notes.append(.init(.temperature, "\(starts ? "Starts at" : "Down to") \(low)°, \(degrees(ideal - low)) under your ideal range."))
+        }
+        if let (high, ideal) = over(c.temperatureC.maximum, p.temperature.comfortMaxC) {
+            notes.append(.init(.temperature, "Up to \(high)°, \(degrees(high - ideal)) over your ideal range."))
+        }
+        if let (head, limit) = over(c.maximumHeadwindKph, p.wind.comfortableHeadwindKph) {
+            let stretches = stretches(d)
+            if let longest = stretches.filter({ $0.wind == .headwind }).max(by: { $0.endKm - $0.startKm < $1.endKm - $1.startKm }) {
+                let km = Int((longest.endKm - longest.startKm).rounded())
+                let span = stretches.count == 1 ? "all the way" : longest == stretches.last ? "for the last \(km) km"
+                    : longest == stretches.first ? "for the first \(km) km" : "for \(km) km from km \(Int(longest.startKm.rounded()))"
+                notes.append(.init(.wind, "Headwind \(span)."))
+            } else {
+                notes.append(.init(.wind, "Headwinds reach \(head) \(kph), over your \(limit) \(kph) limit."))
+            }
+        }
+        if let (cross, limit) = over(c.maximumCrosswindKph, p.wind.comfortableCrosswindKph) {
+            notes.append(.init(.wind, "Crosswinds reach \(cross) \(kph), over your \(limit) \(kph) limit."))
+        }
+        // The API judges gusts by their estimated opposing or sideways part; the raw peak is at least that.
+        if over(c.gustExposure?.maximumAdverseKph, p.wind.comfortableGustKph) != nil {
+            notes.append(.init(.wind, "Gusts reach \(Int(c.maximumGustKph.rounded())) \(kph), over your \(Int(p.wind.comfortableGustKph.rounded())) \(kph) limit."))
+        }
+        if let rain = c.precipitationSummary, rain != "dry", rain != "possible" {
+            notes.append(.init(.rain, "\(sentence(rain)) forecast, up to \(percent(c.maximumPrecipitationProbability)) chance."))
+        }
+        if let points = d.recentRides.map({ Int($0.penaltyPoints.rounded()) }), points > 0 {
+            notes.append(.init(.other, "You've ridden these roads recently, so it loses \(points) \(points == 1 ? "point" : "points")."))
+        }
+        if let fit, fit.status != "within_range", Int(fit.deviationKm.rounded()) > 0 {
+            notes.append(.init(.other, "\(Int(fit.deviationKm.rounded())) km \(fit.status == "below_range" ? "shorter" : "longer") than your preferred distance."))
+        }
+        return notes
+    }
+
+    /// The API's own sentences, when its response has no preferences to personalise with.
     static func notes(_ drawbacks: [String]) -> [RideDetail.Note] {
         drawbacks.map { text in
             let lower = text.lowercased()
@@ -173,45 +227,67 @@ public enum RideBoardLoader {
         }
     }
 
-    static func departure(_ d: Departure, route: RideBoard.RouteSummary) -> RideDetail.Departure {
-        let hourly = d.rideHours.compactMap { hour in hour.conditions.map { (hour.start, $0) } }
-        let hours = hourly.map { time, c in
-            RideDetail.Hour(time: time, sky: sky(c), temperatureC: ((c.temperatureC.minimum + c.temperatureC.maximum) / 2).rounded(),
-                            windKph: c.averageWindSpeedKph, gustKph: c.maximumGustKph, rainChance: c.maximumPrecipitationProbability)
+    static func departure(_ d: Departure, route: RideBoard.RouteSummary, preferences: Preferences?) -> RideDetail.Departure {
+        let hours = d.rideHours.compactMap { hour in
+            hour.conditions.map { c in
+                RideDetail.Hour(time: hour.start, sky: sky(c), temperatureC: ((c.temperatureC.minimum + c.temperatureC.maximum) / 2).rounded(),
+                                windKph: c.averageWindSpeedKph, gustKph: c.maximumGustKph, rainChance: c.maximumPrecipitationProbability)
+            }
         }
-        // Each hour's stretch of road with its felt wind, merged where it doesn't change.
+        return RideDetail.Departure(start: d.departureAt, finish: d.finishAt, score: Int(d.score.rounded()), hours: hours,
+                                    windFrom: nil, wind: stretches(d), factors: factors(d, route: route, preferences: preferences))
+    }
+
+    /// Each ride hour's stretch of road with its felt wind, merged where it doesn't change.
+    static func stretches(_ d: Departure) -> [RideDetail.WindStretch] {
         var stretches: [RideDetail.WindStretch] = []
         var km = 0.0
-        for (_, c) in hourly where c.distanceKm > 0 {
+        for c in d.rideHours.compactMap(\.conditions) where c.distanceKm > 0 {
             let felt = wind(c)
             if stretches.last?.wind == felt { stretches[stretches.count - 1].endKm = km + c.distanceKm }
             else { stretches.append(RideDetail.WindStretch(felt, from: km, to: km + c.distanceKm)) }
             km += c.distanceKm
         }
-        return RideDetail.Departure(start: d.departureAt, finish: d.finishAt, score: Int(d.score.rounded()), hours: hours,
-                                    windFrom: nil, wind: stretches, factors: factors(d, route: route))
+        return stretches
     }
 
     // ponytail: metric, en-GB prose; follow the saved display units when You is wired up.
-    static func factors(_ d: Departure, route: RideBoard.RouteSummary) -> [RideDetail.Factor] {
+    static let kph = "km/\u{2060}h"
+
+    static func percent(_ fraction: Double) -> String { "\(Int((fraction * 100).rounded()))%" }
+
+    /// "light_showers" → "Light showers".
+    static func sentence(_ summary: String) -> String {
+        let words = summary.replacingOccurrences(of: "_", with: " ")
+        return words.prefix(1).uppercased() + words.dropFirst()
+    }
+
+    static func factors(_ d: Departure, route: RideBoard.RouteSummary, preferences p: Preferences?) -> [RideDetail.Factor] {
         let c = d.conditions, f = d.factors
-        let kph = "km/\u{2060}h"
-        func percent(_ fraction: Double) -> String { "\(Int((fraction * 100).rounded()))%" }
         func score(_ value: Double) -> Int { Int(value.rounded()) }
-        let summary = (c.precipitationSummary ?? "dry").replacingOccurrences(of: "_", with: " ")
+        let summary = c.precipitationSummary ?? "dry"
         let rain = switch summary {
         case "dry": "Dry throughout."
         case "possible": "Rain is possible."
-        default: "\(summary.prefix(1).uppercased())\(summary.dropFirst()) forecast." // "Light showers forecast."
+        default: "\(sentence(summary)) forecast."
         }
+        let gust = Int(c.maximumGustKph.rounded())
+        // Comfort counts only gusts against or across the rider (`gustExposure`), so a big one from behind isn't "over".
+        let limit = p.map { limit in
+            let rounded = Int(limit.wind.comfortableGustKph.rounded())
+            return gust <= rounded ? ", under your \(rounded) \(kph) limit"
+                : (c.gustExposure?.maximumAdverseKph).map { Int($0.rounded()) <= rounded } == true ? ", mostly from behind"
+                : ", over your \(rounded) \(kph) limit"
+        } ?? ""
+        let ideal = p.map { " Your ideal range is \(Int($0.temperature.comfortMinC.rounded()))–\(Int($0.temperature.comfortMaxC.rounded()))°." } ?? ""
         let felt = wind(c)
         let share: Double? = c.windDistanceFractions.map {
             switch felt { case .tailwind: $0.tailwind; case .crosswind: $0.crosswind; case .headwind: $0.headwind }
         }
         var factors = [
             RideDetail.Factor("Rain", score: score(f.dryness), reason: "\(rain) The highest chance of rain is \(percent(c.maximumPrecipitationProbability))."),
-            RideDetail.Factor("Wind", score: score(f.wind), reason: "\(felt.title)\(share.map { " for \(percent($0)) of the distance" } ?? " mostly"). Gusts peak at \(Int(c.maximumGustKph.rounded())) \(kph)."),
-            RideDetail.Factor("Temperature", score: score(f.temperature), reason: "\(Int(c.temperatureC.minimum.rounded()))–\(Int(c.temperatureC.maximum.rounded()))° along the way."),
+            RideDetail.Factor("Wind", score: score(f.wind), reason: "\(felt.title)\(share.map { " for \(percent($0)) of the distance" } ?? " mostly"). Gusts peak at \(gust) \(kph)\(limit)."),
+            RideDetail.Factor("Temperature", score: score(f.temperature), reason: "\(Int(c.temperatureC.minimum.rounded()))–\(Int(c.temperatureC.maximum.rounded()))° along the way.\(ideal)"),
         ]
         if let value = f.clearSkies, let cloud = c.cloudCoverFraction {
             factors.append(RideDetail.Factor("Sky", score: score(value), reason: "\(sky(c).title), about \(percent(cloud.mean)) cloud cover."))
@@ -354,6 +430,21 @@ extension RideBoardLoader {
         var unranked: [RouteResult]
         var range: Range?
         var days: [Day]
+        var resolvedPreferences: Preferences?
+        var weather: Weather?
+    }
+
+    /// The comfort settings the ranking used.
+    struct Preferences: Decodable {
+        struct Temperature: Decodable { var comfortMinC, comfortMaxC: Double }
+        struct Wind: Decodable { var comfortableHeadwindKph, comfortableCrosswindKph, comfortableGustKph: Double }
+        var temperature: Temperature
+        var wind: Wind
+    }
+
+    struct Weather: Decodable {
+        struct Credit: Decodable { var text: String; var url: URL }
+        var attribution: [Credit]?
     }
 
     struct Interval: Decodable { var start: Date; var end: Date }
@@ -370,6 +461,9 @@ extension RideBoardLoader {
         var status: String
         var best: Departure?
         var alternatives: [Departure]
+        var distanceFit: DistanceFit?
+
+        struct DistanceFit: Decodable { var status: String; var deviationKm: Double }
     }
 
     struct Departure: Decodable {
@@ -379,6 +473,7 @@ extension RideBoardLoader {
         }
         struct Standards: Decodable { var status: String }
         struct Hour: Decodable { var start: Date; var conditions: Conditions? }
+        struct RecentRides: Decodable { var penaltyPoints: Double }
         var departureAt: Date
         var finishAt: Date
         var score: Double
@@ -387,12 +482,14 @@ extension RideBoardLoader {
         var conditions: Conditions
         var rideHours: [Hour]
         var drawbacks: [String]
+        var recentRides: RecentRides?
     }
 
     struct Conditions: Decodable {
         struct Range: Decodable { var minimum, maximum: Double }
         struct Shares: Decodable { var headwind, tailwind, crosswind: Double }
         struct Cloud: Decodable { var mean: Double }
+        struct GustExposure: Decodable { var maximumAdverseKph: Double }
         var temperatureC: Range
         var averageWindSpeedKph: Double
         var averageHeadwindKph: Double
@@ -405,5 +502,8 @@ extension RideBoardLoader {
         var precipitationSummary: String?
         var skyConditionDistanceFractions: [String: Double]?
         var cloudCoverFraction: Cloud?
+        var maximumHeadwindKph: Double?
+        var maximumCrosswindKph: Double?
+        var gustExposure: GustExposure?
     }
 }
