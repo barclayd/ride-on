@@ -860,6 +860,37 @@ breakdown and standards failures for an accurate scoring explanation.
 
 ## Algorithm
 
+### Temperature and sunshine preference intent
+
+`preferences.temperature.comfortMinC` and `comfortMaxC` define an equally
+comfortable band, including both endpoints. All temperatures inside the saved
+band receive full temperature comfort; there is no extra reward for moving
+towards its middle or warmer end. Outside it, the existing comfort curve falls
+with distance from the nearest boundary. Minimum standards remain separate.
+
+The engine combines that comfort with the saved `weights.temperature`,
+`weights.sunshine` and `sunshine.sunnyIntervalsComfort`. A positive sunshine
+weight expresses a preference for sunshine; zero removes that preference from
+scoring. These inputs determine the warmth/sunshine trade-off for each rider.
+There is no special rule tied to Dan, a named route, a departure time or fixed
+temperatures from the interview.
+
+The 14 October follow-up confirms that Dan's existing 16–32°C band means equal
+temperature preference throughout. With his saved weights, the current algorithm
+already prefers 8°C sunny over 12°C with sunny intervals, 14°C with intervals over
+8°C sunny, and 16°C sunny over 20°C with intervals (likewise 22°C over 26°C).
+`worker/test/temperature-sunshine-calibration.test.ts` preserves these comparisons
+and verifies that another ideal band, zero sunshine importance or zero temperature
+importance changes the outcome. No scoring change or algorithm-version bump is
+needed for this calibration.
+
+Calibration answers describe personal intent and must be represented in saved
+preferences before they affect that rider's recommendations. They do not change
+global defaults. Profiles currently contain resolved settings, without per-field
+confirmation metadata: a default value alone is not evidence that a user actively
+chose it. Any future adaptation requiring affirmative intent must capture that
+choice explicitly rather than infer it from a default or another rider's answers.
+
 ### Wind exposure and assistance v0.14
 
 Wind discomfort now uses the distance-weighted mean of section comfort. At the
@@ -927,8 +958,9 @@ tests cover diagonal assistance, winding routes below the former eligibility
 threshold, and independent lateral discomfort. A separate local replay holds the
 saved production routes, preferences and 14 October forecast snapshot fixed:
 Horsham gains useful assistance and outranks Richmond, while its best departure
-remains 8am. That real-route departure trade-off needs separate calibration; the
-synthetic town example does not establish a live 10am optimum. Private geometry
+remains 8am. In the follow-up interview, Dan preferred 8am after reviewing those
+route-level conditions, confirming that ordering. The synthetic town example does
+not establish a live 10am optimum. Private geometry
 and forecasts stay outside version control. The prior 80–85 crosswind/gust
 reference still passes. No live weather requests are required.
 
