@@ -1,9 +1,21 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-10-09",
-  "updated_on": "2026-10-10",
+  "updated_on": "2026-10-14",
   "purpose": "Human preference calibration examples for the API MVP. These are not live forecasts. Selected cases have executable calibration tests; exact scoring weights remain provisional.",
   "rider": "Dan",
+  "implementation_2026_10_14": {
+    "algorithm_version": "comfort-v0.13",
+    "status": "implemented_with_synthetic_calibration",
+    "test_file": "worker/test/wind-exposure.test.ts",
+    "changes": [
+      "Bounded sustained-tailwind benefit using distance-weighted assistance strength; gust peaks do not earn assistance.",
+      "Gust comfort uses an adverse component estimated from prevailing wind direction; raw gust limits stay independent.",
+      "Wind discomfort is distance-weighted; the other weather factors retain their previous mean/worst-section blend."
+    ],
+    "scope": "The six interview comparisons are covered by synthetic tests. Town-forecast examples use simplified headings and one weather location. They are not replays of the real routes or proof of an exact best half-hour. Numerical benefit constants remain provisional; no new personal thresholds, global weather weights or fixed departure preference were inferred.",
+    "live_route_replay_verified": false
+  },
   "context": {
     "route_characteristics": "Otherwise equally appealing; climbing is neutral for this rider.",
     "assessment": "Day input; recommend route and departure with consistently comfortable conditions throughout the modelled ride and show hourly variation. Supersedes the earlier all-day aggregation proposal.",
@@ -246,6 +258,97 @@
         "Exact sensitivity and wind-versus-sunshine weights on other days.",
         "Whether departures chosen after this adjustment match the rider's preference."
       ]
+    },
+    {
+      "id": "october-17-route-departure-review",
+      "recorded_on": "2026-10-14",
+      "status": "qualitative_route_feedback_recorded",
+      "weather_source": "User-supplied Ride on and Met Office website screenshots; not a saved route-level forecast replay",
+      "forecast_date": "2026-10-17",
+      "displayed_temperature_comfort_c": [16, 32],
+      "displayed_routes": [
+        { "name": "Richmond", "distance_km": 35, "departure_local": "08:30", "finish_local_approximate": "10:15", "score": 80, "temperature_c": [7, 10], "wind_mph": 6, "maximum_gust_mph": 25 },
+        { "name": "Horsham (Road)", "distance_km": 89, "departure_local": "08:00", "finish_local_approximate": "12:25", "score": 76, "temperature_c": [7, 12], "wind_mph": 8, "wind_label": "tailwind", "maximum_gust_mph": 27 },
+        { "name": "Potters Bar", "distance_km": 77, "departure_local": "08:00", "finish_local_approximate": "11:51", "score": 74, "temperature_c": [5, 11], "wind_mph": 9, "maximum_gust_mph": 28 },
+        { "name": "Braintree", "distance_km": 51, "departure_local": "08:00", "finish_local_approximate": "10:32", "score": 65, "temperature_c": [6, 10], "wind_mph": 11, "wind_label": "crosswind", "maximum_gust_mph": 26 }
+      ],
+      "user_response_verbatim": [
+        "As Richmond is more of a circular ride, I would have said that Horsham should be higher rated as the tailwind works in its favour. The strong gusts as they're providing a tailwind I don't think it should penalised.",
+        "as my ideal temperature range is set from 16C to 32C, I'd also debate that 10am is a better departure time due to the better temperature vs at 8am. I'm aware this is trading off against the sunshine."
+      ],
+      "interpretation": "Dan expects Horsham's useful tailwind to improve its comparison with Richmond and questions the earlier departure. Favourable gusts in this example should not incur a generic gust-speed comfort penalty. The departure preference is a whole-ride trade-off, not a fixed 10am bonus or evidence that warmth always beats sunshine.",
+      "limits": [
+        "Town forecasts and rounded route-card summaries do not reconstruct the weather at each route section or explain the exact four-point score gap.",
+        "A tailwind label identifies a majority direction, not uniformly helpful wind or a separate measured gust direction.",
+        "The screenshots do not establish all effective weights, minimum standards, other route preferences or the deployed algorithm version.",
+        "No desired absolute scores, complete four-route ordering or universal strong-wind threshold were specified."
+      ]
+    },
+    {
+      "id": "cold-sunshine-002",
+      "recorded_on": "2026-10-14",
+      "status": "response_recorded",
+      "weather_source": "invented_constant_conditions",
+      "question": "First, let’s isolate the colder-temperature trade-off. Imagine the same ride, equally dry with identical wind throughout: A is 8°C with continuous sunshine; B is 12°C with sunny intervals. How would you choose? These are hypothetical constant conditions, not a reconstruction of the screenshots.",
+      "options": {
+        "A": { "temperature_c": 8, "sky": "continuous sunshine" },
+        "B": { "temperature_c": 12, "sky": "sunny intervals" }
+      },
+      "user_response_verbatim": "Prefer A — continuous sunshine still wins",
+      "expected_order_within_scenario": ["A", "B"],
+      "interpretation": "Preserve this sunshine-over-warmth preference when refining the October departure example. Do not infer from the suggested 10am departure that temperature should receive a generally dominant weight.",
+      "unresolved": ["Magnitude of preference and the crossover for other temperatures or sunshine patterns."]
+    },
+    {
+      "id": "tailwind-versus-calm-002",
+      "recorded_on": "2026-10-14",
+      "status": "conditional_response_recorded",
+      "weather_source": "invented_route_conditions",
+      "question": "For an otherwise identical dry, sunny ride at the same temperature, how would you compare a mostly helpful 8–11 mph tailwind with almost calm conditions at 2–3 mph? Assume any gusts are also directly behind you and feel comfortable.",
+      "user_response_verbatim": "if the tailwind definitely assist them majority of the ride then yes tailwind is preferred here",
+      "interpretation": "Useful tailwind assistance over most of the route is positively preferred to almost calm conditions. Avoiding a headwind penalty alone does not represent this preference. The answer does not specify the size of a bonus or the value of ever-stronger tailwinds.",
+      "unresolved": ["Required assisted share, treatment of opposing sections, strength of the preference and saturation of assistance benefit."]
+    },
+    {
+      "id": "brief-manageable-crosswind-003",
+      "recorded_on": "2026-10-14",
+      "status": "response_recorded",
+      "weather_source": "invented_segment_level_conditions",
+      "question": "Suppose Horsham has helpful wind for 90% of the ride, with a short exposed crosswind section for the remaining 10%. Assuming that section is manageable, how much should it affect the overall rating?",
+      "user_response_verbatim": "Almost no deduction — I’m happy to tolerate a short section",
+      "interpretation": "A manageable crosswind affecting only 10% of an otherwise helpful ride should have almost no effect on the overall rating. The current 25% single-worst-section blend deserves reconsideration for comfort aggregation.",
+      "limits": ["This does not settle treatment of severe exposure, explicit minimum standards, headwind sections or brief rain."]
+    },
+    {
+      "id": "horsham-10am-versus-noon-002",
+      "recorded_on": "2026-10-14",
+      "status": "response_recorded",
+      "weather_source": "Approximate whole-ride comparison from the user-supplied Horsham town forecast, not a route-level forecast replay",
+      "question": "For Horsham’s roughly 4h25 ride, which would you prefer if your schedule were unrestricted? Using the town forecast as a rough guide: 10am–2:25pm starts around 9°C and reaches 13°C, with initial sunshine then sunny intervals and rain chances rising to 10%; noon–4:25pm stays around 12–13°C, has sunny intervals throughout, and rain chances rise to 20%. Both have similar later wind/gust speeds. These are not route-wide forecasts.",
+      "user_response_verbatim": "10am — retain some sunshine and lower rain chances",
+      "expected_departure_order_within_scenario": ["10:00", "12:00"],
+      "interpretation": "The warmer start at noon does not outweigh retaining some sunshine and lower rain chances at 10am in this example. This is not a fixed preferred start or an isolated estimate of temperature, sunshine or rain sensitivity."
+    },
+    {
+      "id": "mixed-tail-head-versus-calm-003",
+      "recorded_on": "2026-10-14",
+      "status": "response_recorded",
+      "weather_source": "invented_segment_level_conditions",
+      "question": "To clarify how much of the route must benefit: with temperature, sunshine and rain equal, would you prefer 10 mph tailwind over 60% of the distance plus 10 mph headwind over 40%, or almost calm conditions throughout? Assume comfortable gusts.",
+      "user_response_verbatim": "Almost calm throughout",
+      "expected_order_within_scenario": ["almost calm throughout", "60% tailwind and 40% headwind at 10 mph"],
+      "interpretation": "A bare majority of assisted distance is insufficient for a favourable overall wind assessment. Substantial opposing exposure must outweigh the benefit in this scenario; do not use a greater-than-50% tailwind label or signed net wind alone to grant an overall bonus.",
+      "unresolved": ["The preference crossover between this mixed ride and the 90% assisted / 10% manageable crosswind example; those examples also differ in the adverse wind direction."]
+    },
+    {
+      "id": "richmond-early-versus-10am-003",
+      "recorded_on": "2026-10-14",
+      "status": "response_recorded",
+      "weather_source": "Approximate whole-ride comparison from the user-supplied Richmond town forecast, not a route-level forecast replay",
+      "question": "For Richmond’s roughly 1h45 circular ride, which would you choose? Using its town forecast as a rough guide: 8:30–10:15 is about 7–10°C, sunny throughout, with lighter wind and gusts around 18–23 mph; 10:00–11:45 is about 9–12°C, turning to sunny intervals, with stronger wind and gusts around 23–28 mph. Rain chances stay below 5%. These figures are approximate and differ from the route-wide card.",
+      "user_response_verbatim": "8:30 — sunshine and lighter wind win on this shorter loop",
+      "expected_departure_order_within_scenario": ["08:30", "10:00"],
+      "interpretation": "Preserve an earlier departure for Richmond while investigating the later departure preferred for Horsham. Departure choice depends on route-specific wind exposure and conditions throughout its duration, not a generic late-start or warmth bonus."
     },
     {
       "id": "wind-calibration-v4-ranking-review",

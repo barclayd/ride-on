@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import type { Attribution, ForecastDetails } from '../lib/types';
+import type { Attribution, Departure, ForecastDetails } from '../lib/types';
 import { clock, degrees, shortDate, speed, type Units } from './format';
 
 const products: Record<string, string> = {
@@ -19,11 +19,13 @@ export const ForecastEvidence = ({
   timeZone,
   units,
   attribution,
+  departure,
 }: {
   details: ForecastDetails;
   timeZone: string;
   units: Units;
   attribution: Attribution[];
+  departure?: Departure;
 }) => {
   const [selected, setSelected] = useState(0);
   const site = details.locations[selected] ?? details.locations[0];
@@ -46,6 +48,23 @@ export const ForecastEvidence = ({
           {products[site.source.productId] ??
             `${site.source.providerId} · ${site.source.productId}`}
         </p>
+        {departure?.windAssistance && (
+          <p>
+            Helpful tailwind on{' '}
+            {Math.round(departure.windAssistance.usefulDistanceFraction * 100)}%{' '}
+            of the route.
+            {departure.windAssistance.appliedPoints > 0 &&
+              ` Assistance adds ${departure.windAssistance.appliedPoints.toFixed(1)} points to this score.`}{' '}
+            Wind discomfort reflects how much of the ride is affected.
+          </p>
+        )}
+        {departure?.conditions.gustExposure && (
+          <p>
+            Gust comfort is estimated using the prevailing wind direction along
+            each route section. Individual gust directions are not supplied by
+            the forecast.
+          </p>
+        )}
         {details.locations.length > 1 && (
           <label>
             Forecast location

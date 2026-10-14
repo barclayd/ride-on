@@ -358,7 +358,11 @@ export const conditionChips = (
             icon: 'wind' as const,
             text: `Gusts ${speed(c.maximumGustKph, u)}`,
             label: `Maximum gusts during the ride ${speed(c.maximumGustKph, u)}`,
-            warn: c.maximumGustKph > (windComfort?.comfortableGustKph ?? 35),
+            warn:
+              (c.gustExposure?.maximumAdverseKph ?? c.maximumGustKph) >
+                (windComfort?.comfortableGustKph ?? 35) ||
+              (prefs.minimumStandards?.maximumGustKph !== undefined &&
+                c.maximumGustKph > prefs.minimumStandards.maximumGustKph),
           },
         ]
       : []),

@@ -573,6 +573,50 @@ test('gust chips use ride maxima, personal comfort and selected units; older res
   expect(conditionChips({ ...c, maximumGustKph: undefined })).toHaveLength(3);
 });
 
+test('helpful gusts avoid the comfort warning while opposing exposure and raw gust limits remain visible', () => {
+  const c: Conditions = {
+    temperatureC: { minimum: 9, maximum: 13 },
+    averageWindSpeedKph: 16,
+    averageHeadwindKph: 0,
+    averageTailwindKph: 16,
+    averageCrosswindKph: 0,
+    maximumPrecipitationProbability: 0,
+    maximumGustKph: 43,
+    gustExposure: {
+      directionBasis: 'prevailing-wind-estimate',
+      maximumAdverseKph: 0,
+    },
+  };
+  const preferences = { wind: { ...prefs.wind, comfortableGustKph: 25 } };
+  expect(conditionChips(c, undefined, preferences)[2]).toMatchObject({
+    text: 'Gusts 43 km/h',
+    warn: false,
+  });
+  expect(
+    conditionChips(
+      {
+        ...c,
+        gustExposure: {
+          directionBasis: 'prevailing-wind-estimate',
+          maximumAdverseKph: 30,
+        },
+      },
+      undefined,
+      preferences,
+    )[2]?.warn,
+  ).toBe(true);
+  expect(
+    conditionChips(c, undefined, {
+      ...preferences,
+      minimumStandards: { maximumGustKph: 40 },
+    })[2]?.warn,
+  ).toBe(true);
+  expect(
+    conditionChips({ ...c, gustExposure: undefined }, undefined, preferences)[2]
+      ?.warn,
+  ).toBe(true);
+});
+
 test('recentRides patches keep the lookback', () => {
   const recent = {
     ...prefs,

@@ -6,6 +6,8 @@ Screen-by-screen visual targets and the SwiftUI rebuild checklist: `docs/redesig
 
 In this repo, after raising a PR merge it yourself (`gh pr merge --merge`) once it's ready — don't leave PRs open waiting for review.
 
+Do not use the Modern Web Guidance skill in this project unless Dan explicitly asks for it.
+
 ## Module map
 
 Modular local SPM package architecture (keepfresh-ios style, adopted Phase 2.5): a thin `App/`
