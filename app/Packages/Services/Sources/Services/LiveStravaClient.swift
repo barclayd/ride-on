@@ -100,7 +100,7 @@ public final class LiveStravaClient: StravaClientProtocol, Sendable {
                     // 100-req/15min rate limit. Coarse-enough for
                     // `ActivityMatcher`'s overlap threshold; upgrade to real
                     // streams if matching accuracy ever needs it.
-                    coordinates: activity.map?.summary_polyline.map(PolylineDecoder.decode) ?? []
+                    coordinates: activity.map?.summary_polyline.map { PolylineDecoder.decode($0) } ?? []
                 )
             }
     }

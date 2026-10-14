@@ -1,0 +1,317 @@
+import Foundation
+import Models
+import Engine
+
+/// Builds the Rides screen from the API (docs/api.md, docs/planning-api.md): the shortlist saved
+/// in the extension, ranked across the saved planning days, with each route's source and geometry.
+public enum RideBoardLoader {
+    /// `nil` when nothing is shortlisted.
+    public static func load() async throws -> RideBoard? {
+        let selection: SelectionResponse = try await RideOnAPI.send("/route-selection")
+        let ids = selection.selection.routeIds
+        guard !ids.isEmpty else { return nil }
+        // ponytail: sends the saved preset as-is; the API's "next" starts today, where the
+        // extension sends tomorrow onwards as dates.
+        let user: UserResponse? = try? await RideOnAPI.send("/users/me")
+        let days = user?.user.settings?.planning?.days ?? PlanningDays(kind: "preset", preset: "next")
+        async let recommendation: Recommendation = RideOnAPI.send("/recommendations", body: RecommendationRequest(routeIds: ids, days: days))
+        async let summaries: SummariesResponse = RideOnAPI.send("/rides/summaries", body: SummariesRequest(routeIds: ids))
+        async let routes = routeInfo(ids)
+        return try await board(from: recommendation, routes: routes, summaries: summaries.summaries)
+    }
+
+    /// About 100 heights spaced evenly along the route, its x axis scaled to the route's distance.
+    public static func elevation(of route: RideBoard.RouteSummary, using client: any ElevationClient) async throws -> [RideDetail.ElevationPoint] {
+        let points = route.coordinates
+        var along = [0.0]
+        for (a, b) in zip(points, points.dropFirst()) { along.append(along[along.count - 1] + GPXGeometry.haversineKm(a, b)) }
+        let total = along[along.count - 1]
+        guard total > 0 else { return [] }
+        var index = 0
+        let samples = (0...100).map { step -> (km: Double, coordinate: Coordinate) in
+            let km = total * Double(step) / 100
+            while index < along.count - 1, along[index] < km { index += 1 }
+            return (km, points[index])
+        }
+        let heights = try await client.elevations(coordinates: samples.map(\.coordinate))
+        let scale = route.distanceKm / total
+        return zip(samples, heights).compactMap { sample, height in
+            height.map { RideDetail.ElevationPoint(km: sample.km * scale, metres: $0) }
+        }
+    }
+
+    // ponytail: geometry is refetched on every load; cache it by route `version` if that gets slow.
+    private static func routeInfo(_ ids: [String]) async throws -> [String: RouteInfo] {
+        try await withThrowingTaskGroup(of: (String, RouteInfo).self) { group in
+            for id in ids {
+                group.addTask {
+                    async let route: RouteResponse = RideOnAPI.send("/routes/\(id)")
+                    async let geometry: GeometryResponse = RideOnAPI.send("/routes/\(id)/geometry")
+                    let source = try await route.route.source
+                    let url = source.flatMap { $0.providerId == "cycle-travel" ? URL(string: "https://cycle.travel/map/journey/\($0.externalId)") : nil }
+                    let coordinates = try await geometry.geometry.map { PolylineDecoder.decode($0.data, precision: 6) } ?? []
+                    return (id, RouteInfo(coordinates: coordinates, cycleTravelURL: url))
+                }
+            }
+            return try await group.reduce(into: [:]) { $0[$1.0] = $1.1 }
+        }
+    }
+
+    // MARK: Mapping
+
+    static func board(from response: Recommendation, routes: [String: RouteInfo], summaries: [Summary]) -> RideBoard {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: response.timeZone) ?? .current
+        func day(_ string: String) -> Date? {
+            let parts = string.split(separator: "-").compactMap { Int($0) }
+            guard parts.count == 3 else { return nil }
+            return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+        }
+        let lastRidden = Dictionary(summaries.compactMap { s in s.lastRiddenOn.flatMap(day).map { (s.routeId, $0) } }, uniquingKeysWith: max)
+        let results = Dictionary((response.rankings + response.unranked).map { ($0.routeId, $0) }, uniquingKeysWith: { first, _ in first })
+
+        func route(_ id: String) -> RideBoard.RouteSummary? {
+            guard let uuid = UUID(uuidString: id), let result = results[id] else { return nil }
+            return RideBoard.RouteSummary(id: uuid, name: result.routeName, distanceKm: result.distanceKm, ascentM: result.ascentM ?? 0,
+                                          coordinates: routes[id]?.coordinates ?? [], cycleTravelURL: routes[id]?.cycleTravelURL)
+        }
+        var details: [String: RideDetail] = [:]
+        func pick(_ id: String, _ best: Departure) -> RideBoard.Pick? {
+            guard let route = route(id), let result = results[id] else { return nil }
+            let pick = RideBoard.Pick(route: route, start: best.departureAt, finish: best.finishAt, score: Int(best.score.rounded()),
+                                      conditions: conditions(best.conditions), meetsMinimums: best.standards.status != "below",
+                                      lastRidden: lastRidden[id])
+            let others = ([result.best].compactMap { $0 } + result.alternatives).filter { $0.departureAt != best.departureAt }
+            details[pick.id] = RideDetail(pick: pick, changeSince: nil, notes: notes(best.drawbacks), elevation: [],
+                                          departures: ([best] + others).prefix(4).map { departure($0, route: route) })
+            return pick
+        }
+
+        let picks = response.rankings.compactMap { result in result.best.flatMap { pick(result.routeId, $0) } }
+        let days = response.days.filter(\.selected).compactMap { summary -> RideBoard.Day? in
+            guard let date = day(summary.date) else { return nil }
+            let best = summary.best.flatMap { best in summary.recommendedRouteId.flatMap { pick($0, best) } }
+            // ponytail: the API has no day-level sky when nothing's rideable.
+            return RideBoard.Day(date: date, best: best, sky: best?.conditions.sky ?? .cloudy)
+        }
+        let unfit = response.unranked.filter { $0.status == "no_feasible_departure" }.compactMap { result -> RideBoard.Unfit? in
+            let window = result.effectiveWindow ?? result.daylight
+            return route(result.routeId).map {
+                RideBoard.Unfit(route: $0, rideDuration: result.estimatedDurationMinutes * 60,
+                                windowAllows: window.map { $0.end.timeIntervalSince($0.start) } ?? 0)
+            }
+        }
+        let dates = (response.range?.dates ?? []).compactMap(day)
+        let start = dates.first ?? calendar.startOfDay(for: response.generatedAt)
+        let end = calendar.date(byAdding: .day, value: 1, to: dates.last ?? start) ?? start
+        return RideBoard(window: DateInterval(start: start, end: end), generatedAt: response.generatedAt,
+                         picks: picks, days: days, unfit: unfit, details: details)
+    }
+
+    static func conditions(_ c: Conditions) -> RideBoard.Conditions {
+        RideBoard.Conditions(temperatureC: c.temperatureC.minimum...c.temperatureC.maximum, windKph: c.averageWindSpeedKph,
+                             wind: wind(c), gustKph: c.maximumGustKph, sky: sky(c))
+    }
+
+    /// The wind felt over most of the distance; the strongest average component without shares.
+    static func wind(_ c: Conditions) -> RideBoard.Wind {
+        let shares: [(RideBoard.Wind, Double)] = c.windDistanceFractions.map { [(.tailwind, $0.tailwind), (.crosswind, $0.crosswind), (.headwind, $0.headwind)] }
+            ?? [(.tailwind, c.averageTailwindKph), (.crosswind, c.averageCrosswindKph), (.headwind, c.averageHeadwindKph)]
+        return shares.max { $0.1 < $1.1 }?.0 ?? .crosswind
+    }
+
+    static func sky(_ c: Conditions) -> RideBoard.Sky {
+        if let rain = c.precipitationSummary, rain != "dry", rain != "possible" { return .rain }
+        if let top = c.skyConditionDistanceFractions?.max(by: { $0.value < $1.value }), top.value > 0 {
+            switch top.key {
+            case "sunny", "clearNight": return .sunny
+            case "sunnyIntervals", "partlyCloudyNight": return .sunnySpells
+            case "precipitation": return .rain
+            default: return .cloudy
+            }
+        }
+        if let cloud = c.cloudCoverFraction?.mean { return cloud < 0.3 ? .sunny : cloud < 0.7 ? .sunnySpells : .cloudy }
+        return .cloudy
+    }
+
+    static func notes(_ drawbacks: [String]) -> [RideDetail.Note] {
+        drawbacks.map { text in
+            let lower = text.lowercased()
+            let kind: RideDetail.Note.Kind = lower.contains("cooler") || lower.contains("warmer") ? .temperature
+                : ["headwind", "crosswind", "gust"].contains(where: { lower.contains($0) }) ? .wind : .other
+            return RideDetail.Note(kind, text)
+        }
+    }
+
+    static func departure(_ d: Departure, route: RideBoard.RouteSummary) -> RideDetail.Departure {
+        let hourly = d.rideHours.compactMap { hour in hour.conditions.map { (hour.start, $0) } }
+        let hours = hourly.map { time, c in
+            RideDetail.Hour(time: time, sky: sky(c), temperatureC: ((c.temperatureC.minimum + c.temperatureC.maximum) / 2).rounded(),
+                            windKph: c.averageWindSpeedKph, gustKph: c.maximumGustKph, rainChance: c.maximumPrecipitationProbability)
+        }
+        // Each hour's stretch of road with its felt wind, merged where it doesn't change.
+        var stretches: [RideDetail.WindStretch] = []
+        var km = 0.0
+        for (_, c) in hourly where c.distanceKm > 0 {
+            let felt = wind(c)
+            if stretches.last?.wind == felt { stretches[stretches.count - 1].endKm = km + c.distanceKm }
+            else { stretches.append(RideDetail.WindStretch(felt, from: km, to: km + c.distanceKm)) }
+            km += c.distanceKm
+        }
+        return RideDetail.Departure(start: d.departureAt, finish: d.finishAt, score: Int(d.score.rounded()), hours: hours,
+                                    windFrom: nil, wind: stretches, factors: factors(d, route: route))
+    }
+
+    // ponytail: metric, en-GB prose; follow the saved display units when You is wired up.
+    static func factors(_ d: Departure, route: RideBoard.RouteSummary) -> [RideDetail.Factor] {
+        let c = d.conditions, f = d.factors
+        let kph = "km/\u{2060}h"
+        func percent(_ fraction: Double) -> String { "\(Int((fraction * 100).rounded()))%" }
+        func score(_ value: Double) -> Int { Int(value.rounded()) }
+        let summary = (c.precipitationSummary ?? "dry").replacingOccurrences(of: "_", with: " ")
+        let rain = switch summary {
+        case "dry": "Dry throughout."
+        case "possible": "Rain is possible."
+        default: "\(summary.prefix(1).uppercased())\(summary.dropFirst()) forecast." // "Light showers forecast."
+        }
+        let felt = wind(c)
+        let share: Double? = c.windDistanceFractions.map {
+            switch felt { case .tailwind: $0.tailwind; case .crosswind: $0.crosswind; case .headwind: $0.headwind }
+        }
+        var factors = [
+            RideDetail.Factor("Rain", score: score(f.dryness), reason: "\(rain) The highest chance of rain is \(percent(c.maximumPrecipitationProbability))."),
+            RideDetail.Factor("Wind", score: score(f.wind), reason: "\(felt.title)\(share.map { " for \(percent($0)) of the distance" } ?? " mostly"). Gusts peak at \(Int(c.maximumGustKph.rounded())) \(kph)."),
+            RideDetail.Factor("Temperature", score: score(f.temperature), reason: "\(Int(c.temperatureC.minimum.rounded()))–\(Int(c.temperatureC.maximum.rounded()))° along the way."),
+        ]
+        if let value = f.clearSkies, let cloud = c.cloudCoverFraction {
+            factors.append(RideDetail.Factor("Sky", score: score(value), reason: "\(sky(c).title), about \(percent(cloud.mean)) cloud cover."))
+        }
+        if let value = f.sunshine, let shares = c.skyConditionDistanceFractions {
+            let sunny = (shares["sunny"] ?? 0) + (shares["sunnyIntervals"] ?? 0)
+            factors.append(RideDetail.Factor("Sunshine", score: score(value), reason: "Sunny or sunny spells for \(percent(sunny)) of the distance."))
+        }
+        if let value = f.climbing {
+            factors.append(RideDetail.Factor("Climbing", score: score(value), reason: "\(Int(route.ascentM.rounded())) m of climbing over \(Int(route.distanceKm.rounded())) km."))
+        }
+        if let value = f.distance {
+            factors.append(RideDetail.Factor("Distance", score: score(value), reason: "\(Int(route.distanceKm.rounded())) km."))
+        }
+        return factors.sorted { $0.score > $1.score }
+    }
+}
+
+// MARK: - Wire types
+
+extension RideBoardLoader {
+    struct RouteInfo: Sendable {
+        var coordinates: [Coordinate]
+        var cycleTravelURL: URL?
+    }
+
+    struct SelectionResponse: Decodable {
+        struct Selection: Decodable { var routeIds: [String] }
+        var selection: Selection
+    }
+
+    struct UserResponse: Decodable {
+        struct User: Decodable { var settings: Settings? }
+        struct Settings: Decodable { var planning: Planning? }
+        struct Planning: Decodable { var days: PlanningDays? }
+        var user: User
+    }
+
+    /// `{kind: "preset", preset}`, `{kind: "range", start, end}` or `{kind: "dates", dates}`.
+    struct PlanningDays: Codable, Sendable {
+        var kind: String
+        var preset: String?
+        var start: String?
+        var end: String?
+        var dates: [String]?
+    }
+
+    struct RecommendationRequest: Encodable {
+        var routeIds: [String]
+        var days: PlanningDays
+    }
+
+    struct SummariesRequest: Encodable { var routeIds: [String] }
+    struct SummariesResponse: Decodable { var summaries: [Summary] }
+    struct Summary: Decodable { var routeId: String; var lastRiddenOn: String? }
+
+    struct RouteResponse: Decodable {
+        struct Route: Decodable { var source: Source? }
+        struct Source: Decodable { var providerId: String; var externalId: String }
+        var route: Route
+    }
+
+    struct GeometryResponse: Decodable {
+        struct Geometry: Decodable { var data: String }
+        var geometry: Geometry?
+    }
+
+    struct Recommendation: Decodable {
+        struct Range: Decodable { var dates: [String] }
+        struct Day: Decodable {
+            var date: String
+            var selected: Bool
+            var best: Departure?
+            var recommendedRouteId: String?
+        }
+        var generatedAt: Date
+        var timeZone: String
+        var rankings: [RouteResult]
+        var unranked: [RouteResult]
+        var range: Range?
+        var days: [Day]
+    }
+
+    struct Interval: Decodable { var start: Date; var end: Date }
+
+    struct RouteResult: Decodable {
+        var routeId: String
+        var routeName: String
+        var distanceKm: Double
+        var ascentM: Double?
+        var estimatedDurationMinutes: Double
+        var daylight: Interval?
+        var effectiveWindow: Interval?
+        var status: String
+        var best: Departure?
+        var alternatives: [Departure]
+    }
+
+    struct Departure: Decodable {
+        struct Factors: Decodable {
+            var distance, climbing, sunshine, clearSkies: Double?
+            var temperature, wind, dryness: Double
+        }
+        struct Standards: Decodable { var status: String }
+        struct Hour: Decodable { var start: Date; var conditions: Conditions? }
+        var departureAt: Date
+        var finishAt: Date
+        var score: Double
+        var factors: Factors
+        var standards: Standards
+        var conditions: Conditions
+        var rideHours: [Hour]
+        var drawbacks: [String]
+    }
+
+    struct Conditions: Decodable {
+        struct Range: Decodable { var minimum, maximum: Double }
+        struct Shares: Decodable { var headwind, tailwind, crosswind: Double }
+        struct Cloud: Decodable { var mean: Double }
+        var temperatureC: Range
+        var averageWindSpeedKph: Double
+        var averageHeadwindKph: Double
+        var averageTailwindKph: Double
+        var averageCrosswindKph: Double
+        var maximumGustKph: Double
+        var maximumPrecipitationProbability: Double
+        var distanceKm: Double
+        var windDistanceFractions: Shares?
+        var precipitationSummary: String?
+        var skyConditionDistanceFractions: [String: Double]?
+        var cloudCoverFraction: Cloud?
+    }
+}

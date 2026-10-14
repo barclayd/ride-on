@@ -9,13 +9,15 @@ import SharedUI
 /// the window's days, then every other tracked route.
 public struct RidesView: View {
     var board: RideBoard
+    var refresh: @MainActor @Sendable () async -> Void
     @State private var selectedDay: Date
     @Namespace private var zoom
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    public init(board: RideBoard) {
+    public init(board: RideBoard, refresh: @escaping @MainActor @Sendable () async -> Void = {}) {
         self.board = board
+        self.refresh = refresh
         let bestDay = board.days.first { $0.best == board.picks.first } ?? board.days.first
         _selectedDay = State(initialValue: bestDay?.date ?? board.window.start)
     }
@@ -27,7 +29,8 @@ public struct RidesView: View {
 
     public var body: some View {
         ScrollView {
-            // ponytail: no picks is the Window passed screen, built with the Ride Window sheet (PR 4).
+            // ponytail: no picks is the Window passed screen, built with the Ride Window sheet (PR 4);
+            // LiveRidesView covers it with an empty state meanwhile.
             if let hero {
                 VStack(spacing: 16) {
                     ZStack(alignment: .bottomTrailing) {
@@ -81,8 +84,7 @@ public struct RidesView: View {
             RideDetailView(board: board, pick: pick)
                 .zoomTransition(from: pick.id, in: zoom)
         }
-        // ponytail: nothing to refresh until the board comes from POST /recommendations.
-        .refreshable {}
+        .refreshable { await refresh() }
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 // ponytail: opens the Ride Window sheet once it exists (PR 4).

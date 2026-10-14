@@ -2,8 +2,8 @@ import Foundation
 
 /// Everything the Rides screen shows for one ride window: the window ranking,
 /// each day's best ride and the routes that can't fit. Presentation values
-/// only — the rebuilt UI renders `.sample` until it's wired to
-/// `POST /recommendations` (docs/redesign/README.md, "Wiring notes").
+/// only: `Services.RideBoardLoader` builds it from `POST /recommendations`;
+/// previews and the fixture world use `.sample`.
 public struct RideBoard: Hashable, Sendable {
     public var window: DateInterval
     public var generatedAt: Date
@@ -13,13 +13,16 @@ public struct RideBoard: Hashable, Sendable {
     public var days: [Day]
     /// Routes too long for the window.
     public var unfit: [Unfit]
+    /// Ride detail per `Pick.id`; missing ones fall back to `RideDetail.sample`.
+    public var details: [String: RideDetail]
 
-    public init(window: DateInterval, generatedAt: Date, picks: [Pick], days: [Day], unfit: [Unfit]) {
+    public init(window: DateInterval, generatedAt: Date, picks: [Pick], days: [Day], unfit: [Unfit], details: [String: RideDetail] = [:]) {
         self.window = window
         self.generatedAt = generatedAt
         self.picks = picks
         self.days = days
         self.unfit = unfit
+        self.details = details
     }
 }
 
