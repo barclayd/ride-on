@@ -29,7 +29,8 @@ final class RideBoardLoaderTests: XCTestCase {
              "unranked":[{"routeId":"\(long)","routeName":"East Anglia","distanceKm":112,"ascentM":null,"estimatedDurationMinutes":425,
                "daylight":{"start":"2026-10-14T06:20:00.000Z","end":"2026-10-14T17:05:00.000Z"},"effectiveWindow":null,
                "status":"no_feasible_departure","best":null,"alternatives":[]}],
-             "days":[{"date":"2026-10-14","selected":true,"recommendedRouteId":"\(route)","temperatureMaxC":14.4,"best":\(departure("2026-10-14T08:00:00.000Z", "2026-10-14T11:00:00.000Z", 85.6))},
+             "days":[{"date":"2026-10-14","selected":true,"recommendedRouteId":"\(route)","temperatureMaxC":14.4,
+                      "daylight":{"sunrise":"2026-10-14T06:20:00.000Z","sunset":"2026-10-14T17:05:00.000Z"},"best":\(departure("2026-10-14T08:00:00.000Z", "2026-10-14T11:00:00.000Z", 85.6))},
                      {"date":"2026-10-15","selected":true,"recommendedRouteId":null,"best":null,"availabilityReason":"no_feasible_departure"},
                      {"date":"2026-10-16","selected":false,"recommendedRouteId":null,"best":null,
                       "availabilityReason":"partial_coverage","until":"2026-10-16T17:00:00.000Z"}]}
@@ -50,6 +51,7 @@ final class RideBoardLoaderTests: XCTestCase {
         XCTAssertEqual(board.forecast.count, 3)
         XCTAssertEqual(board.forecast.map(\.note), [nil, "No tracked route fits your hours", nil])
         XCTAssertEqual(board.forecast[0].temperatureMaxC, 14.4)
+        XCTAssertEqual(board.forecast[0].daylight?.duration, (10 * 60 + 45) * 60)
         XCTAssertEqual(board.forecast[2].forecastEnds, ISO8601DateFormatter().date(from: "2026-10-16T17:00:00Z"))
         XCTAssertEqual(board.window.duration, 2 * 86_400)
         XCTAssertEqual(board.unfit.first?.rideDuration, 425 * 60)
