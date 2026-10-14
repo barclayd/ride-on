@@ -42,6 +42,46 @@
     },
     "scope": "Horsham now outranks Richmond in this fixed replay. Horsham still prefers 8am; its warmth/sunshine/wind departure trade-off needs separate calibration. The synthetic interview cases continue to pass but do not prove a live 10am optimum. This is one forecast snapshot, not validation across unseen days or a promised live score."
   },
+  "temperature_sunshine_follow_up_2026_10_14": {
+    "algorithm_version": "comfort-v0.14",
+    "status": "existing_preferences_match_confirmed_intent",
+    "test_file": "worker/test/temperature-sunshine-calibration.test.ts",
+    "scoring_changed": false,
+    "profile_settings_changed": false,
+    "product_constraint": "Calibration behavior must follow the rider's saved preferences. Do not treat generic defaults or another rider's answers as explicit user intent.",
+    "comparisons": [
+      {
+        "id": "horsham-route-replay-8am-vs-10am",
+        "source": "Saved production route-level forecast from 14 October for 17 October, replayed with fixed preferences",
+        "question": "For Horsham’s 4h25 ride, which would you choose now that we have the route-wide forecast? An 8am start gives about 7–12°C (average 9.4°C), roughly 3 hours of full sunshine, then sunny intervals. A 10am start gives about 9–13°C (average 11.7°C), roughly 1 hour of full sunshine, then sunny intervals. Both have helpful wind overall; 10am has slightly more sideways-wind/gust discomfort. Rain probability at individual points stays below 2% for the early ride and reaches about 9% later in the 10am ride. Assume your schedule is unrestricted.",
+        "user_response_verbatim": "8am — the extra sunshine and lighter wind win",
+        "expected_order": [
+          "08:00",
+          "10:00"
+        ],
+        "interpretation": "The route-level evidence resolves the earlier tentative 10am suggestion in favour of 8am for this snapshot. Preserve the current departure ordering; do not tune towards 10am based on the town screenshot. Does not establish a universal early-start preference."
+      },
+      {
+        "id": "temperature-sunshine-contextual-preference",
+        "source": "Hypothetical constant-temperature four-hour ride with equal dry weather and comfortable wind",
+        "question": "Imagine the same four-hour ride with equally dry conditions and identical comfortable wind. Temperatures stay constant throughout: A is 8°C with continuous sunshine; B is 14°C with sunny intervals. Which would you prefer? Assume your schedule and clothing are suitable for either.",
+        "user_response_verbatim": "I would go with B when it's between 8 and 14C. However, if it was a gap of 16C with continuous sunshine  and 20C, I'd choose the continuous sunshine . Similarly if 22C continuous sunshine and 26C, I'd also choose continuous sunshine",
+        "interpretation": "Prefers 14°C with sunny intervals to 8°C with full sunshine when below the saved 16–32°C ideal band. Prefers full sunshine at 16°C over a 20°C alternative and at 22°C over a 26°C alternative within that band. The warmer alternatives in the additional examples are understood in the existing sunny-intervals comparison context, not specified independently. Does not establish temperature equivalence for every rider or a universal fixed temperature crossover.",
+        "product_constraint_verbatim": "Ideally, it should be set in user preferences so we can read the intent of the user to map the algorithm like this and only draw from it when we've read that intent from the user's preferences",
+        "product_interpretation": "Any calibrated preference must be represented in the rider’s saved settings and applied from those settings. Interview examples are personal evidence, not universal new defaults."
+      },
+      {
+        "id": "equal-comfort-throughout-ideal-temperature-range",
+        "recorded_on": "2026-10-14",
+        "status": "response_recorded",
+        "weather_source": "Hypothetical otherwise identical dry, sunny rides with the same wind",
+        "question": "When you set your ideal range to 16–32°C, what should Ride On understand? Imagine otherwise identical dry, sunny rides at 16°C, 24°C and 30°C, with the same wind.",
+        "user_response_verbatim": "All equally good — temperature should not distinguish them",
+        "interpretation": "The saved ideal band expresses equally preferred temperature comfort throughout, rather than an optimum at its midpoint or warmer end. Other weather preferences still distinguish rides."
+      }
+    ],
+    "scope": "The route-level follow-up confirms Horsham at 8am over 10am for the reviewed snapshot. Temperature/sunshine answers match the existing saved 16–32°C band and personal weights. Additional warmer comparisons use sunny intervals as understood from the interview context. No new global scoring constants, defaults or personal settings are introduced."
+  },
   "context": {
     "route_characteristics": "Otherwise equally appealing; climbing is neutral for this rider.",
     "assessment": "Day input; recommend route and departure with consistently comfortable conditions throughout the modelled ride and show hourly variation. Supersedes the earlier all-day aggregation proposal.",

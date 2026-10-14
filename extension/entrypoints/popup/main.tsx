@@ -1096,6 +1096,7 @@ const PrefsTab = ({ view }: { view: View }) => {
             max={30}
             value={draft.comfortMinC}
             aria-label="Ideal temperature from"
+            aria-describedby="ro-temperature-help"
             aria-valuetext={temp(draft.comfortMinC)}
             onInput={(e) => {
               const v = Number(e.currentTarget.value);
@@ -1113,6 +1114,7 @@ const PrefsTab = ({ view }: { view: View }) => {
             max={35}
             value={draft.comfortMaxC}
             aria-label="Ideal temperature to"
+            aria-describedby="ro-temperature-help"
             aria-valuetext={temp(draft.comfortMaxC)}
             onInput={(e) => {
               const v = Number(e.currentTarget.value);
@@ -1123,6 +1125,9 @@ const PrefsTab = ({ view }: { view: View }) => {
             }}
           />
         </div>
+        <p id="ro-temperature-help" class="ro-help">
+          All temperatures in this range are equally comfortable.
+        </p>
       </section>
       <section class="ro-card" style={{ gap: '14px' }}>
         <div class="ro-pref-group">
