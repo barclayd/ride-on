@@ -139,6 +139,11 @@ export const createApp = (
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
   );
+  // The Ride On app finishes browser sign-in at /auth/browser/done: an https
+  // ASWebAuthenticationSession callback needs this host as an associated domain.
+  app.get('/.well-known/apple-app-site-association', (c) =>
+    c.json({ webcredentials: { apps: ['R2GGK3VN2C.com.danbarclay.rideon'] } }),
+  );
   app.route('/', identityRoutes());
   for (const path of [
     '/rides',
@@ -413,6 +418,17 @@ export const createApp = (
           ? record.route.surface
           : null,
       summary: surfaceSummary(record.route),
+    });
+  });
+  app.get('/routes/:id/geometry', async (c) => {
+    const id = validateInput(z.uuid(), c.req.param('id'));
+    const record = await store(c.env).get(c.get('ownerId'), id);
+    if (!record)
+      throw new AppError(404, 'ROUTE_NOT_FOUND', 'The route was not found.');
+    return c.json({
+      routeId: id,
+      version: record.version,
+      geometry: record.route.geometry ?? null,
     });
   });
   app.post('/routes', async (c) => {
