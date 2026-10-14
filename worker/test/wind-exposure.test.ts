@@ -193,6 +193,38 @@ test('crosswind and headwind gusts matter, including lateral gusts on an oblique
   }
 });
 
+test('diagonal assistance keeps its forward benefit and its separate sideways discomfort', () => {
+  const aligned = windExposure(-10, 0, 30, preferences.wind);
+  const diagonal = windExposure(-10, 10, 30, preferences.wind);
+  const gustier = windExposure(-10, 10, 50, preferences.wind);
+  expect(diagonal.assistance).toBeGreaterThan(0);
+  expect(diagonal.assistance).toBe(aligned.assistance);
+  expect(diagonal.comfort).toBeLessThan(aligned.comfort);
+  expect(gustier.assistance).toBe(diagonal.assistance);
+  expect(gustier.comfort).toBeLessThan(diagonal.comfort);
+  // A predominantly sideways wind with only a weak forward component should
+  // not become useful assistance just because it has a tailwind component.
+  expect(windExposure(-4, 16, 30, preferences.wind).assistance).toBe(0);
+});
+
+test('a winding route earns proportional diagonal assistance without hiding adverse exposure', async () => {
+  // Synthetic headings: 60% diagonal tailwind, 20% weaker diagonal tailwind,
+  // 10% crosswind and 10% headwind. Its mean assistance is below one half.
+  const winding = await routeFor((i) =>
+    i < 60 ? 50 : i < 80 ? 60 : i < 90 ? 90 : 180,
+  );
+  const tail = await routeFor(() => 0);
+  const cross = await routeFor(() => 90);
+  const ride = best(winding);
+  expect(ride.windAssistance.usefulDistanceFraction).toBeCloseTo(0.8, 2);
+  expect(ride.windAssistance.appliedPoints).toBeGreaterThan(1);
+  expect(ride.windAssistance.potentialPoints).toBeLessThan(2);
+  expect(ride.score).toBeLessThan(best(tail).score);
+  expect(ride.score).toBeGreaterThan(best(cross).score);
+  expect(ride.factors.wind).toBeLessThan(best(tail).factors.wind);
+  expect(best(cross).windAssistance.potentialPoints).toBe(0);
+});
+
 test('90% assistance tolerates a brief crosswind; 60% tailwind / 40% headwind loses to calm', async () => {
   const tail = await routeFor(() => 0);
   const brief = await routeFor((i) => (i < 90 ? 0 : 90));

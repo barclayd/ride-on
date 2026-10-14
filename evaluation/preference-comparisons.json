@@ -16,6 +16,32 @@
     "scope": "The six interview comparisons are covered by synthetic tests. Town-forecast examples use simplified headings and one weather location. They are not replays of the real routes or proof of an exact best half-hour. Numerical benefit constants remain provisional; no new personal thresholds, global weather weights or fixed departure preference were inferred.",
     "live_route_replay_verified": false
   },
+  "follow_up_2026_10_14": {
+    "algorithm_version": "comfort-v0.14",
+    "status": "implemented_with_synthetic_calibration_and_saved_live_replay",
+    "test_file": "worker/test/wind-exposure.test.ts",
+    "problem": "The saved route-level replay gave Horsham no assistance benefit: v0.13 subtracted lateral wind from the forward component, then gated the mean assistance a second time.",
+    "changes": [
+      "Score sustained forward assistance independently of lateral discomfort, including diagonal tailwinds.",
+      "Make the bounded benefit proportional to distance-weighted assistance strength, without a second route eligibility threshold.",
+      "Keep crosswind, headwind and estimated gust discomfort, raw gust standards, saturation and rider weights unchanged."
+    ],
+    "replay": {
+      "forecast_date": "2026-10-17",
+      "snapshot_date": "2026-10-14",
+      "method": "Same saved production routes, profile and cached Met Office forecasts for both versions; no new provider requests. Private geometry, profile and forecast payloads remain in ignored local reports.",
+      "before": [
+        { "route": "Richmond", "best_departure_local": "08:30", "score": 82.13 },
+        { "route": "Horsham (Road)", "best_departure_local": "08:00", "score": 81.66 }
+      ],
+      "after": [
+        { "route": "Horsham (Road)", "best_departure_local": "08:00", "score": 83.67, "assistance_points": 2.01 },
+        { "route": "Richmond", "best_departure_local": "09:00", "score": 82.86, "assistance_points": 0.73 }
+      ],
+      "horsham_10am_score": 82.36
+    },
+    "scope": "Horsham now outranks Richmond in this fixed replay. Horsham still prefers 8am; its warmth/sunshine/wind departure trade-off needs separate calibration. The synthetic interview cases continue to pass but do not prove a live 10am optimum. This is one forecast snapshot, not validation across unseen days or a promised live score."
+  },
   "context": {
     "route_characteristics": "Otherwise equally appealing; climbing is neutral for this rider.",
     "assessment": "Day input; recommend route and departure with consistently comfortable conditions throughout the modelled ride and show hourly variation. Supersedes the earlier all-day aggregation proposal.",

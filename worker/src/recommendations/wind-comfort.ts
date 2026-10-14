@@ -43,11 +43,12 @@ export const windExposure = (
   return {
     comfort: 1 - clamp(head + cross + gust),
     adverseGustKph,
-    // Only sustained assistance earns a benefit. Subtract lateral wind before
-    // ramping from a light breeze (5 km/h) to useful assistance (13 km/h,
-    // about 8 mph). The interviewed 8–11 mph range is a plateau, so stronger
-    // afternoon winds cannot keep buying back lost sunshine or higher rain risk.
-    assistance: clamp((-headwindKph - crosswindKph - 5) / 8),
+    // Reward the sustained forward component, including diagonal tailwinds.
+    // Lateral wind and gust exposure already incur their own comfort losses;
+    // subtracting them here would discount useful assistance a second time.
+    // Ramp from 5 to 13 km/h (about 8 mph), then plateau. Gust peaks never
+    // earn assistance and stronger winds cannot keep increasing the benefit.
+    assistance: clamp((-headwindKph - 5) / 8),
   };
 };
 
@@ -58,8 +59,9 @@ export const windComfort = (
   p: RecommendationInput['preferences']['wind'],
 ) => windExposure(headwindKph, crosswindKph, gustKph, p).comfort;
 
-/** At most 10% of the wind weight. Use strength-weighted coverage rather than
- * a count of sections over a threshold: a tiny change in a weak breeze must not
- * suddenly unlock a full-route bonus. Substantial opposing exposure still wins. */
+/** At most 10% of the wind weight, proportional to strength-weighted distance.
+ * Do not apply a second eligibility threshold to the route average: winding
+ * routes can have useful diagonal assistance without reaching that threshold.
+ * Headwind, crosswind and gust losses remain separate from this benefit. */
 export const windAssistanceBenefit = (meanAssistance: number) =>
-  0.1 * meanAssistance * clamp(2 * meanAssistance - 1);
+  0.1 * meanAssistance;
