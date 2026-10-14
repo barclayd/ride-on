@@ -351,9 +351,7 @@ session.
 `POST /auth/browser/start` → `ASWebAuthenticationSession` with an `https` callback on
 `api.ride-on.cc/auth/browser/done` → `POST /auth/browser/exchange`. The session token lives in the
 keychain; a refreshed `set-auth-token` replaces it; a 401 signs out. The `https` callback needs the
-`webcredentials:api.ride-on.cc` associated domain. It's in the iOS entitlements only: the Mac
-profile has to be regenerated with Associated Domains (sign in to Xcode → Settings → Accounts,
-build once with `-allowProvisioningUpdates`) before it can go in `RideOn-macOS.entitlements`.
+`webcredentials:api.ride-on.cc` associated domain, in both the iOS and macOS entitlements.
 
 **Loading.** `GET /route-selection` (the extension's shortlist) → `GET /users/me` (saved
 planning days) → in parallel `POST /recommendations {routeIds, days}`, `POST /rides/summaries`,
