@@ -24,7 +24,7 @@ public struct RideDetail: Hashable, Sendable {
 
 public extension RideDetail {
     struct Note: Hashable, Sendable {
-        public enum Kind: Hashable, Sendable { case temperature, wind, other }
+        public enum Kind: Hashable, Sendable { case temperature, wind, rain, other }
         public var kind: Kind
         public var text: String
 

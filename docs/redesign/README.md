@@ -20,7 +20,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 0 | This doc and reference images | ✅ Done | #154 |
 | 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
 | 2 | Rides screen | ✅ Done (window capsule lands with 4) | #155 |
-| 3 | Ride detail | ✅ Done | #157 |
+| 3 | Ride detail | ✅ Done; wind direction, score change and four factors wait on the API ([requests](ride-detail-api-requests.md)) | #157, #164 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ⬜ | |
 | 6 | Widgets and Lock Screen | ⬜ | |
@@ -147,7 +147,8 @@ Build:
    Footnote: "Each factor is weighted by your preferences."
 7. **Actions** card (accent list buttons): "Add to Calendar" (trailing "Wed 09:00–12:00"),
    "Open in cycle.travel".
-8. **Footer**: Apple Weather · Other data sources; "Updated 08:12."
+8. **Footer**: the forecast provider's attribution ("Apple Weather · Other data sources", or the
+   provider's own line, such as "Powered by Met Office data"); "Updated 08:12."
 
 Chrome: back (44pt circle, `chevron.left`, label "Rides") leading; one capsule with share and
 more (`ellipsis`) trailing. Clear glass over the hero, regular from about 260–320pt of scroll; the
@@ -168,6 +169,11 @@ Build:
 - [x] Light/dark and Dynamic Type through `accessibility5` checked on the simulator
 - [ ] Reduce Motion: the zoom should fall back to a cross-fade (system behaviour, not yet checked)
 - [x] Sample data: `RideDetail.sample(for:on:)` in `Models/RideDetail.swift`, built from any pick
+- [x] Notes and factor sentences measured against your preferences (`resolvedPreferences`), live
+- [x] Footer shows the forecast provider's own attribution (`weather.attribution`)
+- [ ] "Wind from the …" footnote: waits on `windFromDegrees` ([API requests](ride-detail-api-requests.md) §1)
+- [ ] "▲ 4 since 07:00" badge: waits on `best.previous` (§2)
+- [ ] Time budget, Surface match, Intent, Novelty factors: waits on a product decision (§3)
 
 ## 3. Ride Window (sheet)
 
@@ -383,10 +389,12 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 | Forecast on the Ride | `rideHours[]` |
 | Wind strip | `rideHours[]` dominant wind, merged into stretches |
 | Why It Scored | `factors`, sorted by score |
-| Notes | `drawbacks` (temperature, wind or other by wording) |
+| Notes | Built in the app from `best.conditions`, `rideHours[]`, `recentRides` and `distanceFit`, measured against `resolvedPreferences`; `drawbacks` only when preferences are missing |
+| Factor sentences | `factors` + `conditions`; Wind and Temperature quote your limits from `resolvedPreferences` |
+| Footer | `weather.attribution` (Apple Weather when empty) |
 
-**Not wired yet.** Score-change badge (no previous score kept); "Wind from the …" (the API has no
-direction, so it's hidden); unassessable routes aren't shown; factor prose is metric-only; a
+**Not wired yet.** Score-change badge and "Wind from the …" (both hidden until the API adds them,
+see [`ride-detail-api-requests.md`](ride-detail-api-requests.md)); unassessable routes aren't shown; factor prose is metric-only; a
 conflicting settings edit (409) keeps the old saved window, though that load still uses the new
 one; dates assume the device and the routes share a time zone; "Track a route" and Preferences
 are still no-ops or sample data. The Rides day strip doesn't show the sheet's "Rain until 15:00"
