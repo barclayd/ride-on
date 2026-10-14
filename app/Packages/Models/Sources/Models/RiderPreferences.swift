@@ -8,7 +8,7 @@ public enum SunPreference: String, Codable, CaseIterable, Sendable {
 
 /// Display units for distance/elevation/speed. Canonical storage stays
 /// metric everywhere; this only affects formatting (SharedUI's UnitFormat).
-/// Temperature keeps following the locale — iOS has a per-app °C/°F setting.
+/// Temperature has its own choice, `TemperatureUnit`.
 public enum UnitSystem: String, Codable, CaseIterable, Sendable {
     case metric
     case imperial
@@ -18,6 +18,12 @@ public enum UnitSystem: String, Codable, CaseIterable, Sendable {
     public static var localeDefault: UnitSystem {
         Locale.current.measurementSystem == .us ? .imperial : .metric
     }
+}
+
+/// °C or °F, the API's `settings.units.temperature`. Display only.
+public enum TemperatureUnit: String, Codable, CaseIterable, Sendable {
+    case celsius = "C"
+    case fahrenheit = "F"
 }
 
 public struct RiderPreferences: Codable, Sendable, Hashable {
@@ -36,6 +42,8 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
     /// `nil` = follow the locale (`UnitSystem.localeDefault`). Optional so
     /// previously-persisted preferences JSON keeps decoding.
     public var unitSystem: UnitSystem?
+    /// `nil` = follow the locale. Optional for the same reason as `unitSystem`.
+    public var temperatureUnit: TemperatureUnit?
     /// Preferred riding window as minutes from midnight (earliest start ...
     /// latest finish) — the bounds the best-window search scans within.
     /// Optional so previously-persisted preferences JSON keeps decoding.
@@ -62,6 +70,7 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
         ],
         climbingPenaltyMinutesPer100m: Double = 4,
         unitSystem: UnitSystem? = nil,
+        temperatureUnit: TemperatureUnit? = nil,
         ridingWindowMinutes: ClosedRange<Int>? = nil
     ) {
         self.preferredTempRangeC = preferredTempRangeC
@@ -72,6 +81,7 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
         self.speedKphBySurface = speedKphBySurface
         self.climbingPenaltyMinutesPer100m = climbingPenaltyMinutesPer100m
         self.unitSystem = unitSystem
+        self.temperatureUnit = temperatureUnit
         self.ridingWindowMinutes = ridingWindowMinutes
     }
 }

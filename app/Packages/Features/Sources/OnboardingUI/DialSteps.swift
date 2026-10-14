@@ -13,6 +13,7 @@ import SharedUI
 
 struct TemperatureDialStep: View {
     @Binding var range: ClosedRange<Double>
+    @Environment(\.locale) private var locale
     var pageIndex: Int
     var pageCount: Int
     var onContinue: () -> Void
@@ -37,7 +38,7 @@ struct TemperatureDialStep: View {
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading) {
-                    Text("Low: \(UnitFormat.temperature(c: range.lowerBound))").foregroundStyle(.white)
+                    Text("Low: \(UnitFormat.temperature(c: range.lowerBound, locale: locale))").foregroundStyle(.white)
                     Slider(
                         value: Binding(
                             get: { range.lowerBound },
@@ -47,7 +48,7 @@ struct TemperatureDialStep: View {
                     )
                 }
                 VStack(alignment: .leading) {
-                    Text("High: \(UnitFormat.temperature(c: range.upperBound))").foregroundStyle(.white)
+                    Text("High: \(UnitFormat.temperature(c: range.upperBound, locale: locale))").foregroundStyle(.white)
                     Slider(
                         value: Binding(
                             get: { range.upperBound },

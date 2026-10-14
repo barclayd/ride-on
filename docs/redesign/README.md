@@ -22,10 +22,10 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 2 | Rides screen | ✅ Done (window capsule lands with 4) | #155 |
 | 3 | Ride detail | ✅ Done; wind direction, score change and four factors wait on the API ([requests](ride-detail-api-requests.md)) | #157, #164 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
-| 5 | Preferences, Ideal Temperature, Comfortable Wind | ⬜ | |
+| 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live; Strava, points lost, crosswind levels, sign-in provider and seasonal floors wait on the API ([requests](preferences-api-requests.md)) | #167 |
 | 6 | Widgets and Lock Screen | ⬜ | |
-| 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing, YouUI…) | ⬜ | |
-| 8 | Wire to the API | 🟡 Rides, Ride detail and Ride Window live; Preferences, Routes still sample | #159, #162 |
+| 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
+| 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window and Preferences live; Routes still sample | #159, #162, #167 |
 
 Not in scope yet: Routes tab and Onboarding (not redesigned; they keep working as they are).
 
@@ -36,7 +36,8 @@ Not in scope yet: Routes tab and Onboarding (not redesigned; they keep working a
 | Presentation value types + `.sample` | `app/Packages/Models/Sources/Models/RideBoard.swift` |
 | The nine components (DESIGN-SYSTEM.md §6) | `app/Packages/Features/Sources/SharedUI/` |
 | Rides, Ride detail, Window sheet, Window passed | `app/Packages/Features/Sources/RideUI/` |
-| Preferences, Ideal Temperature, Comfortable Wind | `app/Packages/Features/Sources/PreferencesUI/` (replaces YouUI) |
+| Preferences, Ideal Temperature, Comfortable Wind | `app/Packages/Features/Sources/PreferencesUI/` (replaced YouUI; About moved here) |
+| Saved settings (`RiderSettings`, `RiderSettingsStore`) | `app/Packages/Services/Sources/Services/RiderSettings.swift` |
 | Tabs | `app/Packages/Router/Sources/Router/AppTab.swift`: `rides`, `routes`, `preferences` |
 | Accent | `app/App/Assets.xcassets/AccentColor`: `#248A3D` light, `#30D158` dark |
 | Widgets | New widget extension target in `app/project.yml` |
@@ -261,9 +262,11 @@ purple, recently ridden teal, colder indigo, hotter red, gusts grey-blue, chance
 speed green, interval grey, Strava orange, Health white with red heart, Apple black, About grey.
 
 Build:
-- [ ] Form with all sections, menus, stepper, segmented units, Health toggle
-- [ ] Distance range editor (push)
-- [ ] Settings model mirroring the API `settings` shape, held in an `@Observable` store
+- [x] Form with all sections, menus, stepper, segmented units, Health toggle
+- [x] Distance range editor (push)
+- [x] Settings model mirroring the API `settings` shape, held in an `@Observable` store
+- [ ] Strava status and "Use My Strava Average" (hidden until the API has a Strava connection)
+- [ ] "Apple Account" (plain "Account" until `/auth/me` names the provider)
 
 ## 6. Ideal Temperature (push)
 
@@ -286,9 +289,11 @@ Build:
 Inline title "Ideal Temperature", glass back button. Saves as you go; no Done.
 
 Build:
-- [ ] `TemperatureRange` (drag both handles, 1° steps, selection haptic)
-- [ ] Route fit rows recompute as you drag
-- [ ] Deal-breaker steppers + Vary by Month
+- [x] `TemperatureRange` (drag both handles, 1° steps, selection haptic)
+- [x] Route fit rows recompute as you drag
+- [x] Deal-breaker steppers + Vary by Month (the app's own northern-hemisphere table until the API
+  has a seasonal floor)
+- [ ] "so it loses 2 points" ("so it scores a little lower" until the API returns points lost)
 
 ## 7. Comfortable Wind (push)
 
@@ -309,9 +314,9 @@ Build:
    to 50 km/h and it ranks normally."
 
 Build:
-- [ ] `WindEnvelope` (Canvas/Path), redraws live from the sliders
-- [ ] Limits sliders + sensitivity menu
-- [ ] Route fit rows
+- [x] `WindEnvelope` (Canvas/Path), redraws live from the sliders
+- [x] Limits sliders + sensitivity menu (a saved value other than 0.5, 1 or 2 shows "Custom")
+- [x] Route fit rows
 
 ## 8. Widgets and Lock Screen
 
@@ -392,10 +397,14 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 | Notes | Built in the app from `best.conditions`, `rideHours[]`, `recentRides` and `distanceFit`, measured against `resolvedPreferences`; `drawbacks` only when preferences are missing |
 | Factor sentences | `factors` + `conditions`; Wind and Temperature quote your limits from `resolvedPreferences` |
 | Footer | `weather.attribution` (Apple Weather when empty) |
+| Preferences, Ideal Temperature, Comfortable Wind | `GET /users/me` → `settings.riding`, `settings.preferences`, `settings.units`, `preferenceLevels`; each edit sends `PATCH /users/me {expectedVersion, settings}` after 0.6 s (explicit `null` removes a limit or the distance range; a 409 re-reads and re-sends), then Rides reloads |
+| How Your Routes Fit | The last board Rides loaded, measured against the edited values in the app |
 
 **Not wired yet.** Score-change badge and "Wind from the …" (both hidden until the API adds them,
 see [`ride-detail-api-requests.md`](ride-detail-api-requests.md)); unassessable routes aren't shown; factor prose is metric-only; a
 conflicting settings edit (409) keeps the old saved window, though that load still uses the new
-one; dates assume the device and the routes share a time zone; "Track a route" and Preferences
-are still no-ops or sample data. The Rides day strip doesn't show the sheet's "Rain until 15:00"
+one; dates assume the device and the routes share a time zone; "Track a route" is still a no-op.
+Preferences waits on the API for Strava, points lost, crosswind levels, the sign-in provider and
+seasonal floors ([`preferences-api-requests.md`](preferences-api-requests.md)); "How Your Routes
+Fit" is empty until Rides has loaded once. The Rides day strip doesn't show the sheet's "Rain until 15:00"
 style notes yet.

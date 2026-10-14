@@ -15,7 +15,7 @@ let package = Package(
     products: [
         .library(name: "RideUI", type: .static, targets: ["RideUI"]),
         .library(name: "RoutesUI", type: .static, targets: ["RoutesUI"]),
-        .library(name: "YouUI", type: .static, targets: ["YouUI"]),
+        .library(name: "PreferencesUI", type: .static, targets: ["PreferencesUI"]),
         .library(name: "OnboardingUI", type: .static, targets: ["OnboardingUI"]),
         .library(name: "SharedUI", type: .static, targets: ["SharedUI"]),
     ],
@@ -37,7 +37,7 @@ let package = Package(
             name: "RoutesUI",
             dependencies: baseDeps + ["SharedUI"]),
         .target(
-            name: "YouUI",
+            name: "PreferencesUI",
             dependencies: baseDeps + ["SharedUI"]),
         .target(
             name: "OnboardingUI",

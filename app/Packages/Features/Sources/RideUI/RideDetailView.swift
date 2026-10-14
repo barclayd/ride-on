@@ -19,6 +19,7 @@ public struct RideDetailView: View {
     @State private var elevation: [RideDetail.ElevationPoint]
     @Environment(\.services) private var services
     @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(board: RideBoard, pick: RideBoard.Pick) {
@@ -201,7 +202,7 @@ public struct RideDetailView: View {
             Image(systemName: hour.sky.outlineSymbol)
                 .symbolRenderingMode(.multicolor)
                 .font(.title3)
-            Text(UnitFormat.degrees(c: hour.temperatureC)).font(.title2.weight(.semibold))
+            Text(UnitFormat.degrees(c: hour.temperatureC, locale: locale)).font(.title2.weight(.semibold))
             Text(wind).font(.subheadline)
             Text("Gusts \(speedValue(hour.gustKph))").font(.footnote).foregroundStyle(.secondary)
             Label(rain, systemImage: "drop.fill")
@@ -214,7 +215,7 @@ public struct RideDetailView: View {
         .padding(.horizontal, isLarge ? 10 : 0)
         .frame(maxWidth: .infinity, alignment: isLarge ? .leading : .center)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(time), \(hour.sky.title), \(UnitFormat.degrees(c: hour.temperatureC)), wind \(wind), gusts \(UnitFormat.speed(kph: hour.gustKph, system: unitSystem)), \(rain) chance of rain")
+        .accessibilityLabel("\(time), \(hour.sky.title), \(UnitFormat.degrees(c: hour.temperatureC, locale: locale)), wind \(wind), gusts \(UnitFormat.speed(kph: hour.gustKph, system: unitSystem)), \(rain) chance of rain")
     }
 
     /// "24": the gust number alone, in the rider's units, as Weather writes it under the wind.

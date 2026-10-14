@@ -12,13 +12,15 @@ public struct LiveRidesView: View {
     @State private var signInError: String?
     @State private var choosingWindow = false
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+    /// Saved Preferences changes move `revision` on, and Rides re-ranks.
+    @Environment(RiderSettingsStore.self) private var settings: RiderSettingsStore?
 
     public init() {}
 
     public var body: some View {
         content
             .navigationTitle("Rides")
-            .task { await load() }
+            .task(id: settings?.revision) { await load() }
     }
 
     @ViewBuilder private var content: some View {
@@ -67,11 +69,14 @@ public struct LiveRidesView: View {
     private func load(_ window: RideWindow? = nil) async {
         guard RideOnAPI.isSignedIn else { phase = .signedOut; return }
         do {
-            phase = try await RideBoardLoader.load(window: window).map(Phase.loaded) ?? .empty
+            let board = try await RideBoardLoader.load(window: window)
+            settings?.board = board
+            phase = board.map(Phase.loaded) ?? .empty
         } catch let failure as RideOnAPI.Failure where failure.status == 401 {
             phase = .signedOut
-        } catch is CancellationError {
-            // The view went away mid-load; leave the phase as it was.
+        } catch where Task.isCancelled {
+            // The view went away mid-load (URLSession throws URLError.cancelled, not
+            // CancellationError); leave the phase as it was, and it loads again on return.
         } catch {
             phase = .failed(error.localizedDescription)
         }
@@ -89,6 +94,7 @@ public struct LiveRidesView: View {
             signInError = nil
             phase = .loading
             await load()
+            await settings?.load()
         } catch ASWebAuthenticationSessionError.canceledLogin {
             // The person closed the sheet.
         } catch {

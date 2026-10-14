@@ -38,7 +38,7 @@ targets:
       - package: Features
         product: RoutesUI
       - package: Features
-        product: YouUI
+        product: PreferencesUI
       - package: Features
         product: OnboardingUI
     # GENERATE_INFOPLIST_FILE only supports flat string/bool keys via
