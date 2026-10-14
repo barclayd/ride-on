@@ -106,7 +106,7 @@ public enum RideBoardLoader {
             // ponytail: the API has no day-level sky when nothing's rideable.
             let entry = RideBoard.Day(date: date, best: best, sky: best?.conditions.sky ?? .cloudy, temperatureMaxC: summary.temperatureMaxC,
                                       note: note(summary), forecastEnds: summary.until,
-                                      daylight: summary.daylight.flatMap { $0.end >= $0.start ? DateInterval(start: $0.start, end: $0.end) : nil })
+                                      daylight: summary.daylight.flatMap { $0.sunset >= $0.sunrise ? DateInterval(start: $0.sunrise, end: $0.sunset) : nil })
             forecast.append(entry)
             if summary.selected { days.append(entry) }
         }
@@ -344,7 +344,8 @@ extension RideBoardLoader {
             var recommendedRouteId: String?
             var availabilityReason: String?
             var until: Date?
-            var daylight: Interval?
+            /// A day's daylight is `{sunrise, sunset}`; a route's is an `Interval`.
+            var daylight: Sunlight?
             var temperatureMaxC: Double?
         }
         var generatedAt: Date
@@ -356,6 +357,7 @@ extension RideBoardLoader {
     }
 
     struct Interval: Decodable { var start: Date; var end: Date }
+    struct Sunlight: Decodable { var sunrise: Date; var sunset: Date }
 
     struct RouteResult: Decodable {
         var routeId: String
