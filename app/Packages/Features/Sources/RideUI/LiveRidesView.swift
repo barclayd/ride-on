@@ -10,6 +10,7 @@ public struct LiveRidesView: View {
 
     @State private var phase = Phase.loading
     @State private var signInError: String?
+    @State private var choosingWindow = false
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
 
     public init() {}
@@ -47,17 +48,26 @@ public struct LiveRidesView: View {
                 Button("Try Again") { Task { await load() } }
             }
         case .loaded(let board) where board.picks.isEmpty:
-            ContentUnavailableView("No Rides in Your Window", systemImage: "calendar.badge.exclamationmark",
-                                   description: Text("None of your shortlisted routes fit the days you've chosen."))
+            // ponytail: stands in for the Window passed screen (docs/redesign/README.md §4).
+            ContentUnavailableView {
+                Label("No Rides in Your Window", systemImage: "calendar.badge.exclamationmark")
+            } description: {
+                Text("None of your shortlisted routes fit the days you've chosen.")
+            } actions: {
+                Button("Choose Dates") { choosingWindow = true }
+                    .buttonStyle(.borderedProminent)
+            }
+            .sheet(isPresented: $choosingWindow) { RideWindowSheet(board: board) { await load($0) } }
         case .loaded(let board):
-            RidesView(board: board, refresh: load)
+            RidesView(board: board, refresh: { await load() }, apply: { await load($0) })
         }
     }
 
-    private func load() async {
+    /// `window` is a Ride Window sheet choice, saved before Rides reloads with it.
+    private func load(_ window: RideWindow? = nil) async {
         guard RideOnAPI.isSignedIn else { phase = .signedOut; return }
         do {
-            phase = try await RideBoardLoader.load().map(Phase.loaded) ?? .empty
+            phase = try await RideBoardLoader.load(window: window).map(Phase.loaded) ?? .empty
         } catch let failure as RideOnAPI.Failure where failure.status == 401 {
             phase = .signedOut
         } catch is CancellationError {

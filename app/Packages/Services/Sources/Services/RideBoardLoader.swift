@@ -5,19 +5,30 @@ import Engine
 /// Builds the Rides screen from the API (docs/api.md, docs/planning-api.md): the shortlist saved
 /// in the extension, ranked across the saved planning days, with each route's source and geometry.
 public enum RideBoardLoader {
-    /// `nil` when nothing is shortlisted.
-    public static func load() async throws -> RideBoard? {
+    /// `nil` when nothing is shortlisted. A `window` from the Ride Window sheet is saved as the
+    /// planning choice (docs/planning-api.md, "Saved planning"); without one, the saved choice is used.
+    public static func load(window: RideWindow? = nil) async throws -> RideBoard? {
         let selection: SelectionResponse = try await RideOnAPI.send("/route-selection")
         let ids = selection.selection.routeIds
         guard !ids.isEmpty else { return nil }
-        // ponytail: sends the saved preset as-is; the API's "next" starts today, where the
-        // extension sends tomorrow onwards as dates.
         let user: UserResponse? = try? await RideOnAPI.send("/users/me")
-        let days = user?.user.settings?.planning?.days ?? PlanningDays(kind: "preset", preset: "next")
-        async let recommendation: Recommendation = RideOnAPI.send("/recommendations", body: RecommendationRequest(routeIds: ids, days: days))
+        if let window, let version = user?.user.version {
+            // ponytail: a conflicting edit (409) keeps the old saved window; this load still uses the new one.
+            let patch = PlanningPatch(expectedVersion: version, settings: .init(planning: .init(
+                days: window.quickPick.map { PlanningDays(kind: "preset", preset: $0.rawValue) } ?? .dates(window.days),
+                window: PlanningWindow(window.hours))))
+            let _: UserResponse? = try? await RideOnAPI.send("/users/me", method: "PATCH", body: patch)
+        }
+        let saved = user?.user.settings?.planning
+        let days = window.map { PlanningDays.dates($0.days) } ?? saved?.days?.resolved ?? .dates(RideWindow.QuickPick.next.days(from: .now))
+        let hours = window?.hours ?? saved?.window?.hours ?? .daylight
+        let request = RecommendationRequest(routeIds: ids, days: days, previewDays: 7, riding: .init(window: PlanningWindow(hours)))
+        async let recommendation: Recommendation = RideOnAPI.send("/recommendations", body: request)
         async let summaries: SummariesResponse = RideOnAPI.send("/rides/summaries", body: SummariesRequest(routeIds: ids))
         async let routes = routeInfo(ids)
-        return try await board(from: recommendation, routes: routes, summaries: summaries.summaries)
+        var board = try await board(from: recommendation, routes: routes, summaries: summaries.summaries)
+        board.hours = hours
+        return board
     }
 
     /// About 100 heights spaced evenly along the route, its x axis scaled to the route's distance.
@@ -88,11 +99,16 @@ public enum RideBoardLoader {
         }
 
         let picks = response.rankings.compactMap { result in result.best.flatMap { pick(result.routeId, $0) } }
-        let days = response.days.filter(\.selected).compactMap { summary -> RideBoard.Day? in
-            guard let date = day(summary.date) else { return nil }
+        var days: [RideBoard.Day] = [], forecast: [RideBoard.Day] = []
+        for summary in response.days {
+            guard let date = day(summary.date) else { continue }
             let best = summary.best.flatMap { best in summary.recommendedRouteId.flatMap { pick($0, best) } }
             // ponytail: the API has no day-level sky when nothing's rideable.
-            return RideBoard.Day(date: date, best: best, sky: best?.conditions.sky ?? .cloudy)
+            let entry = RideBoard.Day(date: date, best: best, sky: best?.conditions.sky ?? .cloudy, temperatureMaxC: summary.temperatureMaxC,
+                                      note: note(summary), forecastEnds: summary.until,
+                                      daylight: summary.daylight.flatMap { $0.end >= $0.start ? DateInterval(start: $0.start, end: $0.end) : nil })
+            forecast.append(entry)
+            if summary.selected { days.append(entry) }
         }
         let unfit = response.unranked.filter { $0.status == "no_feasible_departure" }.compactMap { result -> RideBoard.Unfit? in
             let window = result.effectiveWindow ?? result.daylight
@@ -105,7 +121,21 @@ public enum RideBoardLoader {
         let start = dates.first ?? calendar.startOfDay(for: response.generatedAt)
         let end = calendar.date(byAdding: .day, value: 1, to: dates.last ?? start) ?? start
         return RideBoard(window: DateInterval(start: start, end: end), generatedAt: response.generatedAt,
-                         picks: picks, days: days, unfit: unfit, details: details)
+                         picks: picks, days: days, forecast: forecast, unfit: unfit, details: details)
+    }
+
+    /// Why a day has no ride, or what it's missing (docs/planning-api.md, "Day tiles"). A forecast
+    /// cutoff shows as `Day.forecastEnds` instead.
+    static func note(_ day: Recommendation.Day) -> String? {
+        switch day.availabilityReason {
+        case "partial_coverage" where day.until == nil: "Some forecast hours are missing"
+        case "outside_forecast_horizon": "Not forecast yet"
+        case "provider_unavailable": "Forecast unavailable"
+        case "missing_data": "Forecast details are missing"
+        case "no_feasible_departure": "No tracked route fits your hours"
+        case "no_remaining_window": "Too late to ride"
+        default: nil
+        }
     }
 
     static func conditions(_ c: Conditions) -> RideBoard.Conditions {
@@ -214,10 +244,17 @@ extension RideBoardLoader {
     }
 
     struct UserResponse: Decodable {
-        struct User: Decodable { var settings: Settings? }
+        struct User: Decodable { var version: Int; var settings: Settings? }
         struct Settings: Decodable { var planning: Planning? }
-        struct Planning: Decodable { var days: PlanningDays? }
+        struct Planning: Decodable { var days: PlanningDays?; var window: PlanningWindow? }
         var user: User
+    }
+
+    struct PlanningPatch: Encodable {
+        struct Settings: Encodable { var planning: Planning }
+        struct Planning: Encodable { var days: PlanningDays; var window: PlanningWindow }
+        var expectedVersion: Int
+        var settings: Settings
     }
 
     /// `{kind: "preset", preset}`, `{kind: "range", start, end}` or `{kind: "dates", dates}`.
@@ -227,11 +264,60 @@ extension RideBoardLoader {
         var start: String?
         var end: String?
         var dates: [String]?
+
+        /// "2026-10-14", in the device's time zone.
+        // ponytail: assumes the device and the routes share a time zone.
+        static func dates(_ days: [Date]) -> PlanningDays {
+            PlanningDays(kind: "dates", dates: days.map {
+                let day = Calendar.current.dateComponents([.year, .month, .day], from: $0)
+                return String(format: "%04d-%02d-%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+            })
+        }
+
+        /// Presets as dates the way the extension sends them: the API's "next" starts today, the app's tomorrow.
+        var resolved: PlanningDays {
+            guard kind == "preset", let pick = preset.flatMap(RideWindow.QuickPick.init) else { return self }
+            return .dates(pick.days(from: .now))
+        }
+    }
+
+    /// `"daylight"` or `{start: "HH:mm", end: "HH:mm"}`.
+    struct PlanningWindow: Codable, Sendable {
+        var hours: RideWindow.Hours
+
+        init(_ hours: RideWindow.Hours) { self.hours = hours }
+
+        init(from decoder: any Decoder) throws {
+            let range = try? decoder.singleValueContainer().decode([String: String].self)
+            func minutes(_ key: String) -> Int? {
+                let parts = range?[key]?.split(separator: ":").compactMap { Int($0) } ?? []
+                return parts.count == 2 ? parts[0] * 60 + parts[1] : nil
+            }
+            if let leave = minutes("start"), let back = minutes("end") {
+                hours = .custom(leave: leave, back: back)
+            } else {
+                hours = .daylight
+            }
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch hours {
+            case .daylight: try container.encode("daylight")
+            case .custom(let leave, let back):
+                func clock(_ minutes: Int) -> String { String(format: "%02d:%02d", minutes / 60, minutes % 60) }
+                try container.encode(["start": clock(leave), "end": clock(back)])
+            }
+        }
     }
 
     struct RecommendationRequest: Encodable {
+        struct Riding: Encodable { var window: PlanningWindow }
         var routeIds: [String]
         var days: PlanningDays
+        /// Today onwards, for the Ride Window sheet's days.
+        var previewDays: Int
+        var riding: Riding
     }
 
     struct SummariesRequest: Encodable { var routeIds: [String] }
@@ -256,6 +342,10 @@ extension RideBoardLoader {
             var selected: Bool
             var best: Departure?
             var recommendedRouteId: String?
+            var availabilityReason: String?
+            var until: Date?
+            var daylight: Interval?
+            var temperatureMaxC: Double?
         }
         var generatedAt: Date
         var timeZone: String

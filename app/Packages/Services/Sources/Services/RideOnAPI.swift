@@ -80,13 +80,14 @@ public enum RideOnAPI {
 
     // MARK: Requests
 
-    /// GET, or POST with a JSON `body`. A 401 signs out, so the caller can show sign-in.
-    static func send<T: Decodable>(_ path: String, query: [URLQueryItem] = [], auth: Bool = true, body: (any Encodable)? = nil) async throws -> T {
+    /// GET, or POST (or `method`) with a JSON `body`. A 401 signs out, so the caller can show sign-in.
+    static func send<T: Decodable>(_ path: String, query: [URLQueryItem] = [], auth: Bool = true, method: String = "POST",
+                                   body: (any Encodable)? = nil) async throws -> T {
         var components = URLComponents(url: base.appending(path: path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query }
         var request = URLRequest(url: components.url!)
         if let body {
-            request.httpMethod = "POST"
+            request.httpMethod = method
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(body)
         }
