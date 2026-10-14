@@ -5,7 +5,7 @@ import SharedUI
 
 /// Step 7 — read-only review of the speeds step 6 just prefilled (or the
 /// `RiderPreferences` defaults, if Strava isn't connected). Editable later in
-/// You → Speed & Climbing (`SpeedModelView`) — this is a preview, not a
+/// Preferences → Riding — this is a preview, not a
 /// second editor.
 struct SpeedPrefillStep: View {
     @Environment(\.unitSystem) private var unitSystem
@@ -21,8 +21,8 @@ struct SpeedPrefillStep: View {
         DialScreen(
             title: "Your Speeds",
             bodyText: isStravaConnected
-                ? "Prefilled from your Strava activity. Fine-tune anytime in You."
-                : "Sensible defaults for now. Fine-tune anytime in You.",
+                ? "Prefilled from your Strava activity. Fine-tune anytime in Preferences."
+                : "Sensible defaults for now. Fine-tune anytime in Preferences.",
             sky: .overcast,
             pageIndex: pageIndex,
             pageCount: pageCount

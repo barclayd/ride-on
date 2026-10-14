@@ -8,6 +8,7 @@ import SharedUI
 public struct RideWindowSheet: View {
     var board: RideBoard
     var apply: @MainActor @Sendable (RideWindow) async -> Void
+    @Environment(\.locale) private var locale
     @State private var selection: Set<Date>
     @State private var custom: Bool
     @State private var leave: Date
@@ -176,7 +177,7 @@ public struct RideWindowSheet: View {
                     .foregroundStyle(day.sky == .rain ? AnyShapeStyle(.rain) : AnyShapeStyle(.secondary))
                     .accessibilityLabel(day.sky.title)
                 if let high = day.temperatureMaxC ?? day.best?.conditions.temperatureC.upperBound {
-                    Text(UnitFormat.degrees(c: high))
+                    Text(UnitFormat.degrees(c: high, locale: locale))
                         .font(.title3)
                         .monospacedDigit()
                         .frame(minWidth: 36, alignment: .trailing)

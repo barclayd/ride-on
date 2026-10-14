@@ -15,6 +15,7 @@ public struct RidesView: View {
     @State private var choosingWindow = false
     @Namespace private var zoom
     @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// `apply` reloads Rides for a window chosen in the Ride Window sheet.
@@ -129,7 +130,7 @@ public struct RidesView: View {
             .foregroundStyle(pick.meetsMinimums ? AnyShapeStyle(.tint) : AnyShapeStyle(.belowMinimums))
 
             FlowLayout {
-                ConditionChip(UnitFormat.temperatureRange(c: conditions.temperatureC), systemImage: "thermometer.medium", tint: .orange)
+                ConditionChip(UnitFormat.temperatureRange(c: conditions.temperatureC, locale: locale), systemImage: "thermometer.medium", tint: .orange)
                 ConditionChip("\(UnitFormat.speed(kph: conditions.windKph, system: unitSystem)) \(conditions.wind.rawValue)", systemImage: "wind", tint: .blue)
                 ConditionChip("Gusts \(UnitFormat.speed(kph: conditions.gustKph, system: unitSystem))")
                 ConditionChip(conditions.sky.title, systemImage: conditions.sky.systemImage, tint: conditions.sky.tint)
@@ -218,7 +219,7 @@ public struct RidesView: View {
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                     if pick.meetsMinimums {
-                        Text("\(UnitFormat.temperatureRange(c: pick.conditions.temperatureC)) · \(pick.conditions.wind.title) · \(pick.conditions.sky.title)")
+                        Text("\(UnitFormat.temperatureRange(c: pick.conditions.temperatureC, locale: locale)) · \(pick.conditions.wind.title) · \(pick.conditions.sky.title)")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {

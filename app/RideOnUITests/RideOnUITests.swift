@@ -25,7 +25,7 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Routes"].waitForExistence(timeout: 5))
 
         app.buttons["Preferences"].tap()
-        XCTAssertTrue(app.staticTexts["Weights"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Ideal Temperature"].waitForExistence(timeout: 5))
 
         app.buttons["Rides"].tap()
         XCTAssertTrue(heroTitle(in: app, startingWith: "Hilly Loop").waitForExistence(timeout: 5))

@@ -65,11 +65,11 @@ public enum UnitFormat {
     }
 
     /// Wind/cruising speed: km/h (metric) or mph (imperial).
-    public static func speed(kph: Double, system: UnitSystem, locale: Locale = .current) -> String {
+    public static func speed(kph: Double, system: UnitSystem, fractionDigits: Int = 0, locale: Locale = .current) -> String {
         let measurement = Measurement(value: kph, unit: UnitSpeed.kilometersPerHour)
         return (system == .metric ? measurement : measurement.converted(to: .milesPerHour))
             .formatted(
-                .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0)))
+                .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(fractionDigits)))
                     .locale(locale)
             )
     }

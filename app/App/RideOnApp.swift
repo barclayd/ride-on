@@ -6,13 +6,14 @@ import Services
 import SharedUI
 import RideUI
 import RoutesUI
-import YouUI
+import PreferencesUI
 import OnboardingUI
 
 @main
 struct RideOnApp: App {
     private let modelContainer = RideOnModelContainer.make()
     @State private var preferencesStore = PreferencesStore()
+    @State private var riderSettings = RiderSettingsStore(live: !FixtureWorld.isEnabled)
 
     // Fixture-world gets fully-fixture services (deterministic E2E); every
     // other launch gets `.live` (Phase 6: real WeatherKit/MapKit/HealthKit/
@@ -31,8 +32,17 @@ struct RideOnApp: App {
             AppRootSwitch()
                 .environment(\.services, services)
                 .environment(preferencesStore)
+                .environment(riderSettings)
                 .environment(\.unitSystem, preferencesStore.preferences.effectiveUnitSystem)
+                .environment(\.locale, Locale.current.temperatureUnit(preferencesStore.preferences.temperatureUnit))
                 .tint(Color.accentColor)
+                .task { await riderSettings.load() }
+                // The account's units win, so the app and the extension agree.
+                .onChange(of: riderSettings.settings?.units) { _, units in
+                    guard let units else { return }
+                    preferencesStore.preferences.temperatureUnit = TemperatureUnit(rawValue: units.temperature)
+                    preferencesStore.preferences.unitSystem = units.windSpeed == "mph" ? .imperial : .metric
+                }
                 .onOpenURL { url in
                     #if os(iOS)
                     if StravaAuthCallbackRouter.shared.handle(url: url) { return }
@@ -63,11 +73,12 @@ struct RideOnApp: App {
         // app with preferences has a Settings scene).
         Settings {
             Form {
-                UnitsPicker()
+                UnitsSection()
             }
             .formStyle(.grouped)
             .frame(width: 380)
             .environment(preferencesStore)
+            .environment(riderSettings)
         }
         #endif
     }
@@ -107,13 +118,13 @@ private func destination(for tab: AppTab, namespace: Namespace.ID) -> some View 
         // The fixture world keeps E2E off the network.
         if FixtureWorld.isEnabled { RidesView(board: .sample) } else { LiveRidesView() }
     case .routes: RoutesView(namespace: namespace)
-    case .preferences: YouView()
+    case .preferences: PreferencesView()
     }
 }
 
 /// Turns a cross-feature `RouterDestination` value into a concrete view —
 /// the one place that can, since only the App shell imports every Features
-/// product (RideUI/RoutesUI/YouUI can't import each other).
+/// product (RideUI/RoutesUI/PreferencesUI can't import each other).
 @MainActor @ViewBuilder
 private func routeDetailDestination(_ destination: RouterDestination, namespace: Namespace.ID) -> some View {
     switch destination {
@@ -280,5 +291,16 @@ private extension View {
         #else
         self
         #endif
+    }
+}
+
+private extension Locale {
+    /// This locale with its weather temperatures in `unit` (the `mu` keyword); `nil` leaves it as is.
+    func temperatureUnit(_ unit: TemperatureUnit?) -> Locale {
+        guard let unit else { return self }
+        let parts = identifier.split(separator: "@", maxSplits: 1)
+        let keywords = (parts.count > 1 ? parts[1].split(separator: ";").filter { !$0.hasPrefix("mu=") }.map(String.init) : [])
+            + ["mu=\(unit == .fahrenheit ? "fahrenhe" : "celsius")"]
+        return Locale(identifier: "\(parts[0])@\(keywords.joined(separator: ";"))")
     }
 }
