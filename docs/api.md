@@ -16,7 +16,7 @@ API v0.18.0 corrects Met Office BPF array decoding and introduces `comfort-v0.11
 API v0.19.0 adds [separate planning days](planning-api.md#search-dates-and-optional-preview): `days: {kind: "dates", dates}` and `range.dates` on every non-null range. Scoring remains `comfort-v0.11`.
 API v0.22.0 adds the opt-in [experimental ground assessment](ground-assessment-api.md), using v0.21.0 [cached ground evidence](ground-evidence-api.md) and v0.20.0 [located surfaces](#route-surface-evidence). Phase 3 model mechanics are implemented; [real-world calibration](ground-calibration.md) is pending. The [phased plan](ground-conditions-plan.md) keeps scoring unchanged at `comfort-v0.11`.
 API v0.23.0 adds temperature interpolation and ride-scoped forecast details (`comfort-v0.12`); see below.
-Algorithm `comfort-v0.13` adds bounded sustained-tailwind assistance, estimated directional gust exposure and distance-weighted wind discomfort, calibrated against the 14 October preference interview.
+Algorithm `comfort-v0.14` rewards the sustained forward component of diagonal tailwinds in proportion to distance, retaining the separate crosswind/gust discomfort and bounded benefit introduced in v0.13. It is checked against the 14 October preference interview and a saved route-level forecast replay.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -860,7 +860,7 @@ breakdown and standards failures for an accurate scoring explanation.
 
 ## Algorithm
 
-### Wind exposure and assistance v0.13
+### Wind exposure and assistance v0.14
 
 Wind discomfort now uses the distance-weighted mean of section comfort. At the
 constant modelled moving speed this is also time-weighted. The single worst wind
@@ -879,15 +879,23 @@ loss; oblique tailwind retains its lateral gust exposure. Raw gust maxima remain
 unchanged for display and `maximumGustKph` minimum standards.
 
 Sustained assistance has a bounded positive benefit. For each section, assistance
-strength is `clamp((tailwind − crosswind − 5) / 8)`, using km/h and clamping to 0–1.
-The benefit plateaus at 13 km/h (about 8 mph) of useful assistance; gust peaks
-never earn a bonus. Let `A` be distance-weighted mean assistance strength. Add
-`100 × normalizedWindWeight × 0.10 × A × clamp(2 × A − 1)` to the weather score,
-capped at 100. This smoothly favours useful assistance over most of the route;
-a bare tailwind majority cannot cancel substantial opposing exposure. Using
-strength-weighted coverage avoids a sudden bonus when weak sections cross a
-binary direction or speed threshold. These constants are provisional
+strength is `clamp((tailwind − 5) / 8)`, using the sustained forward component in
+km/h and clamping to 0–1. The benefit plateaus at 13 km/h (about 8 mph) of forward
+assistance; gust peaks never earn a bonus. Let `A` be distance-weighted mean
+assistance strength. Add `100 × normalizedWindWeight × 0.10 × A` to the weather
+score, capped at 100. Assistance is proportional to strength and distance, without
+a separate majority gate. Crosswind, headwind and gust discomfort are deducted
+independently: useful diagonal wind can both assist and cause discomfort. The
+interview's 60% tailwind / 40% headwind example still loses to calm conditions.
+Strength-weighted coverage avoids a sudden bonus when weak sections cross a
+binary direction or speed threshold. These constants remain provisional
 calibration choices, not physical performance or speed estimates.
+
+v0.13 subtracted crosswind from the forward component and multiplied the route
+benefit by `clamp(2 × A − 1)`. The saved live-route replay revealed that together
+these restrictions removed all assistance from Horsham's diagonal tailwinds.
+v0.14 removes those two restrictions; it does not alter discomfort curves,
+temperature/sunshine weights, forecast data or rider preferences.
 
 Calm ideal rides can still score 100. Equal final scores favour the higher
 potential assistance benefit before the existing departure-time tie-break;
@@ -914,8 +922,15 @@ answers, ceiling ties, sustained opposing winds, tiny exposures, segmentation
 invariance, gust limits, missing data, zero wind weight and saved-plan compatibility.
 The town-forecast examples use synthetic headings and one location: they support
 the Horsham 10am versus 8am/noon and Richmond 8:30am versus 10am comparisons, but
-are not replays of the real routes or proof of an exact best departure. The prior
-80–85 crosswind/gust reference still passes. No live weather requests are required.
+are not replays of the real routes or proof of an exact best departure. Additional
+tests cover diagonal assistance, winding routes below the former eligibility
+threshold, and independent lateral discomfort. A separate local replay holds the
+saved production routes, preferences and 14 October forecast snapshot fixed:
+Horsham gains useful assistance and outranks Richmond, while its best departure
+remains 8am. That real-route departure trade-off needs separate calibration; the
+synthetic town example does not establish a live 10am optimum. Private geometry
+and forecasts stay outside version control. The prior 80–85 crosswind/gust
+reference still passes. No live weather requests are required.
 
 ### Previous wind comfort calibration v0.11–v0.12
 

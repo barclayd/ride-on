@@ -26,7 +26,7 @@ import {
 import { compileTemperature } from './temperature.ts';
 import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.13';
+export const ALGORITHM_VERSION = 'comfort-v0.14';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
