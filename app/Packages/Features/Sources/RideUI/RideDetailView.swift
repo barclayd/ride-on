@@ -342,8 +342,8 @@ private struct IconColumn: LabelStyle {
     }
 }
 
-private extension RideBoard.Sky {
-    /// Weather's outline symbols, drawn multicolour in the forecast grid.
+extension RideBoard.Sky {
+    /// Weather's outline symbols, drawn multicolour in the forecast grid and the Ride Window sheet.
     var outlineSymbol: String {
         switch self {
         case .sunny: "sun.max"

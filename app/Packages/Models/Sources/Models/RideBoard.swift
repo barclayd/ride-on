@@ -11,16 +11,23 @@ public struct RideBoard: Hashable, Sendable {
     public var picks: [Pick]
     /// One entry per day in the window, in order.
     public var days: [Day]
+    /// Today and the six days after it, chosen or not, for the Ride Window sheet.
+    public var forecast: [Day]
+    /// The hours each day's ride must fit in.
+    public var hours: RideWindow.Hours
     /// Routes too long for the window.
     public var unfit: [Unfit]
     /// Ride detail per `Pick.id`; missing ones fall back to `RideDetail.sample`.
     public var details: [String: RideDetail]
 
-    public init(window: DateInterval, generatedAt: Date, picks: [Pick], days: [Day], unfit: [Unfit], details: [String: RideDetail] = [:]) {
+    public init(window: DateInterval, generatedAt: Date, picks: [Pick], days: [Day], forecast: [Day] = [], hours: RideWindow.Hours = .daylight,
+                unfit: [Unfit], details: [String: RideDetail] = [:]) {
         self.window = window
         self.generatedAt = generatedAt
         self.picks = picks
         self.days = days
+        self.forecast = forecast
+        self.hours = hours
         self.unfit = unfit
         self.details = details
     }
@@ -99,13 +106,25 @@ public extension RideBoard {
         public var best: Pick?
         /// The day's overall sky, for days without a ride.
         public var sky: Sky
+        /// The best ride's warmest point.
+        public var temperatureMaxC: Double?
+        /// Why there's no ride, or what's missing: "Not forecast yet".
+        public var note: String?
+        /// When the forecast stops covering the day's hours.
+        public var forecastEnds: Date?
+        public var daylight: DateInterval?
 
         public var id: Date { date }
 
-        public init(date: Date, best: Pick?, sky: Sky) {
+        public init(date: Date, best: Pick?, sky: Sky, temperatureMaxC: Double? = nil, note: String? = nil,
+                    forecastEnds: Date? = nil, daylight: DateInterval? = nil) {
             self.date = date
             self.best = best
             self.sky = sky
+            self.temperatureMaxC = temperatureMaxC
+            self.note = note
+            self.forecastEnds = forecastEnds
+            self.daylight = daylight
         }
     }
 
@@ -120,6 +139,47 @@ public extension RideBoard {
             self.route = route
             self.rideDuration = rideDuration
             self.windowAllows = windowAllows
+        }
+    }
+}
+
+/// What the Ride Window sheet chooses: the days to rank and the hours to ride in.
+public struct RideWindow: Hashable, Sendable {
+    /// The start of each chosen day, ascending.
+    public var days: [Date]
+    /// Set when `days` are exactly a quick pick, so the saved window moves on with the calendar.
+    public var quickPick: QuickPick?
+    public var hours: Hours
+
+    public init(days: [Date], quickPick: QuickPick? = nil, hours: Hours) {
+        self.days = days
+        self.quickPick = quickPick
+        self.hours = hours
+    }
+
+    public enum Hours: Hashable, Sendable {
+        case daylight
+        /// Minutes after midnight.
+        case custom(leave: Int, back: Int)
+    }
+
+    /// The API's day presets (docs/planning-api.md), resolved as the extension resolves them.
+    public enum QuickPick: String, CaseIterable, Sendable {
+        case today, tomorrow, weekend, next
+
+        /// "Next 5 Days" starts tomorrow; "This Weekend" is the coming Saturday and Sunday, or
+        /// Sunday alone on a Sunday.
+        public func days(from today: Date, calendar: Calendar = .current) -> [Date] {
+            let today = calendar.startOfDay(for: today)
+            func day(_ offset: Int) -> Date { calendar.date(byAdding: .day, value: offset, to: today)! }
+            switch self {
+            case .today: return [today]
+            case .tomorrow: return [day(1)]
+            case .next: return (1...5).map(day)
+            case .weekend:
+                let weekday = calendar.component(.weekday, from: today) // 1 is Sunday, 7 Saturday
+                return weekday == 1 ? [today] : [day(7 - weekday), day(8 - weekday)]
+            }
         }
     }
 }
@@ -172,18 +232,26 @@ public extension RideBoard {
         let sunday = Pick(route: potters, start: date(18, 9, 30), finish: date(18, 13, 50), score: 71,
                           conditions: Conditions(temperatureC: 10...13, windKph: 12, wind: .tailwind, gustKph: 25, sky: .sunnySpells),
                           lastRidden: date(4, 8, month: 10))
+        let monday = Pick(route: hilly, start: date(19, 9), finish: date(19, 12), score: 58,
+                          conditions: Conditions(temperatureC: 8...12, windKph: 22, wind: .headwind, gustKph: 38, sky: .sunnySpells),
+                          lastRidden: date(29, 8, month: 9))
+        func daylight(_ day: Int) -> DateInterval { DateInterval(start: date(day, 7, 20), end: date(day, 18, 10)) }
+        let forecast = [
+            Day(date: date(13, 0), best: nil, sky: .rain, temperatureMaxC: 11, note: "Rain until 15:00. No ride fits after it.", daylight: daylight(13)),
+            Day(date: date(14, 0), best: wednesday, sky: .sunnySpells, temperatureMaxC: 14, daylight: daylight(14)),
+            Day(date: date(15, 0), best: thursday, sky: .cloudy, temperatureMaxC: 14, daylight: daylight(15)),
+            Day(date: date(16, 0), best: nil, sky: .rain, temperatureMaxC: 12, note: "Rain from dawn to dusk", daylight: daylight(16)),
+            Day(date: date(17, 0), best: saturday, sky: .cloudy, temperatureMaxC: 13, daylight: daylight(17)),
+            Day(date: date(18, 0), best: sunday, sky: .sunnySpells, temperatureMaxC: 13, daylight: daylight(18)),
+            Day(date: date(19, 0), best: monday, sky: .sunnySpells, temperatureMaxC: 12, forecastEnds: date(19, 18), daylight: daylight(19)),
+        ]
 
         return RideBoard(
             window: DateInterval(start: date(14, 0), end: date(19, 0)),
             generatedAt: date(13, 8, 12),
             picks: [wednesday, thursday, braintreeBest],
-            days: [
-                Day(date: date(14, 0), best: wednesday, sky: .sunnySpells),
-                Day(date: date(15, 0), best: thursday, sky: .cloudy),
-                Day(date: date(16, 0), best: nil, sky: .rain),
-                Day(date: date(17, 0), best: saturday, sky: .cloudy),
-                Day(date: date(18, 0), best: sunday, sky: .sunnySpells),
-            ],
+            days: Array(forecast[1...5]),
+            forecast: forecast,
             unfit: [Unfit(route: eastAnglia, rideDuration: 7 * 3600 + 5 * 60, windowAllows: 5 * 3600 + 45 * 60)]
         )
     }()

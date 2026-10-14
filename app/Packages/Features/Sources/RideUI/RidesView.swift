@@ -10,14 +10,20 @@ import SharedUI
 public struct RidesView: View {
     var board: RideBoard
     var refresh: @MainActor @Sendable () async -> Void
+    var apply: @MainActor @Sendable (RideWindow) async -> Void
     @State private var selectedDay: Date
+    @State private var choosingWindow = false
     @Namespace private var zoom
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    public init(board: RideBoard, refresh: @escaping @MainActor @Sendable () async -> Void = {}) {
+    /// `apply` reloads Rides for a window chosen in the Ride Window sheet.
+    // ponytail: the fixture world's default `apply` does nothing, so Done there only closes the sheet.
+    public init(board: RideBoard, refresh: @escaping @MainActor @Sendable () async -> Void = {},
+                apply: @escaping @MainActor @Sendable (RideWindow) async -> Void = { _ in }) {
         self.board = board
         self.refresh = refresh
+        self.apply = apply
         let bestDay = board.days.first { $0.best == board.picks.first } ?? board.days.first
         _selectedDay = State(initialValue: bestDay?.date ?? board.window.start)
     }
@@ -85,10 +91,10 @@ public struct RidesView: View {
                 .zoomTransition(from: pick.id, in: zoom)
         }
         .refreshable { await refresh() }
+        .sheet(isPresented: $choosingWindow) { RideWindowSheet(board: board, apply: apply) }
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                // ponytail: opens the Ride Window sheet once it exists (PR 4).
-                Button {} label: {
+                Button { choosingWindow = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "calendar")
                         Text(windowTitle).monospacedDigit()

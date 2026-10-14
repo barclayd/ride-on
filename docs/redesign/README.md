@@ -21,11 +21,11 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
 | 2 | Rides screen | ✅ Done (window capsule lands with 4) | #155 |
 | 3 | Ride detail | ✅ Done | #157 |
-| 4 | Ride Window sheet and Window passed | ⬜ | |
+| 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ⬜ | |
 | 6 | Widgets and Lock Screen | ⬜ | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing, YouUI…) | ⬜ | |
-| 8 | Wire to the API | 🟡 Rides and Ride detail live; Preferences, Ride Window, Routes still sample | #159 |
+| 8 | Wire to the API | 🟡 Rides, Ride detail and Ride Window live; Preferences, Routes still sample | #159, #162 |
 
 Not in scope yet: Routes tab and Onboarding (not redesigned; they keep working as they are).
 
@@ -198,11 +198,18 @@ Large detent over the Rides screen.
    "Sunset, about 18:10". Custom swaps the values for `DatePicker(.hourAndMinute)`.
 
 Build:
-- [ ] Sheet with `.presentationDetents([.large])`, Cancel/Done toolbar
-- [ ] Quick picks that select their day range
-- [ ] Days list with multi-select
-- [ ] Hours section, Daylight/Custom
-- [ ] Done applies the window to Rides; Cancel discards
+- [x] Sheet with `.presentationDetents([.large])`, Cancel/Done toolbar (#162)
+- [x] Quick picks that select their day range (#162)
+- [x] Days list with multi-select (#162)
+- [x] Hours section, Daylight/Custom (#162)
+- [x] Done applies the window to Rides; Cancel discards (#162; live only, the fixture world's Done
+  just closes the sheet)
+
+`RideWindowSheet` (`RideUI/RideWindowSheet.swift`). The days are the board's `forecast` (today
+onwards, chosen or not); the ★ Best pick line follows the selection live. A quick pick is
+highlighted while the selection is exactly its days. Done is disabled with no days, or when Back
+By isn't after Leave After. The "No Rides in Your Window" empty state has a "Choose Dates"
+button into the same sheet until Window passed lands.
 
 ## 4. Window passed
 
@@ -354,7 +361,9 @@ keychain; a refreshed `set-auth-token` replaces it; a 401 signs out. The `https`
 `webcredentials:api.ride-on.cc` associated domain, in both the iOS and macOS entitlements.
 
 **Loading.** `GET /route-selection` (the extension's shortlist) → `GET /users/me` (saved
-planning days) → in parallel `POST /recommendations {routeIds, days}`, `POST /rides/summaries`,
+planning days and window; presets resolved to dates the way the extension does, so "Next 5 Days"
+starts tomorrow) → in parallel `POST /recommendations {routeIds, days, previewDays: 7, riding:
+{window}}`, `POST /rides/summaries`,
 and per route `GET /routes/:id` (cycle.travel link) and `GET /routes/:id/geometry` (polyline6 for
 the map). Ride detail's elevation profile samples the geometry through Open-Meteo on first open.
 
@@ -366,6 +375,8 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 | Temperature, wind, sky chips | `best.conditions` (dominant wind and sky by distance fraction) |
 | Last ridden | `POST /rides/summaries` `lastRiddenOn` |
 | Your Window days | `days[]` where `selected`, each day's `best` |
+| Ride Window days | every `days[]` entry (`previewDays: 7`): `best`, `temperatureMaxC`, `until` (Forecast ends), `availabilityReason` (the grey line), `daylight` (Sunrise/Sunset) |
+| Ride Window Done | `PATCH /users/me {expectedVersion, settings: {planning: {days, window}}}` (a quick pick saves as its preset, anything else as dates), then the board reloads with that window |
 | Window range | `range.dates` in the response `timeZone` |
 | Doesn't Fit Your Window | `unranked` with `no_feasible_departure` |
 | Departure tiles | `best` + up to three `alternatives` |
@@ -375,6 +386,8 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 | Notes | `drawbacks` (temperature, wind or other by wording) |
 
 **Not wired yet.** Score-change badge (no previous score kept); "Wind from the …" (the API has no
-direction, so it's hidden); unassessable routes aren't shown; factor prose is metric-only; the
-`next` preset starts today while the extension sends tomorrow onwards; the window capsule,
-"Track a route" and Preferences are still no-ops or sample data.
+direction, so it's hidden); unassessable routes aren't shown; factor prose is metric-only; a
+conflicting settings edit (409) keeps the old saved window, though that load still uses the new
+one; dates assume the device and the routes share a time zone; "Track a route" and Preferences
+are still no-ops or sample data. The Rides day strip doesn't show the sheet's "Rain until 15:00"
+style notes yet.

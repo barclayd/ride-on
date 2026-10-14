@@ -29,9 +29,10 @@ final class RideBoardLoaderTests: XCTestCase {
              "unranked":[{"routeId":"\(long)","routeName":"East Anglia","distanceKm":112,"ascentM":null,"estimatedDurationMinutes":425,
                "daylight":{"start":"2026-10-14T06:20:00.000Z","end":"2026-10-14T17:05:00.000Z"},"effectiveWindow":null,
                "status":"no_feasible_departure","best":null,"alternatives":[]}],
-             "days":[{"date":"2026-10-14","selected":true,"recommendedRouteId":"\(route)","best":\(departure("2026-10-14T08:00:00.000Z", "2026-10-14T11:00:00.000Z", 85.6))},
-                     {"date":"2026-10-15","selected":true,"recommendedRouteId":null,"best":null},
-                     {"date":"2026-10-16","selected":false,"recommendedRouteId":null,"best":null}]}
+             "days":[{"date":"2026-10-14","selected":true,"recommendedRouteId":"\(route)","temperatureMaxC":14.4,"best":\(departure("2026-10-14T08:00:00.000Z", "2026-10-14T11:00:00.000Z", 85.6))},
+                     {"date":"2026-10-15","selected":true,"recommendedRouteId":null,"best":null,"availabilityReason":"no_feasible_departure"},
+                     {"date":"2026-10-16","selected":false,"recommendedRouteId":null,"best":null,
+                      "availabilityReason":"partial_coverage","until":"2026-10-16T17:00:00.000Z"}]}
             """
         let response = try RideOnAPI.decoder.decode(RideBoardLoader.Recommendation.self, from: Data(json.utf8))
         let board = RideBoardLoader.board(from: response, routes: [route: .init(coordinates: [], cycleTravelURL: nil)],
@@ -46,6 +47,10 @@ final class RideBoardLoaderTests: XCTestCase {
         XCTAssertNotNil(pick.lastRidden)
 
         XCTAssertEqual(board.days.map { $0.best?.score }, [86, nil]) // unselected day dropped
+        XCTAssertEqual(board.forecast.count, 3)
+        XCTAssertEqual(board.forecast.map(\.note), [nil, "No tracked route fits your hours", nil])
+        XCTAssertEqual(board.forecast[0].temperatureMaxC, 14.4)
+        XCTAssertEqual(board.forecast[2].forecastEnds, ISO8601DateFormatter().date(from: "2026-10-16T17:00:00Z"))
         XCTAssertEqual(board.window.duration, 2 * 86_400)
         XCTAssertEqual(board.unfit.first?.rideDuration, 425 * 60)
         XCTAssertEqual(board.unfit.first?.windowAllows, (10 * 60 + 45) * 60)
@@ -57,6 +62,15 @@ final class RideBoardLoaderTests: XCTestCase {
         XCTAssertEqual(first.hours.map(\.sky), [.sunny, .rain])
         XCTAssertEqual(first.wind, [.init(.tailwind, from: 0, to: 25), .init(.headwind, from: 25, to: 50)])
         XCTAssertEqual(first.factors.map(\.name), ["Rain", "Wind", "Temperature", "Sunshine", "Sky"])
+    }
+
+    func testPlanningWindowRoundTrips() throws {
+        for hours in [RideWindow.Hours.daylight, .custom(leave: 7 * 60 + 30, back: 17 * 60)] {
+            let data = try JSONEncoder().encode(RideBoardLoader.PlanningWindow(hours))
+            XCTAssertEqual(try JSONDecoder().decode(RideBoardLoader.PlanningWindow.self, from: data).hours, hours)
+        }
+        XCTAssertEqual(String(decoding: try JSONEncoder().encode(RideBoardLoader.PlanningWindow(.custom(leave: 450, back: 1020))), as: UTF8.self)
+            .contains("\"07:30\""), true)
     }
 
     func testDecodesPolyline6() {
