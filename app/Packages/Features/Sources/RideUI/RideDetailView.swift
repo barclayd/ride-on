@@ -3,6 +3,7 @@ import EventKit
 import Models
 import DesignSystem
 import SharedUI
+import Services
 
 /// Ride detail (docs/redesign/README.md §2): one pick's verdict, departures, hourly forecast, route
 /// profile and factor breakdown. Choosing a departure updates the forecast, the profile's wind
@@ -15,14 +16,18 @@ public struct RideDetailView: View {
     @State private var titleOpacity = 0.0
     @State private var addedToCalendar: Date?
     @State private var calendarFailed = false
+    @State private var elevation: [RideDetail.ElevationPoint]
+    @Environment(\.services) private var services
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(board: RideBoard, pick: RideBoard.Pick) {
         self.board = board
         self.pick = pick
-        // ponytail: sample detail until it comes from POST /recommendations.
-        detail = .sample(for: pick, on: board)
+        // The fixture board carries no details; it keeps the sample.
+        let detail = board.details[pick.id] ?? .sample(for: pick, on: board)
+        self.detail = detail
+        _elevation = State(initialValue: detail.elevation)
         _selection = State(initialValue: pick.start)
     }
 
@@ -48,12 +53,14 @@ public struct RideDetailView: View {
                     }
                     RideSection("Forecast on the Ride") {
                         forecastCard
-                        footnote("Wind from the \(departure.windFrom).")
+                        if let windFrom = departure.windFrom { footnote("Wind from the \(windFrom).") }
                     }
-                    RideSection("Along the Route") {
-                        RouteProfile(elevation: detail.elevation, wind: departure.wind)
-                            .padding(16)
-                            .card()
+                    if !elevation.isEmpty {
+                        RideSection("Along the Route") {
+                            RouteProfile(elevation: elevation, wind: departure.wind)
+                                .padding(16)
+                                .card()
+                        }
                     }
                     RideSection("Why It Scored \(departure.score)") {
                         VStack(spacing: 20) {
@@ -79,6 +86,11 @@ public struct RideDetailView: View {
         .ignoresSafeArea(edges: .top)
         .background(.groupedBackground)
         .navigationTitle(pick.route.name)
+        .task {
+            // ponytail: Open-Meteo per visit, no cache; cache by route id if it gets slow.
+            guard elevation.isEmpty, !pick.route.coordinates.isEmpty else { return }
+            elevation = (try? await RideBoardLoader.elevation(of: pick.route, using: services.elevation)) ?? []
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -133,7 +145,7 @@ public struct RideDetailView: View {
                         Label {
                             Text(note.text)
                         } icon: {
-                            Image(systemName: note.kind == .temperature ? "thermometer.medium" : "wind")
+                            Image(systemName: icon(for: note.kind))
                                 .foregroundStyle(.secondary)
                         }
                         .labelStyle(IconColumn())
@@ -290,6 +302,14 @@ public struct RideDetailView: View {
     }
 
     // MARK: Chrome
+
+    private func icon(for kind: RideDetail.Note.Kind) -> String {
+        switch kind {
+        case .temperature: "thermometer.medium"
+        case .wind: "wind"
+        case .other: "info.circle"
+        }
+    }
 
     private func footnote(_ text: String) -> some View {
         Text(text)

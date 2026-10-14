@@ -1,14 +1,14 @@
 import Foundation
 
 /// Everything Ride detail shows for one pick (docs/redesign/README.md §2). Presentation values
-/// only, like `RideBoard`; the rebuilt UI renders `sample(for:on:)` until it's wired to
-/// `POST /recommendations`.
+/// only, like `RideBoard`; `sample(for:on:)` serves previews and the fixture world.
 public struct RideDetail: Hashable, Sendable {
     public var pick: RideBoard.Pick
     /// The forecast the score last moved from ("▲ 4 since 07:00").
     public var changeSince: Date?
     /// Short notes under the verdict.
     public var notes: [Note]
+    /// Empty when unknown; Ride detail then fetches it from the route's coordinates.
     public var elevation: [ElevationPoint]
     /// The pick's departure first, then up to three alternatives in the window.
     public var departures: [Departure]
@@ -24,7 +24,7 @@ public struct RideDetail: Hashable, Sendable {
 
 public extension RideDetail {
     struct Note: Hashable, Sendable {
-        public enum Kind: Hashable, Sendable { case temperature, wind }
+        public enum Kind: Hashable, Sendable { case temperature, wind, other }
         public var kind: Kind
         public var text: String
 
@@ -51,15 +51,15 @@ public extension RideDetail {
         public var score: Int
         /// One per ride hour.
         public var hours: [Hour]
-        /// Where the wind blows from, as a phrase: "west-south-west".
-        public var windFrom: String
+        /// Where the wind blows from, as a phrase: "west-south-west". The API doesn't say yet.
+        public var windFrom: String?
         /// Felt wind along the route, in order, covering its whole length.
         public var wind: [WindStretch]
         public var factors: [Factor]
 
         public var id: Date { start }
 
-        public init(start: Date, finish: Date, score: Int, hours: [Hour], windFrom: String, wind: [WindStretch], factors: [Factor]) {
+        public init(start: Date, finish: Date, score: Int, hours: [Hour], windFrom: String?, wind: [WindStretch], factors: [Factor]) {
             self.start = start
             self.finish = finish
             self.score = score

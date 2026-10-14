@@ -97,7 +97,7 @@ public enum GPXParser {
 public enum GPXGeometry {
     static let earthRadiusKm = 6371.0088
 
-    static func haversineKm(_ a: Coordinate, _ b: Coordinate) -> Double {
+    public static func haversineKm(_ a: Coordinate, _ b: Coordinate) -> Double {
         let lat1 = a.latitude * .pi / 180
         let lat2 = b.latitude * .pi / 180
         let dLat = (b.latitude - a.latitude) * .pi / 180

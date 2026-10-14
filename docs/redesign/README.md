@@ -9,7 +9,7 @@ doc is the *what*, that one is the *how*.
 **Approach.** The UI is rebuilt from scratch. Nothing from the previous Ride/You/SharedUI views
 is adapted. Screens are built against sample data shaped like the canvas (see
 [Sample data](#sample-data)), then wired to the existing API
-(https://ride-on-api.barclaysd.workers.dev, already powering the Safari client) in a later pass.
+(https://api.ride-on.cc, already powering the Safari client) in a later pass.
 
 This doc is updated with every PR that lands a piece of the redesign: tick the item, note the PR.
 
@@ -25,7 +25,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ⬜ | |
 | 6 | Widgets and Lock Screen | ⬜ | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing, YouUI…) | ⬜ | |
-| 8 | Wire to the API | ⬜ Later | |
+| 8 | Wire to the API | 🟡 Rides and Ride detail live; Preferences, Ride Window, Routes still sample | #159 |
 
 Not in scope yet: Routes tab and Onboarding (not redesigned; they keep working as they are).
 
@@ -339,22 +339,44 @@ Preferences in the sample: ideal 10–22°, headwind 15, crosswind 20, gusts 45 
 than 4°, never hotter than 30°, rain chance limit 60%, 20 km/h, departures every 30 min, distance
 40–80 km, °C and km/h.
 
-## Wiring notes (for the API pass)
+## Wiring notes
 
-Where each piece of UI will come from in `POST /recommendations` (see
-[`docs/api.md`](../api.md#result-contract)):
+The Rides tab is live outside the fixture world (`LiveRidesView`, which falls back to
+`RidesView(board: .sample)` under `--fixture-world` so E2E never touches the network).
+`RideBoardLoader` (`Services/RideBoardLoader.swift`) builds the board; `RideOnAPI` holds the
+session.
+
+**Sign-in.** Apple or Google through the PKCE browser handoff
+([`docs/authentication.md`](../authentication.md), "iOS and macOS app"):
+`POST /auth/browser/start` → `ASWebAuthenticationSession` with an `https` callback on
+`api.ride-on.cc/auth/browser/done` → `POST /auth/browser/exchange`. The session token lives in the
+keychain; a refreshed `set-auth-token` replaces it; a 401 signs out. The `https` callback needs the
+`webcredentials:api.ride-on.cc` associated domain. It's in the iOS entitlements only: the Mac
+profile has to be regenerated with Associated Domains (sign in to Xcode → Settings → Accounts,
+build once with `-allowProvisioningUpdates`) before it can go in `RideOn-macOS.entitlements`.
+
+**Loading.** `GET /route-selection` (the extension's shortlist) → `GET /users/me` (saved
+planning days) → in parallel `POST /recommendations {routeIds, days}`, `POST /rides/summaries`,
+and per route `GET /routes/:id` (cycle.travel link) and `GET /routes/:id/geometry` (polyline6 for
+the map). Ride detail's elevation profile samples the geometry through Open-Meteo on first open.
 
 | UI | API |
 |---|---|
-| Best pick (hero) | `recommendedRouteId` → its `rankings[]` entry |
-| Score, change badge | `best.score` (change = difference from the previous response for the same window) |
-| Meets your preferences / Below your minimums | `best.standards` (`meets` / `below`) |
-| Temperature chip, Forecast grid | `best.conditions`, `best.rideHours`, `best.forecastDetails` |
-| Wind chip, wind strip | `best.conditions.windDistanceFractions`, max gust |
-| Sky chip, rain | `best.conditions` sky fractions, `precipitationSummary` |
-| Departure tiles | `best` + up to three alternatives |
-| Why It Scored | `best.factors` + `best.drawbacks` |
+| Picks (hero, other routes) | `rankings[].best`, ordered as ranked |
+| Score | `best.score`, rounded |
+| Meets your preferences / Below your minimums | `best.standards.status` |
+| Temperature, wind, sky chips | `best.conditions` (dominant wind and sky by distance fraction) |
+| Last ridden | `POST /rides/summaries` `lastRiddenOn` |
+| Your Window days | `days[]` where `selected`, each day's `best` |
+| Window range | `range.dates` in the response `timeZone` |
 | Doesn't Fit Your Window | `unranked` with `no_feasible_departure` |
-| Day strip / Days list | one request per day in the window |
-| Preferences | `GET`/`PATCH /users/me` `settings` |
-| Updated 08:12 | `generatedAt`; refresh after `weather.refreshAt` |
+| Departure tiles | `best` + up to three `alternatives` |
+| Forecast on the Ride | `rideHours[]` |
+| Wind strip | `rideHours[]` dominant wind, merged into stretches |
+| Why It Scored | `factors`, sorted by score |
+| Notes | `drawbacks` (temperature, wind or other by wording) |
+
+**Not wired yet.** Score-change badge (no previous score kept); "Wind from the …" (the API has no
+direction, so it's hidden); unassessable routes aren't shown; factor prose is metric-only; the
+`next` preset starts today while the extension sends tomorrow onwards; the window capsule,
+"Track a route" and Preferences are still no-ops or sample data.

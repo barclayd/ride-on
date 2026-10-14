@@ -103,8 +103,9 @@ private struct RouteEditMenuItem: View {
 @MainActor @ViewBuilder
 private func destination(for tab: AppTab, namespace: Namespace.ID) -> some View {
     switch tab {
-    // ponytail: sample data until the API pass (docs/redesign/README.md, "Wiring notes").
-    case .rides: RidesView(board: .sample)
+    case .rides:
+        // The fixture world keeps E2E off the network.
+        if FixtureWorld.isEnabled { RidesView(board: .sample) } else { LiveRidesView() }
     case .routes: RoutesView(namespace: namespace)
     case .preferences: YouView()
     }

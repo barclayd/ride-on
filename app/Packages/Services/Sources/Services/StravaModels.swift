@@ -15,10 +15,11 @@ public struct StravaToken: Codable, Sendable, Hashable {
     }
 }
 
-/// Google's encoded polyline algorithm (precision 5) — what Strava's
-/// `map.summary_polyline` uses. No dependency; short enough to hand-roll.
+/// Google's encoded polyline algorithm: precision 5 is Strava's `map.summary_polyline`,
+/// 6 the Ride On API's `polyline6` geometry. No dependency; short enough to hand-roll.
 public enum PolylineDecoder {
-    public static func decode(_ encoded: String) -> [Coordinate] {
+    public static func decode(_ encoded: String, precision: Int = 5) -> [Coordinate] {
+        let scale = pow(10, Double(precision))
         var coordinates: [Coordinate] = []
         var index = encoded.startIndex
         var lat = 0
@@ -28,7 +29,7 @@ public enum PolylineDecoder {
             guard let dLat = decodeValue(encoded, &index), let dLon = decodeValue(encoded, &index) else { break }
             lat += dLat
             lon += dLon
-            coordinates.append(Coordinate(latitude: Double(lat) / 1e5, longitude: Double(lon) / 1e5))
+            coordinates.append(Coordinate(latitude: Double(lat) / scale, longitude: Double(lon) / scale))
         }
         return coordinates
     }
