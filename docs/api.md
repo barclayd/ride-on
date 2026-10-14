@@ -241,6 +241,9 @@ even if its geometry is equivalent. No automatic identity merging is applied. Wh
 active, [geometric overlap](ride-history.md) can lower scores across different IDs.
 
 `GET /routes/<id>` returns one owned summary with source, version and timestamps.
+`GET /routes/<id>/geometry` returns `{routeId, version, geometry}`: the stored
+`polyline6` path (`{version, encoding, data, pointCount}`) for drawing the route, or
+null when the GPX was too sparse or large. It carries no elevation.
 `GET /routes` returns `{ "routes": [...], "limit": 100, "nextCursor": null }`.
 Use `limit=1..100` and the returned `cursor` for additional pages, retaining any
 filters. Ordering is newest creation first, then route ID; refreshing a source

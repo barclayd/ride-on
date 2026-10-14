@@ -75,8 +75,9 @@ Alternatives may span dates. Clients must not merge or re-sort daily results.
 
 Each day includes `availability: full | partial | none`, `availabilityReason`,
 `availabilityBasis: required_windows_for_feasible_routes`, `until`, `daylight`,
-`temperatureMaxC`, `quality`, `recommendedRouteId`, `minimumStandardsStatus` and
-per-route `coverage[].intervals` with UTC start/end instants.
+`temperatureMaxC`, `quality`, `recommendedRouteId`, `best`, `minimumStandardsStatus` and
+per-route `coverage[].intervals` with UTC start/end instants. `best` is that day's
+recommended departure (the same shape as `rankings[].best`), or null.
 
 Availability checks essential measurements, their native intervals and location
 constraints throughout the effective windows of routes with feasible departures.

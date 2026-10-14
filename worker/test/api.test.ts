@@ -216,6 +216,33 @@ test('authentication and route ownership apply to all private endpoints', async 
   ).toBe(404);
   expect(calls()).toBe(0);
 });
+test('route geometry is owner-scoped and the app association is public', async () => {
+  const { app, send, upload } = setup();
+  const { route } = await upload();
+  const response = await send(`/routes/${route.id}/geometry`);
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as {
+    routeId: string;
+    version: number;
+    geometry: { encoding: string; pointCount: number } | null;
+  };
+  expect(body.routeId).toBe(route.id);
+  expect(body.version).toBe(1);
+  expect(body.geometry?.encoding).toBe('polyline6');
+  expect((await send(`/routes/${route.id}/geometry`, bobToken)).status).toBe(
+    404,
+  );
+  const association = await app.request(
+    '/.well-known/apple-app-site-association',
+    {},
+    env,
+  );
+  expect(association.status).toBe(200);
+  expect(association.headers.get('Content-Type')).toContain('application/json');
+  expect((await association.json()) as unknown).toEqual({
+    webcredentials: { apps: ['R2GGK3VN2C.com.danbarclay.rideon'] },
+  });
+});
 test('invalid dates, unknown preference fields, invalid pace and oversized requests fail before upstream use', async () => {
   const { send, upload, calls } = setup();
   const { route } = await upload();

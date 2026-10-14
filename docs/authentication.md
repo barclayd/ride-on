@@ -203,6 +203,14 @@ tab, with `redirectUri` set to `https://api.ride-on.cc/auth/browser/done`. That 
 `Referrer-Policy: no-referrer`. The extension's content script reads `code` and `state` from its URL
 and exchanges them exactly as above. Register the URL in `clientRedirects` to enable it.
 
+### iOS and macOS app
+
+The app runs the same handoff in `ASWebAuthenticationSession` with an https callback for
+`https://api.ride-on.cc/auth/browser/done`. That needs the API host as an associated domain:
+the Worker serves `/.well-known/apple-app-site-association` with
+`webcredentials.apps: ["R2GGK3VN2C.com.danbarclay.rideon"]`, and the app has
+`webcredentials:api.ride-on.cc`.
+
 Product APIs answer CORS for any `safari-web-extension://` origin, without
 `Access-Control-Allow-Credentials`: those requests carry bearer tokens, never cookies, so
 cookie-authenticated writes still require a trusted origin.

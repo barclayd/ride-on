@@ -130,6 +130,7 @@ const response = z.object({
       quality: z.number().nullable(),
       temperatureMaxC: z.number().nullable(),
       recommendedRouteId: z.string().nullable(),
+      best: bestSchema.nullable(),
       coverage: z.array(
         z.object({
           intervals: z.array(z.object({ start: z.string(), end: z.string() })),
@@ -297,6 +298,11 @@ integration(
         (result.days.find((day) => day.date === '2026-10-14')?.quality ?? 0) >
           ranking.best.score,
       );
+    }
+    // Each day carries its own best departure, so day tiles need no extra request.
+    for (const day of result.days) {
+      assert.equal(day.best?.score ?? null, day.quality);
+      assert.equal(day.best?.date ?? day.date, day.date);
     }
   },
 );

@@ -222,6 +222,7 @@ export const daySummary = (
     temperatureMaxC: best?.conditions.temperatureC.maximum ?? null,
     quality: best?.score ?? null,
     recommendedRouteId: result.recommendedRouteId,
+    best,
     minimumStandardsStatus: result.minimumStandardsStatus,
     coverage: windows.map((w) => ({
       routeId: w.routeId,
