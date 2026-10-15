@@ -500,3 +500,198 @@ integration(
     assert.equal(h.requests.length, 0);
   },
 );
+
+integration(
+  'tailwind opt-in persists, changes ranking, and reuses cached weather across restart and temporary overrides',
+  async (h) => {
+    h.use(
+      metOffice(({ request }) => {
+        const tailwind =
+          new URL(request.url).searchParams.get('longitude') === '-1';
+        return HttpResponse.json(
+          hourlyForecast(request, {
+            values: () => ({
+              screenTemperature: tailwind ? 14 : 14.3,
+              windSpeed10m: tailwind ? 4.5 : 1,
+              max10mWindGust: tailwind ? 8 : 1,
+              windDirectionFrom10m: 180,
+            }),
+          }),
+        );
+      }),
+    );
+    const tail = await upload(h, 'Helpful tailwind', -1);
+    const calm = await upload(h, 'Slightly warmer calm', 0);
+    const ids = [tail.id, calm.id];
+    const created = await createUser(h);
+    assert.equal(created.settings.preferences.wind.preferTailwind, false);
+    const before = await recommendMetOffice(h, ids);
+    assert.equal(before.recommendedRouteId, calm.id);
+    const calls = h.requests.length;
+    const off = first(
+      before.rankings.filter((r) => r.routeId === tail.id),
+    ).best;
+    assert.deepEqual(off.windAssistance, {
+      usefulDistanceFraction: 1,
+      potentialPoints: 0,
+      appliedPoints: 0,
+    });
+    const response = await patch(h, {
+      expectedVersion: created.version,
+      settings: { preferences: { wind: { preferTailwind: true } } },
+    });
+    assert.equal(response.status, 200);
+    const saved = await readUser(response);
+    assert.deepEqual(saved.settings.preferences.wind, {
+      ...created.settings.preferences.wind,
+      preferTailwind: true,
+    });
+    await h.restart();
+    assert.deepEqual(await readUser(await h.send('/users/me')), saved);
+    const after = await recommendMetOffice(h, ids);
+    assert.equal(after.resolvedPreferences.wind.preferTailwind, true);
+    assert.equal(after.recommendedRouteId, tail.id);
+    const on = first(after.rankings).best;
+    assert.equal(on.windAssistance.potentialPoints, 2);
+    assert.equal(on.score - off.score, on.windAssistance.appliedPoints);
+    assert.deepEqual(on.conditions, off.conditions);
+    assert.deepEqual(on.factors, off.factors);
+    assert.deepEqual(on.standards, off.standards);
+
+    // An older client edits another wind setting without knowing this field.
+    const unrelated = await readUser(
+      await patch(h, {
+        expectedVersion: saved.version,
+        settings: { preferences: { wind: { comfortableHeadwindKph: 19 } } },
+      }),
+    );
+    assert.equal(unrelated.settings.preferences.wind.preferTailwind, true);
+    const temporary = await recommendMetOffice(h, ids, {
+      preferences: { wind: { preferTailwind: false } },
+    });
+    assert.equal(temporary.recommendedRouteId, calm.id);
+    assert.equal(temporary.resolvedPreferences.wind.preferTailwind, false);
+    assert.equal(temporary.resolvedPreferences.wind.comfortableHeadwindKph, 19);
+    assert.deepEqual(await readUser(await h.send('/users/me')), unrelated);
+    const inherited = await recommendMetOffice(h, ids, {
+      preferences: { wind: { comfortableCrosswindKph: 21 } },
+    });
+    assert.equal(inherited.resolvedPreferences.wind.preferTailwind, true);
+    assert.equal(inherited.recommendedRouteId, tail.id);
+    assert.equal(
+      (
+        await patch(h, {
+          expectedVersion: saved.version,
+          settings: { preferences: { wind: { preferTailwind: false } } },
+        })
+      ).status,
+      409,
+    );
+
+    const disabled = await readUser(
+      await patch(h, {
+        expectedVersion: unrelated.version,
+        settings: { preferences: { wind: { preferTailwind: false } } },
+      }),
+    );
+    assert.equal(disabled.settings.preferences.wind.preferTailwind, false);
+    assert.equal(
+      (await recommendMetOffice(h, ids)).recommendedRouteId,
+      calm.id,
+    );
+    assert.equal(h.requests.length, calls);
+    const bob = await createUser(h, {}, BOB_TOKEN);
+    assert.equal(bob.settings.preferences.wind.preferTailwind, false);
+  },
+);
+
+integration(
+  'legacy users default to no tailwind preference without rewriting stored settings or version',
+  async (h) => {
+    const saved = await createUser(h, {
+      preferences: { wind: { preferTailwind: true } },
+    });
+    assert.equal(saved.settings.preferences.wind.preferTailwind, true);
+    const { preferTailwind: _removed, ...oldWind } =
+      saved.settings.preferences.wind;
+    const legacy = {
+      ...saved,
+      settings: {
+        ...saved.settings,
+        preferences: { ...saved.settings.preferences, wind: oldWind },
+      },
+    };
+    const db = await h.runtime.getD1Database('ROUTES_DB');
+    await db
+      .prepare('UPDATE users SET user_json = ? WHERE id = ?')
+      .bind(JSON.stringify(legacy), saved.id)
+      .run();
+    await h.restart();
+    const read = await readUser(await h.send('/users/me'));
+    assert.equal(read.settings.preferences.wind.preferTailwind, false);
+    assert.equal(read.version, saved.version);
+    assert.equal(read.updatedAt, saved.updatedAt);
+    const restartedDb = await h.runtime.getD1Database('ROUTES_DB');
+    const stored = await restartedDb
+      .prepare('SELECT user_json FROM users WHERE id = ?')
+      .bind(saved.id)
+      .first<{ user_json: string }>();
+    assert.equal(stored?.user_json, JSON.stringify(legacy));
+    const changed = await readUser(
+      await patch(h, {
+        expectedVersion: saved.version,
+        settings: { preferences: { wind: { comfortableGustKph: 40 } } },
+      }),
+    );
+    assert.equal(changed.settings.preferences.wind.preferTailwind, false);
+    assert.equal(changed.settings.preferences.wind.comfortableGustKph, 40);
+  },
+);
+
+integration(
+  'tailwind preference accepts only booleans and invalid writes are atomic',
+  async (h) => {
+    const user = await createUser(h, {
+      preferences: { wind: { preferTailwind: true } },
+    });
+    for (const preferTailwind of [null, 'true', 'false', 0, 1, {}, []]) {
+      const preferences = { wind: { preferTailwind } };
+      assert.equal(
+        (
+          await patch(h, {
+            expectedVersion: user.version,
+            settings: { preferences },
+          })
+        ).status,
+        400,
+      );
+      assert.equal(
+        (
+          await h.send('/recommendations', {
+            body: JSON.stringify({
+              routeIds: ['00000000-0000-4000-8000-000000000001'],
+              date: RIDE_DATE,
+              preferences,
+            }),
+          })
+        ).status,
+        400,
+      );
+      assert.equal(
+        (
+          await h.send('/users', {
+            token: BOB_TOKEN,
+            body: JSON.stringify({
+              displayName: 'Bob',
+              settings: { preferences },
+            }),
+          })
+        ).status,
+        400,
+      );
+    }
+    assert.deepEqual(await readUser(await h.send('/users/me')), user);
+    assert.equal((await h.send('/users/me', { token: BOB_TOKEN })).status, 404);
+    assert.equal(h.requests.length, 0);
+  },
+);

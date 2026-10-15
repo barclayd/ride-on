@@ -74,6 +74,11 @@ const candidate = z.object({
   finishAt: z.iso.datetime(),
   score: z.number().min(0).max(100),
   weatherScore: z.number().min(0).max(100),
+  windAssistance: z.object({
+    usefulDistanceFraction: z.number().min(0).max(1),
+    potentialPoints: z.number().nonnegative(),
+    appliedPoints: z.number().nonnegative(),
+  }),
   factors: z.object({
     climbing: z.number().min(0).max(100).nullable(),
     distance: z.number().min(0).max(100).nullable(),
