@@ -1468,6 +1468,7 @@ a.ro-name:hover {
 }
 .ro-expander > span:first-child {
   flex: 1;
+  text-wrap: pretty;
 }
 .ro-expander > span:last-child {
   font:
@@ -1962,6 +1963,9 @@ a.ro-name:hover {
   padding: 6px 4px;
   font: 600 12px var(--ro-sans);
   color: var(--ro-slate);
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 .ro-unit-switch input {
   position: absolute;

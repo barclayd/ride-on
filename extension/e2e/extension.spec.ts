@@ -97,7 +97,11 @@ const reset = () => {
       },
       preferences: {
         temperature: { comfortMinC: 10, comfortMaxC: 22 },
-        wind: { comfortableHeadwindKph: 15, comfortableCrosswindKph: 20 },
+        wind: {
+          comfortableHeadwindKph: 15,
+          comfortableCrosswindKph: 20,
+          preferTailwind: false,
+        },
         climbing: { preference: 'neutral' },
         distance: null,
         minimumStandards: {},
@@ -785,6 +789,26 @@ test('gust comfort saves separately and appears alongside the ride wind', async 
   await expect(page.locator('.ro-sync')).toHaveText('Synced');
   await expectPanelFits(page);
   await page.screenshot({ path: test.info().outputPath('gust-comfort.png') });
+
+  // Ideal wind: the API's default is calm; Tailwind saves and re-ranks.
+  const ideal = page.getByRole('radiogroup', { name: 'Ideal wind' });
+  await expect(ideal.getByRole('radio', { name: 'Calm' })).toBeChecked();
+  const before = recCalls().length;
+  await ideal.getByRole('radio', { name: 'Tailwind' }).check();
+  await expect
+    .poll(() => patches().at(-1)?.body.settings.preferences.wind.preferTailwind)
+    .toBe(true);
+  await expect.poll(() => recCalls().length).toBeGreaterThan(before);
+  await expect(page.getByText(/wind behind you rank higher/)).toBeVisible();
+  await page
+    .getByRole('button', { name: /Wind preferences/ })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath('ideal-wind.png') });
+  await page.getByRole('button', { name: /Wind preferences/ }).click();
+  await expect(
+    page.getByRole('button', { name: /Wind preferences/ }),
+  ).toContainText('Prefer a tailwind · headwind up to 15 km/h');
+  await expect(page.locator('.ro-sync')).toHaveText('Synced');
 });
 
 test('a scored ride explains uncertain sunshine in the popup and on Journeys', async ({
