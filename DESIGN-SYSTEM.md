@@ -35,7 +35,8 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
    the actual best score each day, the wind strip is the actual wind along the route. No
    stock illustrations.
 6. **One tinted action per screen, at most.** Zero is fine (Rides and Ride detail have none).
-   The commit star's gold is an on state, not a tinted action: it stays clear glass until tapped.
+   The track star's gold is an on state, not a tinted action: it stays clear glass until the ride
+   is tracked.
 7. **Typography over iconography for data.** Scores, temperatures and times are typeset with
    monospaced digits. A verdict never relies on colour alone: it always has a symbol and words.
 
@@ -48,8 +49,9 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 | Tab bar (Rides, Routes, Preferences) | System glass; shrinks to the selected tab's icon on scroll | `TabView` + `.tabBarMinimizeBehavior(.onScrollDown)` |
 | Toolbars | System glass. At most 3 groups. Icons only, each with an accessibility label. Related actions share one capsule (share + more) | `.toolbar`, `ToolbarItemGroup`, `ToolbarSpacer` |
 | Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
-| Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero commit star `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while on |
+| Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero track star `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while tracked |
 | Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
+| Partial-height sheets (Track) | System glass, floating inset over the dimmed screen; Close leading, actions as full-width capsules at the bottom | `.presentationDetents([.height(content)])`, `Button(role: .close)`, `.glassProminent` / `.glass` capsules |
 | Pushed screens' back button | 44pt glass circle, chevron only | stock `NavigationStack` back button |
 | Cards, rows, chips, badges | **Not glass.** Solid `secondarySystemGroupedBackground` | `.background(.background.secondary, in: .rect(cornerRadius: 26))` |
 
@@ -86,7 +88,7 @@ Rules:
   | Crosswind | `#E8A100` | `#FFD60A` |
   | Headwind | `#C93400` | `#FF453A` |
   | Rain chance | `#0A66D8` | `#64B5FF` |
-  | Committed (hero star on) | `#C88A00` | `#C88A00` |
+  | Committed (tracked star, Track sheet medal) | `#C88A00` | `#C88A00` |
 
 - **Temperature ramp** (`ConditionPalette`, the only custom palette): Apple Weather's
   convention, deep blue below 0° through green to red above 30°. Used by the Ideal
@@ -116,7 +118,7 @@ en-GB ("Wednesday 14 October", "Wed 14 – Sun 18").
 
 - **Grouped background** with solid cards, 16pt side margins, 26pt card radius. Nested
   shapes use `ConcentricRectangle` / `.rect(corners: .concentric)` rather than hard-coded radii.
-- **Minimum target 44pt.** Toolbar circles are 44pt; the hero commit star is 48pt.
+- **Minimum target 44pt.** Toolbar circles are 44pt; the hero track star is 48pt.
 - **The hero** (Rides and Ride detail): the map is full-bleed under the status bar and
   toolbar (`.ignoresSafeArea(edges: .top)` + `.backgroundExtensionEffect()`), with a bottom
   scrim for the title block and the Maps attribution row along the bottom edge.
@@ -138,8 +140,8 @@ before adding a custom component in code.
    shadow) and the Maps attribution row. No date or times on the map: they lead the card below. The map ignores touches
    (taps belong to whatever the hero opens), so the attribution shows but Legal isn't tappable
    there. On Rides the hero is a `NavigationLink` and the `matchedTransitionSource` for the
-   zoom into Ride detail; the clear-glass commit star ("Commit to Hilly Loop on Wednesday 14
-   October"; `star.fill` on gold-tinted glass while on) is overlaid beside the link, not inside it, so VoiceOver reaches both. Ride detail shows the same map,
+   zoom into Ride detail; the clear-glass track star ("Track Hilly Loop on Wednesday 14
+   October"; opens the Track sheet; `star.fill` on gold-tinted glass while tracked) is overlaid beside the link, not inside it, so VoiceOver reaches both. Ride detail shows the same map,
    400pt instead of 480pt, so the zoom lands on the same image.
 2. **`ConditionChip`** — SF Symbol + value in `.footnote` on a solid `.fill.tertiary`
    capsule ("9–14°", "15 km/h tailwind", "Gusts 28 km/h", "Sunny spells"). Max 4 per row.
@@ -157,7 +159,7 @@ before adding a custom component in code.
    over a wind strip on the same km axis (`RectangleMark` bands: tailwind / crosswind /
    headwind, with a worded legend). Scrubbing with `chartXSelection`.
 7. **`ScoreGauge`** — the score as a ring (`Gauge(.accessoryCircular)` style) on Ride detail
-   and in widgets. On Rides the score is a plain number with a `ProgressView` bar and a ▲/▼
+   (64pt), the Track sheet's ride card (40pt) and in widgets. On Rides the score is a plain number with a `ProgressView` bar and a ▲/▼
    change badge.
 8. **`TemperatureRange`** — Ideal Temperature's two-handle range control on the temperature
    ramp, plus the Weather-style range bars in "How Your Routes Fit". Custom because SwiftUI
@@ -184,6 +186,8 @@ hand-roll `.animation()` calls.
 | Tab bar shrinking on scroll | system (`.tabBarMinimizeBehavior(.onScrollDown)`) |
 | Async content arriving | `.smooth` (`Motion.panelMaterialize`), never a hard cut |
 | Haptics — stepped sliders, range handles, pickers | `.sensoryFeedback(.selection)` per step |
+| Track sheet in and out | system sheet presentation (no bounce) |
+| Star turning gold once the Track sheet has gone | `.contentTransition(.symbolEffect(.replace))` + `.symbolEffect(.bounce)`, `.sensoryFeedback(.success)` |
 
 Reduce Motion: the zoom falls back to a cross-fade, re-rank slides become cross-fades,
 glass transitions use `.materialize`.
@@ -200,7 +204,7 @@ glass transitions use `.materialize`.
 - **Reduce Transparency**: glass becomes opaque (`systemBackground`-family solid).
   **Increase Contrast**: glass becomes solid with a visible border.
 - Every icon-only control has an accessibility label ("Rides", "Track a route", "Share",
-  "More", "Send route to a bike computer", "Commit to Hilly Loop on Wednesday 14 October").
+  "More", "Send route to a bike computer", "Track Hilly Loop on Wednesday 14 October").
 
 ## 9. Screen ↔ pattern map
 
@@ -209,6 +213,7 @@ glass transitions use `.materialize`.
 | **Rides** (tab) | `RideHero` for the best pick in the window → conditions card (date, then 09:00 Leave ┄ 🚲 about 3h ┄ ~12:00 Back, then "✓ Meets your preferences", last ridden, `ConditionChip`s, score with bar and change badge) → "Your Window" `DayStrip` → "Other Tracked Routes" rows (route thumbnail, name, departure → return · distance, conditions or "Below your minimums", score) → "Doesn't Fit Your Window" → Apple Weather attribution, "Updated 08:12. Pull down to refresh." Toolbar: window capsule (leading), "+" track a route (trailing). Pull to refresh. |
 | **Ride detail** (push, zoom from hero) | Shorter `RideHero` → verdict card (`ScoreGauge`, verdict, change since last update, last ridden, one or two notes) → "Departure" `DeparturePicker` → "Forecast on the Ride" hourly grid (time, sky, temperature, wind, gusts, rain chance) → "Along the Route" `RouteProfile` → "Why It Scored 86" `FactorRow`s → Add to Calendar, Open in cycle.travel (accent list buttons) → Apple Weather attribution. Toolbar: back (leading), share + more in one capsule (trailing). |
 | **Window sheet** | Large detent (the days list plus Hours need the height). Grabber, Cancel (glass circle, `xmark`) leading, centred "Ride Window", Done (tinted circle, `checkmark`) trailing. Quick picks (Tomorrow, This Weekend, Next 5 Days) → "Days" multi-select list, each day showing its best route and score, sky and temperature → "Hours": segmented Daylight / Custom, Leave After and Back By (`DatePicker(.hourAndMinute)` when Custom). |
+| **Track sheet** | Content-height detent, floating glass. Grabber, Close (glass circle, `xmark`) leading → gold star medal with a bell badge → "Track This Ride" and one sentence → ride card (thumbnail, name, day and times, 40pt `ScoreGauge`) → "Notify Me If" rows (rain, gusts over your limit, below your minimum, a better time or day) and the evening-before footnote → "Start Tracking" (`.glassProminent`, the one tinted action) and "Not Now". Tracking mode: "Tracking This Ride", Notifications Are Off card when denied, "We'll Notify You If", "Stop Tracking" (`.glass`, red label). |
 | **Window passed** | Rides when the saved window is in the past. No hero, so the toolbar is regular glass and the capsule shows the stale range. `ContentUnavailableView` ("Your Window Has Passed", one sentence, "Choose Dates" as the one `.borderedProminent` button) → "Quick Picks" rows with each range's best route and score. |
 | **Preferences** (tab) | `Form` with a large title and subtitle "Changes re-rank your rides straight away." Sections: What Makes a Good Ride (Ideal Temperature and Comfortable Wind push to their screens; Sunshine, Rain, Climbing, Recently Ridden are menus; Distance), Deal-Breakers, Riding (average speed stepper, "Use My Strava Average", departure interval), Units (segmented), Connections (Strava, Apple Health), Account. Plumbing is plain settings rows; taste gets a visual screen. |
 | **Ideal Temperature** (push) | Big range readout, `TemperatureRange`, one-line explanation → "How Your Routes Fit" range bars per route → "Deal-Breakers" steppers. Saves automatically; no Done. |

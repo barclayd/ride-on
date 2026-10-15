@@ -13,8 +13,12 @@ public struct RidesView: View {
     var apply: @MainActor @Sendable (RideWindow) async -> Void
     @State private var selectedDay: Date
     @State private var choosingWindow = false
-    // ponytail: in memory only, no notifications. The commit sheet and the API come later.
-    @State private var committed: Set<String> = []
+    // ponytail: in memory only, so nothing is watched yet. The tracking API comes later
+    // (docs/redesign/ride-tracking-api-requests.md).
+    @State private var tracked: Set<String> = []
+    /// The ride the Track sheet is open for, and the state it asked for when it closed.
+    @State private var tracking: RideBoard.Pick?
+    @State private var trackingChange: (id: String, on: Bool)?
     @Namespace private var zoom
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.speedSystem) private var speedSystem
@@ -52,7 +56,7 @@ public struct RidesView: View {
                         .matchedTransitionSource(id: hero.id, in: zoom)
 
                         // Beside the link, not inside it, so VoiceOver reaches both.
-                        commitButton(hero)
+                        trackButton(hero)
                             .padding(.trailing, 20)
                             .padding(.bottom, 38)
                     }
@@ -88,6 +92,16 @@ public struct RidesView: View {
         }
         .refreshable { await refresh() }
         .sheet(isPresented: $choosingWindow) { RideWindowSheet(board: board, apply: apply) }
+        // The star changes once the sheet has gone, so the change is seen.
+        .sheet(item: $tracking, onDismiss: {
+            guard let change = trackingChange else { return }
+            trackingChange = nil
+            withAnimation(Motion.glassTapLayout) {
+                if change.on { tracked.insert(change.id) } else { tracked.remove(change.id) }
+            }
+        }) { pick in
+            TrackRideSheet(pick: pick, isTracking: tracked.contains(pick.id)) { trackingChange = (pick.id, $0) }
+        }
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button { choosingWindow = true } label: {
@@ -106,25 +120,28 @@ public struct RidesView: View {
         }
     }
 
-    /// Commits to the hero's ride on its day; gold glass while on.
-    private func commitButton(_ pick: RideBoard.Pick) -> some View {
-        let isOn = committed.contains(pick.id)
+    /// Opens the Track sheet for the hero's ride; gold glass while it's tracked.
+    private func trackButton(_ pick: RideBoard.Pick) -> some View {
+        let isOn = tracked.contains(pick.id)
+        let day = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
         return Button {
-            withAnimation(Motion.glassTapLayout) { committed.formSymmetricDifference([pick.id]) }
+            tracking = pick
         } label: {
             Image(systemName: isOn ? "star.fill" : "star")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
                 .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: isOn)
                 .padding(8)
                 .frame(minWidth: 48, minHeight: 48)
                 .glassEffect(isOn ? .clear.tint(.committed).interactive() : .clear.interactive(), in: .circle)
                 .shadow(color: isOn ? Color.committed.opacity(0.45) : .clear, radius: 8, y: 4)
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: isOn)
-        .accessibilityLabel("Commit to \(pick.route.name) on \(pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide)))")
+        .sensoryFeedback(trigger: isOn) { _, on in on ? .success : .selection }
+        .accessibilityLabel(isOn ? "Tracking \(pick.route.name) on \(day)" : "Track \(pick.route.name) on \(day)")
         .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityIdentifier("track-star")
     }
 
     // MARK: Conditions
