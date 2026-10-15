@@ -4,7 +4,7 @@ import {
   weatherProviderChoices,
   weatherProviderIds,
 } from '../weather/choices.ts';
-import { levelWeights, preferenceLevelsSchema } from './levels.ts';
+import { levelWeights, levelWind, preferenceLevelsSchema } from './levels.ts';
 import {
   defaultPlanning,
   planningDaysSchema,
@@ -236,6 +236,16 @@ const checkSettingsConflicts = (
       message:
         'Choose weatherProviderId or advanced weather/forecast settings, not both.',
     });
+  if (
+    patch.preferenceLevels?.crosswind !== undefined &&
+    patch.preferences?.wind?.crosswindSensitivity !== undefined
+  )
+    context.addIssue({
+      code: 'custom',
+      path: ['preferenceLevels', 'crosswind'],
+      message:
+        'Do not combine a crosswind level with its raw sensitivity in the same request.',
+    });
   for (const [level, field] of [
     ['sunshine', 'sunshine'],
     ['rain', 'dryness'],
@@ -294,7 +304,11 @@ export const mergeSettings = (
         ...base.preferences.temperature,
         ...preferences?.temperature,
       },
-      wind: { ...base.preferences.wind, ...preferences?.wind },
+      wind: {
+        ...base.preferences.wind,
+        ...preferences?.wind,
+        ...levelWind(patch.preferenceLevels),
+      },
       sunshine: { ...base.preferences.sunshine, ...preferences?.sunshine },
       recentRides: {
         ...(base.preferences.recentRides ?? {

@@ -18,6 +18,7 @@ API v0.22.0 adds the opt-in [experimental ground assessment](ground-assessment-a
 API v0.23.0 adds temperature interpolation and ride-scoped forecast details (`comfort-v0.12`); see below.
 Algorithm `comfort-v0.14` rewards the sustained forward component of diagonal tailwinds in proportion to distance, retaining the separate crosswind/gust discomfort and bounded benefit introduced in v0.13. It is checked against the 14 October preference interview and a saved route-level forecast replay.
 API v0.24.0 adds an explicit [helpful-tailwind preference](#helpful-tailwind-preference). Algorithm `comfort-v0.15` applies the calibrated assistance bonus only when the rider opts in; new and existing profiles otherwise receive no bonus.
+API v0.25.0 adds [wind bearing and comparable previous scores](redesign/ride-detail-api-requests.md), [factor point-loss explanations, crosswind levels and linked sign-in methods](redesign/preferences-api-requests.md). Algorithm `comfort-v0.15` and existing rankings are unchanged. Seasonal floors, automatic gust-setting coupling and linked wind/distance units were declined in the contract review; Strava connection metadata awaits a real OAuth/sync implementation.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 

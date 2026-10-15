@@ -177,13 +177,25 @@ test('every planning kind exposes its exact resolved dates in range.dates', () =
   }
 });
 test('levels preserve calibrated and custom weights, conflict atomically, and do not remove standards', () => {
-  expect(preferenceLevels({ sunshine: 0.25, dryness: 0.2 })).toEqual({
+  expect(
+    preferenceLevels({
+      weights: { sunshine: 0.25, dryness: 0.2 },
+      wind: { crosswindSensitivity: 1 },
+    }),
+  ).toEqual({
     sunshine: 'important',
     rain: 'light-ok',
+    crosswind: 'normal',
   });
-  expect(preferenceLevels({ sunshine: 0.18, dryness: 0.6 })).toEqual({
+  expect(
+    preferenceLevels({
+      weights: { sunshine: 0.18, dryness: 0.6 },
+      wind: { crosswindSensitivity: 5 },
+    }),
+  ).toEqual({
     sunshine: 'custom',
     rain: 'custom',
+    crosswind: 'custom',
   });
   const base = settingsSchema.parse(
     mergeSettings({
@@ -256,6 +268,7 @@ test('missing elevation exposes a weather-only assessment without inventing a co
   const r = presentRoute(present(result.unranked[0]), 30);
   expect(r.partialAssessment?.weatherScore).toBeGreaterThan(0);
   expect(r.partialAssessment?.score).toBeNull();
+  expect(r.partialAssessment?.pointsLost).toBeNull();
   expect(r.verdict.code).toBe('missing_elevation');
   expect(r.coverage.assessedFraction).toBe(0);
 });

@@ -12,6 +12,7 @@ import {
 } from './access.ts';
 import { browserRoutes } from './browser.ts';
 import { authConfig, createIdentity } from './config.ts';
+import { linkedProviders } from './providers.ts';
 
 export const copySessionHeaders = (from: Headers, to: Headers) => {
   for (const cookie of from.getSetCookie()) to.append('Set-Cookie', cookie);
@@ -69,9 +70,12 @@ export const identityRoutes = () => {
   app.get('/auth/me', async (c) => {
     const session = await requireSession(c.req.raw, createIdentity(c.env));
     copySessionHeaders(session.headers, c.res.headers);
-    const binding = await existingOwner(c.env.ROUTES_DB, session.user.id);
+    const [binding, providers] = await Promise.all([
+      existingOwner(c.env.ROUTES_DB, session.user.id),
+      linkedProviders(c.env.ROUTES_DB, session.user.id),
+    ]);
     return c.json({
-      user: session.user,
+      user: { ...session.user, providers },
       ownerId: binding?.owner_id ?? null,
       session: { id: session.session.id, expiresAt: session.session.expiresAt },
     });

@@ -23,8 +23,10 @@ import {
   type RecommendationInput,
   resolveMinimumTemperature,
 } from './input.ts';
+import type { PreviousScore } from './score-baselines.ts';
 import { compileTemperature } from './temperature.ts';
 import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
+import { meanWindFrom } from './wind-direction.ts';
 
 export const ALGORITHM_VERSION = 'comfort-v0.15';
 export const requiredWeather = [
@@ -129,6 +131,7 @@ type Observation = {
     ReturnType<ReturnType<typeof compileTemperature>['range']>
   >;
   windSpeedKph: number;
+  windFromDegrees: number;
   cloudCoverFraction: number | null;
   skyCondition: number | null;
   precipitationType: number | null;
@@ -190,6 +193,7 @@ const summarize = (rows: readonly Observation[]) => {
           ]),
         )
       : null,
+    windFromDegrees: meanWindFrom(rows),
     averageWindSpeedKph: round(mean((r) => r.windSpeedKph)),
     averageHeadwindKph: round(mean((r) => Math.max(0, r.headwindKph))),
     averageTailwindKph: round(mean((r) => Math.max(0, -r.headwindKph))),
@@ -379,6 +383,7 @@ const assessCandidate = (
       temperatureC,
       temperatureRange,
       windSpeedKph: speedMs * 3.6,
+      windFromDegrees: direction,
       cloudCoverFraction,
       skyCondition,
       precipitationType: values.at(-1) ?? null,
@@ -514,11 +519,28 @@ const assessCandidate = (
   const windShare = weights.wind / weightTotal;
   // Wind exposure is proportional to distance (and time at the model's fixed
   // speed). Preserve the existing worst-section treatment of other factors.
-  const unassistedWeatherScore =
-    100 *
-    (0.75 * mean('nonWindComfort') +
-      0.25 * Math.min(...rows.map((row) => row.nonWindComfort)) +
-      windShare * mean('wind'));
+  type WeatherFactor = keyof typeof weights;
+  const unassistedScore = (ideal?: WeatherFactor) => {
+    const nonWind = rows.map((row) =>
+      ideal === undefined || ideal === 'wind'
+        ? row.nonWindComfort
+        : row.nonWindComfort +
+          (weights[ideal] / weightTotal) *
+            (1 - (row[ideal] ?? (ideal === 'sunshine' ? 0.5 : 0))),
+    );
+    const average =
+      nonWind.reduce(
+        (sum, value, i) => sum + value * (rows[i]?.distanceM ?? 0),
+        0,
+      ) / route.distanceM;
+    return (
+      100 *
+      (0.75 * average +
+        0.25 * Math.min(...nonWind) +
+        windShare * (ideal === 'wind' ? 1 : mean('wind')))
+    );
+  };
+  const unassistedWeatherScore = unassistedScore();
   // Use raw distance shares for scoring, never rounded display fractions.
   const usefulAssistedShare =
     rows.reduce(
@@ -534,10 +556,15 @@ const assessCandidate = (
   const climbingShare = climbing.status === 'assessed' ? CLIMBING_SHARE : 0;
   const distanceShare = distance.comfort === null ? 0 : DISTANCE_SHARE;
   const weatherShare = 1 - climbingShare - distanceShare;
-  const score =
-    weatherShare * weatherScore +
-    climbingShare * 100 * (climbing.comfort ?? 0) +
-    distanceShare * 100 * (distance.comfort ?? 0);
+  const combinedScore = (
+    weather: number,
+    climbingComfort = climbing.comfort ?? 0,
+    distanceComfort = distance.comfort ?? 0,
+  ) =>
+    weatherShare * weather +
+    climbingShare * 100 * climbingComfort +
+    distanceShare * 100 * distanceComfort;
+  const score = combinedScore(weatherScore);
   const rideHours = Array.from(
     { length: Math.ceil(durationMs / HOUR) },
     (_, index) => {
@@ -552,7 +579,34 @@ const assessCandidate = (
     },
   );
   const recentRides = history.assess(route.id, iso(departure));
-  const finalScore = Math.max(0, score - recentRides.penaltyPoints);
+  const afterHistory = (base: number) =>
+    Math.max(0, base - recentRides.penaltyPoints);
+  const finalScore = afterHistory(score);
+  // Counterfactual gains are not additive allocations. Re-evaluate the same
+  // departure with one factor ideal, retaining the ceiling, shares and history.
+  const gain = (base: number) =>
+    round(Math.max(0, afterHistory(base) - finalScore));
+  const weatherGain = (factor: WeatherFactor) =>
+    weights[factor] === 0
+      ? null
+      : factor === 'sunshine' && unknownSunshine.length
+        ? null
+        : gain(
+            combinedScore(
+              Math.min(100, unassistedScore(factor) + assistancePoints),
+            ),
+          );
+  const pointsLost = {
+    temperature: weatherGain('temperature'),
+    wind: weatherGain('wind'),
+    dryness: weatherGain('dryness'),
+    clearSkies: weatherGain('clearSkies'),
+    sunshine: weatherGain('sunshine'),
+    climbing: climbingShare ? gain(combinedScore(weatherScore, 1)) : null,
+    distance: distanceShare
+      ? gain(combinedScore(weatherScore, undefined, 1))
+      : null,
+  };
   const scoreWithoutAssistance =
     score - weatherShare * Math.max(0, weatherScore - unassistedWeatherScore);
   const drawbacks: string[] = [];
@@ -599,12 +653,14 @@ const assessCandidate = (
     );
   return {
     status: 'assessed' as const,
+    previous: null as PreviousScore | null,
     date: input.date,
     departureAt: iso(departure),
     finishAt: iso(departure + durationMs),
     baseScore: round(score),
     score: round(finalScore),
     recentRides,
+    pointsLost,
     weatherScore: round(weatherScore),
     windAssistance: {
       usefulDistanceFraction: round(usefulAssistedShare),
@@ -805,6 +861,7 @@ export const recommendRides = (
             ...partial,
             status: 'partial' as const,
             score: null,
+            pointsLost: null,
             reasonCode: 'missing-elevation',
           }
         : null,

@@ -97,6 +97,12 @@ before the new Worker;
 
 `GET /auth/me` requires a session and returns the login user, a nullable `ownerId`
 and session ID/expiry. It does not provision a cycling profile or assign an owner.
+From v0.25.0, `user.providers` lists linked `apple`, `google` and/or `passkey`
+methods, deduplicated and ordered by earliest link creation (provider name breaks
+ties). Passkeys come from their own credential table. An empty list is valid.
+This is not the provider used for the current session, and differs from the
+public `/auth/providers` list of methods available on the server. No credentials
+or tokens are exposed by this field.
 Use `POST /users` after sign-in to create a new rider's profile; its saved settings
 API stays unchanged. First access to a product endpoint binds a new, server-generated
 owner ID to the login. Clients cannot supply an owner ID.

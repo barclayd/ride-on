@@ -36,6 +36,7 @@ import {
   resolvePlanningDays,
 } from './recommendations/planning.ts';
 import { presentRoute } from './recommendations/presentation.ts';
+import type { ScoreBaselineStore } from './recommendations/score-baselines.ts';
 import { evaluateComparisons } from './recommendations/service.ts';
 import { readJsonBody, validateInput } from './request.ts';
 import { rideRoutes } from './rides/routes.ts';
@@ -79,6 +80,7 @@ export const createApp = (
     routeSources?: ReadonlyMap<string, RouteSourceProvider>;
     userStore?: UserStore;
     providers?: Readonly<Record<string, ForecastProvider>>;
+    scoreBaselines?: ScoreBaselineStore;
     cache?: ForecastCache;
     now?: () => Date;
     log?: boolean;
@@ -134,7 +136,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.24.0',
+      version: '0.25.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -268,7 +270,7 @@ export const createApp = (
         user: {
           ...user,
           weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
-          preferenceLevels: preferenceLevels(user.settings.preferences.weights),
+          preferenceLevels: preferenceLevels(user.settings.preferences),
         },
       },
       201,
@@ -286,7 +288,7 @@ export const createApp = (
       user: {
         ...user,
         weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
-        preferenceLevels: preferenceLevels(user.settings.preferences.weights),
+        preferenceLevels: preferenceLevels(user.settings.preferences),
       },
     });
   });
@@ -322,7 +324,7 @@ export const createApp = (
       user: {
         ...user,
         weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
-        preferenceLevels: preferenceLevels(user.settings.preferences.weights),
+        preferenceLevels: preferenceLevels(user.settings.preferences),
       },
     });
   });
@@ -717,7 +719,7 @@ export const createApp = (
       timeZone: input.timeZone,
       savedUser: user ? { id: user.id, version: user.version } : null,
       resolvedPreferences: input.preferences,
-      preferenceLevels: preferenceLevels(input.preferences.weights),
+      preferenceLevels: preferenceLevels(input.preferences),
       resolvedMinimumTemperatures: Object.fromEntries(
         inputs.map((i) => [i.date, resolveMinimumTemperature(i)]),
       ),
