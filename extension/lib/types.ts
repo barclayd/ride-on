@@ -158,7 +158,13 @@ export type Conditions = {
     'sunny' | 'sunnyIntervals' | 'cloudy' | 'overcast' | 'obscured',
     number
   > | null;
+  // docs/extension-api-brief-v6.md: the same shares plus `unknown`, kept when part of the ride isn't forecast.
+  skyConditionShares?: SkyShares | null;
+  distanceKm?: number;
 };
+// Every sky category the API sends (sunny, cloudy, overcast…), each a share of distance.
+export type SkyShares = Record<string, number> &
+  Partial<Record<'sunny' | 'sunnyIntervals' | 'unknown', number>>;
 export type PrecipitationSummary =
   | 'dry'
   | 'possible'
@@ -184,6 +190,10 @@ export type Departure = {
     status: 'complete' | 'partial' | 'unavailable';
     unknownDistanceFraction: number;
   } | null;
+  // Elapsed ride hours in ride order; conditions null when no route sample falls in the hour.
+  rideHours?: { start: string; end: string; conditions: Conditions | null }[];
+  // docs/tailwind-opportunity.md: ordering only, never shown as a number. Null when unranked.
+  tailwindOpportunity?: { priorityPoints: number } | null;
   date: string;
   departureAt: string;
   finishAt: string;

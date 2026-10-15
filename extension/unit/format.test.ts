@@ -44,6 +44,7 @@ import {
   rideSummary,
   searchPatch,
   shownOf,
+  skyChip,
   speed,
   tile,
   toggleDay,
@@ -905,7 +906,7 @@ test('condition chips: temperature, wind, rain, amber where it lowers the score'
   const chips = (c: Partial<Conditions>) =>
     conditionChips({ ...calm, ...c }, undefined, { temperature: comfort }).map(
       (chip) =>
-        `${chip.icon} ${chip.text} | ${chip.label}${chip.warn ? ' !' : ''}${chip.good ? ' +' : ''}`,
+        `${chip.icon} ${chip.text} | ${chip.label}${chip.warn ? ' !' : ''}`,
     );
 
   // Calm: speed only, even with fractions; no summary yet and a low chance reads dry.
@@ -988,64 +989,25 @@ test('condition chips: temperature, wind, rain, amber where it lowers the score'
     'wet 35% chance of rain | 35% chance of rain !',
   );
 
-  // Dry: the sky, when the API sends its shares; wet still wins.
-  const sky = (
-    f: Partial<NonNullable<Conditions['skyConditionDistanceFractions']>>,
-    more: Partial<Conditions> = {},
-  ) =>
+  // The sky has its own chip (handoff v4): the rain slot says Dry whatever the sky.
+  expect(
     chips({
       skyConditionDistanceFractions: {
-        sunny: 0,
+        sunny: 1,
         sunnyIntervals: 0,
         cloudy: 0,
         overcast: 0,
         obscured: 0,
-        ...f,
       },
-      ...more,
-    })[2];
-  expect(sky({ sunny: 0.6, overcast: 0.4 })).toBe(
-    'sun Sunny | Dry, sun on 60% of the route +',
-  );
-  expect(sky({ sunny: 0.2, sunnyIntervals: 0.3, cloudy: 0.5 })).toBe(
-    'sun Sunny spells | Dry, sun on 50% of the route +',
-  );
-  expect(sky({ sunnyIntervals: 0.3, cloudy: 0.3, overcast: 0.4 })).toBe(
-    'cloud Overcast | Dry, overcast on 70% of the route',
-  );
-  expect(sky({ cloudy: 1 })).toBe(
-    'cloud Cloudy | Dry, cloudy on 100% of the route',
-  );
-  expect(sky({ obscured: 0.7, cloudy: 0.3 })).toBe(
-    'fog Fog | Dry, fog or mist on 70% of the route',
-  );
-  expect(sky({})).toBe('dry Dry | Dry, no rain');
-  expect(sky({ sunny: 1 }, { precipitationSummary: 'showers' })).toBe(
-    'wet Showers | Rain: showers !',
-  );
+    })[2],
+  ).toBe('dry Dry | Dry, no rain');
 
-  // Preference levels: cloud is amber only when sunshine is Important; rain never when they don't mind;
-  // a bare chance only above their rain limit.
+  // Preference levels: rain never amber when they don't mind; a bare chance only above their rain limit.
   const leveled = (
     more: Partial<Conditions>,
     levels: Levels,
     prefs: Partial<Preferences> = {},
   ) => conditionChips({ ...calm, ...more }, undefined, prefs, levels)[2];
-  const overcast = {
-    skyConditionDistanceFractions: {
-      sunny: 0,
-      sunnyIntervals: 0,
-      cloudy: 0,
-      overcast: 1,
-      obscured: 0,
-    },
-  };
-  expect(
-    leveled(overcast, { sunshine: 'important', rain: 'light-ok' }).warn,
-  ).toBe(true);
-  expect(leveled(overcast, { sunshine: 'nice', rain: 'light-ok' }).warn).toBe(
-    false,
-  );
   const dontMind = { sunshine: 'nice', rain: 'dont-mind' } as const;
   expect(leveled({ precipitationSummary: 'rain' }, dontMind).warn).toBe(false);
   const preferDry = { sunshine: 'nice', rain: 'light-ok' } as const;
@@ -1057,6 +1019,149 @@ test('condition chips: temperature, wind, rain, amber where it lowers the score'
   expect(leveled(chance, preferDry).warn).toBe(true);
   expect(leveled(chance, preferDry, limit(0.4)).warn).toBe(false);
   expect(leveled(chance, preferDry, limit(0.2)).warn).toBe(true);
+});
+
+test('sky chip (handoff v4, 18a): labels, the timeline in ride order and rounded legend shares', () => {
+  const complete = { status: 'complete', unknownDistanceFraction: 0 } as const;
+  const hour = (km: number, shares: Record<string, number> | null) => ({
+    start: '',
+    end: '',
+    conditions: {
+      ...conditions,
+      distanceKm: km,
+      skyConditionDistanceFractions: null,
+      skyConditionShares: shares,
+    },
+  });
+  const sky = (
+    overall: Record<string, number> | null,
+    hours: ReturnType<typeof hour>[] = [],
+    assessed: Departure['sunshineAssessment'] = complete,
+    sunshine?: Levels['sunshine'],
+  ) =>
+    skyChip(
+      {
+        ...departure('2026-10-17T08:00:00Z', 73),
+        conditions: { ...conditions, skyConditionShares: overall },
+        rideHours: hours,
+        sunshineAssessment: assessed,
+      },
+      sunshine,
+    );
+  const brief = (k: ReturnType<typeof sky>) =>
+    k &&
+    `${k.icon} ${k.text}${k.partial ? ' (dashed)' : ''} | ${k.label} | ${k.segments
+      ?.map((g) => `${g.kind} ${g.share.toFixed(2)}`)
+      .join(
+        ', ',
+      )} | ${k.legend?.map((l) => `${l.name} ${l.share}`).join(', ')}`;
+
+  // Horsham: sun for two hours, then intervals. One label for any mix; the order is the timeline's.
+  expect(
+    brief(
+      sky({ sunny: 0.55, sunnyIntervals: 0.45 }, [
+        hour(20, { sunny: 1 }),
+        hour(20, { sunny: 0.75, sunnyIntervals: 0.25 }),
+        hour(20, { sunnyIntervals: 1 }),
+      ]),
+    ),
+  ).toBe(
+    'sunCloud Sun and sunny intervals | Sky: sun and sunny intervals | sunny 0.58, sunnyIntervals 0.42 | Sunny ~55%, Sunny intervals ~45%',
+  );
+  // Richmond: sunny throughout.
+  expect(
+    brief(sky({ sunny: 1 }, [hour(20, { sunny: 1 }), hour(15, { sunny: 1 })])),
+  ).toBe(
+    'sun Sunny throughout | Sky: sunny throughout | sunny 1.00 | Sunny Throughout',
+  );
+  // A rounded 1 isn't throughout when a ride hour has intervals; never shortened to "Sunny".
+  expect(
+    sky({ sunny: 1 }, [
+      hour(20, { sunny: 1 }),
+      hour(20, { sunny: 0.99, sunnyIntervals: 0.01 }),
+    ])?.text,
+  ).toBe('Sun and sunny intervals');
+  // Mostly intervals: under 10% sun.
+  expect(sky({ sunny: 0.05, sunnyIntervals: 0.95 })?.text).toBe(
+    'Sunny intervals',
+  );
+  // Neighbouring hours merge; an hour's mix carries on the last colour first.
+  expect(
+    sky({ sunny: 0.5, sunnyIntervals: 0.5 }, [
+      hour(10, { sunnyIntervals: 1 }),
+      hour(10, { sunny: 0.5, sunnyIntervals: 0.5 }),
+      hour(10, { sunny: 1 }),
+    ])?.segments?.map((g) => g.kind),
+  ).toEqual(['sunnyIntervals', 'sunny']);
+
+  // The forecast stops before the finish: dashed, with the gap last.
+  const partial = { status: 'partial', unknownDistanceFraction: 0.3 } as const;
+  expect(
+    brief(
+      sky(
+        { sunny: 0.7, unknown: 0.3 },
+        [hour(20, { sunny: 1 }), hour(20, { sunny: 0.4, unknown: 0.6 })],
+        partial,
+      ),
+    ),
+  ).toBe(
+    'sun Sunny where forecast (dashed) | Sky: sunny where forecast | sunny 0.70, unknown 0.30 | Sunny ~70%, Not forecast yet ~30%',
+  );
+  expect(
+    sky({ sunny: 0.4, sunnyIntervals: 0.3, unknown: 0.3 }, [], partial)?.label,
+  ).toBe('Sky: sun and sunny intervals where forecast');
+  // Before skyConditionShares, a gap nulls the overall shares and its hour's: rebuilt from the hours.
+  expect(
+    brief(
+      skyChip({
+        ...departure('2026-10-17T08:00:00Z', 73),
+        conditions: { ...conditions, skyConditionDistanceFractions: null },
+        rideHours: [
+          {
+            ...hour(30, null),
+            conditions: {
+              ...conditions,
+              distanceKm: 30,
+              skyConditionDistanceFractions: {
+                sunny: 1,
+                sunnyIntervals: 0,
+                cloudy: 0,
+                overcast: 0,
+                obscured: 0,
+              },
+            },
+          },
+          hour(10, null),
+        ],
+        sunshineAssessment: partial,
+      }),
+    ),
+  ).toBe(
+    'sun Sunny where forecast (dashed) | Sky: sunny where forecast | sunny 0.75, unknown 0.25 | Sunny ~75%, Not forecast yet ~25%',
+  );
+
+  // Mostly cloud keeps its word, amber only when sunshine is Important; cloud on a sunny ride is a mix.
+  expect(brief(sky({ sunnyIntervals: 0.3, cloudy: 0.3, overcast: 0.4 }))).toBe(
+    'cloud Overcast | Sky: overcast on 70% of the route | undefined | undefined',
+  );
+  expect(sky({ cloudy: 1 }, [], complete, 'important')?.warn).toBe(true);
+  expect(sky({ cloudy: 1 })?.warn).toBe(false);
+  expect(sky({ obscured: 0.7, cloudy: 0.3 })?.text).toBe('Fog');
+  expect(
+    brief(sky({ sunny: 0.6, overcast: 0.4 }))?.endsWith(
+      'Sunny ~60%, Cloud ~40%',
+    ),
+  ).toBe(true);
+  expect(sky({ sunny: 0.6, overcast: 0.4 })?.text).toBe('Sun and cloud');
+
+  // Hidden when sunshine isn't weighed or nothing is forecast.
+  expect(sky({ sunny: 1 }, [], null)).toBeNull();
+  expect(
+    sky({ unknown: 1 }, [], {
+      status: 'unavailable',
+      unknownDistanceFraction: 1,
+    }),
+  ).toBeNull();
 });
 
 test('units: region defaults and display conversion', () => {

@@ -216,7 +216,10 @@ const best = (date: string, i: number, score: number) => ({
     potentialPoints: 1.4,
     appliedPoints: 1.4,
   },
-  conditions: CONDITIONS,
+  // The API nulls the shares when any sky symbol is missing.
+  conditions: sunshineUncertain
+    ? { ...CONDITIONS, skyConditionDistanceFractions: null }
+    : CONDITIONS,
   forecastDetails: {
     temperatureMethod: 'linear-interpolation',
     locations: [0, 1].map((site) => ({
@@ -247,7 +250,26 @@ const best = (date: string, i: number, score: number) => ({
   },
   sunshineAssessment: sunshineUncertain
     ? { status: 'partial', unknownDistanceFraction: 0.4 }
-    : null,
+    : { status: 'complete', unknownDistanceFraction: 0 },
+  // Intervals and cloud, then sun: the sky chip's timeline (handoff v4).
+  rideHours: [
+    { sunny: 0, sunnyIntervals: 0.6, cloudy: 0.4 },
+    { sunny: 0.4, sunnyIntervals: 0.4, cloudy: 0.2 },
+  ].map((sky, h) => ({
+    start: `${date}T0${8 + i + h}:00:00Z`,
+    end: `${date}T0${9 + i + h}:00:00Z`,
+    conditions: {
+      ...CONDITIONS,
+      distanceKm: 25,
+      // The second hour crosses the forecast horizon.
+      skyConditionDistanceFractions:
+        sunshineUncertain && h === 1
+          ? null
+          : { ...sky, overcast: 0, obscured: 0 },
+    },
+  })),
+  // Only the first route has an opportunity; never shown as a number.
+  tailwindOpportunity: { priorityPoints: i === 0 ? 3.17 : 0 },
 });
 
 const nextWindows = (after: { window: unknown }) => {
@@ -824,6 +846,16 @@ test('a scored ride explains uncertain sunshine in the popup and on Journeys', a
   await expect(card.locator('.ro-coverage')).toHaveText(
     'Sunshine is uncertain for this ride.',
   );
+  // The dashed sky chip; the Rides card opens the same timeline.
+  const sky = card.locator('.ro-sky-chip button');
+  await expect(sky).toHaveAttribute('data-partial', 'true');
+  await sky.click();
+  await expect(sky).toHaveText('Sunny intervals');
+  await expect(card.locator('.ro-sky li')).toHaveText([
+    'Sunny intervals~30%',
+    'Cloud~20%',
+    'Not forecast yet~50%',
+  ]);
   await expect(card.locator('.ro-meter')).toHaveText('Conditions84/100');
   await expectPanelFits(page);
   await page.screenshot({
@@ -1338,15 +1370,37 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   const chips = module.locator('.ro-chips li');
   await expect(chips).toHaveText([
     '9–14°C',
+    'Sun and sunny intervals',
     '15 km/h tailwind',
     'Gusts 48 km/h',
-    'Sunny spells',
+    'Dry',
   ]);
   await expect(chips.nth(0)).toHaveAttribute('data-warn', 'true');
-  await expect(chips.nth(1)).toHaveAttribute('aria-label', 'Tailwind 15 km/h');
-  await expect(chips.nth(3)).toHaveAttribute('data-good', 'true');
-  await expect(chips.nth(2)).toHaveAttribute('data-warn', 'true');
-  await expect(chips.nth(3)).toHaveAttribute('data-warn', 'false');
+  await expect(chips.nth(2)).toHaveAttribute('aria-label', 'Tailwind 15 km/h');
+  await expect(chips.nth(3)).toHaveAttribute('data-warn', 'true');
+  await expect(chips.nth(4)).toHaveAttribute('data-warn', 'false');
+  // The sky chip opens the expected conditions inside the tile, and closes it again.
+  const sky = module.getByRole('button', {
+    name: 'Sky: sun and sunny intervals. Show expected conditions',
+  });
+  await expect(sky).toHaveAttribute('aria-expanded', 'false');
+  await sky.click();
+  await expect(sky).toHaveAttribute('aria-expanded', 'true');
+  const timeline = module.locator('.ro-sky');
+  await expect(timeline.locator('b')).toHaveText(
+    'Expected conditions along the ride',
+  );
+  await expect(timeline.locator('.ro-sky-bar span')).toHaveCount(4);
+  await expect(timeline.locator('li')).toHaveText([
+    'Sunny~20%',
+    'Sunny intervals~50%',
+    'Cloud~30%',
+  ]);
+  await sky.click();
+  await expect(timeline).toBeHidden();
+  await expect(module.locator('.ro-ride .ro-opportunity')).toHaveText(
+    'Favourable tailwind opportunity',
+  );
   await expect(
     module.getByRole('button', { name: 'Stop tracking Hilly Loop' }),
   ).toBeVisible();
@@ -1471,11 +1525,12 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
   const chips = journeys.locator('ride-on-module .ro-chips li');
   await expect(chips).toHaveText([
     '48–57°F',
+    'Sun and sunny intervals',
     '9 mph tailwind',
     'Gusts 30 mph',
-    'Sunny spells',
+    'Dry',
   ]);
-  await expect(chips.nth(1)).toHaveAttribute('aria-label', 'Tailwind 9 mph');
+  await expect(chips.nth(2)).toHaveAttribute('aria-label', 'Tailwind 9 mph');
 });
 
 test('Journeys page: a passed window asks for new dates, then rescores', async ({

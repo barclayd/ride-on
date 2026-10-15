@@ -14,6 +14,7 @@ import {
   dayMonth,
   ridden,
   shortDate,
+  skyChip,
   viewOf,
 } from './format';
 
@@ -139,7 +140,7 @@ const Slot = (props: { class: string; children: ComponentChildren }) => (
 
 // 16-unit stroke icons from the design (11b).
 const ICONS: Record<
-  Chip['icon'] | 'clock' | 'route' | 'star',
+  Chip['icon'] | 'clock' | 'route' | 'star' | 'chevron' | 'arrow',
   ComponentChildren
 > = {
   route: (
@@ -191,7 +192,23 @@ const ICONS: Record<
   sun: (
     <>
       <circle cx="8" cy="8" r="2.8" />
-      <path d="M8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" />
+      <path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1" />
+    </>
+  ),
+  // Sun behind a cloud: any mix of sun and sunny intervals (handoff v4).
+  sunCloud: (
+    <>
+      <path d="M4.2 7.4A2.3 2.3 0 1 1 8 5" />
+      <path d="M5.8 1.4v1M1.6 5.6h1M2.8 2.6l.7.7M8.8 2.6l-.7.7" />
+      <path d="M6.6 13.8h5.3a2.2 2.2 0 0 0 .2-4.4 3.1 3.1 0 0 0-5.9.9 1.8 1.8 0 0 0 .4 3.5z" />
+    </>
+  ),
+  // The design's 12-unit chevron, scaled to 16.
+  chevron: <path d="M3 4.5l3 3 3-3" transform="scale(1.333)" />,
+  arrow: (
+    <>
+      <path d="M2 8h10" />
+      <path d="M9 4.5L12.5 8 9 11.5" />
     </>
   ),
   // The wet cloud, without its rain, dropped to the middle.
@@ -200,14 +217,20 @@ const ICONS: Record<
   ),
   fog: <path d="M3 5h10M2 8h12M4 11h8" />,
 };
-const Icon = (props: { name: keyof typeof ICONS; size: number }) => (
+const Icon = (props: {
+  name: keyof typeof ICONS;
+  size: number;
+  weight?: number;
+  class?: string;
+}) => (
   <svg
+    class={props.class}
     width={props.size}
     height={props.size}
     viewBox="0 0 16 16"
     fill="none"
     stroke="currentColor"
-    stroke-width="1.5"
+    stroke-width={props.weight ?? 1.5}
     stroke-linecap="round"
     stroke-linejoin="round"
     aria-hidden="true"
@@ -373,6 +396,19 @@ export const RouteTile = (props: {
   // The Rides tab's heading has the date, unless the window spans days.
   const dated = !panel || (view.range?.length ?? 0) > 1;
   const notRecommended = card.score !== null && card.score < 50;
+  const [skyOpen, setSkyOpen] = useState(false);
+  const sky =
+    card.best &&
+    skyChip(card.best, view.state.user?.preferenceLevels?.sunshine);
+  const chips = card.best
+    ? conditionChips(
+        card.best.conditions,
+        view.state.units,
+        view.state.user?.settings.preferences,
+        view.state.user?.preferenceLevels,
+      )
+    : [];
+  const skyId = `ro-sky-${card.routeId}`;
   return (
     <div
       class={`ro-ride ${panel ? (rank < 3 ? `ro-${MEDALS[rank].toLowerCase()}` : '') : tint(card)}`}
@@ -450,33 +486,80 @@ export const RouteTile = (props: {
       <Slot class="ro-conditions">
         {card.best ? (
           <ul class="ro-chips">
-            {conditionChips(
-              card.best.conditions,
-              view.state.units,
-              view.state.user?.settings.preferences,
-              view.state.user?.preferenceLevels,
-            ).map((chip) => (
+            {/* Temperature, sky, wind, gusts, rain (handoff v4). */}
+            {[chips[0], ...(sky ? [sky] : []), ...chips.slice(1)].map((chip) =>
               // Keyed by text: a changed chip fades in afresh.
-              <li
-                key={chip.text}
-                aria-label={chip.label}
-                data-warn={chip.warn}
-                data-good={chip.good}
-              >
-                <Icon name={chip.icon} size={16} />
-                {chip.text}
-              </li>
-            ))}
+              chip === sky && sky.segments ? (
+                <li key={chip.text} class="ro-sky-chip">
+                  <button
+                    type="button"
+                    aria-expanded={skyOpen}
+                    aria-controls={skyId}
+                    aria-label={`${sky.label}. Show expected conditions`}
+                    data-partial={sky.partial}
+                    onClick={() => setSkyOpen(!skyOpen)}
+                  >
+                    <Icon name={chip.icon} size={16} />
+                    {chip.text}
+                    <Icon
+                      name="chevron"
+                      size={12}
+                      weight={1.6}
+                      class="ro-chevron"
+                    />
+                  </button>
+                </li>
+              ) : (
+                <li
+                  key={chip.text}
+                  aria-label={chip.label}
+                  data-warn={chip.warn}
+                >
+                  <Icon name={chip.icon} size={16} />
+                  {chip.text}
+                </li>
+              ),
+            )}
           </ul>
         ) : (
           <span>{card.reason}</span>
         )}
       </Slot>
+      {skyOpen && card.best && sky?.segments && sky.legend && (
+        <div class="ro-sky" id={skyId}>
+          <b>Expected conditions along the ride</b>
+          <div class="ro-sky-bar" aria-hidden="true">
+            {sky.segments.map((g, i) => (
+              <span key={i} data-sky={g.kind} style={{ flex: g.share }} />
+            ))}
+          </div>
+          <div class="ro-sky-ends" aria-hidden="true">
+            <span>{clock(card.best.departureAt, view.timeZone)}</span>
+            <span>~{clock(card.best.finishAt, view.timeZone)}</span>
+          </div>
+          <ul>
+            {sky.legend.map((l) => (
+              <li key={l.kind}>
+                <i data-sky={l.kind} />
+                <span>{l.name}</span>
+                <span>{l.share}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {!blank && <Notes card={card} />}
       {blank || card.score !== null ? (
         <Meter score={card.score} blank={blank} change={props.change} />
       ) : (
         card.state === 'incomplete' && <span class="ro-no-score">No score</span>
+      )}
+      {/* Why a ride may lead on equal Conditions: ordering only, never a number (handoff v4 §4). */}
+      {!blank && (card.best?.tailwindOpportunity?.priorityPoints ?? 0) > 0 && (
+        <span class="ro-opportunity">
+          <Icon name="arrow" size={14} weight={1.6} />
+          Favourable tailwind opportunity
+        </span>
       )}
     </div>
   );
