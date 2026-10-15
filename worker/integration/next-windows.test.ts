@@ -55,6 +55,11 @@ const best = z.object({
   departureAt: z.string(),
   finishAt: z.string(),
   score: z.number(),
+  recommendationPriority: z.number(),
+  tailwindOpportunity: z.object({
+    priorityPoints: z.number(),
+    enabled: z.boolean(),
+  }),
   windAssistance: z.object({
     usefulDistanceFraction: z.number(),
     potentialPoints: z.number(),
@@ -102,7 +107,10 @@ const resultSchema = z.object({
     attribution: z.array(z.object({ text: z.string(), url: z.string() })),
   }),
   resolvedPreferences: z.object({
-    wind: z.object({ preferTailwind: z.boolean() }),
+    wind: z.object({
+      preferTailwind: z.boolean(),
+      prioritiseTailwindOpportunities: z.boolean(),
+    }),
     distance: z.object({ minKm: z.number(), maxKm: z.number() }).nullable(),
   }),
 });
@@ -142,7 +150,14 @@ integration(
         await h.send('/users', {
           body: JSON.stringify({
             displayName: 'Rider',
-            settings: { preferences: { wind: { preferTailwind: true } } },
+            settings: {
+              preferences: {
+                wind: {
+                  preferTailwind: true,
+                  prioritiseTailwindOpportunities: true,
+                },
+              },
+            },
           }),
         })
       ).status,
@@ -152,6 +167,22 @@ integration(
     assert.equal(on.resolvedPreferences.wind.preferTailwind, true);
     assert.ok(on.windows.length > 0);
     const calls = h.requests.length;
+    const noOpportunity = await suggest(h, [route.id], {
+      preferences: { wind: { prioritiseTailwindOpportunities: false } },
+    });
+    for (const assisted of on.windows) {
+      const other = first(
+        noOpportunity.windows.filter((w) => w.kind === assisted.kind),
+      );
+      assert.equal(assisted.best.score, other.best.score);
+      assert.equal(assisted.best.tailwindOpportunity.priorityPoints, 5);
+      assert.equal(
+        assisted.best.recommendationPriority -
+          other.best.recommendationPriority,
+        5,
+      );
+    }
+
     const off = await suggest(h, [route.id], {
       preferences: { wind: { preferTailwind: false } },
     });

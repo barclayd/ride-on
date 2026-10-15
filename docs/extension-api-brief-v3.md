@@ -97,7 +97,9 @@ The response contains:
   standard assessed-departure fields (score, standards, conditions, drawbacks,
   factor scores, recent-ride evidence and hourly variation).
 - `recommendedKind`: the card to highlight, or null. Uses the engine's
-  standards-first comparison, score, earlier departure and route-ID tie-breaker.
+  standards-first comparison, recommendation priority, Conditions, physical
+  assistance, earlier departure and route-ID tie-breaker. See the
+  [opportunity contract](tailwind-opportunity.md).
   Do not find the highest raw score in the client.
 - `omitted`: one entry for each missing kind, with its `searchRange`, daily
   availability evidence, `reasonCode: "no_ranked_ride" | "duplicate"`, and

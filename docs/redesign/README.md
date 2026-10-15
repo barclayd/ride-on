@@ -34,6 +34,12 @@ tolerance; [contract and calibration](../seasonal-temperature.md). Client contro
 are still pending. Preserve these choices on partial edits and keep the existing
 user-chosen monthly minimum standards separate.
 
+API v0.27.0 adds the opt-in [tailwind opportunity preference](../tailwind-opportunity.md).
+Client controls and the separate reason are pending. Preserve API ranking order;
+continue rendering `score` as Conditions, never the new 0–105 ordering value
+`recommendationPriority`. Use `tailwindOpportunity.reason` to explain the extra
+priority, and preserve the boolean on unrelated preference edits.
+
 ## Where the code goes
 
 | What | Where |

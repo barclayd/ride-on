@@ -1,5 +1,13 @@
 import type { RecommendationInput } from './input.ts';
 
+type WindComfort = Pick<
+  RecommendationInput['preferences']['wind'],
+  | 'comfortableHeadwindKph'
+  | 'comfortableCrosswindKph'
+  | 'comfortableGustKph'
+  | 'crosswindSensitivity'
+>;
+
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 // Small breezes remain ideal. A comfort setting marks the end of the gentle
 // slope, not a promise of perfect comfort at every speed below that setting.
@@ -14,7 +22,7 @@ export const windExposure = (
   headwindKph: number,
   crosswindKph: number,
   gustKph: number,
-  p: RecommendationInput['preferences']['wind'],
+  p: WindComfort,
 ) => {
   const speed = Math.hypot(headwindKph, crosswindKph);
   // Gust direction is not supplied. Project its magnitude using the prevailing
@@ -56,7 +64,7 @@ export const windComfort = (
   headwindKph: number,
   crosswindKph: number,
   gustKph: number,
-  p: RecommendationInput['preferences']['wind'],
+  p: WindComfort,
 ) => windExposure(headwindKph, crosswindKph, gustKph, p).comfort;
 
 /** At most 10% of the wind weight, proportional to strength-weighted distance.
