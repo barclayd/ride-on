@@ -15,6 +15,7 @@ public struct RidesView: View {
     @State private var choosingWindow = false
     @Namespace private var zoom
     @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.speedSystem) private var speedSystem
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -131,8 +132,8 @@ public struct RidesView: View {
 
             FlowLayout {
                 ConditionChip(UnitFormat.temperatureRange(c: conditions.temperatureC, locale: locale), systemImage: "thermometer.medium", tint: .orange)
-                ConditionChip("\(UnitFormat.speed(kph: conditions.windKph, system: unitSystem)) \(conditions.wind.rawValue)", systemImage: "wind", tint: .blue)
-                ConditionChip("Gusts \(UnitFormat.speed(kph: conditions.gustKph, system: unitSystem))")
+                ConditionChip("\(UnitFormat.speed(kph: conditions.windKph, system: speedSystem)) \(conditions.wind.rawValue)", systemImage: "wind", tint: .blue)
+                ConditionChip("Gusts \(UnitFormat.speed(kph: conditions.gustKph, system: speedSystem))")
                 ConditionChip(conditions.sky.title, systemImage: conditions.sky.systemImage, tint: conditions.sky.tint)
             }
 

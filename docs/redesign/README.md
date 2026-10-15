@@ -20,12 +20,12 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 0 | This doc and reference images | ✅ Done | #154 |
 | 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
 | 2 | Rides screen | ✅ Done (window capsule lands with 4) | #155 |
-| 3 | Ride detail | ✅ Done; wind direction, score change and four factors wait on the API ([requests](ride-detail-api-requests.md)) | #157, #164 |
+| 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)) | #157, #164, #172 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
-| 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live; Strava, points lost, crosswind levels, sign-in provider and seasonal floors wait on the API ([requests](preferences-api-requests.md)) | #167 |
+| 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava waits on the API ([contract](preferences-api-requests.md)) | #167, #172 |
 | 6 | Widgets and Lock Screen | ⬜ | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
-| 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window and Preferences live; Routes still sample | #159, #162, #167 |
+| 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window and Preferences live; Routes still sample | #159, #162, #167, #172 |
 
 Not in scope yet: Routes tab and Onboarding (not redesigned; they keep working as they are).
 
@@ -177,8 +177,8 @@ Build:
 - [x] Sample data: `RideDetail.sample(for:on:)` in `Models/RideDetail.swift`, built from any pick
 - [x] Notes and factor sentences measured against your preferences (`resolvedPreferences`), live
 - [x] Footer shows the forecast provider's own attribution (`weather.attribution`)
-- [ ] "Wind from the …" footnote: API v0.25.0 supplies `windFromDegrees`; client wiring pending ([reviewed contract](ride-detail-api-requests.md) §1)
-- [ ] "▲ 4 since 07:00" badge: API v0.25.0 supplies comparable `best.previous`; client wiring pending (§2)
+- [x] "Wind from the …" footnote from `windFromDegrees` in 16 compass words, hidden when null ([reviewed contract](ride-detail-api-requests.md) §1)
+- [x] "▲ 4 since 07:00" badge from `best.previous`, only when the rounded change is at least 1 (§2)
 - [x] Additional-factor decision: explain the seven existing factors; keep time feasibility and recent-rides deductions separate, with no invented Surface match or Intent scores (§3)
 
 ## 3. Ride Window (sheet)
@@ -256,11 +256,11 @@ Rows have a 30pt rounded-square coloured icon.
 | Section | Rows | Footer |
 |---|---|---|
 | What Makes a Good Ride | Ideal Temperature "10°–22°" + mini ramp → push · Comfortable Wind "Up to 15 km/h" → push · Sunshine "Nice to Have" (menu) · Rain "Light Rain Is OK" (menu) · Climbing "Flatter" (menu) · Distance "40–80 km" (push) · Recently Ridden "Prefer Variety" (menu) | Routes you rode in the last 28 days score a little lower, so you see more of your list. |
-| Deal-Breakers | Never Colder Than 4° · Never Hotter Than 30° · Strongest Gusts 45 km/h · Chance of Rain 60% (menu) | Rides that break one of these still appear, marked Below your minimums, so you can decide. |
+| Deal-Breakers | Never Colder Than 4° ("By Month" for a monthly table) · Never Hotter Than 30° · Gust Limit 45 km/h · Chance of Rain 60% (menu) | Rides that break one of these still appear, marked Below your minimums, so you can decide. |
 | Riding | Average Speed 20 km/h + stepper · "Use My Strava Average, 21.4 km/h" (accent button) · Try Departures Every 30 min (menu) | Speed sets how long each route takes, and so whether it fits your window. |
-| Units | Temperature °C/°F · Wind Speed km/h/mph (segmented) | |
+| Units | Temperature °C/°F · Wind Speed km/h/mph · Distance km/mi (segmented, each saved on its own) | |
 | Connections | Strava "Connected", subtitle "Routes and rides synced 08:10" (push) · Apple Health switch, subtitle "Log rides from cycling workouts" | |
-| Account | Apple Account "Signed In" · About Ride On | Apple Weather · Other data sources |
+| Account | Apple Account "Signed In" ("Account" when Apple isn't linked) · About Ride On | Apple Weather · Other data sources |
 
 Icon colours: temperature orange, wind cyan, sunshine yellow, rain blue, climbing green, distance
 purple, recently ridden teal, colder indigo, hotter red, gusts grey-blue, chance of rain blue,
@@ -271,7 +271,7 @@ Build:
 - [x] Distance range editor (push)
 - [x] Settings model mirroring the API `settings` shape, held in an `@Observable` store
 - [ ] Strava status and "Use My Strava Average" (hidden until the API has a Strava connection)
-- [ ] Account label: API v0.25.0 supplies `/auth/me` linked `user.providers`; client wiring pending (these are linked methods, not the current session's sign-in method)
+- [x] Account label from `/auth/me` `user.providers` (linked methods, not this session's), and Sign-In Methods on the Account screen
 
 ## 6. Ideal Temperature (push)
 
@@ -285,11 +285,13 @@ Build:
    gently rather than all at once."
 2. **"How Your Routes Fit"**: per route, name + "Wed · 9–14°", a mini range bar against the
    preference, and status: Hilly Loop "1° under" (secondary), Potters Bar "In range" (accent),
-   Braintree "In range". Footer: "Hilly Loop's 9° start is 1° under your range, so it loses 2
-   points. Rides re-rank as you drag."
+   Braintree "In range". Footer: "Hilly Loop goes down to 9°, 1° under your range. It could gain
+   2 points if the temperature were ideal. Rides re-rank as you drag." The points sentence comes
+   from `pointsLost` and shows only while the board was scored with the range on screen.
 3. **"Deal-Breakers"**: Never Colder Than 4° (stepper), Never Hotter Than 30° (stepper), Vary by
-   Month (edit the rider's chosen monthly limits). Footer: "Rides outside these are marked
-   Below your minimums." No automatic seasonal offsets; preserve saved custom tables.
+   Month (switch). With it on, Never Colder Than pushes a 12-month list of the rider's own limits;
+   unset months read "Not Set" and use the fallback, or have no limit. Footer: "Rides outside these
+   are marked Below your minimums." No automatic seasonal offsets; saved tables are kept.
 
 Inline title "Ideal Temperature", glass back button. Saves as you go; no Done.
 
@@ -297,8 +299,8 @@ Build:
 - [x] `TemperatureRange` (drag both handles, 1° steps, selection haptic)
 - [x] Route fit rows recompute as you drag
 - [x] Deal-breaker steppers
-- [ ] Replace the guessed northern-hemisphere Vary by Month table with user-chosen monthly limits; preserve existing tables and unresolved months ([reviewed contract](preferences-api-requests.md) §6)
-- [ ] Factor point-loss wording: API v0.25.0 supplies `pointsLost`; client wiring pending. Zero is no effect, null is inactive/unknown, and old board scores must not describe unsaved edits
+- [x] User-chosen monthly limits, month by month; existing tables and unset months kept ([reviewed contract](preferences-api-requests.md) §6)
+- [x] Point-loss wording from `pointsLost` (`Pick.gainSentence`): rounded from 1, "a small effect" below it, nothing at zero or unknown, and nothing once the edited values differ from the board's `resolvedPreferences`
 
 ## 7. Comfortable Wind (push)
 
@@ -310,19 +312,20 @@ Build:
    15"), crosswind limits left and right ("20"), "Tailwind, any" at the bottom; accent shaded
    shape is the comfortable envelope; dashed blue ring is the gust limit ("Gusts 45"). Caption:
    "Speeds in km/h. You ride up the page: the shaded shape is wind you're happy with, the dashed
-   ring is your gust limit."
-2. **"Limits"**: Headwind 15 km/h, Crosswind 20 km/h (accent sliders), Gusts 45 km/h (blue
-   slider), Crosswind Sensitivity "Normal" (menu).
+   ring is your maximum gust limit."
+2. **"Limits"**: Headwind 15 km/h, Crosswind 20 km/h (accent sliders), Gust Limit 45 km/h (blue
+   slider, "No Limit" at the top), Crosswind Sensitivity "Normal" (menu). Footer: "Wind over your
+   headwind or crosswind comfort scores lower. Gusts over the limit mark a ride Below your minimums."
 3. **"How Your Routes Fit"**: Hilly Loop "Wed · 15 km/h tailwind" In range; Potters Bar "Thu ·
    14 km/h crosswind" In range; Braintree "Wed · Gusts 48 km/h" "⚠ 3 over" (warn). Footer:
-   "Braintree's gusts are 3 km/h over your limit, so it's marked Below your minimums. Raise Gusts
-   to 50 km/h and it ranks normally."
+   "Braintree's gusts are 3 km/h over your limit, so it's marked Below your minimums. Raise the
+   gust limit to 50 km/h and it ranks normally."
 
 Build:
 - [x] `WindEnvelope` (Canvas/Path), redraws live from the sliders
-- [x] Limits sliders + sensitivity menu (a saved value other than 0.5, 1 or 2 shows "Custom")
-- [ ] Wire API v0.25.0 `preferenceLevels.crosswind`; preserve custom values until explicitly changed
-- [ ] Distinguish gust comfort from the hard maximum; do not auto-link them at 80% ([reviewed contract](preferences-api-requests.md) §3)
+- [x] Limits sliders + sensitivity menu
+- [x] Crosswind Sensitivity saves `preferenceLevels.crosswind`; `custom` shows read-only until the rider picks a level; hidden on APIs older than v0.25.0
+- [x] The slider is the hard maximum (`minimumStandards.maximumGustKph`), labelled Gust Limit; gust comfort stays untouched ([reviewed contract](preferences-api-requests.md) §3)
 - [x] Route fit rows
 
 ## 8. Widgets and Lock Screen
@@ -404,16 +407,13 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 | Notes | Built in the app from `best.conditions`, `rideHours[]`, `recentRides` and `distanceFit`, measured against `resolvedPreferences`; `drawbacks` only when preferences are missing |
 | Factor sentences | `factors` + `conditions`; Wind and Temperature quote your limits from `resolvedPreferences` |
 | Footer | `weather.attribution` (Apple Weather when empty) |
-| Preferences, Ideal Temperature, Comfortable Wind | `GET /users/me` → `settings.riding`, `settings.preferences`, `settings.units`, `preferenceLevels`; each edit sends `PATCH /users/me {expectedVersion, settings}` after 0.6 s (explicit `null` removes a limit or the distance range; a 409 re-reads and re-sends), then Rides reloads |
+| Preferences, Ideal Temperature, Comfortable Wind | `GET /users/me` → `settings.riding`, `settings.preferences`, `settings.units`, `settings.display`, `preferenceLevels`, and `GET /auth/me` → `user.providers`; each edit sends `PATCH /users/me {expectedVersion, settings}` after 0.6 s (explicit `null` removes a limit or the distance range; a 409 re-reads and re-sends), then Rides reloads |
 | How Your Routes Fit | The last board Rides loaded, measured against the edited values in the app |
 
-**Not wired yet.** Score-change badge and "Wind from the …" (API v0.25.0 is ready;
-see [`ride-detail-api-requests.md`](ride-detail-api-requests.md)); unassessable routes aren't shown; factor prose is metric-only; a
-conflicting settings edit (409) keeps the old saved window, though that load still uses the new
-one; dates assume the device and the routes share a time zone; "Track a route" is still a no-op.
-Preferences can now consume points lost, crosswind levels and linked sign-in methods.
-Strava needs its own connection/sync implementation; seasonal guesses were declined in favor of
-user-chosen monthly limits. Wind and distance units remain separate, saved choices
-([`preferences-api-requests.md`](preferences-api-requests.md)); "How Your Routes
-Fit" is empty until Rides has loaded once. The Rides day strip doesn't show the sheet's "Rain until 15:00"
+**Not wired yet.** Unassessable routes aren't shown; a conflicting settings edit (409) keeps
+the old saved window, though that load still uses the new one; dates assume the device and the
+routes share a time zone; "Track a route" is still a no-op. Strava needs its own connection/sync
+implementation ([`preferences-api-requests.md`](preferences-api-requests.md) §1). Crosswind
+Sensitivity stays hidden until the API returns a level (v0.25.0). "How Your Routes Fit" is empty
+until Rides has loaded once. The Rides day strip doesn't show the sheet's "Rain until 15:00"
 style notes yet.

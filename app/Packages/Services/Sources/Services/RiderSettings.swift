@@ -9,15 +9,21 @@ public struct RiderSettings: Hashable, Sendable {
     public var riding: Riding
     public var preferences: Preferences
     public var units: Units?
+    public var display: Display?
     public var sunshine: SunshineLevel
     public var rain: RainLevel
+    /// `nil` from an API older than v0.25.0, which has no crosswind level; the picker hides.
+    public var crosswind: CrosswindLevel?
 
-    public init(riding: Riding, preferences: Preferences, units: Units? = nil, sunshine: SunshineLevel, rain: RainLevel) {
+    public init(riding: Riding, preferences: Preferences, units: Units? = nil, display: Display? = nil,
+                sunshine: SunshineLevel, rain: RainLevel, crosswind: CrosswindLevel? = nil) {
         self.riding = riding
         self.preferences = preferences
         self.units = units
+        self.display = display
         self.sunshine = sunshine
         self.rain = rain
+        self.crosswind = crosswind
     }
 
     public struct Riding: Codable, Hashable, Sendable {
@@ -36,8 +42,10 @@ public struct RiderSettings: Hashable, Sendable {
         public var minimumStandards: MinimumStandards
 
         public struct Temperature: Codable, Hashable, Sendable { public var comfortMinC, comfortMaxC: Double }
+        /// `crosswindSensitivity` is left out: the API rejects it alongside `preferenceLevels.crosswind`,
+        /// which is how the app sets it.
         public struct Wind: Codable, Hashable, Sendable {
-            public var comfortableHeadwindKph, comfortableCrosswindKph, comfortableGustKph, crosswindSensitivity: Double
+            public var comfortableHeadwindKph, comfortableCrosswindKph, comfortableGustKph: Double
         }
         public struct RecentRides: Codable, Hashable, Sendable {
             public enum Mode: String, Codable, Sendable { case neutral, preferVariety = "prefer-variety" }
@@ -80,17 +88,19 @@ public struct RiderSettings: Hashable, Sendable {
 
             public static func fixed(_ c: Double) -> Self { .init(kind: "fixed", valueC: c) }
 
-            /// Vary by Month: `c` from April to October, 2° lower in March and November, 4° lower
-            /// from December to February.
-            // ponytail: the offsets are the app's guess at "accept colder starts in winter", and
-            // assume the northern hemisphere (docs/redesign/preferences-api-requests.md, item 6).
+            /// The same limit in every month, for the rider to change month by month. The API has
+            /// no seasonal offsets, so the app doesn't invent any.
             public static func monthly(_ c: Double) -> Self {
-                .init(kind: "monthly", valuesC: ["11": c - 2, "12": c - 4, "1": c - 4, "2": c - 4, "3": c - 2], fallbackC: c)
+                .init(kind: "monthly", valuesC: Dictionary(uniqueKeysWithValues: (1...12).map { ("\($0)", c) }), fallbackC: nil)
             }
 
             public var isMonthly: Bool { kind == "monthly" }
-            /// The summer value: the fixed value, or the monthly policy's warmest month.
-            public var baseC: Double { valueC ?? fallbackC ?? valuesC?.values.max() ?? 0 }
+
+            /// The limit in `month` (1–12). `nil` when a monthly policy has neither that month nor a
+            /// fallback: the API leaves it unresolved, so there's no limit to show.
+            public func valueC(in month: Int) -> Double? {
+                isMonthly ? valuesC?["\(month)"] ?? fallbackC : valueC
+            }
         }
 
         /// The API removes the distance preference only when it's sent as `null`.
@@ -112,6 +122,12 @@ public struct RiderSettings: Hashable, Sendable {
         public init(temperature: String, windSpeed: String) { self.temperature = temperature; self.windSpeed = windSpeed }
     }
 
+    /// `settings.display`: distances, independent of wind speed.
+    public struct Display: Codable, Hashable, Sendable {
+        public var unit: String // "km" | "mi"
+        public init(unit: String) { self.unit = unit }
+    }
+
     /// `preferenceLevels.sunshine`. The API reads weights it doesn't recognise as `custom`.
     public enum SunshineLevel: String, Codable, Sendable, CaseIterable {
         case dontMind = "dont-mind", nice, important, custom
@@ -121,6 +137,11 @@ public struct RiderSettings: Hashable, Sendable {
     public enum RainLevel: String, Codable, Sendable, CaseIterable {
         case dontMind = "dont-mind", lightOK = "light-ok", avoid, custom
     }
+
+    /// `preferenceLevels.crosswind` (API v0.25.0): sensitivity 0.5, 1 or 2; anything else is `custom`.
+    public enum CrosswindLevel: String, Codable, Sendable, CaseIterable {
+        case low, normal, high, custom
+    }
 }
 
 public extension RiderSettings {
@@ -129,12 +150,12 @@ public extension RiderSettings {
         riding: .init(averageSpeedKph: 20, departureStepMinutes: 30),
         preferences: .init(
             temperature: .init(comfortMinC: 10, comfortMaxC: 22),
-            wind: .init(comfortableHeadwindKph: 15, comfortableCrosswindKph: 20, comfortableGustKph: 35, crosswindSensitivity: 1),
+            wind: .init(comfortableHeadwindKph: 15, comfortableCrosswindKph: 20, comfortableGustKph: 35),
             recentRides: .init(mode: .preferVariety, lookbackDays: 28),
             climbing: .init(preference: .flatter),
             distance: .init(minKm: 40, maxKm: 80),
             minimumStandards: .init(minimumTemperature: .fixed(4), maximumTemperatureC: 30, maximumGustKph: 45, maximumPrecipitationProbability: 0.6)),
-        sunshine: .nice, rain: .lightOK)
+        sunshine: .nice, rain: .lightOK, crosswind: .normal)
 }
 
 /// The rider's saved settings, shared by the Preferences tab and Rides. Edits save as you go:
@@ -154,6 +175,9 @@ public final class RiderSettingsStore {
     public var board: RideBoard?
     /// "Signed in with Apple" details from `/auth/me`.
     public private(set) var email: String?
+    /// Linked sign-in methods, oldest first: "apple", "google", "passkey". Not necessarily the
+    /// one this session used.
+    public private(set) var providers: [String] = []
     public private(set) var weatherProviderId: String?
     /// Strava's state for the Connections row. The API has no Strava connection yet, so live
     /// accounts leave it `nil` (docs/redesign/preferences-api-requests.md, item 1).
@@ -177,6 +201,7 @@ public final class RiderSettingsStore {
             saved = .sample
             settings = .sample
             board = .sample
+            providers = ["apple"]
             strava = Strava(lastSync: Calendar.current.date(bySettingHour: 8, minute: 10, second: 0, of: .now), averageSpeedKph: 21.4)
         }
     }
@@ -191,6 +216,7 @@ public final class RiderSettingsStore {
             // An edit still waiting to save wins over what the server had.
             if settings == saved { apply(response) } else { version = response.user.version }
             email = await auth?.user.email
+            providers = await auth?.user.providers ?? []
             phase = .loaded
         } catch let failure as RideOnAPI.Failure where failure.status == 401 {
             phase = .signedOut
@@ -206,6 +232,7 @@ public final class RiderSettingsStore {
         saved = nil
         settings = nil
         email = nil
+        providers = []
         phase = .signedOut
         revision += 1
     }
@@ -215,7 +242,8 @@ public final class RiderSettingsStore {
         version = user.version
         weatherProviderId = user.weatherProviderId
         let fresh = RiderSettings(riding: user.settings.riding, preferences: user.settings.preferences, units: user.settings.units,
-                                  sunshine: user.preferenceLevels?.sunshine ?? .custom, rain: user.preferenceLevels?.rain ?? .custom)
+                                  display: user.settings.display, sunshine: user.preferenceLevels?.sunshine ?? .custom,
+                                  rain: user.preferenceLevels?.rain ?? .custom, crosswind: user.preferenceLevels?.crosswind)
         saved = fresh
         settings = fresh
     }
@@ -255,10 +283,12 @@ public final class RiderSettingsStore {
                 var riding: RiderSettings.Riding
                 var preferences: RiderSettings.Preferences
                 var units: RiderSettings.Units?
+                var display: RiderSettings.Display?
             }
             struct Levels: Codable {
                 var sunshine: RiderSettings.SunshineLevel?
                 var rain: RiderSettings.RainLevel?
+                var crosswind: RiderSettings.CrosswindLevel?
             }
             var version: Int
             var settings: Settings
@@ -269,7 +299,7 @@ public final class RiderSettingsStore {
     }
 
     struct AuthResponse: Decodable {
-        struct User: Decodable { var email: String? }
+        struct User: Decodable { var email: String?; var providers: [String]? }
         var user: User
     }
 
@@ -278,17 +308,20 @@ public final class RiderSettingsStore {
             var riding: RiderSettings.Riding
             var preferences: RiderSettings.Preferences
             var units: RiderSettings.Units?
+            var display: RiderSettings.Display?
             var preferenceLevels: UserResponse.User.Levels
         }
         var expectedVersion: Int
         var settings: Settings
 
-        /// A `custom` level isn't sent, so weights set elsewhere survive.
+        /// A `custom` level isn't sent, so weights set elsewhere survive. Nor is a missing crosswind
+        /// level: an API older than v0.25.0 rejects the key.
         init(expectedVersion: Int, _ s: RiderSettings) {
             self.expectedVersion = expectedVersion
-            settings = Settings(riding: s.riding, preferences: s.preferences, units: s.units,
+            settings = Settings(riding: s.riding, preferences: s.preferences, units: s.units, display: s.display,
                                 preferenceLevels: .init(sunshine: s.sunshine == .custom ? nil : s.sunshine,
-                                                        rain: s.rain == .custom ? nil : s.rain))
+                                                        rain: s.rain == .custom ? nil : s.rain,
+                                                        crosswind: s.crosswind == .custom ? nil : s.crosswind))
         }
     }
 }

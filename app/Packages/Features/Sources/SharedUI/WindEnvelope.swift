@@ -3,13 +3,13 @@ import Models
 
 /// DESIGN-SYSTEM.md §6.9: Comfortable Wind's polar shape. You ride up the page; the shaded
 /// shape reaches the headwind limit ahead, the crosswind limit each side and any tailwind
-/// behind, and the dashed ring is the gust limit. Values are km/h; labels follow `unitSystem`.
+/// behind, and the dashed ring is the gust limit. Values are km/h; labels follow `speedSystem`.
 /// Drawn, so VoiceOver gets one summary and the Sliders below it are the way to edit.
 public struct WindEnvelope: View {
     var headwindKph: Double
     var crosswindKph: Double
     var gustKph: Double?
-    @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.speedSystem) private var speedSystem
     @Environment(\.locale) private var locale
 
     public init(headwindKph: Double, crosswindKph: Double, gustKph: Double?) {
@@ -71,11 +71,11 @@ public struct WindEnvelope: View {
 
     /// The bare number in display units: "15".
     private func number(_ kph: Double) -> String {
-        (unitSystem == .metric ? kph : kph / 1.609344).formatted(.number.precision(.fractionLength(0)).locale(locale))
+        (speedSystem == .metric ? kph : kph / 1.609344).formatted(.number.precision(.fractionLength(0)).locale(locale))
     }
 
     private var summary: String {
-        let speed = { UnitFormat.speed(kph: $0, system: unitSystem, locale: locale) }
+        let speed = { UnitFormat.speed(kph: $0, system: speedSystem, locale: locale) }
         return ["Headwind up to \(speed(headwindKph))", "crosswind up to \(speed(crosswindKph))", "any tailwind",
                 gustKph.map { "gusts up to \(speed($0))" } ?? "no gust limit"].joined(separator: ", ")
     }

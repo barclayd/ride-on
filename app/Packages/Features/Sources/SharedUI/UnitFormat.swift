@@ -3,10 +3,10 @@ import Models
 
 /// Display-only unit formatting. Canonical storage/engine values stay metric
 /// everywhere else (distanceKm, elevationGainM, windKph, temperatureC,
-/// speed km/h) — this converts for display per the rider's `UnitSystem`
-/// (You tab / macOS Settings; defaults from the locale, UK = metric).
-/// Temperature is the exception: it keeps following the locale, which iOS
-/// exposes as a per-app °C/°F override.
+/// speed km/h) — this converts for display. Distance/elevation follow
+/// `\.unitSystem`, wind/riding speed `\.speedSystem`: the account saves them
+/// separately, so mph with kilometres is fine. Both default from the locale.
+/// Temperature follows the locale, which the app root rewrites to the saved unit.
 public enum UnitFormat {
     /// Ride distance: km (metric) or miles (imperial).
     public static func distance(km: Double, system: UnitSystem, fractionDigits: Int = 1, locale: Locale = .current) -> String {
@@ -92,7 +92,9 @@ public extension FormatStyle where Self == Date.FormatStyle {
 }
 
 public extension EnvironmentValues {
-    /// The rider's display units, injected at the app root from
+    /// The rider's distance and elevation units, injected at the app root from
     /// `PreferencesStore` — views read this and pass it to `UnitFormat`.
     @Entry var unitSystem: UnitSystem = .localeDefault
+    /// The rider's wind and riding speed units, saved separately from distance.
+    @Entry var speedSystem: UnitSystem = .localeDefault
 }

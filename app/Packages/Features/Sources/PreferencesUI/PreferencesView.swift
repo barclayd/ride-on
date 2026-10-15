@@ -9,6 +9,7 @@ public struct PreferencesView: View {
     @Environment(RiderSettingsStore.self) private var store
     @Environment(PreferencesStore.self) private var local
     @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.speedSystem) private var speedSystem
     @Environment(\.locale) private var locale
     @State private var isHealthPrimingPresented = false
 
@@ -68,7 +69,7 @@ public struct PreferencesView: View {
             }
             NavigationLink { ComfortableWindView() } label: {
                 LabeledContent {
-                    Text("Up to \(UnitFormat.speed(kph: preferences.wind.comfortableHeadwindKph, system: unitSystem, locale: locale))")
+                    Text("Up to \(UnitFormat.speed(kph: preferences.wind.comfortableHeadwindKph, system: speedSystem, locale: locale))")
                 } label: {
                     Row("Comfortable Wind", "wind", .cyan)
                 }
@@ -123,7 +124,9 @@ public struct PreferencesView: View {
         Section {
             NavigationLink { IdealTemperatureView() } label: {
                 LabeledContent {
-                    Text(preferences.minimumStandards.minimumTemperature.map { UnitFormat.degrees(c: $0.baseC, locale: locale) } ?? "None")
+                    Text(preferences.minimumStandards.minimumTemperature.map { floor in
+                        floor.isMonthly ? "By Month" : floor.valueC.map { UnitFormat.degrees(c: $0, locale: locale) } ?? "None"
+                    } ?? "None")
                 } label: {
                     Row("Never Colder Than", "snowflake", .indigo)
                 }
@@ -137,9 +140,9 @@ public struct PreferencesView: View {
             }
             NavigationLink { ComfortableWindView() } label: {
                 LabeledContent {
-                    Text(preferences.minimumStandards.maximumGustKph.map { UnitFormat.speed(kph: $0, system: unitSystem, locale: locale) } ?? "None")
+                    Text(preferences.minimumStandards.maximumGustKph.map { UnitFormat.speed(kph: $0, system: speedSystem, locale: locale) } ?? "None")
                 } label: {
-                    Row("Strongest Gusts", "wind", Color(red: 0.4, green: 0.47, blue: 0.58))
+                    Row("Gust Limit", "wind", Color(red: 0.4, green: 0.47, blue: 0.58))
                 }
             }
             Picker(selection: settings.preferences.minimumStandards.maximumPrecipitationProbability) {
@@ -162,7 +165,7 @@ public struct PreferencesView: View {
         Section {
             Stepper {
                 LabeledContent {
-                    Text(UnitFormat.speed(kph: settings.wrappedValue.riding.averageSpeedKph, system: unitSystem, locale: locale))
+                    Text(UnitFormat.speed(kph: settings.wrappedValue.riding.averageSpeedKph, system: speedSystem, locale: locale))
                 } label: {
                     Row("Average Speed", "gauge.with.dots.needle.33percent", .green)
                 }
@@ -177,7 +180,7 @@ public struct PreferencesView: View {
                     settings.wrappedValue.riding.averageSpeedKph = average
                 } label: {
                     Label {
-                        Text("Use My Strava Average, \(UnitFormat.speed(kph: average, system: unitSystem, fractionDigits: 1, locale: locale))")
+                        Text("Use My Strava Average, \(UnitFormat.speed(kph: average, system: speedSystem, fractionDigits: 1, locale: locale))")
                     } icon: {
                         Color.clear.frame(width: Tile.size, height: Tile.size)
                     }
@@ -223,7 +226,12 @@ public struct PreferencesView: View {
                     LabeledContent {
                         Text("Signed In")
                     } label: {
-                        Row("Account", "person.fill", .black)
+                        // Linked methods, not how this session signed in, so "Signed In" stays neutral.
+                        if store.providers.contains("apple") {
+                            Row("Apple Account", "apple.logo", .black)
+                        } else {
+                            Row("Account", "person.fill", .black)
+                        }
                     }
                 }
             }
@@ -256,7 +264,7 @@ public struct PreferencesView: View {
 
     /// One step in the rider's units: 1 km/h, or 1 mph snapped to whole mph.
     private func stepSpeed(by delta: Double) {
-        let unit = unitSystem == .metric ? 1 : 1.609344
+        let unit = speedSystem == .metric ? 1 : 1.609344
         let kph = ((settings.wrappedValue.riding.averageSpeedKph / unit).rounded() + delta) * unit
         settings.wrappedValue.riding.averageSpeedKph = min(max(kph, 5), 50)
     }
@@ -346,8 +354,8 @@ struct Row: View {
     }
 }
 
-/// °C/°F and km/h/mph. Also the macOS Settings window (⌘,). Kept on the device and, when
-/// signed in, saved as `settings.units` so the extension matches.
+/// °C/°F, km/h/mph and km/mi, each its own choice. Also the macOS Settings window (⌘,). Kept on the
+/// device and, when signed in, saved as `settings.units` and `settings.display` so the extension matches.
 public struct UnitsSection: View {
     @Environment(RiderSettingsStore.self) private var store
     @Environment(PreferencesStore.self) private var local
@@ -378,8 +386,20 @@ public struct UnitsSection: View {
             } label: {
                 Row("Wind Speed", "wind", Color(red: 0.4, green: 0.47, blue: 0.58))
             }
+            LabeledContent {
+                Picker("Distance", selection: distance) {
+                    Text("km").tag(UnitSystem.metric)
+                    Text("mi").tag(UnitSystem.imperial)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            } label: {
+                Row("Distance", "point.topleft.down.to.point.bottomright.curvepath", .purple)
+            }
         }
         .sensoryFeedback(.selection, trigger: local.preferences.temperatureUnit)
+        .sensoryFeedback(.selection, trigger: local.preferences.speedSystem)
         .sensoryFeedback(.selection, trigger: local.preferences.unitSystem)
     }
 
@@ -392,8 +412,18 @@ public struct UnitsSection: View {
 
     private var windSpeed: Binding<UnitSystem> {
         Binding(
+            get: { local.preferences.effectiveSpeedSystem },
+            set: { local.preferences.speedSystem = $0; saveUnits() }
+        )
+    }
+
+    private var distance: Binding<UnitSystem> {
+        Binding(
             get: { local.preferences.effectiveUnitSystem },
-            set: { local.preferences.unitSystem = $0; saveUnits() }
+            set: {
+                local.preferences.unitSystem = $0
+                if store.settings != nil { store.settings?.display = .init(unit: $0 == .metric ? "km" : "mi") }
+            }
         )
     }
 
@@ -461,6 +491,11 @@ struct AccountView: View {
         Form {
             Section {
                 LabeledContent("Email", value: store.email ?? "Unknown")
+                if !store.providers.isEmpty {
+                    LabeledContent("Sign-In Methods", value: store.providers
+                        .map { ["apple": "Apple", "google": "Google", "passkey": "Passkey"][$0] ?? $0.capitalized }
+                        .formatted(.list(type: .and)))
+                }
             } footer: {
                 Text("Your routes, rides and preferences are kept in your Ride On account.")
             }

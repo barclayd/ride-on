@@ -18,7 +18,7 @@ public struct RideDetailView: View {
     @State private var calendarFailed = false
     @State private var elevation: [RideDetail.ElevationPoint]
     @Environment(\.services) private var services
-    @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.speedSystem) private var speedSystem
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -195,7 +195,7 @@ public struct RideDetailView: View {
         let isLarge = dynamicTypeSize.isAccessibilitySize
         let layout = isLarge ? AnyLayout(FlowLayout(spacing: 12)) : AnyLayout(VStackLayout(spacing: 6))
         let time = hour.time.formatted(.clockTime)
-        let wind = UnitFormat.speed(kph: hour.windKph, system: unitSystem)
+        let wind = UnitFormat.speed(kph: hour.windKph, system: speedSystem)
         let rain = (hour.rainChance).formatted(.percent.precision(.fractionLength(0)))
         return layout {
             Text(time).font(.subheadline).foregroundStyle(.secondary)
@@ -215,13 +215,13 @@ public struct RideDetailView: View {
         .padding(.horizontal, isLarge ? 10 : 0)
         .frame(maxWidth: .infinity, alignment: isLarge ? .leading : .center)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(time), \(hour.sky.title), \(UnitFormat.degrees(c: hour.temperatureC, locale: locale)), wind \(wind), gusts \(UnitFormat.speed(kph: hour.gustKph, system: unitSystem)), \(rain) chance of rain")
+        .accessibilityLabel("\(time), \(hour.sky.title), \(UnitFormat.degrees(c: hour.temperatureC, locale: locale)), wind \(wind), gusts \(UnitFormat.speed(kph: hour.gustKph, system: speedSystem)), \(rain) chance of rain")
     }
 
     /// "24": the gust number alone, in the rider's units, as Weather writes it under the wind.
     private func speedValue(_ kph: Double) -> Int {
         let speed = Measurement(value: kph, unit: UnitSpeed.kilometersPerHour)
-        return Int(speed.converted(to: unitSystem == .metric ? .kilometersPerHour : .milesPerHour).value.rounded())
+        return Int(speed.converted(to: speedSystem == .metric ? .kilometersPerHour : .milesPerHour).value.rounded())
     }
 
     // MARK: Actions
