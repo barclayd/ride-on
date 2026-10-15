@@ -10,7 +10,7 @@ final class RideBoardLoaderTests: XCTestCase {
         let conditions = { (sky: String, rain: String, head: Double) in """
             {"temperatureC":{"minimum":9,"maximum":14},"averageWindSpeedKph":15,"averageHeadwindKph":\(head),
              "averageTailwindKph":6,"averageCrosswindKph":4,"maximumHeadwindKph":\(head + 8),"maximumCrosswindKph":6,
-             "maximumGustKph":28,"gustExposure":{"directionBasis":"prevailing-wind-estimate","maximumAdverseKph":22},"maximumPrecipitationProbability":0.05,
+             "maximumGustKph":28,"windFromDegrees":248,"gustExposure":{"directionBasis":"prevailing-wind-estimate","maximumAdverseKph":22},"maximumPrecipitationProbability":0.05,
              "distanceKm":25,"windDistanceFractions":{"headwind":\(head > 5 ? 0.7 : 0.1),"tailwind":\(head > 5 ? 0.2 : 0.6),"crosswind":0.1},
              "precipitationSummary":"\(rain)","skyConditionDistanceFractions":{"\(sky)":0.8,"cloudy":0.2},"cloudCoverFraction":{"mean":0.4,"maximum":0.6}}
             """ }
@@ -21,12 +21,15 @@ final class RideBoardLoaderTests: XCTestCase {
              "rideHours":[{"start":"\(at)","end":"2026-10-14T09:00:00.000Z","conditions":\(conditions("sunny", "dry", 1))},
                           {"start":"2026-10-14T09:00:00.000Z","end":"\(finish)","conditions":\(conditions("cloudy", "light_showers", 9))}],
              "recentRides":{"status":"applied","penaltyPoints":3},
+             "pointsLost":{"temperature":2.1,"wind":0,"dryness":0,"clearSkies":0.4,"sunshine":null,"climbing":null,"distance":null},
+             "previous":{"score":81.7,"generatedAt":"2026-10-13T06:00:00.000Z"},
              "drawbacks":["Some sections are cooler than your comfort range.","Gusts exceed your comfort setting.","Cloud covers more than half the sky on average during this ride."]}
             """ }
         let json = """
             {"generatedAt":"2026-10-13T07:12:00.000Z","timeZone":"Europe/London","range":{"dates":["2026-10-14","2026-10-15"]},
              "resolvedPreferences":{"temperature":{"comfortMinC":10,"comfortMaxC":22},
-               "wind":{"comfortableHeadwindKph":5,"comfortableCrosswindKph":20,"comfortableGustKph":20,"crosswindSensitivity":1}},
+               "wind":{"comfortableHeadwindKph":5,"comfortableCrosswindKph":20,"comfortableGustKph":20,"crosswindSensitivity":1},
+               "minimumStandards":{"maximumGustKph":25}},
              "weather":{"selectedProvider":{"id":"met-office","name":"Met Office"},
                "attribution":[{"text":"Powered by Met Office data","url":"https://www.metoffice.gov.uk/"}]},
              "rankings":[{"routeId":"\(route)","routeName":"Hilly Loop","distanceKm":51,"ascentM":640,"estimatedDurationMinutes":180,
@@ -42,8 +45,11 @@ final class RideBoardLoaderTests: XCTestCase {
                       "availabilityReason":"partial_coverage","until":"2026-10-16T17:00:00.000Z"}]}
             """
         let response = try RideOnAPI.decoder.decode(RideBoardLoader.Recommendation.self, from: Data(json.utf8))
-        let board = RideBoardLoader.board(from: response, routes: [route: .init(coordinates: [], cycleTravelURL: nil)],
-                                          summaries: [.init(routeId: route, lastRiddenOn: "2026-09-29")])
+        func mapped(_ units: RideBoardLoader.ProseUnits) -> RideBoard {
+            RideBoardLoader.board(from: response, routes: [route: .init(coordinates: [], cycleTravelURL: nil)],
+                                  summaries: [.init(routeId: route, lastRiddenOn: "2026-09-29")], units: units)
+        }
+        let board = mapped(.metric)
 
         let pick = try XCTUnwrap(board.picks.first)
         XCTAssertEqual(board.picks.count, 1)
@@ -52,6 +58,9 @@ final class RideBoardLoaderTests: XCTestCase {
         XCTAssertEqual(pick.conditions.sky, .sunnySpells)
         XCTAssertEqual(pick.conditions.wind, .tailwind)
         XCTAssertNotNil(pick.lastRidden)
+        XCTAssertEqual(pick.change, 4) // 86 now, 82 earlier
+        XCTAssertEqual(pick.pointsLost, ["temperature": 2.1, "wind": 0, "dryness": 0, "clearSkies": 0.4]) // nulls make no claim
+        XCTAssertEqual(board.scoredWith?.temperatureC, 10...22)
 
         XCTAssertEqual(board.days.map { $0.best?.score }, [86, nil]) // unselected day dropped
         XCTAssertEqual(board.forecast.count, 3)
@@ -65,17 +74,29 @@ final class RideBoardLoaderTests: XCTestCase {
 
         let detail = try XCTUnwrap(board.details[pick.id])
         XCTAssertEqual(detail.departures.map(\.score), [86, 70])
-        let kph = RideBoardLoader.kph
-        XCTAssertEqual(detail.notes.map(\.text), ["Starts at 9°, a degree under your ideal range.", "Headwind for the last 25 km.",
-                                                  "Gusts reach 28 \(kph), over your 20 \(kph) limit.",
+        let kph = RideBoardLoader.ProseUnits.metric.speedUnit
+        XCTAssertEqual(detail.changeSince, ISO8601DateFormatter().date(from: "2026-10-13T06:00:00Z"))
+        XCTAssertEqual(detail.notes.map(\.text), ["Down to 9° in the first hour, a degree under your ideal range.",
+                                                  "Headwinds reach 9 \(kph), more than the 5 \(kph) you're comfortable with.",
+                                                  "Gusts reach 28 \(kph), over your 25 \(kph) limit.",
                                                   "You've ridden these roads recently, so it loses 3 points."])
         XCTAssertEqual(board.credits.map(\.text), ["Powered by Met Office data"])
         let first = try XCTUnwrap(detail.departures.first)
         XCTAssertEqual(first.hours.map(\.sky), [.sunny, .rain])
         XCTAssertEqual(first.wind, [.init(.tailwind, from: 0, to: 25), .init(.headwind, from: 25, to: 50)])
         XCTAssertEqual(first.factors.map(\.name), ["Rain", "Wind", "Temperature", "Sunshine", "Sky"])
-        XCTAssertEqual(first.factors[1].reason, "Tailwind for 60% of the distance. Gusts peak at 28 \(kph), over your 20 \(kph) limit.")
+        XCTAssertEqual(first.windFrom, "west-south-west")
+        XCTAssertEqual(first.factors[1].reason, "Tailwind for 60% of the distance. Gusts peak at 28 \(kph), over your 25 \(kph) limit.")
         XCTAssertEqual(first.factors[2].reason, "9–14° along the way. Your ideal range is 10–22°.")
+
+        // Saved units, each on its own: °F, mph and miles here.
+        let imperial = try XCTUnwrap(mapped(.init(fahrenheit: true, mph: true, miles: true)).details[pick.id])
+        XCTAssertEqual(imperial.notes.prefix(3).map(\.text), ["Down to 48° in the first hour, 2 degrees under your ideal range.",
+                                                              "Headwinds reach 6 mph, more than the 3 mph you're comfortable with.",
+                                                              "Gusts reach 17 mph, over your 16 mph limit."])
+        let saved = RideBoardLoader.ProseUnits(.init(temperature: "C", windSpeed: "mph"), nil, locale: Locale(identifier: "en_US"))
+        XCTAssertEqual([saved.fahrenheit, saved.mph, saved.miles], [false, true, true])
+        XCTAssertEqual([0, 12, 359].map(RideBoardLoader.compass), ["north", "north-north-east", "north"])
     }
 
     func testPlanningWindowRoundTrips() throws {

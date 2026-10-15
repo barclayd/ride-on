@@ -34,14 +34,19 @@ struct RideOnApp: App {
                 .environment(preferencesStore)
                 .environment(riderSettings)
                 .environment(\.unitSystem, preferencesStore.preferences.effectiveUnitSystem)
+                .environment(\.speedSystem, preferencesStore.preferences.effectiveSpeedSystem)
                 .environment(\.locale, Locale.current.temperatureUnit(preferencesStore.preferences.temperatureUnit))
                 .tint(Color.accentColor)
                 .task { await riderSettings.load() }
-                // The account's units win, so the app and the extension agree.
+                // The account's units win, so the app and the extension agree. Each is its own choice.
                 .onChange(of: riderSettings.settings?.units) { _, units in
                     guard let units else { return }
                     preferencesStore.preferences.temperatureUnit = TemperatureUnit(rawValue: units.temperature)
-                    preferencesStore.preferences.unitSystem = units.windSpeed == "mph" ? .imperial : .metric
+                    preferencesStore.preferences.speedSystem = units.windSpeed == "mph" ? .imperial : .metric
+                }
+                .onChange(of: riderSettings.settings?.display) { _, display in
+                    guard let display else { return }
+                    preferencesStore.preferences.unitSystem = display.unit == "mi" ? .imperial : .metric
                 }
                 .onOpenURL { url in
                     #if os(iOS)
