@@ -65,15 +65,25 @@ Top to bottom:
 
 1. **Hero** (`RideHero`, at least 480pt, taller when large text needs it; edge to edge under the
    status bar). A non-interactive satellite `Map` of the best pick with the route in accent on a
-   white casing and a start marker; a dark scrim sized to the title block.
-   - "★ Best pick · Wednesday 14 October" (`.subheadline` semibold, white 85%)
+   white casing and a start marker; an eased black scrim (at least 340pt, 0 → 80% with no
+   visible top edge) sized to the title block. The hero follows canvas board
+   `HeroD.dc.html` ("3b"), which supersedes the hero in the screenshots above.
+   - "Best pick" pill (`.footnote` semibold, white on `pickPill` green; "Best that day" for
+     another day's best; no pill in detail when it's neither)
    - "Hilly Loop" (`.largeTitle` bold, white)
-   - "09:00 → ~12:00 · 51 km · 640 m" (`.body`, monospaced digits)
-   - Share button: 48pt clear-glass circle, bottom right, `square.and.arrow.up`, label "Send
-     route to a bike computer".
+   - ↔ 51 km · ⛰ 640 m climb (`.subheadline`, white 88%, monospaced digits, wraps at large
+     text). Soft text shadow on the whole block. No date or times: they lead the card.
+   - Commit star: 48pt clear-glass circle, bottom right, `star`; on tap `star.fill` on
+     gold-tinted glass (`.committed`) with a selection haptic. Label "Commit to Hilly Loop on
+     Wednesday 14 October", Selected trait while on.
    - The `Map`'s own "Maps" and "Legal" attribution, bottom leading.
    - Tap anywhere else on the hero: zoom to Ride detail.
 2. **Conditions card** (solid card, 26pt radius).
+   - "Wednesday 14 October" (`.subheadline` semibold), then a flight-board row: "09:00" over
+     "Leave" · dashed line, accent `bicycle`, dashed line over "About 3h 00m" · "~12:00" over
+     "Back" (`.title` bold over `.footnote` secondary). One VoiceOver sentence: "Wednesday 14
+     October. Leave 09:00, about 3 hours, back about 12:00." At large text it falls back to
+     "09:00 → ~12:00" over the duration. Hairline divider.
    - "✓ Meets your preferences" (accent, `.subheadline` semibold) · "Last ridden 29 Sep" trailing
      (`.footnote`, secondary). Stacks at large text sizes.
    - `ConditionChip`s: 🌡 9–14° · 15 km/h tailwind · Gusts 28 km/h · ☀ Sunny spells.
@@ -113,6 +123,9 @@ Build:
 - [x] Footer attribution
 - [x] Zoom transition source on the hero and each route row
 - [x] Light/dark and Dynamic Type through `accessibility5` checked on the simulator
+- [x] Hero 3b: eased scrim, pick pill, icon stats, commit star (gold glass when on) and the
+      card's date/Leave–Back header. The star is in-memory only: no commit sheet, persistence
+      or condition-change notifications yet
 - [ ] Reduce Transparency
 
 ## 2. Ride detail (push from the hero, zoom transition)
@@ -121,7 +134,7 @@ Build:
 |---|---|
 | <img src="screens/ride-detail-light.png" width="300"> | <img src="screens/ride-detail-dark.png" width="300"> |
 
-1. **Hero**, 400pt, same art and title block as Rides, no share button in the hero.
+1. **Hero**, 400pt, same art and title block as Rides, no commit star in the hero.
 2. **Verdict card**: `ScoreGauge` (64pt ring, 86), "✓ Meets your preferences", "▲ 4 since 07:00 ·
    last ridden 29 Sep". Then notes with symbols:
    - 🌡 "Starts at 9°, a degree under your ideal range."

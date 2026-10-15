@@ -13,6 +13,8 @@ public struct RidesView: View {
     var apply: @MainActor @Sendable (RideWindow) async -> Void
     @State private var selectedDay: Date
     @State private var choosingWindow = false
+    // ponytail: in memory only, no notifications. The commit sheet and the API come later.
+    @State private var committed: Set<String> = []
     @Namespace private var zoom
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.speedSystem) private var speedSystem
@@ -50,17 +52,9 @@ public struct RidesView: View {
                         .matchedTransitionSource(id: hero.id, in: zoom)
 
                         // Beside the link, not inside it, so VoiceOver reaches both.
-                        ShareLink(item: RouteGPX(route: hero.route), preview: SharePreview(hero.route.name)) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .padding(8)
-                                .frame(minWidth: 48, minHeight: 48)
-                                .glassEffect(.clear.interactive(), in: .circle)
-                        }
-                        .accessibilityLabel("Send route to a bike computer")
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 38)
+                        commitButton(hero)
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 38)
                     }
 
                     Group {
@@ -112,11 +106,77 @@ public struct RidesView: View {
         }
     }
 
+    /// Commits to the hero's ride on its day; gold glass while on.
+    private func commitButton(_ pick: RideBoard.Pick) -> some View {
+        let isOn = committed.contains(pick.id)
+        return Button {
+            withAnimation(Motion.glassTapLayout) { committed.formSymmetricDifference([pick.id]) }
+        } label: {
+            Image(systemName: isOn ? "star.fill" : "star")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+                .contentTransition(.symbolEffect(.replace))
+                .padding(8)
+                .frame(minWidth: 48, minHeight: 48)
+                .glassEffect(isOn ? .clear.tint(.committed).interactive() : .clear.interactive(), in: .circle)
+                .shadow(color: isOn ? Color.committed.opacity(0.45) : .clear, radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: isOn)
+        .accessibilityLabel("Commit to \(pick.route.name) on \(pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide)))")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
     // MARK: Conditions
+
+    /// The ride's day and times, flight-board style: leave, how long, back.
+    private func planHeader(_ pick: RideBoard.Pick) -> some View {
+        let date = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        let leave = pick.start.formatted(.clockTime)
+        let back = pick.finish.formatted(.clockTime)
+        let length = pick.finish.timeIntervalSince(pick.start)
+        let spoken = Duration.seconds(length).formatted(.units(allowed: [.hours, .minutes], width: .wide))
+        let duration = "About \(Self.hoursMinutes(length))"
+        let dash = Dash().stroke(.tertiary, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])).frame(minWidth: 12, maxHeight: 2)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(date).font(.subheadline.weight(.semibold))
+            ViewThatFits(in: .horizontal) {
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 0) {
+                    GridRow {
+                        Text(leave)
+                        HStack(spacing: 6) {
+                            dash
+                            Image(systemName: "bicycle").font(.body).foregroundStyle(.tint)
+                            dash
+                        }
+                        .gridColumnAlignment(.center)
+                        Text("~\(back)").gridColumnAlignment(.trailing)
+                    }
+                    .font(.title.bold())
+                    GridRow {
+                        Text("Leave")
+                        Text(duration)
+                        Text("Back")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("\(leave) → ~\(back)").font(.title.bold())
+                    Text(duration).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .monospacedDigit()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(date). Leave \(leave), about \(spoken), back about \(back).")
+    }
 
     private func conditionsCard(_ pick: RideBoard.Pick) -> some View {
         let conditions = pick.conditions
         return VStack(alignment: .leading, spacing: 14) {
+            planHeader(pick)
+            Divider()
             let verdict = Verdict(meetsMinimums: pick.meetsMinimums)
             let lastRidden = pick.lastRidden.map {
                 Text("Last ridden \($0.formatted(.dateTime.day().month(.abbreviated)))")
@@ -391,6 +451,13 @@ private extension View {
 }
 
 /// The share item: the route as a GPX file a bike computer app can import.
+/// A horizontal line through the middle of its frame, for dashed strokes.
+private struct Dash: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { $0.move(to: CGPoint(x: rect.minX, y: rect.midY)); $0.addLine(to: CGPoint(x: rect.maxX, y: rect.midY)) }
+    }
+}
+
 struct RouteGPX: Transferable {
     var route: RideBoard.RouteSummary
 
