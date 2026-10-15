@@ -6,9 +6,9 @@ public enum SunPreference: String, Codable, CaseIterable, Sendable {
     case seek
 }
 
-/// Display units for distance/elevation/speed. Canonical storage stays
-/// metric everywhere; this only affects formatting (SharedUI's UnitFormat).
-/// Temperature has its own choice, `TemperatureUnit`.
+/// Display units: km/m or mi/ft for distance and elevation, and separately km/h or mph for
+/// speed. Canonical storage stays metric everywhere; this only affects formatting (SharedUI's
+/// UnitFormat). Temperature has its own choice, `TemperatureUnit`.
 public enum UnitSystem: String, Codable, CaseIterable, Sendable {
     case metric
     case imperial
@@ -42,6 +42,9 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
     /// `nil` = follow the locale (`UnitSystem.localeDefault`). Optional so
     /// previously-persisted preferences JSON keeps decoding.
     public var unitSystem: UnitSystem?
+    /// Wind and riding speed, separate from distance: mph with kilometres is fine. `nil` = follow
+    /// the locale. Optional for the same reason as `unitSystem`.
+    public var speedSystem: UnitSystem?
     /// `nil` = follow the locale. Optional for the same reason as `unitSystem`.
     public var temperatureUnit: TemperatureUnit?
     /// Preferred riding window as minutes from midnight (earliest start ...
@@ -51,6 +54,10 @@ public struct RiderPreferences: Codable, Sendable, Hashable {
 
     public var effectiveUnitSystem: UnitSystem {
         unitSystem ?? .localeDefault
+    }
+
+    public var effectiveSpeedSystem: UnitSystem {
+        speedSystem ?? .localeDefault
     }
 
     public static let defaultRidingWindowMinutes = (6 * 60)...(21 * 60)

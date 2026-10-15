@@ -51,7 +51,7 @@ public extension RideDetail {
         public var score: Int
         /// One per ride hour.
         public var hours: [Hour]
-        /// Where the wind blows from, as a phrase: "west-south-west". The API doesn't say yet.
+        /// Where the wind blows from, as a phrase: "west-south-west". `nil` when calm or mixed.
         public var windFrom: String?
         /// Felt wind along the route, in order, covering its whole length.
         public var wind: [WindStretch]
@@ -146,13 +146,10 @@ public extension RideDetail {
         let start = pick.conditions.temperatureC.lowerBound
         if start < ideal.lowerBound {
             let under = Int(ideal.lowerBound - start)
-            notes.append(Note(.temperature, "Starts at \(Int(start))°, \(under == 1 ? "a degree" : "\(under) degrees") under your ideal range."))
+            notes.append(Note(.temperature, "Down to \(Int(start))° in the first hour, \(under == 1 ? "a degree" : "\(under) degrees") under your ideal range."))
         }
         if pick.conditions.gustKph > gustLimit {
             notes.append(Note(.wind, "Gusts reach \(Int(pick.conditions.gustKph)) \(kph), over your \(Int(gustLimit)) \(kph) limit."))
-        }
-        if let last = departures.first?.wind.last, last.wind == .headwind {
-            notes.append(Note(.wind, "Headwind for the last \(Int(last.endKm - last.startKm)) km back into town."))
         }
 
         return RideDetail(pick: pick,
@@ -211,11 +208,11 @@ public extension RideDetail {
         let delta = score - 86
         func s(_ base: Int) -> Int { min(100, max(0, base + delta)) }
         let factors = [
-            Factor("Rain", score: s(100), reason: "Dry throughout. The highest chance of rain is \(maxRain)%."),
+            Factor("Rain", score: s(100), reason: "Dry throughout. The highest hourly chance of rain is \(maxRain)%."),
             Factor("Wind", score: s(94), reason: "\(conditions.wind.title) for \(Int(share * 100))% of the distance. Gusts peak at \(gust) \(kph), \(Double(gust) > gustLimit ? "over" : "under") your \(Int(gustLimit)) \(kph) limit."),
             Factor("Time budget", score: s(92), reason: "About \(duration). You're back by \(back), \(back < "17:00" ? "long " : "")before sunset at 18:04."),
             Factor("Surface match", score: s(88), reason: "Sealed roads all the way, right for your road bike."),
-            Factor("Temperature", score: s(81), reason: "\(Int(hours.first?.temperatureC ?? 0))° at the start, \(Int(hours.last?.temperatureC ?? 0))° by the finish. Your ideal range is \(Int(ideal.lowerBound))–\(Int(ideal.upperBound))°."),
+            Factor("Temperature", score: s(81), reason: "\(Int(range.lowerBound))–\(Int(range.upperBound))° along the way. Your ideal range is \(Int(ideal.lowerBound))–\(Int(ideal.upperBound))°."),
             Factor("Sky", score: s(76), reason: "\(conditions.sky.title), about \(cloud)% cloud cover."),
             Factor("Intent", score: s(70), reason: "You wanted a steady ride. \(Int(route.ascentM)) m of climbing \(climbing)."),
             Factor("Novelty", score: s(60), reason: novelty),

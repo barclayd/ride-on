@@ -21,9 +21,12 @@ public struct RideBoard: Hashable, Sendable {
     public var details: [String: RideDetail]
     /// The forecast provider's required attribution; empty means Apple Weather.
     public var credits: [Credit]
+    /// The comfort settings this ranking was scored with. Its `Pick.pointsLost` only describe
+    /// edited preferences once these match them again; `nil` when the API doesn't say.
+    public var scoredWith: Comfort?
 
     public init(window: DateInterval, generatedAt: Date, picks: [Pick], days: [Day], forecast: [Day] = [], hours: RideWindow.Hours = .daylight,
-                unfit: [Unfit], details: [String: RideDetail] = [:], credits: [Credit] = []) {
+                unfit: [Unfit], details: [String: RideDetail] = [:], credits: [Credit] = [], scoredWith: Comfort? = nil) {
         self.window = window
         self.generatedAt = generatedAt
         self.picks = picks
@@ -33,6 +36,22 @@ public struct RideBoard: Hashable, Sendable {
         self.unfit = unfit
         self.details = details
         self.credits = credits
+        self.scoredWith = scoredWith
+    }
+}
+
+public extension RideBoard {
+    /// The API's `resolvedPreferences`, as far as the Preferences explanations need them.
+    struct Comfort: Hashable, Sendable {
+        public var temperatureC: ClosedRange<Double>
+        public var headwindKph: Double
+        public var crosswindKph: Double
+
+        public init(temperatureC: ClosedRange<Double>, headwindKph: Double, crosswindKph: Double) {
+            self.temperatureC = temperatureC
+            self.headwindKph = headwindKph
+            self.crosswindKph = crosswindKph
+        }
     }
 }
 
@@ -81,10 +100,24 @@ public extension RideBoard {
         public var lastRidden: Date?
         /// Score change since the previous forecast, if it moved.
         public var change: Int?
+        /// How many points the score could gain if one factor were ideal (API `pointsLost`), keyed
+        /// `temperature`, `wind`, `dryness`, `clearSkies`, `sunshine`, `climbing`, `distance`. A
+        /// missing key is inactive or unknown, so makes no claim. Not additive.
+        public var pointsLost: [String: Double]
 
         public var id: String { "\(route.id)@\(start.timeIntervalSinceReferenceDate)" }
 
-        public init(route: RouteSummary, start: Date, finish: Date, score: Int, conditions: Conditions, meetsMinimums: Bool = true, lastRidden: Date? = nil, change: Int? = nil) {
+        /// `pointsLost[factor]` in words, where `factor` is also the word ("temperature", "wind").
+        /// `nil` makes no claim: zero costs nothing, and a missing value can't say.
+        public func gainSentence(_ factor: String) -> String? {
+            guard let points = pointsLost[factor], points > 0 else { return nil }
+            guard points >= 1 else { return "The \(factor) has a small effect on its score." }
+            let gain = Int(points.rounded())
+            return "It could gain \(gain) \(gain == 1 ? "point" : "points") if the \(factor) were ideal."
+        }
+
+        public init(route: RouteSummary, start: Date, finish: Date, score: Int, conditions: Conditions, meetsMinimums: Bool = true, lastRidden: Date? = nil, change: Int? = nil,
+                    pointsLost: [String: Double] = [:]) {
             self.route = route
             self.start = start
             self.finish = finish
@@ -93,6 +126,7 @@ public extension RideBoard {
             self.meetsMinimums = meetsMinimums
             self.lastRidden = lastRidden
             self.change = change
+            self.pointsLost = pointsLost
         }
     }
 
@@ -235,13 +269,13 @@ public extension RideBoard {
 
         let wednesday = Pick(route: hilly, start: date(14, 9), finish: date(14, 12), score: 86,
                              conditions: Conditions(temperatureC: 9...14, windKph: 15, wind: .tailwind, gustKph: 28, sky: .sunnySpells),
-                             lastRidden: date(29, 8, month: 9), change: 4)
+                             lastRidden: date(29, 8, month: 9), change: 4, pointsLost: ["temperature": 2.1, "wind": 0, "dryness": 0])
         let thursday = Pick(route: potters, start: date(15, 9), finish: date(15, 13, 20), score: 79,
                             conditions: Conditions(temperatureC: 12...14, windKph: 18, wind: .crosswind, gustKph: 31, sky: .cloudy),
                             lastRidden: date(4, 8, month: 10))
         let braintreeBest = Pick(route: braintree, start: date(14, 9, 30), finish: date(14, 12, 30), score: 61,
                                  conditions: Conditions(temperatureC: 10...14, windKph: 26, wind: .headwind, gustKph: 48, sky: .cloudy),
-                                 meetsMinimums: false)
+                                 meetsMinimums: false, pointsLost: ["temperature": 0, "wind": 6.4, "dryness": 0])
         let saturday = Pick(route: hilly, start: date(17, 10), finish: date(17, 13), score: 64,
                             conditions: Conditions(temperatureC: 8...11, windKph: 20, wind: .crosswind, gustKph: 34, sky: .cloudy),
                             lastRidden: date(29, 8, month: 9))
@@ -268,7 +302,9 @@ public extension RideBoard {
             picks: [wednesday, thursday, braintreeBest],
             days: Array(forecast[1...5]),
             forecast: forecast,
-            unfit: [Unfit(route: eastAnglia, rideDuration: 7 * 3600 + 5 * 60, windowAllows: 5 * 3600 + 45 * 60)]
+            unfit: [Unfit(route: eastAnglia, rideDuration: 7 * 3600 + 5 * 60, windowAllows: 5 * 3600 + 45 * 60)],
+            // `RiderSettings.sample`'s comfort settings.
+            scoredWith: Comfort(temperatureC: 10...22, headwindKph: 15, crosswindKph: 20)
         )
     }()
 

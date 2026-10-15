@@ -91,9 +91,9 @@ struct IdealTemperatureView: View {
         let reach = miss.under
             ? "goes down to \(UnitFormat.degrees(c: temperature.lowerBound, locale: locale)), \(miss.degrees)° under"
             : "reaches \(UnitFormat.degrees(c: temperature.upperBound, locale: locale)), \(miss.degrees)° over"
-        // ponytail: "so it loses 2 points" needs the API's per-route preview
-        // (docs/redesign/preferences-api-requests.md, item 2).
-        return "\(pick.route.name) \(reach) your range, so it scores a little lower. Rides re-rank as you drag."
+        // Points only from a board scored with this range; mid-drag it can't say.
+        let points = store.board?.scoredWith?.temperatureC == range ? pick.gainSentence("temperature") : nil
+        return ["\(pick.route.name) \(reach) your range.", points, "Rides re-rank as you drag."].compactMap(\.self).joined(separator: " ")
     }
 
     /// How far a route's forecast falls outside the range, in whole display degrees; `nil` inside it.
@@ -109,19 +109,22 @@ struct IdealTemperatureView: View {
     private func dealBreakers(_ limits: Binding<RiderSettings.Preferences.MinimumStandards>) -> some View {
         let floor = limits.wrappedValue.minimumTemperature
         let ceiling = limits.wrappedValue.maximumTemperatureC
-        // Editing a monthly floor rebuilds it from the new summer value.
-        let setFloor: (Double?) -> Void = { c in
-            limits.wrappedValue.minimumTemperature = c.map { floor?.isMonthly == true ? .monthly($0) : .fixed($0) }
-        }
         return Section {
-            Stepper {
-                LabeledContent("Never Colder Than", value: floor.map { UnitFormat.degrees(c: $0.baseC, locale: locale) } ?? "None")
-            } onIncrement: {
-                setFloor(floor.map { min($0.baseC + 1, 20) } ?? -10)
-            } onDecrement: {
-                // Below −10° the limit comes off.
-                guard let floor else { return }
-                setFloor(floor.baseC <= -10 ? nil : floor.baseC - 1)
+            if floor?.isMonthly == true {
+                NavigationLink { MonthlyFloorView() } label: {
+                    LabeledContent("Never Colder Than", value: "By Month")
+                }
+            } else {
+                let c = floor?.valueC
+                Stepper {
+                    LabeledContent("Never Colder Than", value: c.map { UnitFormat.degrees(c: $0, locale: locale) } ?? "None")
+                } onIncrement: {
+                    limits.wrappedValue.minimumTemperature = .fixed(c.map { min($0 + 1, 20) } ?? -10)
+                } onDecrement: {
+                    // Below −10° the limit comes off.
+                    guard let c else { return }
+                    limits.wrappedValue.minimumTemperature = c <= -10 ? nil : .fixed(c - 1)
+                }
             }
             Stepper {
                 LabeledContent("Never Hotter Than", value: ceiling.map { UnitFormat.degrees(c: $0, locale: locale) } ?? "None")
@@ -134,14 +137,61 @@ struct IdealTemperatureView: View {
             }
             Toggle("Vary by Month", isOn: Binding(
                 get: { floor?.isMonthly == true },
-                set: { isOn in floor.map { limits.wrappedValue.minimumTemperature = isOn ? .monthly($0.baseC) : .fixed($0.baseC) } }))
+                set: { isOn in
+                    guard let floor else { return }
+                    // On: today's limit in every month, to change month by month. Off: this month's.
+                    let c = isOn ? floor.valueC : floor.valueC(in: Calendar.current.component(.month, from: .now)) ?? floor.valuesC?.values.min()
+                    limits.wrappedValue.minimumTemperature = c.map { isOn ? .monthly($0) : .fixed($0) }
+                }))
                 .disabled(floor == nil)
         } header: {
             Text("Deal-Breakers")
         } footer: {
-            Text("Rides outside these are marked Below your minimums. Turn on Vary by Month to accept colder starts in winter.")
+            Text("Rides outside these are marked Below your minimums.")
         }
         .sensoryFeedback(.selection, trigger: limits.wrappedValue)
+    }
+}
+
+/// The rider's own Never Colder Than for each month (docs/redesign/preferences-api-requests.md §6).
+/// Nothing is filled in for them: a month left unset uses the fallback, or has no limit.
+struct MonthlyFloorView: View {
+    @Environment(RiderSettingsStore.self) private var store
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        let floor = store.binding.preferences.minimumStandards.minimumTemperature
+        let values = floor.wrappedValue?.valuesC ?? [:]
+        let fallback = floor.wrappedValue?.fallbackC
+        let set: (Int, Double?) -> Void = { month, c in
+            var changed = values
+            changed["\(month)"] = c
+            floor.wrappedValue?.valuesC = changed
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale
+        return Form {
+            Section {
+                ForEach(1...12, id: \.self) { month in
+                    let c = values["\(month)"]
+                    Stepper {
+                        LabeledContent(calendar.standaloneMonthSymbols[month - 1], value: c.map { UnitFormat.degrees(c: $0, locale: locale) } ?? "Not Set")
+                    } onIncrement: {
+                        set(month, c.map { min($0 + 1, 20) } ?? fallback ?? -10)
+                    } onDecrement: {
+                        // Below −10° the month's limit comes off.
+                        guard let c else { return }
+                        set(month, c <= -10 ? nil : c - 1)
+                    }
+                }
+            } footer: {
+                Text(fallback.map { "Months not set use \(UnitFormat.degrees(c: $0, locale: locale))." } ?? "Months not set have no limit.")
+            }
+            .sensoryFeedback(.selection, trigger: values)
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Never Colder Than")
+        .toolbarTitleDisplayMode(.inline)
     }
 }
 

@@ -8,7 +8,7 @@ import SharedUI
 /// Preferences → Riding — this is a preview, not a
 /// second editor.
 struct SpeedPrefillStep: View {
-    @Environment(\.unitSystem) private var unitSystem
+    @Environment(\.speedSystem) private var speedSystem
     var speedKphBySurface: [SurfaceType: Double]
     var isStravaConnected: Bool
     var pageIndex: Int
@@ -32,7 +32,7 @@ struct SpeedPrefillStep: View {
                     HStack {
                         Text(label(for: surface))
                         Spacer()
-                        Text(UnitFormat.speed(kph: speedKphBySurface[surface] ?? 20, system: unitSystem))
+                        Text(UnitFormat.speed(kph: speedKphBySurface[surface] ?? 20, system: speedSystem))
                             .monospacedDigit()
                     }
                     .foregroundStyle(.white)
