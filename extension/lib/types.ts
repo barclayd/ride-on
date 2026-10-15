@@ -28,6 +28,7 @@ export type Preferences = {
     comfortableHeadwindKph: number;
     comfortableCrosswindKph: number;
     comfortableGustKph?: number;
+    preferTailwind?: boolean; // v0.24; absent reads as false (calm), like the API
   };
   climbing: { preference: Climbing };
   distance: Distance | null;

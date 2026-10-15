@@ -345,12 +345,16 @@ export const conditionChips = (
         ? `${kind[0].toUpperCase()}${kind.slice(1)} ${shown}`
         : `Wind ${shown}`,
       // The speed shown against the comfort for its direction; a mix includes some headwind.
+      // A rider who prefers calm loses points to any named wind, a tailwind too.
       warn:
-        kind !== 'tailwind' &&
-        c.averageWindSpeedKph >
-          (kind === 'crosswind'
-            ? (windComfort?.comfortableCrosswindKph ?? 20)
-            : (windComfort?.comfortableHeadwindKph ?? 15)),
+        (!!windComfort &&
+          !windComfort.preferTailwind &&
+          c.averageWindSpeedKph >= NAMED_WIND_KPH) ||
+        (kind !== 'tailwind' &&
+          c.averageWindSpeedKph >
+            (kind === 'crosswind'
+              ? (windComfort?.comfortableCrosswindKph ?? 20)
+              : (windComfort?.comfortableHeadwindKph ?? 15))),
     },
     ...(c.maximumGustKph !== undefined
       ? [
@@ -718,6 +722,7 @@ export type Draft = {
   headKph: number;
   crossKph: number;
   gustComfortKph: number;
+  preferTailwind: boolean;
   floorOn: boolean;
   floorMode: 'fixed' | 'monthly';
   floorFixedC: number;
@@ -740,6 +745,7 @@ export const draftFrom = (p: Preferences, local: LocalPrefs): Draft => {
     headKph: p.wind.comfortableHeadwindKph,
     crossKph: p.wind.comfortableCrosswindKph,
     gustComfortKph: p.wind.comfortableGustKph ?? 35,
+    preferTailwind: p.wind.preferTailwind ?? false,
     floorOn: !!floor,
     floorMode: floor?.kind ?? local.floorMode,
     floorFixedC: floor?.kind === 'fixed' ? floor.valueC : local.floorFixedC,
@@ -765,6 +771,7 @@ export const draftPatch = (d: Draft): PreferencesPatch => ({
     comfortableHeadwindKph: d.headKph,
     comfortableCrosswindKph: d.crossKph,
     comfortableGustKph: d.gustComfortKph,
+    preferTailwind: d.preferTailwind,
   },
   minimumStandards: {
     minimumTemperature: !d.floorOn

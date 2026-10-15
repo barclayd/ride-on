@@ -1175,7 +1175,8 @@ const PrefsTab = ({ view }: { view: View }) => {
           <span class="ro-col">
             <span class="ro-label">Wind preferences</span>
             <span class="ro-hint">
-              Headwind up to {speed(draft.headKph, u)} · crosswind up to{' '}
+              {draft.preferTailwind ? 'Prefer a tailwind' : 'Prefer calm'} ·
+              headwind up to {speed(draft.headKph, u)} · crosswind up to{' '}
               {speed(draft.crossKph, u)} · gusts up to{' '}
               {speed(draft.gustComfortKph, u)}
             </span>
@@ -1184,10 +1185,40 @@ const PrefsTab = ({ view }: { view: View }) => {
         </button>
         {windOpen && (
           <div class="ro-divided">
+            <div class="ro-pref-group">
+              <span class="ro-sublabel">Ideal wind</span>
+              <div
+                class="ro-unit-switch"
+                role="radiogroup"
+                aria-label="Ideal wind"
+              >
+                {(
+                  [
+                    [false, 'Calm'],
+                    [true, 'Tailwind'],
+                  ] as const
+                ).map(([preferTailwind, label]) => (
+                  <label key={label}>
+                    <input
+                      type="radio"
+                      name="ro-ideal-wind"
+                      checked={draft.preferTailwind === preferTailwind}
+                      onChange={() => edit({ preferTailwind })}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <span class="ro-hint">
+                {draft.preferTailwind
+                  ? "Rides with the wind behind you rank higher, even when it's breezier."
+                  : "Rides with the least wind rank highest. A tailwind doesn't earn extra points."}
+              </span>
+            </div>
             <p class="ro-hint">
-              Light winds score best. Comfort falls gradually towards these
-              speeds, then more strongly above them. Gust comfort affects your
-              score; the separate gust limit below controls which rides to skip.
+              Comfort falls gradually towards these speeds, then more strongly
+              above them. Gust comfort affects your score; the separate gust
+              limit below controls which rides to skip.
             </p>
             {(
               [

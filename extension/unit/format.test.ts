@@ -946,6 +946,27 @@ test('condition chips: temperature, wind, rain, amber where it lowers the score'
   expect(chips({ averageWindSpeedKph: 15 })[1]).toBe(
     'wind 15 km/h | Wind 15 km/h',
   );
+  // Prefer calm: any named wind lowers the score, a tailwind too; below it stays green.
+  const ideal = (preferTailwind: boolean | undefined, kph: number) =>
+    conditionChips(
+      {
+        ...calm,
+        averageWindSpeedKph: kph,
+        windDistanceFractions: { headwind: 0.1, tailwind: 0.8, crosswind: 0.1 },
+      },
+      undefined,
+      {
+        wind: {
+          comfortableHeadwindKph: 15,
+          comfortableCrosswindKph: 20,
+          preferTailwind,
+        },
+      },
+    )[1].warn;
+  expect(ideal(false, 10)).toBe(true);
+  expect(ideal(undefined, 12)).toBe(true); // the API's default
+  expect(ideal(false, 9)).toBe(false);
+  expect(ideal(true, 30)).toBe(false);
 
   // Outside the comfort range; one rounded value shows once.
   expect(chips({ temperatureC: { minimum: 6.6, maximum: 7.4 } })[0]).toBe(

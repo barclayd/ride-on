@@ -214,8 +214,8 @@ const recRequest = (state: State) => {
     body,
     // Drop persisted scores from before the forecast/scoring correction, or without range.dates.
     key: JSON.stringify([
-      'comfort-v0.14',
-      'api-0.23',
+      'comfort-v0.15',
+      'api-0.24',
       body,
       user.id,
       user.version,
