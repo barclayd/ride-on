@@ -29,6 +29,11 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 
 Not in scope yet: Routes tab and Onboarding (not redesigned; they keep working as they are).
 
+API v0.26.0 provides separate opt-in cold sensitivity and seasonal temperature
+tolerance; [contract and calibration](../seasonal-temperature.md). Client controls
+are still pending. Preserve these choices on partial edits and keep the existing
+user-chosen monthly minimum standards separate.
+
 ## Where the code goes
 
 | What | Where |

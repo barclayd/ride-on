@@ -297,6 +297,8 @@ integration(
     assert.deepEqual(updated.settings.preferences.temperature, {
       comfortMinC: 32,
       comfortMaxC: 35,
+      coldSensitivity: 'standard',
+      seasonalTolerance: 'none',
     });
     assert.equal(updated.createdAt, saved.createdAt);
     assert.equal(updated.version, 2);

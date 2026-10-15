@@ -1,5 +1,11 @@
 # Preferences: reviewed API contract
 
+**v0.26.0 addition:** explicit `temperature.coldSensitivity` and
+`temperature.seasonalTolerance` are ready for client integration. See the
+[seasonal temperature contract](../seasonal-temperature.md) for save semantics,
+defaults, wording and assessment fields. These are separate from the custom
+monthly hard minimums below; neither choice should be enabled implicitly.
+
 Reviewed on 15 October 2026. API **v0.25.0** adds factor point-loss explanations,
 crosswind levels and linked sign-in methods. Scoring stays **comfort-v0.15**.
 The iOS UI must consume these fields separately; this backend change does not
