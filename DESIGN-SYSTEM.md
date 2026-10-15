@@ -35,6 +35,7 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
    the actual best score each day, the wind strip is the actual wind along the route. No
    stock illustrations.
 6. **One tinted action per screen, at most.** Zero is fine (Rides and Ride detail have none).
+   The commit star's gold is an on state, not a tinted action: it stays clear glass until tapped.
 7. **Typography over iconography for data.** Scores, temperatures and times are typeset with
    monospaced digits. A verdict never relies on colour alone: it always has a symbol and words.
 
@@ -47,7 +48,7 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 | Tab bar (Rides, Routes, Preferences) | System glass; shrinks to the selected tab's icon on scroll | `TabView` + `.tabBarMinimizeBehavior(.onScrollDown)` |
 | Toolbars | System glass. At most 3 groups. Icons only, each with an accessibility label. Related actions share one capsule (share + more) | `.toolbar`, `ToolbarItemGroup`, `ToolbarSpacer` |
 | Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
-| Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero share button `.glassEffect(.clear.interactive())` |
+| Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero commit star `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while on |
 | Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
 | Pushed screens' back button | 44pt glass circle, chevron only | stock `NavigationStack` back button |
 | Cards, rows, chips, badges | **Not glass.** Solid `secondarySystemGroupedBackground` | `.background(.background.secondary, in: .rect(cornerRadius: 26))` |
@@ -72,7 +73,9 @@ Rules:
   for chips, `.separator`. Everything adapts to Dark Mode and Increase Contrast.
 - **Accent**: green, defined once as `AccentColor` in the asset catalog. Light `#248A3D`, dark
   `#30D158` (the system green pair; the light value is darkened for 4.5:1 on white). Applied
-  via `.tint()`. Text on an accent fill is white in light, black in dark.
+  via `.tint()`. Text on an accent fill is white in light, black in dark. Exception: the hero's
+  "Best pick" pill always sits on the dark scrim, so it is `pickPill` (`#1E7132`, the light
+  accent 18% darker) with white text in both schemes.
 - **Status colours** (always paired with a symbol and words):
 
   | Meaning | Light | Dark |
@@ -83,6 +86,7 @@ Rules:
   | Crosswind | `#E8A100` | `#FFD60A` |
   | Headwind | `#C93400` | `#FF453A` |
   | Rain chance | `#0A66D8` | `#64B5FF` |
+  | Committed (hero star on) | `#C88A00` | `#C88A00` |
 
 - **Temperature ramp** (`ConditionPalette`, the only custom palette): Apple Weather's
   convention, deep blue below 0° through green to red above 30°. Used by the Ideal
@@ -112,7 +116,7 @@ en-GB ("Wednesday 14 October", "Wed 14 – Sun 18").
 
 - **Grouped background** with solid cards, 16pt side margins, 26pt card radius. Nested
   shapes use `ConcentricRectangle` / `.rect(corners: .concentric)` rather than hard-coded radii.
-- **Minimum target 44pt.** Toolbar circles are 44pt; the hero share button is 48pt.
+- **Minimum target 44pt.** Toolbar circles are 44pt; the hero commit star is 48pt.
 - **The hero** (Rides and Ride detail): the map is full-bleed under the status bar and
   toolbar (`.ignoresSafeArea(edges: .top)` + `.backgroundExtensionEffect()`), with a bottom
   scrim for the title block and the Maps attribution row along the bottom edge.
@@ -128,12 +132,14 @@ before adding a custom component in code.
 
 1. **`RideHero`** — the best pick for the window, full-bleed: a non-interactive `Map`
    (`.mapStyle(.imagery)`, route polyline in the accent with a white casing, start marker),
-   a bottom scrim, the title block ("★ Best pick · Wednesday 14 October", route name,
-   "09:00 → ~12:00 · 51 km · 640 m") and the Maps attribution row. The map ignores touches
+   an eased bottom scrim (at least 340pt, black 0 → 80% on eased stops, no visible top edge),
+   the title block (a "Best pick" / "Best that day" accent pill, the route name, then
+   ↔ "51 km" and `mountain.2` "640 m climb" in `.subheadline` white 88%, with a soft text
+   shadow) and the Maps attribution row. No date or times on the map: they lead the card below. The map ignores touches
    (taps belong to whatever the hero opens), so the attribution shows but Legal isn't tappable
    there. On Rides the hero is a `NavigationLink` and the `matchedTransitionSource` for the
-   zoom into Ride detail; the clear-glass "Send route to a bike computer" button is overlaid
-   beside the link, not inside it, so VoiceOver reaches both. Ride detail shows the same map,
+   zoom into Ride detail; the clear-glass commit star ("Commit to Hilly Loop on Wednesday 14
+   October"; `star.fill` on gold-tinted glass while on) is overlaid beside the link, not inside it, so VoiceOver reaches both. Ride detail shows the same map,
    400pt instead of 480pt, so the zoom lands on the same image.
 2. **`ConditionChip`** — SF Symbol + value in `.footnote` on a solid `.fill.tertiary`
    capsule ("9–14°", "15 km/h tailwind", "Gusts 28 km/h", "Sunny spells"). Max 4 per row.
@@ -194,13 +200,13 @@ glass transitions use `.materialize`.
 - **Reduce Transparency**: glass becomes opaque (`systemBackground`-family solid).
   **Increase Contrast**: glass becomes solid with a visible border.
 - Every icon-only control has an accessibility label ("Rides", "Track a route", "Share",
-  "More", "Send route to a bike computer").
+  "More", "Send route to a bike computer", "Commit to Hilly Loop on Wednesday 14 October").
 
 ## 9. Screen ↔ pattern map
 
 | Screen | What's on it |
 |---|---|
-| **Rides** (tab) | `RideHero` for the best pick in the window → conditions card ("✓ Meets your preferences", last ridden, `ConditionChip`s, score with bar and change badge) → "Your Window" `DayStrip` → "Other Tracked Routes" rows (route thumbnail, name, departure → return · distance, conditions or "Below your minimums", score) → "Doesn't Fit Your Window" → Apple Weather attribution, "Updated 08:12. Pull down to refresh." Toolbar: window capsule (leading), "+" track a route (trailing). Pull to refresh. |
+| **Rides** (tab) | `RideHero` for the best pick in the window → conditions card (date, then 09:00 Leave ┄ 🚲 about 3h ┄ ~12:00 Back, then "✓ Meets your preferences", last ridden, `ConditionChip`s, score with bar and change badge) → "Your Window" `DayStrip` → "Other Tracked Routes" rows (route thumbnail, name, departure → return · distance, conditions or "Below your minimums", score) → "Doesn't Fit Your Window" → Apple Weather attribution, "Updated 08:12. Pull down to refresh." Toolbar: window capsule (leading), "+" track a route (trailing). Pull to refresh. |
 | **Ride detail** (push, zoom from hero) | Shorter `RideHero` → verdict card (`ScoreGauge`, verdict, change since last update, last ridden, one or two notes) → "Departure" `DeparturePicker` → "Forecast on the Ride" hourly grid (time, sky, temperature, wind, gusts, rain chance) → "Along the Route" `RouteProfile` → "Why It Scored 86" `FactorRow`s → Add to Calendar, Open in cycle.travel (accent list buttons) → Apple Weather attribution. Toolbar: back (leading), share + more in one capsule (trailing). |
 | **Window sheet** | Large detent (the days list plus Hours need the height). Grabber, Cancel (glass circle, `xmark`) leading, centred "Ride Window", Done (tinted circle, `checkmark`) trailing. Quick picks (Tomorrow, This Weekend, Next 5 Days) → "Days" multi-select list, each day showing its best route and score, sky and temperature → "Hours": segmented Daylight / Custom, Leave After and Back By (`DatePicker(.hourAndMinute)` when Custom). |
 | **Window passed** | Rides when the saved window is in the past. No hero, so the toolbar is regular glass and the capsule shows the stale range. `ContentUnavailableView` ("Your Window Has Passed", one sentence, "Choose Dates" as the one `.borderedProminent` button) → "Quick Picks" rows with each range's best route and score. |
