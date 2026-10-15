@@ -850,10 +850,8 @@ and site are grouped. Gust period bounds remain complete even at a partial-hour
 start or finish. The details reuse the selected cached evidence without provider
 calls; they do not expose whole-horizon or arbitrary-location forecasts.
 
-The extension's Forecast details disclosure appears on both popup and Journeys
-cards. It labels retrieval as **Fetched**, keeps an unknown forecast-run time
-unknown, and shows the actual product and statistic behind the provider choice.
-Hourly source temperatures are distinguished from interpolated ride temperatures.
+The extension no longer shows these details; its Forecast details disclosure
+was removed from the popup and Journeys cards.
 Older responses without details remain readable; persisted ranking keys are bumped
 to discard recommendations computed before this algorithm change. Saved ride plans
 remain historical snapshots.
@@ -1016,8 +1014,7 @@ include `gustExposure: {directionBasis: "prevailing-wind-estimate",
 maximumAdverseKph: number}`. This field is optional on historical plans, which
 are never retrospectively rescored. The extension retains the raw gust chip but
 uses estimated adverse gust exposure for comfort colouring; a breached explicit
-raw-gust limit still colours it amber. Forecast details explain the assumption
-and any applied assistance benefit. Persisted recommendations use a new cache key.
+raw-gust limit still colours it amber. Persisted recommendations use a new cache key.
 
 Synthetic checks in `worker/test/wind-exposure.test.ts` cover all six interview
 answers, ceiling ties, sustained opposing winds, tiny exposures, segmentation
