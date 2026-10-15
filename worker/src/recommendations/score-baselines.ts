@@ -1,4 +1,5 @@
 import { Temporal } from '@js-temporal/polyfill';
+import { climateSource } from '../climate/seasonal.ts';
 import type { Route } from '../routes/model.ts';
 import { ALGORITHM_VERSION } from './engine.ts';
 import type { RecommendationInput } from './input.ts';
@@ -130,6 +131,11 @@ export const attachPreviousScores = async (
             candidate: best,
             key: await fingerprint({
               algorithm: ALGORITHM_VERSION,
+              climateVersion:
+                input.preferences.temperature.seasonalTolerance ===
+                'cooler-winters'
+                  ? climateSource.version
+                  : null,
               route: routeHashes.get(ranked.routeId),
               routeId: ranked.routeId,
               viewedOn: Temporal.Instant.from(now.toISOString())

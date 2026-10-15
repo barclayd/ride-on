@@ -1,3 +1,8 @@
+import {
+  climateSource,
+  compileSeasonalNormal,
+  monthlyClimateAt,
+} from '../climate/seasonal.ts';
 import { haversineKm } from '../geo.ts';
 import { type HistoryAssessment, prepareHistory } from '../rides/overlap.ts';
 import type { Route } from '../routes/model.ts';
@@ -25,10 +30,11 @@ import {
 } from './input.ts';
 import type { PreviousScore } from './score-baselines.ts';
 import { compileTemperature } from './temperature.ts';
+import { temperatureComfort } from './temperature-comfort.ts';
 import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
 import { meanWindFrom } from './wind-direction.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.15';
+export const ALGORITHM_VERSION = 'comfort-v0.16';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -145,6 +151,10 @@ type Observation = {
   precipitationProbability: number;
   precipitationRateMmH: number;
   temperature: number;
+  blendTemperature: number;
+  coldPenalty: number;
+  effectiveMinimumC: number;
+  normalMaximumC: number | null;
   wind: number;
   dryness: number;
   nonWindComfort: number;
@@ -258,6 +268,7 @@ const assessCandidate = (
   climbing: ReturnType<typeof assessClimbing>,
   distance: ReturnType<typeof assessDistance>,
   history: HistoryAssessment,
+  seasonalNormals: ReadonlyMap<Route['legs'][number], number | null>,
 ) => {
   const rows: Observation[] = [];
   const missing = new Set<string>();
@@ -345,15 +356,13 @@ const assessCandidate = (
     const headwindKph = speedMs * 3.6 * Math.cos(angle);
     const crosswindKph = Math.abs(speedMs * 3.6 * Math.sin(angle));
     const gustKph = gustMs * 3.6;
-    const temperature =
-      1 -
-      clamp(
-        Math.max(
-          preferences.temperature.comfortMinC - temperatureC,
-          temperatureC - preferences.temperature.comfortMaxC,
-          0,
-        ) / 10,
-      );
+    const normalMaximumC = seasonalNormals.get(leg) ?? null;
+    const thermal = temperatureComfort(
+      temperatureC,
+      preferences.temperature,
+      normalMaximumC,
+    );
+    const temperature = thermal.comfort;
     const exposure = windExposure(
       headwindKph,
       crosswindKph,
@@ -397,10 +406,14 @@ const assessCandidate = (
       precipitationProbability,
       precipitationRateMmH,
       temperature,
+      blendTemperature: thermal.blendComfort,
+      coldPenalty: thermal.coldPenalty,
+      effectiveMinimumC: thermal.effectiveMinimumC,
+      normalMaximumC,
       wind: exposure.comfort,
       dryness,
       nonWindComfort:
-        (weights.temperature * temperature +
+        (weights.temperature * thermal.blendComfort +
           weights.dryness * dryness +
           weights.clearSkies * (clearSkies ?? 0) +
           // Unknown sunshine affects preference scoring neutrally; it is not
@@ -509,6 +522,7 @@ const assessCandidate = (
       | 'nonWindComfort'
       | 'assistance'
       | 'temperature'
+      | 'coldPenalty'
       | 'wind'
       | 'dryness'
       | 'clearSkies'
@@ -526,7 +540,10 @@ const assessCandidate = (
         ? row.nonWindComfort
         : row.nonWindComfort +
           (weights[ideal] / weightTotal) *
-            (1 - (row[ideal] ?? (ideal === 'sunshine' ? 0.5 : 0))),
+            (1 -
+              (ideal === 'temperature'
+                ? row.blendTemperature
+                : (row[ideal] ?? (ideal === 'sunshine' ? 0.5 : 0)))),
     );
     const average =
       nonWind.reduce(
@@ -537,7 +554,10 @@ const assessCandidate = (
       100 *
       (0.75 * average +
         0.25 * Math.min(...nonWind) +
-        windShare * (ideal === 'wind' ? 1 : mean('wind')))
+        windShare * (ideal === 'wind' ? 1 : mean('wind')) -
+        (ideal === 'temperature'
+          ? 0
+          : (weights.temperature / weightTotal) * mean('coldPenalty')))
     );
   };
   const unassistedWeatherScore = unassistedScore();
@@ -552,7 +572,8 @@ const assessCandidate = (
   const assistancePoints = preferences.wind.preferTailwind
     ? 100 * windShare * windAssistanceBenefit(mean('assistance'))
     : 0;
-  const weatherScore = Math.min(100, unassistedWeatherScore + assistancePoints);
+  const weatherScore =
+    100 * clamp((unassistedWeatherScore + assistancePoints) / 100);
   const climbingShare = climbing.status === 'assessed' ? CLIMBING_SHARE : 0;
   const distanceShare = distance.comfort === null ? 0 : DISTANCE_SHARE;
   const weatherShare = 1 - climbingShare - distanceShare;
@@ -593,7 +614,7 @@ const assessCandidate = (
         ? null
         : gain(
             combinedScore(
-              Math.min(100, unassistedScore(factor) + assistancePoints),
+              100 * clamp((unassistedScore(factor) + assistancePoints) / 100),
             ),
           );
   const pointsLost = {
@@ -608,7 +629,9 @@ const assessCandidate = (
       : null,
   };
   const scoreWithoutAssistance =
-    score - weatherShare * Math.max(0, weatherScore - unassistedWeatherScore);
+    score -
+    weatherShare *
+      Math.max(0, weatherScore - 100 * clamp(unassistedWeatherScore / 100));
   const drawbacks: string[] = [];
   if (sunshineAssessment && sunshineAssessment.status !== 'complete')
     drawbacks.push(
@@ -671,6 +694,57 @@ const assessCandidate = (
       ),
     },
     sunshineAssessment,
+    temperatureAssessment: {
+      coldSensitivity: preferences.temperature.coldSensitivity,
+      seasonalTolerance: preferences.temperature.seasonalTolerance,
+      idealRangeC: {
+        minimum: preferences.temperature.comfortMinC,
+        maximum: preferences.temperature.comfortMaxC,
+      },
+      effectiveMinimumC: {
+        minimum: round(Math.min(...rows.map((row) => row.effectiveMinimumC))),
+        maximum: round(Math.max(...rows.map((row) => row.effectiveMinimumC))),
+      },
+      seasonal: {
+        status:
+          preferences.temperature.seasonalTolerance === 'none'
+            ? ('disabled' as const)
+            : rows.every((row) => row.normalMaximumC !== null)
+              ? ('complete' as const)
+              : rows.some((row) => row.normalMaximumC !== null)
+                ? ('partial' as const)
+                : ('unavailable' as const),
+        coveredDistanceFraction: round(
+          rows.reduce(
+            (sum, row) =>
+              sum + (row.normalMaximumC === null ? 0 : row.distanceM),
+            0,
+          ) / route.distanceM,
+        ),
+        normalMaximumC: rows.some((row) => row.normalMaximumC !== null)
+          ? {
+              minimum: round(
+                Math.min(
+                  ...rows.flatMap((row) =>
+                    row.normalMaximumC === null ? [] : [row.normalMaximumC],
+                  ),
+                ),
+              ),
+              maximum: round(
+                Math.max(
+                  ...rows.flatMap((row) =>
+                    row.normalMaximumC === null ? [] : [row.normalMaximumC],
+                  ),
+                ),
+              ),
+            }
+          : null,
+        source:
+          preferences.temperature.seasonalTolerance === 'none'
+            ? null
+            : climateSource,
+      },
+    },
     factors: {
       distance:
         distance.comfort === null ? null : round(100 * distance.comfort),
@@ -782,6 +856,7 @@ export const recommendRides = (
       ];
     }),
   );
+  const normalForDate = compileSeasonalNormal(input.date);
   const evaluated = routes.map((route) => {
     const plan = planDepartures(route, input, nowMs);
     const climbing = assessClimbing(
@@ -791,6 +866,16 @@ export const recommendRides = (
     const distance = assessDistance(
       route.distanceM,
       input.preferences.distance,
+    );
+    // Resolve once per leg/day, shared by every departure. No climate network calls.
+    const seasonalNormals = new Map(
+      route.legs.map((leg) => {
+        const monthly =
+          input.preferences.temperature.seasonalTolerance === 'cooler-winters'
+            ? monthlyClimateAt(leg.coordinate)
+            : null;
+        return [leg, monthly ? normalForDate(monthly) : null] as const;
+      }),
     );
     const candidates = plan.departures.map((departure) =>
       assessCandidate(
@@ -804,6 +889,7 @@ export const recommendRides = (
         climbing,
         distance,
         history,
+        seasonalNormals,
       ),
     );
     const weatherAssessed = candidates

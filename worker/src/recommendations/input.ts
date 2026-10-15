@@ -31,6 +31,8 @@ const temperatureFloor = z.discriminatedUnion('kind', [
 const temperature = z.strictObject({
   comfortMinC: z.number().min(-30).max(50),
   comfortMaxC: z.number().min(-30).max(50),
+  coldSensitivity: z.enum(['standard', 'high']),
+  seasonalTolerance: z.enum(['none', 'cooler-winters']),
 });
 const wind = z.strictObject({
   preferTailwind: z.boolean(),
@@ -74,7 +76,10 @@ const minimumStandards = z.strictObject({
 });
 export const preferencesSchema = z
   .strictObject({
-    temperature,
+    temperature: temperature.extend({
+      coldSensitivity: temperature.shape.coldSensitivity.default('standard'),
+      seasonalTolerance: temperature.shape.seasonalTolerance.default('none'),
+    }),
     // Defaults belong only on resolved settings: old profiles gain no inferred
     // preference, and an unrelated partial patch must preserve an explicit choice.
     wind: wind.extend({
@@ -187,7 +192,12 @@ export const defaultSettings: Settings = {
   timeZone: 'Europe/London',
   riding: { averageSpeedKph: 20, departureStepMinutes: 30 },
   preferences: {
-    temperature: { comfortMinC: 16, comfortMaxC: 24 },
+    temperature: {
+      comfortMinC: 16,
+      comfortMaxC: 24,
+      coldSensitivity: 'standard',
+      seasonalTolerance: 'none',
+    },
     // Personal comfort settings shape gradual wind penalties; separate minimum
     // standards express conditions the rider wants to avoid.
     wind: {

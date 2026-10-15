@@ -19,6 +19,8 @@ API v0.23.0 adds temperature interpolation and ride-scoped forecast details (`co
 Algorithm `comfort-v0.14` rewards the sustained forward component of diagonal tailwinds in proportion to distance, retaining the separate crosswind/gust discomfort and bounded benefit introduced in v0.13. It is checked against the 14 October preference interview and a saved route-level forecast replay.
 API v0.24.0 adds an explicit [helpful-tailwind preference](#helpful-tailwind-preference). Algorithm `comfort-v0.15` applies the calibrated assistance bonus only when the rider opts in; new and existing profiles otherwise receive no bonus.
 API v0.25.0 adds [wind bearing and comparable previous scores](redesign/ride-detail-api-requests.md), [factor point-loss explanations, crosswind levels and linked sign-in methods](redesign/preferences-api-requests.md). Algorithm `comfort-v0.15` and existing rankings are unchanged. Seasonal floors, automatic gust-setting coupling and linked wind/distance units were declined in the contract review; Strava connection metadata awaits a real OAuth/sync implementation.
+
+API v0.26.0 adds opt-in [cold sensitivity and local seasonal tolerance](seasonal-temperature.md) with algorithm `comfort-v0.16`. Existing profiles retain standard, season-independent scoring. Monthly hard minimums remain user-chosen.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -797,8 +799,8 @@ These are syntax examples, not adopted settings. A missing month uses the explic
 fallback or remains unknown. Equality meets a threshold; any sampled breach fails
 it. Failure evidence includes the limit, worst actual value, affected distance,
 route sections and their modelled observation times. A zero scoring weight does
-not switch off a configured minimum standard. Climate-relative temperature rules
-remain a future extension; unsupported configuration is rejected rather than guessed.
+not switch off a configured minimum standard. [Seasonal comfort tolerance](seasonal-temperature.md)
+never changes these limits; unsupported configuration is rejected rather than guessed.
 
 ### Result contract
 
@@ -935,6 +937,11 @@ band receive full temperature comfort; there is no extra reward for moving
 towards its middle or warmer end. Outside it, the existing comfort curve falls
 with distance from the nearest boundary. Minimum standards remain separate.
 
+From v0.26.0, explicit `coldSensitivity: "high"` and/or
+`seasonalTolerance: "cooler-winters"` select the [seasonal temperature model](seasonal-temperature.md).
+The description of the original linear curve below applies to the default
+`standard` / `none` choices. New profiles and old saved profiles keep those defaults.
+
 The engine combines that comfort with the saved `weights.temperature`,
 `weights.sunshine` and `sunshine.sunnyIntervalsComfort`. A positive sunshine
 weight expresses a preference for sunshine; zero removes that preference from
@@ -1035,7 +1042,7 @@ reference still passes. No live weather requests are required.
 
 ### Previous wind comfort calibration v0.11–v0.12
 
-Scores remain personal comfort values, not probabilities or a ranking percentile. There is no starting bonus tied to the width of a rider’s preferences. Calm, dry rides in the rider’s temperature comfort band can still reach 100. The same temperature earns the same comfort score year-round: season is context, not an extra bonus. Temperature, rain, sunshine, distance and climbing curves are unchanged in this release.
+Scores remain personal comfort values, not probabilities or a ranking percentile. There is no starting bonus tied to the width of a rider’s preferences. Calm, dry rides in the rider’s temperature comfort band can still reach 100. Without explicit seasonal tolerance, the same temperature earns the same comfort score year-round. The wind release preserved other curves; v0.26.0 subsequently adds opt-in seasonal temperature calibration.
 
 Wind now loses comfort gradually before the rider’s preferred speed and more strongly beyond it. All speeds below are km/h. Let `approach(v, ideal, comfort)` be zero at or below `min(ideal, comfort)`, increasing linearly to one at `comfort` (using a minimum 1 km/h transition span when comfort is at/below ideal). Clamp each fraction to 0–1:
 
