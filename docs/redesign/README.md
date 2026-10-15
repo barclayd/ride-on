@@ -2,7 +2,7 @@
 
 The approved Claude Design canvas, written down screen by screen so the SwiftUI rebuild has one
 place to check against. The canvas is the visual source of truth:
-https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T (version 17). The rules behind it (materials,
+https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T (version 30). The rules behind it (materials,
 colour, type, motion, accessibility) live in [`DESIGN-SYSTEM.md`](../../DESIGN-SYSTEM.md); this
 doc is the *what*, that one is the *how*.
 
@@ -19,7 +19,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 |---|---|---|---|
 | 0 | This doc and reference images | ✅ Done | #154 |
 | 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
-| 2 | Rides screen | ✅ Done (window capsule lands with 4) | #155 |
+| 2 | Rides screen and Track sheet | ✅ Done (window capsule lands with 4); tracking is in memory until the API lands ([requests](ride-tracking-api-requests.md)) | #155, #176 |
 | 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)) | #157, #164, #172 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava waits on the API ([contract](preferences-api-requests.md)) | #167, #172 |
@@ -73,9 +73,10 @@ Top to bottom:
    - "Hilly Loop" (`.largeTitle` bold, white)
    - ↔ 51 km · ⛰ 640 m climb (`.subheadline`, white 88%, monospaced digits, wraps at large
      text). Soft text shadow on the whole block. No date or times: they lead the card.
-   - Commit star: 48pt clear-glass circle, bottom right, `star`; on tap `star.fill` on
-     gold-tinted glass (`.committed`) with a selection haptic. Label "Commit to Hilly Loop on
-     Wednesday 14 October", Selected trait while on.
+   - Track star: 48pt clear-glass circle, bottom right, `star`. Tap opens the
+     [Track sheet](#track-sheet); while the ride is tracked it's `star.fill` on gold-tinted glass
+     (`.committed`). Label "Track Hilly Loop on Wednesday 14 October" ("Tracking …" while on),
+     Selected trait while on.
    - The `Map`'s own "Maps" and "Legal" attribution, bottom leading.
    - Tap anywhere else on the hero: zoom to Ride detail.
 2. **Conditions card** (solid card, 26pt radius).
@@ -123,10 +124,52 @@ Build:
 - [x] Footer attribution
 - [x] Zoom transition source on the hero and each route row
 - [x] Light/dark and Dynamic Type through `accessibility5` checked on the simulator
-- [x] Hero 3b: eased scrim, pick pill, icon stats, commit star (gold glass when on) and the
-      card's date/Leave–Back header. The star is in-memory only: no commit sheet, persistence
-      or condition-change notifications yet
+- [x] Hero 3b: eased scrim, pick pill, icon stats, track star (gold glass when on) and the
+      card's date/Leave–Back header
+- [x] Track sheet (#176). Tracking is in memory only: no persistence or condition-change
+      notifications until the API lands
 - [ ] Reduce Transparency
+
+### Track sheet
+
+Canvas boards `TrackFlow`, `TrackSheet`, `TrackSheetTracking`, `TrackSheetDark`. The hero's star
+opens it; tracking a ride means the forecast keeps being checked and the rider is notified if
+it changes before they leave.
+
+A content-height detent, so iOS 26 floats it inset as Liquid Glass over the dimmed Rides screen.
+It slides up on the system curve with no bounce (a cross-fade with Reduce Motion). Its mode is
+fixed when it opens.
+
+1. Grabber; Close (glass circle, `xmark`, `role: .close`) top leading.
+2. Medal: 64pt gold (`.committed`) circle with a white `star.fill`, and a 28pt `bell.fill` badge
+   bottom right.
+3. **Track mode** (not tracked):
+   - "Track This Ride" (`.title2` bold, centred), then "We'll keep checking the forecast and
+     notify you if anything changes before you leave."
+   - Ride card: 48pt route thumbnail, "Hilly Loop", "Wed 14 Oct · 09:00 → ~12:00", a 40pt
+     `ScoreGauge` showing 86.
+   - **"Notify Me If"**: "Rain moves in" (`cloud.rain`, rain blue); "Gusts pass your 45 km/h
+     limit" (`wind`, cyan); "It drops below your 4° minimum" (`thermometer.low`, indigo); "A
+     better time or day opens up" (`clock`, accent). A limit the rider hasn't set has no row.
+   - Footnote: "Plus the final forecast the evening before." plus " iOS will ask to allow
+     notifications." until they've been asked.
+   - "Start Tracking" (`.glassProminent` capsule, no icon), then "Not Now" (plain accent).
+4. **Tracking mode**:
+   - "Tracking This Ride", then "Forecast checked 10 minutes ago. Nothing has changed since you
+     started tracking."
+   - Notifications denied: a card with `bell.slash` (warning colour), "Notifications Are Off",
+     "You won't hear if anything changes." and a "Turn On" capsule opening Settings.
+   - The same ride card; **"We'll Notify You If"** with the same rows and footnote.
+   - "Stop Tracking" (`.glass` capsule, red label).
+
+Flow: Start Tracking asks for notifications the first time (`requestAuthorization`), then the
+sheet closes and the star turns gold with a bounce and a success haptic. Denied still tracks;
+the Tracking sheet then shows Notifications Are Off. Stop Tracking closes the sheet, then the
+star goes back to outline.
+
+`TrackRideSheet` (`RideUI/TrackRideSheet.swift`). The limits come from `RiderSettingsStore`
+(`minimumStandards.maximumGustKph`, `minimumTemperature` for the ride's month). "Forecast
+checked 10 minutes ago" is sample copy until the API returns a last-checked time.
 
 ## 2. Ride detail (push from the hero, zoom transition)
 
