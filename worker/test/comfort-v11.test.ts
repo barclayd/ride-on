@@ -16,6 +16,7 @@ import {
 // Agreed calibration case: two dry, warm hours with 10 mph crosswinds and
 // 30 mph gusts feel good with noticeable compromises (80–85), not ideal.
 const wind = {
+  preferTailwind: false,
   comfortableHeadwindKph: 16,
   comfortableCrosswindKph: 16,
   comfortableGustKph: 25,

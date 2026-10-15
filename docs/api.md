@@ -17,6 +17,7 @@ API v0.19.0 adds [separate planning days](planning-api.md#search-dates-and-optio
 API v0.22.0 adds the opt-in [experimental ground assessment](ground-assessment-api.md), using v0.21.0 [cached ground evidence](ground-evidence-api.md) and v0.20.0 [located surfaces](#route-surface-evidence). Phase 3 model mechanics are implemented; [real-world calibration](ground-calibration.md) is pending. The [phased plan](ground-conditions-plan.md) keeps scoring unchanged at `comfort-v0.11`.
 API v0.23.0 adds temperature interpolation and ride-scoped forecast details (`comfort-v0.12`); see below.
 Algorithm `comfort-v0.14` rewards the sustained forward component of diagonal tailwinds in proportion to distance, retaining the separate crosswind/gust discomfort and bounded benefit introduced in v0.13. It is checked against the 14 October preference interview and a saved route-level forecast replay.
+API v0.24.0 adds an explicit [helpful-tailwind preference](#helpful-tailwind-preference). Algorithm `comfort-v0.15` applies the calibrated assistance bonus only when the rider opts in; new and existing profiles otherwise receive no bonus.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
@@ -121,6 +122,72 @@ Apple Weather; existing saved source policies are preserved. Responses
 include `savedUser: { "id": "dan", "version": 1 }` (or `null`) and the exact
 resolved settings, so a result can be traced to the profile used. Date, route IDs
 and the day's time window belong to the recommendation request, not the profile.
+
+### Helpful-tailwind preference
+
+From v0.24.0, `settings.preferences.wind.preferTailwind` is a boolean. It defaults
+to `false`, including when an older stored profile lacks the field. A read resolves
+that default without writing to D1 or changing the profile version. A general wind
+weight or wind comfort threshold does not imply this preference.
+
+Use a **"Prefer helpful tailwinds"** switch. `true` means the rider prefers useful
+sustained assistance over otherwise equally comfortable calm conditions. `false`
+means no extra preference for assistance; it does **not** mean the rider actively
+dislikes tailwinds or that every windy ride must rank below calm. Ordinary
+headwind, crosswind and estimated gust discomfort still apply in both modes.
+
+Read `GET /users/me` → `user.settings.preferences.wind.preferTailwind` and save
+through the existing authenticated endpoint with the last-read `user.version`:
+
+```http
+PATCH /users/me
+Content-Type: application/json
+```
+
+```json
+{
+  "expectedVersion": 1,
+  "settings": {
+    "preferences": {
+      "wind": { "preferTailwind": true }
+    }
+  }
+}
+```
+
+The response returns the resolved user and incremented version. `POST /users`
+accepts the same nested setting at creation. Omitted fields preserve the saved
+choice, including when an older client sends other wind fields. Explicit `false`
+turns the bonus off. Null, strings, numbers and unknown fields are rejected with
+400; stale writes return `409 USER_VERSION_CONFLICT` without changing settings.
+
+Both `POST /recommendations` and `POST /recommendations/next-windows` accept a
+temporary override at `preferences.wind.preferTailwind` (without the `settings`
+wrapper). Single-day and multi-day searches use the same resolution:
+defaults → saved profile → request overrides. Responses expose the effective value
+at `resolvedPreferences.wind.preferTailwind`. Overrides never save themselves.
+
+When enabled, the [v0.14 assistance curve](#wind-exposure-and-assistance-v014)
+and assistance tie-break are unchanged. When disabled, each departure's
+`windAssistance.potentialPoints` and `appliedPoints` are zero, so assistance also
+cannot break a score tie. `usefulDistanceFraction` still describes the forecast;
+it can be positive with the preference off. Wind discomfort, raw gust limits,
+weather facts, speed/duration and other preferences are independent of the switch.
+Zero wind weight still disables the bonus even when the switch is on.
+
+After saving, clients should request fresh rankings using the returned profile
+version and invalidate cached recommendation responses from `comfort-v0.14`.
+Include the resolved preference (or saved profile version, plus request overrides)
+and algorithm version in client ranking-cache identity. There is no need to wait
+for weather expiry: the API reuses cached forecasts and evaluates the new choice.
+Saved ride-plan snapshots retain their original scores and algorithm version.
+
+**Rollout:** there is no automatic opt-in or per-user data migration. Riders who
+want the former tailwind bonus must save `true` through the UI. With that explicit
+choice, all 31 departures in the saved 14 October Horsham/Richmond replay match
+v0.14 exactly: Horsham 08:00 scores 83.67; Richmond 09:00 scores 82.86. This is a
+fixed forecast replay, not a promise about new live forecasts. No production
+profile or forecast data is changed by this release.
 
 ### Display units
 
@@ -429,6 +496,7 @@ Defaults and optional settings are shown below. These comfort values are
   "preferences": {
     "temperature": { "comfortMinC": 16, "comfortMaxC": 24 },
     "wind": {
+      "preferTailwind": false,
       "comfortableHeadwindKph": 15,
       "comfortableCrosswindKph": 20,
       "comfortableGustKph": 35,
@@ -892,6 +960,9 @@ chose it. Any future adaptation requiring affirmative intent must capture that
 choice explicitly rather than infer it from a default or another rider's answers.
 
 ### Wind exposure and assistance v0.14
+
+From v0.15, the assistance benefit and tie-break described below require
+`wind.preferTailwind: true`; the underlying wind discomfort model is unchanged.
 
 Wind discomfort now uses the distance-weighted mean of section comfort. At the
 constant modelled moving speed this is also time-weighted. The single worst wind

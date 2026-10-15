@@ -26,7 +26,7 @@ import {
 import { compileTemperature } from './temperature.ts';
 import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.14';
+export const ALGORITHM_VERSION = 'comfort-v0.15';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -525,8 +525,11 @@ const assessCandidate = (
       (sum, row) => sum + (row.assistance > 0 ? row.distanceM : 0),
       0,
     ) / route.distanceM;
-  const assistancePoints =
-    100 * windShare * windAssistanceBenefit(mean('assistance'));
+  // A wind comfort weight is not consent to prefer assistance over calm. Gate
+  // both the score benefit and its potential-points tie-break on an explicit opt-in.
+  const assistancePoints = preferences.wind.preferTailwind
+    ? 100 * windShare * windAssistanceBenefit(mean('assistance'))
+    : 0;
   const weatherScore = Math.min(100, unassistedWeatherScore + assistancePoints);
   const climbingShare = climbing.status === 'assessed' ? CLIMBING_SHARE : 0;
   const distanceShare = distance.comfort === null ? 0 : DISTANCE_SHARE;

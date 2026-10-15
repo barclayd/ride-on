@@ -27,6 +27,7 @@ const now = Date.parse('2026-10-14T12:00:00Z');
 const preferences = {
   temperature: { comfortMinC: 16, comfortMaxC: 32 },
   wind: {
+    preferTailwind: true,
     comfortableHeadwindKph: 16,
     comfortableCrosswindKph: 16,
     comfortableGustKph: 25,
@@ -145,6 +146,60 @@ test('useful sustained tailwind beats calm, including ties at the 100-point ceil
       expect(orderDepartures(a, b)).toBeLessThan(0);
     } else expect(a.score).toBeGreaterThan(b.score);
   }
+});
+
+test('no preference and explicit opt-out give no tailwind bonus or ceiling tie-break', async () => {
+  const tail = await routeFor(() => 0);
+  const calm = await routeFor(() => 0);
+  const { preferTailwind: _choice, ...legacyWind } = preferences.wind;
+  for (const temperature of [12, 20]) {
+    const weather: Weather = (q, h, route) => {
+      if (q === 'air-temperature') return temperature;
+      if (route.id === calm.id && (q === 'wind-speed' || q === 'wind-gust'))
+        return (3 * mph) / 3.6;
+      return constant(q, h, route);
+    };
+    for (const wind of [legacyWind, { ...legacyWind, preferTailwind: false }]) {
+      const result = evaluate([tail, calm], weather, {
+        preferences: { ...preferences, wind },
+      });
+      const assisted = present(
+        result.rankings.find((r) => r.routeId === tail.id)?.best ?? undefined,
+      );
+      const still = present(
+        result.rankings.find((r) => r.routeId === calm.id)?.best ?? undefined,
+      );
+      expect(assisted.windAssistance).toEqual({
+        usefulDistanceFraction: 1,
+        potentialPoints: 0,
+        appliedPoints: 0,
+      });
+      expect(assisted.score).toBe(still.score);
+      expect(orderDepartures(assisted, still)).toBe(0);
+    }
+  }
+});
+
+test('tailwind preference changes only assistance, retaining discomfort and raw gust limits', async () => {
+  const route = await routeFor((i) => (i < 80 ? 40 : 180));
+  const on = best(route, constant, {
+    preferences: { ...preferences, minimumStandards: { maximumGustKph: 35 } },
+  });
+  const off = best(route, constant, {
+    preferences: {
+      ...preferences,
+      wind: { ...preferences.wind, preferTailwind: false },
+      minimumStandards: { maximumGustKph: 35 },
+    },
+  });
+  expect(on.conditions).toEqual(off.conditions);
+  expect(on.factors).toEqual(off.factors);
+  expect(on.standards).toEqual(off.standards);
+  expect(off.standards.status).toBe('below');
+  expect(on.score - off.score).toBeCloseTo(on.windAssistance.appliedPoints, 2);
+  expect(on.windAssistance.appliedPoints).toBeGreaterThan(0);
+  expect(off.windAssistance.potentialPoints).toBe(0);
+  expect(off.windAssistance.appliedPoints).toBe(0);
 });
 
 test('aligned gusts add neither discomfort nor assistance; raw gust limits still apply', async () => {

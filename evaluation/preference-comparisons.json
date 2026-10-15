@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-10-09",
-  "updated_on": "2026-10-14",
+  "updated_on": "2026-10-15",
   "purpose": "Human preference calibration examples for the API MVP. These are not live forecasts. Selected cases have executable calibration tests; exact scoring weights remain provisional.",
   "rider": "Dan",
   "implementation_2026_10_14": {
@@ -81,6 +81,16 @@
       }
     ],
     "scope": "The route-level follow-up confirms Horsham at 8am over 10am for the reviewed snapshot. Temperature/sunshine answers match the existing saved 16–32°C band and personal weights. Additional warmer comparisons use sunny intervals as understood from the interview context. No new global scoring constants, defaults or personal settings are introduced."
+  },
+  "tailwind_preference_follow_up_2026_10_15": {
+    "algorithm_version": "comfort-v0.15",
+    "status": "explicit_preference_implemented",
+    "setting": "preferences.wind.preferTailwind",
+    "default": false,
+    "opt_in_behavior": "Use the v0.14 assistance bonus and tie-break only when true; a general wind weight does not imply preference for tailwinds over calm.",
+    "opt_out_behavior": "No assistance points or assistance tie-break. Forecast assistance coverage, headwind/crosswind/gust discomfort and raw gust limits are unchanged. False expresses no bonus, not an active dislike of tailwinds.",
+    "validation": "All 31 departures from the fixed 14 October route-level replay match v0.14 exactly when explicitly enabled. Horsham 08:00 remains 83.67; Richmond 09:00 remains 82.86. With no opt-in, Richmond 08:30 scores 82.13 and Horsham 08:00 scores 81.66. Private replay inputs stay outside version control; no new provider calls or production profile writes.",
+    "scope": "Backend contract only; UI integration is separate. Existing profiles resolve false without being rewritten. No temperature, sunshine, heat-limit or other preference calibration changes."
   },
   "context": {
     "route_characteristics": "Otherwise equally appealing; climbing is neutral for this rider.",

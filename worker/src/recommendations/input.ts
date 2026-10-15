@@ -33,6 +33,7 @@ const temperature = z.strictObject({
   comfortMaxC: z.number().min(-30).max(50),
 });
 const wind = z.strictObject({
+  preferTailwind: z.boolean(),
   comfortableHeadwindKph: z.number().min(0).max(100),
   comfortableCrosswindKph: z.number().min(0).max(100),
   comfortableGustKph: z.number().min(0).max(150),
@@ -74,7 +75,11 @@ const minimumStandards = z.strictObject({
 export const preferencesSchema = z
   .strictObject({
     temperature,
-    wind,
+    // Defaults belong only on resolved settings: old profiles gain no inferred
+    // preference, and an unrelated partial patch must preserve an explicit choice.
+    wind: wind.extend({
+      preferTailwind: wind.shape.preferTailwind.default(false),
+    }),
     sunshine,
     recentRides: recentRides.default({ mode: 'neutral', lookbackDays: 28 }),
     climbing: climbing.default({ preference: 'neutral' }),
@@ -186,6 +191,7 @@ export const defaultSettings: Settings = {
     // Personal comfort settings shape gradual wind penalties; separate minimum
     // standards express conditions the rider wants to avoid.
     wind: {
+      preferTailwind: false,
       comfortableHeadwindKph: 15,
       comfortableCrosswindKph: 20,
       comfortableGustKph: 35,

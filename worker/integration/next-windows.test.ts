@@ -55,6 +55,11 @@ const best = z.object({
   departureAt: z.string(),
   finishAt: z.string(),
   score: z.number(),
+  windAssistance: z.object({
+    usefulDistanceFraction: z.number(),
+    potentialPoints: z.number(),
+    appliedPoints: z.number(),
+  }),
   conditions: conditionsSchema,
   recentRides: z.object({ penaltyPoints: z.number(), status: z.string() }),
   standards: z.object({ status: z.string() }),
@@ -97,6 +102,7 @@ const resultSchema = z.object({
     attribution: z.array(z.object({ text: z.string(), url: z.string() })),
   }),
   resolvedPreferences: z.object({
+    wind: z.object({ preferTailwind: z.boolean() }),
     distance: z.object({ minKm: z.number(), maxKm: z.number() }).nullable(),
   }),
 });
@@ -116,6 +122,56 @@ const suggest = async (
   assert.equal(r.status, 200, await r.clone().text());
   return resultSchema.parse(await r.json());
 };
+
+integration(
+  'next windows apply saved tailwind intent and temporary opt-out without refetching',
+  async (h) => {
+    h.use(
+      apple((data) => {
+        for (const row of data.forecastHourly.hours) {
+          row.temperature = 14;
+          row.windSpeed = 18;
+          row.windGust = 28;
+          row.windDirection = 180;
+        }
+      }),
+    );
+    const route = await upload(h);
+    assert.equal(
+      (
+        await h.send('/users', {
+          body: JSON.stringify({
+            displayName: 'Rider',
+            settings: { preferences: { wind: { preferTailwind: true } } },
+          }),
+        })
+      ).status,
+      201,
+    );
+    const on = await suggest(h, [route.id]);
+    assert.equal(on.resolvedPreferences.wind.preferTailwind, true);
+    assert.ok(on.windows.length > 0);
+    const calls = h.requests.length;
+    const off = await suggest(h, [route.id], {
+      preferences: { wind: { preferTailwind: false } },
+    });
+    assert.equal(off.resolvedPreferences.wind.preferTailwind, false);
+    assert.equal(off.windows.length, on.windows.length);
+    for (const assisted of on.windows) {
+      const other = first(off.windows.filter((w) => w.kind === assisted.kind));
+      assert.equal(assisted.best.windAssistance.potentialPoints, 2);
+      assert.equal(assisted.best.score - other.best.score, 2);
+      assert.equal(other.best.windAssistance.appliedPoints, 0);
+      assert.equal(other.best.windAssistance.potentialPoints, 0);
+      assert.deepEqual(assisted.best.conditions, other.best.conditions);
+    }
+    assert.equal(
+      (await suggest(h, [route.id])).resolvedPreferences.wind.preferTailwind,
+      true,
+    );
+    assert.equal(h.requests.length, calls);
+  },
+);
 
 integration(
   'next windows use one shared weather snapshot, agree with normal rankings and carry attribution and preferences',
