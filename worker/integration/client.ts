@@ -73,6 +73,17 @@ const candidate = z.object({
   departureAt: z.iso.datetime(),
   finishAt: z.iso.datetime(),
   score: z.number().min(0).max(100),
+  recommendationPriority: z.number().min(0).max(105),
+  tailwindOpportunity: z.object({
+    enabled: z.boolean(),
+    maximumPoints: z.literal(5),
+    priorityPoints: z.number().min(0).max(5),
+    basis: z.literal('route-leg-bearings-and-sustained-wind'),
+    routeDirectionality: z.number().min(0).max(1),
+    alignment: z.number().min(0).max(1),
+    opposingExposure: z.number().min(0).max(1),
+    reason: z.string().nullable(),
+  }),
   weatherScore: z.number().min(0).max(100),
   windAssistance: z.object({
     usefulDistanceFraction: z.number().min(0).max(1),

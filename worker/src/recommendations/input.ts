@@ -36,6 +36,7 @@ const temperature = z.strictObject({
 });
 const wind = z.strictObject({
   preferTailwind: z.boolean(),
+  prioritiseTailwindOpportunities: z.boolean(),
   comfortableHeadwindKph: z.number().min(0).max(100),
   comfortableCrosswindKph: z.number().min(0).max(100),
   comfortableGustKph: z.number().min(0).max(150),
@@ -84,6 +85,8 @@ export const preferencesSchema = z
     // preference, and an unrelated partial patch must preserve an explicit choice.
     wind: wind.extend({
       preferTailwind: wind.shape.preferTailwind.default(false),
+      prioritiseTailwindOpportunities:
+        wind.shape.prioritiseTailwindOpportunities.default(false),
     }),
     sunshine,
     recentRides: recentRides.default({ mode: 'neutral', lookbackDays: 28 }),
@@ -202,6 +205,7 @@ export const defaultSettings: Settings = {
     // standards express conditions the rider wants to avoid.
     wind: {
       preferTailwind: false,
+      prioritiseTailwindOpportunities: false,
       comfortableHeadwindKph: 15,
       comfortableCrosswindKph: 20,
       comfortableGustKph: 35,

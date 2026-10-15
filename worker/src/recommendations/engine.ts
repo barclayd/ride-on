@@ -29,12 +29,16 @@ import {
   resolveMinimumTemperature,
 } from './input.ts';
 import type { PreviousScore } from './score-baselines.ts';
+import {
+  assessTailwindOpportunity,
+  routeDirectionality,
+} from './tailwind-opportunity.ts';
 import { compileTemperature } from './temperature.ts';
 import { temperatureComfort } from './temperature-comfort.ts';
 import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
 import { meanWindFrom } from './wind-direction.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.16';
+export const ALGORITHM_VERSION = 'comfort-v0.17';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -269,6 +273,7 @@ const assessCandidate = (
   distance: ReturnType<typeof assessDistance>,
   history: HistoryAssessment,
   seasonalNormals: ReadonlyMap<Route['legs'][number], number | null>,
+  directionality: number,
 ) => {
   const rows: Observation[] = [];
   const missing = new Set<string>();
@@ -603,6 +608,11 @@ const assessCandidate = (
   const afterHistory = (base: number) =>
     Math.max(0, base - recentRides.penaltyPoints);
   const finalScore = afterHistory(score);
+  const tailwindOpportunity = assessTailwindOpportunity(
+    directionality,
+    rows,
+    preferences.wind,
+  );
   // Counterfactual gains are not additive allocations. Re-evaluate the same
   // departure with one factor ideal, retaining the ceiling, shares and history.
   const gain = (base: number) =>
@@ -682,6 +692,10 @@ const assessCandidate = (
     finishAt: iso(departure + durationMs),
     baseScore: round(score),
     score: round(finalScore),
+    recommendationPriority: round(
+      round(finalScore) + tailwindOpportunity.priorityPoints,
+    ),
+    tailwindOpportunity,
     recentRides,
     pointsLost,
     weatherScore: round(weatherScore),
@@ -775,6 +789,7 @@ type Assessed = Extract<
 export const orderDepartures = (a: Assessed, b: Assessed) =>
   Number(b.standards.status === 'meets') -
     Number(a.standards.status === 'meets') ||
+  b.recommendationPriority - a.recommendationPriority ||
   b.score - a.score ||
   b.windAssistance.potentialPoints - a.windAssistance.potentialPoints ||
   a.departureAt.localeCompare(b.departureAt);
@@ -859,6 +874,7 @@ export const recommendRides = (
   const normalForDate = compileSeasonalNormal(input.date);
   const evaluated = routes.map((route) => {
     const plan = planDepartures(route, input, nowMs);
+    const directionality = routeDirectionality(route);
     const climbing = assessClimbing(
       route,
       input.preferences.climbing.preference,
@@ -890,6 +906,7 @@ export const recommendRides = (
         distance,
         history,
         seasonalNormals,
+        directionality,
       ),
     );
     const weatherAssessed = candidates
@@ -947,6 +964,8 @@ export const recommendRides = (
             ...partial,
             status: 'partial' as const,
             score: null,
+            recommendationPriority: null,
+            tailwindOpportunity: null,
             pointsLost: null,
             reasonCode: 'missing-elevation',
           }
@@ -1022,13 +1041,16 @@ export const recommendRides = (
         : minimumStandardsStatus === 'unknown'
           ? 'No confirmed match for your minimum standards. Some departures or standards could not be assessed.'
           : ranked.length
-            ? input.preferences.distance !== null
-              ? input.preferences.climbing.preference === 'neutral'
-                ? 'Routes ranked by weather comfort and your preferred distance.'
-                : 'Routes ranked by weather comfort, preferred distance and climbing preference.'
-              : input.preferences.climbing.preference === 'neutral'
-                ? 'Routes ranked by comfort throughout the ride.'
-                : 'Routes ranked by weather comfort and your climbing preference.'
+            ? input.preferences.wind.preferTailwind &&
+              input.preferences.wind.prioritiseTailwindOpportunities
+              ? 'Routes ranked by comfort and your tailwind opportunity preference.'
+              : input.preferences.distance !== null
+                ? input.preferences.climbing.preference === 'neutral'
+                  ? 'Routes ranked by weather comfort and your preferred distance.'
+                  : 'Routes ranked by weather comfort, preferred distance and climbing preference.'
+                : input.preferences.climbing.preference === 'neutral'
+                  ? 'Routes ranked by comfort throughout the ride.'
+                  : 'Routes ranked by weather comfort and your climbing preference.'
             : 'No ride could be recommended for this day.',
     rankings: ranked.map((route, index) => ({ rank: index + 1, ...route })),
     unranked: evaluated.filter((route) => route.best === null),

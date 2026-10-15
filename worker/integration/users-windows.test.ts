@@ -697,3 +697,208 @@ integration(
     assert.equal(h.requests.length, 0);
   },
 );
+
+integration(
+  'opportunity opt-in persists, ranks independently of Conditions, and reuses weather for daily and multi-day requests',
+  async (h) => {
+    h.use(
+      metOffice(({ request }) => {
+        const tail =
+          new URL(request.url).searchParams.get('longitude') === '-1';
+        return HttpResponse.json(
+          hourlyForecast(request, {
+            values: () => ({
+              screenTemperature: tail ? 12 : 14,
+              windSpeed10m: tail ? 4.5 : 1,
+              max10mWindGust: tail ? 8 : 1,
+              windDirectionFrom10m: 180,
+            }),
+          }),
+        );
+      }),
+    );
+    const tail = await upload(h, 'Opportunity', -1);
+    const calm = await upload(h, 'Calm', 0);
+    const ids = [tail.id, calm.id];
+    const created = await createUser(h, {
+      preferences: { wind: { preferTailwind: true } },
+    });
+    assert.equal(
+      created.settings.preferences.wind.prioritiseTailwindOpportunities,
+      false,
+    );
+    const off = await recommendMetOffice(h, ids);
+    assert.equal(off.recommendedRouteId, calm.id);
+    const calls = h.requests.length;
+    const saved = await readUser(
+      await patch(h, {
+        expectedVersion: created.version,
+        settings: {
+          preferences: { wind: { prioritiseTailwindOpportunities: true } },
+        },
+      }),
+    );
+    await h.restart();
+    assert.deepEqual(await readUser(await h.send('/users/me')), saved);
+    const on = await recommendMetOffice(h, ids);
+    assert.equal(
+      on.resolvedPreferences.wind.prioritiseTailwindOpportunities,
+      true,
+    );
+    assert.equal(on.recommendedRouteId, tail.id);
+    for (const r of on.rankings) {
+      const before = first(off.rankings.filter((x) => x.routeId === r.routeId));
+      assert.equal(r.best.score, before.best.score);
+      assert.deepEqual(r.best.conditions, before.best.conditions);
+      assert.equal(
+        r.best.recommendationPriority,
+        r.best.score + r.best.tailwindOpportunity.priorityPoints,
+      );
+    }
+    assert.equal(first(on.rankings).best.tailwindOpportunity.priorityPoints, 5);
+    assert.ok(first(on.rankings).best.score < first(off.rankings).best.score);
+    const multi = await recommendMetOffice(h, ids, {
+      date: undefined,
+      days: { kind: 'dates', dates: [RIDE_DATE] },
+    });
+    assert.equal(multi.recommendedRouteId, tail.id);
+    assert.deepEqual(multi.rankings, on.rankings);
+    const unrelated = await readUser(
+      await patch(h, {
+        expectedVersion: saved.version,
+        settings: { preferences: { wind: { comfortableCrosswindKph: 21 } } },
+      }),
+    );
+    assert.equal(
+      unrelated.settings.preferences.wind.prioritiseTailwindOpportunities,
+      true,
+    );
+    const temporary = await recommendMetOffice(h, ids, {
+      preferences: { wind: { prioritiseTailwindOpportunities: false } },
+    });
+    assert.equal(temporary.recommendedRouteId, calm.id);
+    assert.equal(
+      temporary.resolvedPreferences.wind.prioritiseTailwindOpportunities,
+      false,
+    );
+    assert.deepEqual(await readUser(await h.send('/users/me')), unrelated);
+    assert.equal(
+      (
+        await patch(h, {
+          expectedVersion: saved.version,
+          settings: {
+            preferences: { wind: { prioritiseTailwindOpportunities: false } },
+          },
+        })
+      ).status,
+      409,
+    );
+    const disabled = await readUser(
+      await patch(h, {
+        expectedVersion: unrelated.version,
+        settings: {
+          preferences: { wind: { prioritiseTailwindOpportunities: false } },
+        },
+      }),
+    );
+    assert.equal(
+      disabled.settings.preferences.wind.prioritiseTailwindOpportunities,
+      false,
+    );
+    assert.equal(
+      (await recommendMetOffice(h, ids)).recommendedRouteId,
+      calm.id,
+    );
+    assert.equal(h.requests.length, calls);
+    const bob = await createUser(h, {}, BOB_TOKEN);
+    assert.equal(
+      bob.settings.preferences.wind.prioritiseTailwindOpportunities,
+      false,
+    );
+  },
+);
+
+integration(
+  'legacy tailwind users gain no opportunity preference and invalid inputs never write or fetch',
+  async (h) => {
+    const saved = await createUser(h, {
+      preferences: { wind: { preferTailwind: true } },
+    });
+    const { prioritiseTailwindOpportunities: _removed, ...oldWind } =
+      saved.settings.preferences.wind;
+    const legacy = {
+      ...saved,
+      settings: {
+        ...saved.settings,
+        preferences: { ...saved.settings.preferences, wind: oldWind },
+      },
+    };
+    const raw = JSON.stringify(legacy);
+    const db = await h.runtime.getD1Database('ROUTES_DB');
+    await db
+      .prepare('UPDATE users SET user_json = ? WHERE id = ?')
+      .bind(raw, saved.id)
+      .run();
+    await h.restart();
+    const read = await readUser(await h.send('/users/me'));
+    assert.equal(
+      read.settings.preferences.wind.prioritiseTailwindOpportunities,
+      false,
+    );
+    assert.equal(read.settings.preferences.wind.preferTailwind, true);
+    assert.equal(read.version, saved.version);
+    const stored = await (await h.runtime.getD1Database('ROUTES_DB'))
+      .prepare('SELECT user_json FROM users WHERE id = ?')
+      .bind(saved.id)
+      .first<{ user_json: string }>();
+    assert.equal(stored?.user_json, raw);
+    for (const invalid of [null, 'true', 'false', 1, 0, {}, []]) {
+      const preferences = {
+        wind: { prioritiseTailwindOpportunities: invalid },
+      };
+      assert.equal(
+        (
+          await patch(h, {
+            expectedVersion: saved.version,
+            settings: { preferences },
+          })
+        ).status,
+        400,
+      );
+      assert.equal(
+        (
+          await h.send('/users', {
+            token: BOB_TOKEN,
+            body: JSON.stringify({
+              displayName: 'B',
+              settings: { preferences },
+            }),
+          })
+        ).status,
+        400,
+      );
+      for (const path of [
+        '/recommendations',
+        '/recommendations/next-windows',
+      ]) {
+        const window = path.endsWith('next-windows')
+          ? { after: { date: RIDE_DATE, window: 'daylight' } }
+          : { date: RIDE_DATE };
+        assert.equal(
+          (
+            await h.send(path, {
+              body: JSON.stringify({
+                routeIds: ['00000000-0000-4000-8000-000000000001'],
+                ...window,
+                preferences,
+              }),
+            })
+          ).status,
+          400,
+        );
+      }
+    }
+    assert.deepEqual(await readUser(await h.send('/users/me')), read);
+    assert.equal(h.requests.length, 0);
+  },
+);

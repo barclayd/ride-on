@@ -20,6 +20,8 @@ Algorithm `comfort-v0.14` rewards the sustained forward component of diagonal ta
 API v0.24.0 adds an explicit [helpful-tailwind preference](#helpful-tailwind-preference). Algorithm `comfort-v0.15` applies the calibrated assistance bonus only when the rider opts in; new and existing profiles otherwise receive no bonus.
 API v0.25.0 adds [wind bearing and comparable previous scores](redesign/ride-detail-api-requests.md), [factor point-loss explanations, crosswind levels and linked sign-in methods](redesign/preferences-api-requests.md). Algorithm `comfort-v0.15` and existing rankings are unchanged. Seasonal floors, automatic gust-setting coupling and linked wind/distance units were declined in the contract review; Strava connection metadata awaits a real OAuth/sync implementation.
 
+API v0.27.0 adds an explicit [tailwind opportunity preference](tailwind-opportunity.md), with up to five recommendation-priority points separate from Conditions (algorithm `comfort-v0.17`). It defaults off and reuses cached weather.
+
 API v0.26.0 adds opt-in [cold sensitivity and local seasonal tolerance](seasonal-temperature.md) with algorithm `comfort-v0.16`. Existing profiles retain standard, season-independent scoring. Monthly hard minimums remain user-chosen.
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
@@ -125,6 +127,14 @@ Apple Weather; existing saved source policies are preserved. Responses
 include `savedUser: { "id": "dan", "version": 1 }` (or `null`) and the exact
 resolved settings, so a result can be traced to the profile used. Date, route IDs
 and the day's time window belong to the recommendation request, not the profile.
+
+### Tailwind opportunity preference
+
+From v0.27.0, `settings.preferences.wind.prioritiseTailwindOpportunities` adds
+optional priority for predominantly one-way rides with sustained favourable wind.
+It defaults false, requires `preferTailwind: true` to be active, and changes ordering
+without changing Conditions. See the [preference, response fields, client handoff
+and calibration](tailwind-opportunity.md).
 
 ### Helpful-tailwind preference
 
@@ -500,6 +510,7 @@ Defaults and optional settings are shown below. These comfort values are
     "temperature": { "comfortMinC": 16, "comfortMaxC": 24 },
     "wind": {
       "preferTailwind": false,
+      "prioritiseTailwindOpportunities": false,
       "comfortableHeadwindKph": 15,
       "comfortableCrosswindKph": 20,
       "comfortableGustKph": 35,
@@ -815,6 +826,7 @@ The response includes:
 | `distanceFit` | `null` with no distance preference; otherwise `status` (`within_range`, `below_range`, `above_range`) and nonnegative `deviationKm`. Outside-range routes stay eligible. |
 | `best.departureAt`, `best.finishAt` | Suggested start and estimated finish. |
 | `best.score`, `best.weatherScore`, `best.factors` | Combined ride score, original weather-only score and temperature/wind/dryness/clear-sky/sunshine/climbing/distance factors. These are not probabilities. |
+| `best.recommendationPriority`, `best.tailwindOpportunity` | v0.27 ordering value (0–105) and separate opportunity explanation/points. Keep showing `score` for Conditions; see [contract](tailwind-opportunity.md). |
 | `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate, categorical sky-condition distance fractions, assisted-distance fraction and the v0.15 wind/precipitation summaries below. |
 | `best.standards` | `meets`, `below`, `unknown`, or `not_configured`, with structured failures. |
 | `minimumStandardsStatus` | Collection-level `match_found`, `none_meet`, `unknown`, `not_configured`, or `no_feasible_departure`. |
@@ -824,8 +836,10 @@ The response includes:
 | `weather` | Requested/selected provider, attempts, per-location provenance/issues, range, quality limits, cache hits/misses and `refreshAt`: the earliest retrieval-TTL, provider-expiry or model-age limit among the forecasts used, or `null` when any location was unavailable (ask again). The same request returns the same ranking until then, barring profile, route or ride-history changes. |
 
 A route known to meet every configured standard takes priority over a higher
-scoring route that does not. Otherwise the highest comfort score is returned as
-the best available. Each route is represented by its best departure under that
+scoring route that does not. Otherwise the highest recommendation priority is
+returned as the best available. Priority equals Conditions unless the explicit
+[tailwind opportunity preference](tailwind-opportunity.md) contributes up to five
+extra ordering points. Each route is represented by its best departure under that
 same rule. A high score never erases a failed standard.
 
 `none_meet` means every assessable choice fails and no unresolved choice could
