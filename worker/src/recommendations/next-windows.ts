@@ -216,7 +216,7 @@ export const recommendNextWindows = async (
     omitted,
     recommendedKind: recommended?.kind ?? null,
     resolvedPreferences: settings.preferences,
-    preferenceLevels: preferenceLevels(settings.preferences.weights),
+    preferenceLevels: preferenceLevels(settings.preferences),
     riding: settings.riding,
     forecast: settings.forecast,
     history: shared.history,

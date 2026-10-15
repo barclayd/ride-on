@@ -34,6 +34,7 @@ export const conditionsSchema = z.strictObject({
       fraction,
     )
     .nullable(),
+  windFromDegrees: z.number().int().min(0).max(359).nullable().optional(),
   averageWindSpeedKph: nonnegative,
   averageHeadwindKph: nonnegative,
   averageTailwindKph: nonnegative,

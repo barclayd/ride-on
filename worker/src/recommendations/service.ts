@@ -30,6 +30,11 @@ import { recommendRides, requiredWeatherFor } from './engine.ts';
 import { forecastRefreshSeconds } from './freshness.ts';
 import type { RecommendationInput } from './input.ts';
 import { daySummary } from './multi-day.ts';
+import {
+  attachPreviousScores,
+  createScoreBaselineStore,
+  type ScoreBaselineStore,
+} from './score-baselines.ts';
 
 const HOUR = 3_600_000;
 const quality = {
@@ -46,6 +51,7 @@ export type ComparisonContext = {
   /** Preview dates reuse evidence without forcing a refresh for an unselected day. */
   refreshDates?: readonly string[];
   dependencies: {
+    scoreBaselines?: ScoreBaselineStore;
     cache?: ForecastCache;
     providers?: Readonly<Record<string, ForecastProvider>>;
   };
@@ -264,6 +270,21 @@ export const evaluateComparisons = async (
       ),
     };
   });
+  await attachPreviousScores(
+    comparisons,
+    routes,
+    ownerId,
+    startedAt,
+    selected?.source ?? null,
+    {
+      revision: history.revision,
+      status: history.status,
+      matcherVersion: history.matcherVersion,
+      affectedRouteIds: [...history.affectedRouteIds].sort(),
+      affectedRideIds: [...history.affectedRideIds].sort(),
+    },
+    dependencies.scoreBaselines ?? createScoreBaselineStore(env.ROUTES_DB),
+  );
   return {
     comparisons,
     history: {

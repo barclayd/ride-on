@@ -163,13 +163,13 @@ planning choice and send `days`. Browsing another window must not silently save 
 ## Functional preference levels
 
 Create/update profile settings accept `preferenceLevels`; recommendations accept
-the same field at the top level for a temporary override. They map to raw weights
+the same field at the top level for a temporary override. They map to raw settings
 before validation and are never independently persisted. Omitted controls and
 unrelated raw values are preserved. Each user response includes derived
 `user.preferenceLevels` next to `user.settings`; recommendation responses include
 resolved `preferenceLevels`.
 
-| Control | Write value | Underlying weight |
+| Control | Write value | Underlying setting |
 | --- | --- | --- |
 | Sunshine: Don't mind | `dont-mind` | sunshine 0 |
 | Sunshine: Nice to have | `nice` | sunshine 0.12 |
@@ -177,18 +177,23 @@ resolved `preferenceLevels`.
 | Rain: Don't mind | `dont-mind` | dryness 0 |
 | Rain: Prefer dry | `light-ok` | dryness 0.20 |
 | Rain: Strongly prefer dry | `avoid` | dryness 0.40 |
+| Crosswind: Low | `low` | wind.crosswindSensitivity 0.5 |
+| Crosswind: Normal | `normal` | wind.crosswindSensitivity 1 |
+| Crosswind: High | `high` | wind.crosswindSensitivity 2 |
 
-These are relative coefficients, not fixed percentages of the final score. Only
-the controlled weight changes; other weights and all minimum standards survive.
+Sunshine and rain values are relative coefficients, not fixed percentages of the
+final score. Crosswind levels (v0.25.0) change sensitivity, not a factor weight.
+Only the controlled setting changes; other values and all minimum standards survive.
 All-zero weather weights still fail validation. `light-ok` remains the agreed wire
 identifier for compatibility with the brief; the display label is “Prefer dry”.
 
 Reads return `custom` when a stored value differs from every preset by more than
-1e-9. `custom` is read-only. Sending both a level and its controlled raw weight is
+1e-9. `custom` is read-only. Sending both a level and its controlled raw setting is
 400, even when their values agree. Dan's calibrated 0.25/0.20 values read as
-`important`/`light-ok`; existing custom profiles are not coerced. There are no
-climbing/wind aliases and no ineffective tailwind toggle. Direction-aware wind
-assessment remains always active, without a separate stronger-tailwind bonus.
+`important`/`light-ok`; existing custom profiles are not coerced, including a
+crosswind sensitivity of 5. Direction-aware discomfort remains active; the
+separate [helpful-tailwind preference](api.md#helpful-tailwind-preference) is an
+explicit opt-in and is preserved when editing any preset.
 
 ## Provider capabilities, caching and attribution
 

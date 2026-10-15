@@ -172,9 +172,9 @@ Build:
 - [x] Sample data: `RideDetail.sample(for:on:)` in `Models/RideDetail.swift`, built from any pick
 - [x] Notes and factor sentences measured against your preferences (`resolvedPreferences`), live
 - [x] Footer shows the forecast provider's own attribution (`weather.attribution`)
-- [ ] "Wind from the …" footnote: waits on `windFromDegrees` ([API requests](ride-detail-api-requests.md) §1)
-- [ ] "▲ 4 since 07:00" badge: waits on `best.previous` (§2)
-- [ ] Time budget, Surface match, Intent, Novelty factors: waits on a product decision (§3)
+- [ ] "Wind from the …" footnote: API v0.25.0 supplies `windFromDegrees`; client wiring pending ([reviewed contract](ride-detail-api-requests.md) §1)
+- [ ] "▲ 4 since 07:00" badge: API v0.25.0 supplies comparable `best.previous`; client wiring pending (§2)
+- [x] Additional-factor decision: explain the seven existing factors; keep time feasibility and recent-rides deductions separate, with no invented Surface match or Intent scores (§3)
 
 ## 3. Ride Window (sheet)
 
@@ -266,7 +266,7 @@ Build:
 - [x] Distance range editor (push)
 - [x] Settings model mirroring the API `settings` shape, held in an `@Observable` store
 - [ ] Strava status and "Use My Strava Average" (hidden until the API has a Strava connection)
-- [ ] "Apple Account" (plain "Account" until `/auth/me` names the provider)
+- [ ] Account label: API v0.25.0 supplies `/auth/me` linked `user.providers`; client wiring pending (these are linked methods, not the current session's sign-in method)
 
 ## 6. Ideal Temperature (push)
 
@@ -283,17 +283,17 @@ Build:
    Braintree "In range". Footer: "Hilly Loop's 9° start is 1° under your range, so it loses 2
    points. Rides re-rank as you drag."
 3. **"Deal-Breakers"**: Never Colder Than 4° (stepper), Never Hotter Than 30° (stepper), Vary by
-   Month (switch). Footer: "Rides outside these are marked Below your minimums. Turn on Vary by
-   Month to accept colder starts in winter."
+   Month (edit the rider's chosen monthly limits). Footer: "Rides outside these are marked
+   Below your minimums." No automatic seasonal offsets; preserve saved custom tables.
 
 Inline title "Ideal Temperature", glass back button. Saves as you go; no Done.
 
 Build:
 - [x] `TemperatureRange` (drag both handles, 1° steps, selection haptic)
 - [x] Route fit rows recompute as you drag
-- [x] Deal-breaker steppers + Vary by Month (the app's own northern-hemisphere table until the API
-  has a seasonal floor)
-- [ ] "so it loses 2 points" ("so it scores a little lower" until the API returns points lost)
+- [x] Deal-breaker steppers
+- [ ] Replace the guessed northern-hemisphere Vary by Month table with user-chosen monthly limits; preserve existing tables and unresolved months ([reviewed contract](preferences-api-requests.md) §6)
+- [ ] Factor point-loss wording: API v0.25.0 supplies `pointsLost`; client wiring pending. Zero is no effect, null is inactive/unknown, and old board scores must not describe unsaved edits
 
 ## 7. Comfortable Wind (push)
 
@@ -316,6 +316,8 @@ Build:
 Build:
 - [x] `WindEnvelope` (Canvas/Path), redraws live from the sliders
 - [x] Limits sliders + sensitivity menu (a saved value other than 0.5, 1 or 2 shows "Custom")
+- [ ] Wire API v0.25.0 `preferenceLevels.crosswind`; preserve custom values until explicitly changed
+- [ ] Distinguish gust comfort from the hard maximum; do not auto-link them at 80% ([reviewed contract](preferences-api-requests.md) §3)
 - [x] Route fit rows
 
 ## 8. Widgets and Lock Screen
@@ -400,11 +402,13 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 | Preferences, Ideal Temperature, Comfortable Wind | `GET /users/me` → `settings.riding`, `settings.preferences`, `settings.units`, `preferenceLevels`; each edit sends `PATCH /users/me {expectedVersion, settings}` after 0.6 s (explicit `null` removes a limit or the distance range; a 409 re-reads and re-sends), then Rides reloads |
 | How Your Routes Fit | The last board Rides loaded, measured against the edited values in the app |
 
-**Not wired yet.** Score-change badge and "Wind from the …" (both hidden until the API adds them,
+**Not wired yet.** Score-change badge and "Wind from the …" (API v0.25.0 is ready;
 see [`ride-detail-api-requests.md`](ride-detail-api-requests.md)); unassessable routes aren't shown; factor prose is metric-only; a
 conflicting settings edit (409) keeps the old saved window, though that load still uses the new
 one; dates assume the device and the routes share a time zone; "Track a route" is still a no-op.
-Preferences waits on the API for Strava, points lost, crosswind levels, the sign-in provider and
-seasonal floors ([`preferences-api-requests.md`](preferences-api-requests.md)); "How Your Routes
+Preferences can now consume points lost, crosswind levels and linked sign-in methods.
+Strava needs its own connection/sync implementation; seasonal guesses were declined in favor of
+user-chosen monthly limits. Wind and distance units remain separate, saved choices
+([`preferences-api-requests.md`](preferences-api-requests.md)); "How Your Routes
 Fit" is empty until Rides has loaded once. The Rides day strip doesn't show the sheet's "Rain until 15:00"
 style notes yet.

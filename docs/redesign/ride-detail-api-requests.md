@@ -1,119 +1,125 @@
-# Ride detail: API requests
+# Ride detail: reviewed API contract
 
-What the iOS Ride detail screen (`docs/redesign/README.md` §2) still needs from `POST /recommendations`.
-The screen is otherwise live. It reads the multi-day response the Rides tab already loads
-(`routeIds`, `days`, `previewDays: 7`, `riding.window`), so every request below concerns that
-response. No new endpoint is needed.
+Reviewed against the Worker on 15 October 2026. API **v0.25.0** implements wind
+bearing and comparable previous scores; scoring stays **comfort-v0.15**. Existing
+fields remain stable. The iOS screen still needs to consume the additions and
+apply the wording corrections below. No new endpoint is required.
 
-Three requests, in priority order:
+## 1. Wind direction — implemented
 
-1. Wind direction, for "Wind from the west-south-west."
-2. The previous score, for "▲ 4 since 07:00".
-3. A decision on the four factors the design shows but the scorer doesn't have.
+Every assessed departure's `conditions` and every non-null
+`rideHours[].conditions` includes:
 
-## Already used (please keep stable)
+```json
+{ "windFromDegrees": 248 }
+```
 
-The app now builds its own notes and factor sentences from these fields, so structured drawbacks
-aren't needed. Please don't rename or drop these in the multi-day response:
+This is the meteorological **from** direction, clockwise from true north, rounded
+to an integer from 0 through 359. The app can map it to a 16-point compass label
+(248° is west-south-west). The field is nullable; historical saved plans may omit it.
 
-| Field | Used for |
+The engine takes a distance-weighted circular mean of the route's sampled wind
+vectors. It omits samples below 3 km/h from that directional mean, since a calm
+sample has no meaningful direction. It returns `null` if the full ride/hour's
+average speed is below 3 km/h or the directional resultant is below 0.3. Thus
+350° and 10° average to 0°, opposing winds can yield `null`, and 359.8° rounds to
+0°, never 360°. Hide the compass sentence when missing or null. This does not
+change headwind, crosswind or tailwind scoring.
+
+## 2. Previous score — implemented with stricter comparability
+
+`rankings[].best` and `days[].best` can include:
+
+```json
+{ "previous": { "score": 81.7, "generatedAt": "2026-10-14T06:00:00.000Z" } }
+```
+
+`previous` is `null` on the first comparable evaluation. It refers to the earliest
+stored evaluation **on the current local viewing day**, in the request's
+`timeZone`, for that owner, route and departure date. It is a previous **daily
+best** score, not the earlier score of this exact departure. The best time may
+move within the same assessed set of departures. Multi-day results and
+`POST /recommendations/next-windows` use the same comparison store.
+
+The comparison must also match:
+
+- Algorithm version and the route facts used by scoring (geometry, elevation,
+  distance and weather locations).
+- Effective preferences, riding speed, departure grid, ride window and time zone.
+- Weather-selection policy, selected provider/product and forecast representation
+  and freshness policy.
+- Ride-history revision and assessment availability.
+- The set of assessed departure/finish times. A passing slot or changed coverage
+  must not masquerade as a weather improvement or deterioration.
+
+Changes to those inputs establish a new baseline. Returning to an identical
+context can reuse its earlier baseline that day. Display-unit edits and weather
+value updates do not reset it. Merely changing the set of other compared routes
+is not itself a reset. A new local viewing day always starts a new baseline.
+
+Ordinary alternatives have `previous: null`. A multi-day alternative which was
+itself a daily best may retain that day's comparison: display it only with the
+same daily-best interpretation. Never carry the top choice's badge over to a
+selected alternative.
+
+Round both current and previous scores consistently, then show a signed change
+only if their displayed difference is at least one. `generatedAt` is a UTC instant;
+format the time in the response time zone. Missing/null history means no badge.
+
+**Storage review.** The proposed `0008_ride_learning.sql` snapshot work is not on
+main and is not a dependency. Standalone migration
+`0009_recommendation_score_baselines.sql` stores only owner, route, a hashed
+comparison key, score, generation time and expiry. Rows expire after 48 hours;
+cleanup runs on subsequent requests from that owner, with a cap of 1,000 rows per
+owner. Route deletion cascades. Concurrent requests keep the earliest generation
+time even if they complete out of order. Storage failure hides the trend without
+losing the current recommendation. No full forecast or route geometry is stored
+in this table.
+
+## 3. Unscored design factors — use option A
+
+Explain the engine's seven existing factors: temperature, wind, dryness,
+clearSkies, sunshine, climbing and distance. Do not invent scores for the four
+extra design rows:
+
+| Design row | Actual behavior |
 |---|---|
-| `resolvedPreferences.temperature.comfortMinC` / `comfortMaxC` | "Starts at 11°, 5 degrees under your ideal range." / "Your ideal range is 16–24°." |
-| `resolvedPreferences.wind.comfortableHeadwindKph` / `comfortableCrosswindKph` / `comfortableGustKph` | "Headwind for the last 9 km.", "Gusts reach 32 km/h, over your 25 km/h limit." |
-| `weather.attribution[] {text, url}` | The footer: "Powered by Met Office data", or "Apple Weather · Other data sources" |
-| `best` / `alternatives[]` → `conditions.maximumHeadwindKph`, `maximumCrosswindKph`, `maximumGustKph`, `gustExposure.maximumAdverseKph`, `windDistanceFractions`, `precipitationSummary`, `maximumPrecipitationProbability`, `temperatureC` | Notes, the Wind/Rain/Temperature sentences, the verdict chips |
-| `rideHours[] {start, end, conditions}` | The forecast grid and the wind strip under the elevation profile |
-| `recentRides.penaltyPoints` | "You've ridden these roads recently, so it loses 3 points." |
-| Route result `distanceFit {status, deviationKm}` | "6 km longer than your preferred distance." |
-| `drawbacks[]` | Fallback only, when `resolvedPreferences` is missing |
+| Time budget | Feasibility constraint; departures must fit the full ride in the window/daylight. |
+| Surface match | Route evidence exists, but there is no bike-match scoring preference. |
+| Intent | No saved riding-intent concept; climbing preference already affects climbing. |
+| Novelty | Explain `recentRides.penaltyPoints` separately; do not count it twice. |
 
-## 1. Wind direction
+A non-null `factors` value does not necessarily mean its weight is active. Use
+[`pointsLost`](preferences-api-requests.md#2-points-lost-per-factor--implemented)
+for combined-score effects; null means inactive or insufficient evidence. Zero
+means no recoverable points from that factor under this score combination.
 
-**Why.** The forecast card ends with "Wind from the west-south-west." Today the app hides the line
-because conditions carry no direction. The engine already fetches `windDirection` (it's in
-`requiredWeather`, and BPF gives an ensemble mean), but it only uses it to split the distance into
-head, tail and crosswind.
+## Stable inputs and required wording corrections
 
-**Shape.** Add one optional field to `conditionsSchema` (`worker/src/recommendations/conditions.ts`),
-so it appears on every departure's `conditions` and on every `rideHours[].conditions`:
+Continue reading `resolvedPreferences`, `weather.attribution`, `conditions`,
+`rideHours`, `recentRides`, `distanceFit` and `drawbacks`. The additions above do
+not rename or remove them. The review found these limits in the proposed copy:
 
-```jsonc
-"conditions": {
-  // …existing fields
-  "windFromDegrees": 248   // 0–359, meteorological "from" direction, true north; null when calm or unknown
-}
-```
+- **Temperature:** first/last hourly `temperatureC` values are ranges over sampled
+  sections, not exact departure/arrival temperatures. Say “During the first hour,
+  9–11°C” rather than “Starts at 9°C”. Exact endpoint claims need separate evidence.
+- **Wind location:** a whole-ride `windDistanceFractions.headwind` does not prove
+  “headwind for the last 9 km”. Hourly summaries can support qualified hourly
+  descriptions, not a continuous exact segment claim.
+- **Gusts:** `maximumGustKph` in conditions is the raw forecast maximum. The soft
+  `wind.comfortableGustKph` preference is compared against estimated adverse gust
+  exposure, using prevailing direction. Compare raw maxima with
+  `minimumStandards.maximumGustKph` for a hard-limit statement. A comfort setting
+  is not a hard limit, and must not be presented as one when no maximum is set.
+- **Units:** saved `settings.units` and `settings.display.unit` win over locale.
+  Temperature, wind speed and distance are independent choices; API values stay
+  metric. Use locale only as an initial choice when no saved preference exists.
+- **Rain:** the highest local hourly probability is not a whole-ride probability.
+- **Unsaved edits:** old board scores and `pointsLost` describe the preferences
+  that generated that response. Wait for the newly evaluated response before
+  attributing a score change to a preference edit.
 
-- Use the distance-weighted circular mean of the samples along the ride: average the unit vectors,
-  then `atan2`. Don't take the arithmetic mean of the degrees, because 350° and 10° must average
-  to 0°, not 180°.
-- Return `null` when the mean vector is short (resultant length under about 0.3, meaning the wind
-  swings round), or when the average wind is under about 3 km/h. The app then hides the line.
-- Round to whole degrees.
-
-**What the app does.** It maps degrees to a 16-point compass word (248° → "west-south-west") and
-shows "Wind from the west-south-west." under the grid for the selected departure. Per-hour values
-aren't shown yet. They're cheap to include, though, and would let the grid's wind column get an
-arrow later.
-
-**Test.** Give a fixture with winds of 350° and 10° along the ride. Expect `windFromDegrees: 0`, not 180.
-
-## 2. Previous score
-
-**Why.** The verdict card shows "▲ 4 since 07:00 · last ridden 29 Sep". It tells the rider whether the
-forecast is moving for or against the ride. The API keeps no earlier result today, so the app hides
-the badge.
-
-**Shape.** Add one optional field to each route result's `best` (and to `days[].best`):
-
-```jsonc
-"best": {
-  // …existing fields
-  "previous": { "score": 81.7, "generatedAt": "2026-10-14T06:00:00.000Z" }  // or null
-}
-```
-
-- **What to compare.** The same user, the same route, and the same calendar day of departure. The
-  departure time can differ, so if the best slot moved from 09:00 to 09:30 it still counts.
-- **Which earlier result.** The earliest recommendation generated today (in the response
-  `timeZone`) that contains that route and day. That gives "since 07:00" when the rider first
-  looked at 7 am, and it stays stable across reloads. Otherwise every refresh would show "▲ 0
-  since a minute ago".
-- **When to return `null`.** When no earlier result exists today, or when the user's preferences or
-  ride window changed since that result. A change there means the scores aren't comparable.
-- **Storage.** The in-progress `recommendation_snapshots` table (migration `0008_ride_learning.sql`)
-  looks like the natural place to read from. The app only needs the score and time, not the
-  snapshot.
-
-**What the app does.** It rounds both scores. It shows "▲ N since HH:mm" (or "▼ N") when the
-difference is at least 1, and hides the badge otherwise.
-
-## 3. Factors the design shows but the scorer doesn't have
-
-**Why.** "Why It Scored 87" should explain the actual score. The app shows one row per non-null
-`factors` key (distance, climbing, sunshine, clearSkies, temperature, wind, dryness). The design
-also lists four factors the engine doesn't score:
-
-| Design factor | Design sentence | What exists today |
-|---|---|---|
-| Time budget | "About 3 hours. You're back by 12:00, long before sunset at 18:04." | A hard constraint only: a departure that doesn't fit the window is `no_feasible_departure`. There's no score. |
-| Surface match | "Sealed roads all the way, right for your road bike." | The route has `surfaceSummary`. There's no bike type in preferences and no score. |
-| Intent | "You wanted a steady ride. 640 m of climbing makes it a harder one." | There's no intent concept in preferences. `climbing` partly covers it. |
-| Novelty | "You rode it 15 days ago, on 29 September." | The `recentRides.penaltyPoints` penalty. The app now shows it as a note. |
-
-**Decision needed** (product, not just API). One of:
-
-- **A. The design drops them** *(recommended for now)*. The app keeps showing the API's seven factors.
-  Novelty is already explained by the recent-rides note, and Time budget is already enforced.
-  Nothing is needed from the API.
-- **B. The API scores some of them.** Each one becomes a 0–100 entry in `factors` with a weight in
-  preferences, the same as the existing ones. Novelty is the cheapest, because `recentRides` already
-  computes it. Surface match needs a bike type in user settings first. Time budget and Intent need
-  new preference concepts. Tell me which to add and the app will show them with no other API work.
-
-## Not needed
-
-- **Structured drawbacks.** The app builds its notes from `resolvedPreferences` and the conditions.
-- **Start and finish temperatures.** These come from the first and last `rideHours`.
-- **Display units.** The app formats with the device locale for now. If `settings.display`
-  (°C/°F, km/h/mph) should win over the locale, that's a client change.
+Synthetic tests cover circular wind, calm samples, history persistence, owner
+isolation, concurrent writes, expiry, changing weather, local midnight, expired
+slots and reset conditions. Cached calibration replay verifies that these
+explanations leave existing rankings unchanged.
