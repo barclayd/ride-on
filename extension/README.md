@@ -11,7 +11,6 @@ using the Ride On API (v0.9.0). Design: handoff 3 (`design_handoff_ride_on_v2`),
   (distance and climbing for this search or as usual, auto-synced profile, forecast provider).
 - **cycle.travel `/user/journeys`** — "Tracked routes" module, date · time button, per-row chips.
   Journeys are imported as GPX (with elevation) when tracked, and re-imported when edited on cycle.travel.
-- **Forecast details** — expand a scored ride in the popup or Journeys page to see the forecast product, fetched time, sites, hourly temperatures and full gust periods. No extra weather requests.
 - **Weather attribution** from the results (Apple Weather logo, legal link and notice; "Powered by
   Met Office data") shows under the rides and in Preferences, not on the page.
 
