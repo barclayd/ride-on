@@ -4,7 +4,7 @@ import DesignSystem
 
 /// DESIGN-SYSTEM.md §6 component 1: a ride shown full-bleed on its route's map, with the title
 /// block over a bottom scrim. At least `height` tall, taller when large text needs the room. The
-/// caller places it under the status bar and toolbar, and overlays anything tappable (the commit
+/// caller places it under the status bar and toolbar, and overlays anything tappable (the track
 /// star on Rides) bottom trailing, clear of the title's trailing 84pt. The date and times live in
 /// the caller's card below, not on the map.
 public struct RideHero: View {
@@ -39,13 +39,18 @@ public struct RideHero: View {
                 // Ride detail). The Maps attribution stays visible, just not tappable.
                 RouteMap(pick.route.coordinates, style: .hero, tint: pick.meetsMinimums ? .accentColor : .gray)
                     .id(pick.route.id)
+                    .overlay(alignment: .top) {
+                        // Dims under the status bar and toolbar so their glyphs stay legible (§2).
+                        LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 150)
+                    }
                     .allowsHitTesting(false)
-            }
-            .overlay(alignment: .top) {
-                // Dims under the status bar and toolbar so their glyphs stay legible (§2).
-                LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 150)
-                    .allowsHitTesting(false)
+                    // Pulled down past the top (pull to refresh), the map grows from its bottom
+                    // edge to fill the gap, rather than showing the background above it.
+                    .visualEffect { content, proxy in
+                        let pull = max(0, proxy.frame(in: .scrollView).minY)
+                        return content.scaleEffect(1 + pull / max(proxy.size.height, 1), anchor: .bottom)
+                    }
             }
     }
 

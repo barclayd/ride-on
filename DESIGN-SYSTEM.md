@@ -142,7 +142,8 @@ before adding a custom component in code.
    there. On Rides the hero is a `NavigationLink` and the `matchedTransitionSource` for the
    zoom into Ride detail; the clear-glass track star ("Track Hilly Loop on Wednesday 14
    October"; opens the Track sheet; `star.fill` on gold-tinted glass while tracked) is overlaid beside the link, not inside it, so VoiceOver reaches both. Ride detail shows the same map,
-   400pt instead of 480pt, so the zoom lands on the same image.
+   400pt instead of 480pt, so the zoom lands on the same image. Pulled down past the top (pull to
+   refresh), the map scales up from its bottom edge to fill the gap, so no background shows above it.
 2. **`ConditionChip`** — SF Symbol + value in `.footnote` on a solid `.fill.tertiary`
    capsule ("9–14°", "15 km/h tailwind", "Gusts 28 km/h", "Sunny spells"). Max 4 per row.
 3. **`DayStrip`** — "Your Window": one bar per day in the window, height = that day's best
