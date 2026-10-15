@@ -175,6 +175,7 @@ const assess = async (
     sunny?: boolean;
     uncovered?: boolean;
     weight?: number;
+    onlyTemperature?: boolean;
     minimum?: number;
     high?: boolean;
   } = {},
@@ -210,9 +211,9 @@ const assess = async (
       },
       weights: {
         temperature: options.weight ?? 0.15,
-        wind: 0.4,
-        dryness: 0.2,
-        sunshine: 0.25,
+        wind: options.onlyTemperature ? 0 : 0.4,
+        dryness: options.onlyTemperature ? 0 : 0.2,
+        sunshine: options.onlyTemperature ? 0 : 0.25,
         clearSkies: 0,
       },
       minimumStandards:
@@ -294,7 +295,8 @@ test('zero temperature importance disables cold loss; counterfactual points incl
     (await assess([20], { weight: 0 })).score,
   );
   expect((await assess([7], { weight: 0 })).pointsLost.temperature).toBeNull();
-  const extreme = await assess([-40], { weight: 1 });
-  expect(extreme.score).toBeGreaterThanOrEqual(0);
-  expect(extreme.score).toBeLessThanOrEqual(100);
+  const extreme = await assess([-40], { weight: 1, onlyTemperature: true });
+  expect(extreme.score).toBe(0);
+  expect(extreme.pointsLost.temperature).toBe(100);
+  expect(extreme.windAssistance.appliedPoints).toBe(0);
 });
