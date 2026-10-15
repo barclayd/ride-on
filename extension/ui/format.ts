@@ -26,6 +26,7 @@ import type {
   RideSummary,
   RouteResult,
   RouteSummary,
+  SkyShares,
   Standard,
   StandardsStatus,
   Window,
@@ -295,11 +296,18 @@ const WET: Record<string, string> = {
   thunder: 'Thunderstorms',
 };
 export type Chip = {
-  icon: 'temperature' | 'wind' | 'dry' | 'wet' | 'sun' | 'cloud' | 'fog';
+  icon:
+    | 'temperature'
+    | 'wind'
+    | 'dry'
+    | 'wet'
+    | 'sun'
+    | 'sunCloud'
+    | 'cloud'
+    | 'fog';
   text: string;
   label: string;
   warn: boolean; // amber: against what the rider asked for
-  good?: boolean; // what they asked for
 };
 // The API's defaults, for users that predate them (planning-api.md).
 export const DEFAULT_LEVELS: Levels = { sunshine: 'nice', rain: 'light-ok' };
@@ -382,42 +390,135 @@ export const conditionChips = (
               c.maximumPrecipitationProbability >
                 (prefs.minimumStandards?.maximumPrecipitationProbability ?? 0)),
         }
-      : skyChip(c, levels.sunshine),
+      : { icon: 'dry', text: 'Dry', label: 'Dry, no rain', warn: false },
   ];
 };
-// A dry ride names its sky; the API only sends sky shares while sunshine is weighed.
-// Sun is what the rider asked for; cloud is amber only when sunshine is Important.
-const skyChip = (c: Conditions, sunshine: Levels['sunshine']): Chip => {
-  const f = c.skyConditionDistanceFractions;
-  const sun = f ? f.sunny + f.sunnyIntervals : 0;
-  const cloud = f ? f.cloudy + f.overcast : 0;
-  const fog = f?.obscured ?? 0;
-  const on = (x: number) => `on ${Math.round(x * 100)}% of the route`;
-  if (f && sun && sun >= cloud && sun >= fog)
+// The sky chip (handoff v4, 18a), between temperature and wind. Sun and sunny intervals get the
+// timeline; a mostly cloudy or misty sky keeps its one-word chip, amber only when sunshine is Important.
+// Null hides it: sunshine isn't weighed, or no symbol is forecast at all.
+export type SkyKind = 'sunny' | 'sunnyIntervals' | 'other' | 'unknown';
+export type Sky = Chip & {
+  partial?: boolean; // part of the ride isn't forecast yet: the dashed chip
+  segments?: { kind: SkyKind; share: number }[]; // ride order, neighbours merged, shares of distance
+  legend?: { kind: SkyKind; name: string; share: string }[];
+};
+const SKY_KINDS = ['sunny', 'sunnyIntervals', 'other', 'unknown'] as const;
+const SKY_NAMES: Record<SkyKind, string> = {
+  sunny: 'Sunny',
+  sunnyIntervals: 'Sunny intervals',
+  other: 'Cloud',
+  unknown: 'Not forecast yet',
+};
+const GAP: Record<SkyKind, number> = {
+  sunny: 0,
+  sunnyIntervals: 0,
+  other: 0,
+  unknown: 1,
+};
+// Cloud, overcast, mist, showers and night all count as 'other'.
+const skyKinds = (c: Conditions | null): Record<SkyKind, number> | null => {
+  const f: SkyShares | null | undefined =
+    c?.skyConditionShares ?? c?.skyConditionDistanceFractions;
+  if (!f) return null;
+  const { sunny = 0, sunnyIntervals = 0, unknown = 0, ...rest } = f;
+  const other = Object.values(rest).reduce((a, b) => a + b, 0);
+  return { sunny, sunnyIntervals, other, unknown };
+};
+// ponytail: 10% of the forecast distance makes sun a real part of a mix; below it the ride is mostly intervals.
+const REAL_PART = 0.1;
+const approx = (x: number) =>
+  x < 0.025 ? '<5%' : `~${Math.round(x * 20) * 5}%`;
+export const skyChip = (
+  b: Departure,
+  sunshine: Levels['sunshine'] = 'nice',
+): Sky | null => {
+  const assessed = b.sunshineAssessment;
+  if (!assessed || assessed.status === 'unavailable') return null;
+  // Before skyConditionShares, an hour with a gap has no shares: count it all as not forecast.
+  const hours = (b.rideHours ?? []).flatMap((h) =>
+    h.conditions?.distanceKm
+      ? [{ km: h.conditions.distanceKm, k: skyKinds(h.conditions) ?? GAP }]
+      : [],
+  );
+  const km = hours.reduce((sum, h) => sum + h.km, 0);
+  const all =
+    skyKinds(b.conditions) ??
+    (km
+      ? (Object.fromEntries(
+          SKY_KINDS.map((kind) => [
+            kind,
+            hours.reduce((sum, h) => sum + h.k[kind] * h.km, 0) / km,
+          ]),
+        ) as Record<SkyKind, number>)
+      : null);
+  if (!all) return null;
+  const { sunny, sunnyIntervals, other, unknown } = all;
+  const known = sunny + sunnyIntervals + other;
+  if (!known) return null;
+  if (sunny + sunnyIntervals < other) {
+    const f: SkyShares =
+      b.conditions.skyConditionShares ??
+      b.conditions.skyConditionDistanceFractions ??
+      {};
+    const cloud = (f.cloudy ?? 0) + (f.overcast ?? 0);
+    const fog = f.obscured ?? 0;
+    if (!cloud && !fog) return null;
+    const text =
+      fog > cloud
+        ? 'Fog'
+        : (f.overcast ?? 0) >= (f.cloudy ?? 0)
+          ? 'Overcast'
+          : 'Cloudy';
     return {
-      icon: 'sun',
-      text: f.sunny >= f.sunnyIntervals ? 'Sunny' : 'Sunny spells',
-      label: `Dry, sun ${on(sun)}`,
-      warn: false,
-      good: true,
-    };
-  if (f && cloud && cloud >= fog) {
-    const text = f.overcast >= f.cloudy ? 'Overcast' : 'Cloudy';
-    return {
-      icon: 'cloud',
+      icon: fog > cloud ? 'fog' : 'cloud',
       text,
-      label: `Dry, ${text.toLowerCase()} ${on(cloud)}`,
+      label: `Sky: ${fog > cloud ? 'fog or mist' : text.toLowerCase()} on ${Math.round(Math.max(cloud, fog) * 100)}% of the route`,
       warn: sunshine === 'important',
     };
   }
-  if (fog)
-    return {
-      icon: 'fog',
-      text: 'Fog',
-      label: `Dry, fog or mist ${on(fog)}`,
-      warn: sunshine === 'important',
-    };
-  return { icon: 'dry', text: 'Dry', label: 'Dry, no rain', warn: false };
+  // A rounded share of 1 isn't enough: every ride hour must be sun alone.
+  const pure = [all, ...hours.map((h) => h.k)].every(
+    (k) => !k.sunnyIntervals && !k.other,
+  );
+  const partial =
+    assessed.status !== 'complete' ||
+    assessed.unknownDistanceFraction > 0 ||
+    unknown > 0;
+  const text = pure
+    ? partial
+      ? 'Sunny where forecast'
+      : 'Sunny throughout'
+    : sunny / known < REAL_PART
+      ? 'Sunny intervals'
+      : sunnyIntervals >= other
+        ? 'Sun and sunny intervals'
+        : 'Sun and cloud';
+  // The order within an hour isn't known: carry on the last colour, then the rest, the gap last.
+  const segments: NonNullable<Sky['segments']> = [];
+  for (const h of hours.length ? hours : [{ km: 1, k: all }]) {
+    const last = segments.at(-1);
+    for (const kind of new Set([last?.kind ?? 'sunny', ...SKY_KINDS])) {
+      const share = (h.k[kind] * h.km) / (km || 1);
+      if (share <= 0) continue;
+      const tail = segments.at(-1);
+      if (tail?.kind === kind) tail.share += share;
+      else segments.push({ kind, share });
+    }
+  }
+  const present = SKY_KINDS.filter((kind) => all[kind] > 0);
+  return {
+    icon: pure ? 'sun' : 'sunCloud',
+    text,
+    label: `Sky: ${text.toLowerCase()}${partial && !pure ? ' where forecast' : ''}`,
+    warn: false,
+    partial,
+    segments,
+    legend: present.map((kind) => ({
+      kind,
+      name: SKY_NAMES[kind],
+      share: present.length === 1 ? 'Throughout' : approx(all[kind]),
+    })),
+  };
 };
 
 const FAILURES: Record<

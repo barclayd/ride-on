@@ -209,6 +209,7 @@ fieldset {
 .ro-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  align-items: start; /* an open timeline doesn't stretch its neighbours */
   gap: 14px;
 }
 .ro-strip {
@@ -629,7 +630,7 @@ fieldset {
 }
 .ro-ride-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* × stays on a wrapped name's first line */
   gap: 8px;
 }
 .ro-pills {
@@ -726,8 +727,8 @@ fieldset {
 }
 .ro-ride .ro-name {
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  text-wrap: pretty;
   font: 700 17px / 1.25 var(--ro-sans);
   color: var(--ro-olive-900);
   text-decoration: none;
@@ -857,22 +858,128 @@ a.ro-name:hover {
 .ro-chips li[data-warn="true"] svg {
   color: #b4692a;
 }
-/* What the rider asked for, e.g. sun when sunshine matters to them. */
-.ro-chips li[data-good="true"] {
-  background: #d9edb2;
+/* The sky chip opens the timeline (handoff v4). Never amber; dashed when part of the ride isn't forecast. */
+.ro-chips li.ro-sky-chip {
+  padding: 0;
+  background: none;
+}
+.ro-sky-chip button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: #eef4e2;
+  color: var(--ro-olive-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.ro-sky-chip button:hover {
+  filter: brightness(0.97);
+}
+.ro-sky-chip button[data-partial="true"] {
+  background: #f2f3ee;
+  color: var(--ro-slate);
+  outline: 1px dashed #b9c1a8;
+  outline-offset: -1px;
+}
+.ro-sky-chip button[data-partial="true"] svg {
+  color: var(--ro-muted);
+}
+.ro-chevron {
+  transition: transform 0.2s;
+}
+[aria-expanded="true"] > .ro-chevron {
+  transform: rotate(180deg);
+}
+.ro-sky {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #f5f7f1;
+  border-radius: 8px;
+  padding: 10px 12px 12px;
+}
+.ro-sky > b {
+  font: 600 12px var(--ro-sans);
+  color: var(--ro-olive-ink);
+}
+.ro-sky-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.ro-sky-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -3px;
+  font: 500 11px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-sky ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ro-sky li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 12px var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-sky li i {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.ro-sky li span:first-of-type {
+  flex: 1;
+}
+.ro-sky li span:last-child {
+  font: 500 12px var(--ro-serif);
   color: var(--ro-olive-900);
 }
-.ro-chips li[data-good="true"] svg {
-  color: var(--ro-olive-900);
+[data-sky="sunny"] {
+  background: #efc54a;
+}
+[data-sky="sunnyIntervals"] {
+  background: #c8d2db;
+}
+/* ponytail: cloud on a mostly sunny ride; the handoff has no swatch for it. */
+[data-sky="other"] {
+  background: #97a1ab;
+}
+[data-sky="unknown"] {
+  background: repeating-linear-gradient(135deg, #d3d9ca 0 3px, #f5f7f1 3px 6px);
+}
+/* 8px under the Conditions bar. */
+.ro-opportunity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -2px;
+  font: 600 12px var(--ro-sans);
+  color: var(--ro-olive-ink);
+}
+.ro-module .ro-opportunity {
+  margin-top: -4px;
+}
+.ro-opportunity svg {
+  flex: none;
+  color: var(--ro-olive-700);
 }
 .ro-meter {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-/* Bottom of the tile, so scores line up across a row. */
-.ro-module .ro-meter {
-  margin-top: auto;
 }
 .ro-meter > span {
   display: flex;
@@ -1069,6 +1176,7 @@ a.ro-name:hover {
   border-radius: 4px;
   background: var(--ro-tint-2);
   opacity: 0;
+  pointer-events: none;
 }
 .ro-when.ro-slot {
   min-height: 18px;
@@ -1877,7 +1985,8 @@ a.ro-name:hover {
   .ro-checkin-track > *,
   .ro-meter > div > div,
   .ro-ride,
-  .ro-medal {
+  .ro-medal,
+  .ro-chevron {
     transition: none;
   }
   .ro-chips li {
