@@ -53,7 +53,7 @@ export const rideRoutes = (now: () => Date) => {
   });
   app.post('/rides', async (c) => {
     const key = validateInput(z.uuid(), c.req.header('Idempotency-Key'));
-    const input = await readJsonBody(c, createRideSchema);
+    const input = await readJsonBody(c, createRideSchema, 400_000);
     const timestamp = now();
     checkDate(input.riddenOn, input.timeZone, timestamp);
     // Preserve fingerprints created before plans existed; omitted and null are equivalent.

@@ -1,6 +1,32 @@
 # Extension API brief v7: route outline and wind stretches
 
-Proposed against API **0.28.0**, algorithm **comfort-v0.17**. For the API agent.
+Implemented in API **0.29.0**, algorithm **comfort-v0.17**.
+
+## Review decisions (16 October 2026)
+
+- Dan chose to **preserve actual wind sections**. The proposed 2% sliver absorption
+  below is superseded: no section changes its effect to match a neighbour. The UI
+  may omit tiny labels, but must still colour each section accurately and retain
+  the section containing the strongest adverse gust. There can be up to 1,000
+  entries (the route-leg limit), rather than approximately 50.
+- Legacy legs store midpoints only. The fallback uses the actual endpoints from
+  `weatherLocations` at distance zero and the route end, with leg midpoints between
+  them. If usable endpoints are absent, return null rather than inventing them.
+- Stored geometry has already been simplified. Outline chainage is computed along
+  that path and scaled to the route distance, then retained during the 64-point
+  simplification. It is approximate display geometry. Whole-metre rounding makes
+  its last distance `Math.round(route.distanceM)`; wind stretch bounds retain the
+  exact route distance.
+- Wind is sampled even with zero wind scoring weight. Such rides still carry wind
+  stretches. No additional weather calls or cache invalidation are needed.
+- Gust directions are estimates from the prevailing wind. `effect` describes the
+  section's sustained wind, not an independently forecast gust direction. Clients
+  must not claim a precise gust direction or exact peak time from these fields.
+- The immutable tracked-plan and logged-plan snapshots retain the new sections;
+  historical snapshots are not back-filled. Storage/request bounds accommodate
+  up to 1,000 sections while the existing per-owner storage quota remains.
+
+The original proposal follows for context; these review decisions take precedence.
 
 The wind redesign replaces the raw gust chip on Journeys tiles and Rides cards
 with a wind pill (`10 mph tailwind`) that opens a "Wind along the ride" dropdown,
@@ -103,10 +129,9 @@ departure:
 2. **Merge neighbours.** Merge adjacent rows that share an effect and an 8-point
    compass sector of `windFromDegrees` (N, NE, … NW, each 45° wide and centred on
    its point). `light` rows merge whatever their direction.
-3. **Absorb slivers.** Merge any stretch shorter than 2% of the route distance into
-   the longer of its neighbours, keeping that neighbour's effect. Repeat until
-   none remain. This keeps the list to at most about 50 entries. The client drops
-   anything under 5% when drawing.
+3. **Preserve short sections (reviewed).** Do not absorb short sections into
+   neighbours or discard them below 5%. Only adjacent rows with the same effect
+   and compass sector merge, as above. Tiny labels may be omitted by the client.
 4. **Fill each stretch.**
    - `fromM`/`toM`: the stretch's bounds. Stretches are contiguous and together
      cover `[0, distanceM]` exactly.
@@ -141,7 +166,7 @@ and are never back-filled, and new snapshots round-trip without dropping it.
     paragraph. Note that it's a display sketch, not navigation geometry.
   - Add `windStretches` to the table row for `best.conditions` / `best.rideHours`,
     and give it a short subsection under "Condition chip summaries". It should
-    state the light threshold, the merge rules, the 2% sliver rule and the
+    state the light threshold, the merge rules, preservation of short sections and the
     invariant on `maximumAdverseGustKph`.
 - Tests:
   - An out-and-back fixture into a steady westerly. Check that `windStretches` is

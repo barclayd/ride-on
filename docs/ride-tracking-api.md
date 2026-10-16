@@ -22,7 +22,7 @@ References expire at their departure. Request a new recommendation after `422 RE
 
 If snapshot storage fails or its bounds are reached, ordinary recommendations still succeed, with `recommendationRef: null` and `trackingAvailability: "unavailable"`. Do not manufacture a tracking payload from displayed values.
 
-Unaccepted storage is bounded to 50 MB and 1,000 contexts per owner, 400 newly issued contexts per hour, 48 candidates per context, and 500 KB per context including candidates (context 200 KB, each candidate 80 KB). A request can issue several contexts for its distinct searches. Cleanup removes expired contexts in bounded batches during issuance; existing unexpired references are not evicted to make room. Accepted baselines are independent durable copies.
+Unaccepted storage is bounded to 50 MB and 1,000 contexts per owner, 400 newly issued contexts per hour, 48 candidates per context, and 2 MB per context including candidates (context 600 KB, each candidate 400 KB). A request can issue several contexts for its distinct searches. Cleanup removes expired contexts in bounded batches during issuance; existing unexpired references are not evicted to make room. Accepted baselines are independent durable copies. Since v0.29.0 these bounds accommodate up to 1,000 faithful wind sections; each accepted baseline or assessment is bounded to 1 MB. The 50 MB unaccepted-snapshot quota per owner is unchanged. New candidates retain `windStretches`; older saved candidates may omit the field and are never back-filled.
 
 ## Create or replace
 

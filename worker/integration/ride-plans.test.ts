@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { HttpResponse } from 'msw/http';
 import { z } from 'zod';
 import { conditionsSchema } from '../src/recommendations/conditions.ts';
+import { windStretchesSchema } from '../src/recommendations/wind-stretches.ts';
 import { ridePlanSchema } from '../src/rides/plan.ts';
 import { first, upload } from './client.ts';
 import { hourlyForecast, metOffice } from './fixtures.ts';
@@ -69,6 +70,7 @@ const fixture = async (h: Harness) => {
             departureAt: z.string(),
             finishAt: z.string(),
             conditions: conditionsSchema,
+            windStretches: windStretchesSchema,
           }),
         }),
       ),
@@ -96,6 +98,7 @@ integration(
     const { route, plan } = await fixture(h);
     assert.equal(plan.conditions.precipitationSummary, 'dry');
     assert.ok(plan.conditions.windDistanceFractions);
+    assert.ok(plan.windStretches.length > 0);
     const key = crypto.randomUUID();
     const created = await log(h, route.id, plan, key);
     assert.equal(created.status, 201, await created.clone().text());
@@ -137,12 +140,14 @@ integration(
       precipitationSummary: _rain,
       ...conditions
     } = plan.conditions;
-    const legacy = { ...plan, conditions };
+    const { windStretches: _stretches, ...oldPlan } = plan;
+    const legacy = { ...oldPlan, conditions };
     const key = crypto.randomUUID();
     const created = await log(h, route.id, legacy, key);
     assert.equal(created.status, 201);
     const ride = await readRide(created);
     assert.deepEqual(ride.plan?.conditions, conditions);
+    assert.equal(ride.plan?.windStretches, undefined);
     await h.restart();
     const fetched = await readRide(await h.send(`/rides/${ride.id}`));
     assert.deepEqual(fetched.plan?.conditions, conditions);
@@ -234,6 +239,34 @@ integration(
       { ...plan, schemaVersion: 2 },
       { ...plan, pickRank: 0 },
       { ...plan, actualDuration: 100 },
+      {
+        ...plan,
+        windStretches: plan.windStretches.map((s) => ({
+          ...s,
+          effect: 'unknown',
+        })),
+      },
+      {
+        ...plan,
+        windStretches: plan.windStretches.map((s) => ({
+          ...s,
+          fromM: s.fromM + 1,
+        })),
+      },
+      {
+        ...plan,
+        windStretches: plan.windStretches.map((s) => ({
+          ...s,
+          maximumAdverseGustKph: 999,
+        })),
+      },
+      {
+        ...plan,
+        windStretches: plan.windStretches.map((s) => ({
+          ...s,
+          startAt: plan.generatedAt,
+        })),
+      },
       { ...plan, weather: undefined },
       { ...plan, weather: { attribution: [] } },
       {
@@ -273,6 +306,14 @@ integration(
       ...plan,
       departureAt: '2026-10-10T09:00:00+01:00',
       finishAt: '2026-10-10T11:00:00+01:00',
+      windStretches: plan.windStretches.map((s) => {
+        const length = plan.windStretches.at(-1)?.toM ?? 1;
+        const at = (m: number) =>
+          new Date(
+            Date.parse('2026-10-10T08:00:00Z') + (7200000 * m) / length,
+          ).toISOString();
+        return { ...s, startAt: at(s.fromM), endAt: at(s.toM) };
+      }),
     };
     const accepted = await log(h, route.id, offset);
     assert.equal(accepted.status, 201);

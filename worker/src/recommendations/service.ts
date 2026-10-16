@@ -3,6 +3,7 @@ import { AppError } from '../errors.ts';
 import { prepareHistory } from '../rides/overlap.ts';
 import { readHistory } from '../rides/store.ts';
 import type { Route } from '../routes/model.ts';
+import { routeOutline } from '../routes/outline.ts';
 import type { Env } from '../types.ts';
 import {
   FORECAST_RETENTION_SECONDS,
@@ -231,6 +232,9 @@ export const evaluateComparisons = async (
   const refreshAt = Number.isFinite(staleAt)
     ? new Date(staleAt).toISOString()
     : null;
+  const outlines = new Map(
+    routes.map((route) => [route.id, routeOutline(route)]),
+  );
   const comparisons = inputs.map((dayInput) => {
     const dayTtl = forecastRefreshSeconds(
       [dayInput.date],
@@ -268,6 +272,8 @@ export const evaluateComparisons = async (
       quality.maxLocationDistanceM,
       3,
       history,
+      undefined,
+      outlines,
     );
     return {
       input: dayInput,
@@ -341,6 +347,7 @@ export const evaluateComparisons = async (
             0,
             history,
             new Map([[pinned.routeId, Date.parse(pinned.departureAt)]]),
+            outlines,
           )
         : null,
     history: {

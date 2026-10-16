@@ -254,7 +254,7 @@ export const createTracking = async (
           baseline.pick.candidate.finishAt,
           baseline.context.inputs[0]?.timeZone ?? 'UTC',
           now,
-          boundedJson(baseline, 350_000),
+          boundedJson(baseline, 1_000_000),
           owner,
           token,
         ),
@@ -337,7 +337,7 @@ export const publishRefresh = async (
   revision: InputRevision,
   finishAt?: string,
 ) => {
-  const json = snapshot ? boundedJson(snapshot, 350_000) : null;
+  const json = snapshot ? boundedJson(snapshot, 1_000_000) : null;
   // Generation/check times do not create a new assessment for identical evidence.
   const hash = snapshot
     ? await digest({

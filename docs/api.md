@@ -22,6 +22,12 @@ API v0.25.0 adds [wind bearing and comparable previous scores](redesign/ride-det
 
 API v0.27.0 adds an explicit [tailwind opportunity preference](tailwind-opportunity.md), with up to five recommendation-priority points separate from Conditions (algorithm `comfort-v0.17`). It defaults off and reuses cached weather.
 
+API v0.29.0 adds compact route `outline` sketches and per-departure `windStretches`
+for the wind dropdown. These reuse stored geometry and the existing observations;
+no extra weather requests, scoring changes or forecast-cache invalidation.
+The reviewed [extension brief v7](extension-api-brief-v7.md) records the contract
+and the decision to preserve short wind sections. Scoring remains `comfort-v0.17`.
+
 API v0.28.0 adds [tracked ride plans](ride-tracking-api.md): server-issued recommendation references, one active plan per account, immutable accepted baselines, manual refresh and retained assessment history. Background monitoring and notifications remain a follow-up. Scoring is unchanged at `comfort-v0.17`.
 
 API v0.26.0 adds opt-in [cold sensitivity and local seasonal tolerance](seasonal-temperature.md) with algorithm `comfort-v0.16`. Existing profiles retain standard, season-independent scoring. Monthly hard minimums remain user-chosen.
@@ -327,6 +333,9 @@ active, [geometric overlap](ride-history.md) can lower scores across different I
 `GET /routes/<id>/geometry` returns `{routeId, version, geometry}`: the stored
 `polyline6` path (`{version, encoding, data, pointCount}`) for drawing the route, or
 null when the GPX was too sparse or large. It carries no elevation.
+Recommendation route results also carry a compact `outline` (at most 64 points),
+so cards can draw a display sketch without fetching this full path. The sketch
+is not navigation geometry; see the wind sections contract below.
 `GET /routes` returns `{ "routes": [...], "limit": 100, "nextCursor": null }`.
 Use `limit=1..100` and the returned `cursor` for additional pages, retaining any
 filters. Ordering is newest creation first, then route ID; refreshing a source
@@ -824,11 +833,13 @@ The response includes:
 | `recommendedRouteId` | Best assessable route, or `null` if none can be recommended. |
 | `rankings` | Ordered routes; each has `best`, up to three tested alternative departures, duration, daylight, effective window, warnings and coverage counts. |
 | `unranked` | Routes with `unassessable` evidence (weather, or elevation when climbing matters) or `no_feasible_departure`. |
+| `outline` | Version-one display sketch with at most 64 `[latitude, longitude, distanceM]` points, or null when insufficient route points/endpoints are available. Included on ranked and unranked routes. |
 | `distanceM`, `ascentM`, `ascentMPerKm` | Route distance and estimated total/ascent-per-kilometre facts; ascent fields are `null` when elevation is incomplete. |
 | `distanceFit` | `null` with no distance preference; otherwise `status` (`within_range`, `below_range`, `above_range`) and nonnegative `deviationKm`. Outside-range routes stay eligible. |
 | `best.departureAt`, `best.finishAt` | Suggested start and estimated finish. |
 | `best.score`, `best.weatherScore`, `best.factors` | Combined ride score, original weather-only score and temperature/wind/dryness/clear-sky/sunshine/climbing/distance factors. These are not probabilities. |
 | `best.recommendationPriority`, `best.tailwindOpportunity` | v0.27 ordering value (0–105) and separate opportunity explanation/points. Keep showing `score` for Conditions; see [contract](tailwind-opportunity.md). |
+| `best.windStretches` | Contiguous wind sections with route bounds, ride times, wind effect/direction/speed and estimated maximum adverse gust. Also on alternatives, partial assessments, day winners and next-window winners. See below. |
 | `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate, categorical sky-condition distance fractions, assisted-distance fraction and the v0.15 wind/precipitation summaries below. |
 | `best.standards` | `meets`, `below`, `unknown`, or `not_configured`, with structured failures. |
 | `minimumStandardsStatus` | Collection-level `match_found`, `none_meet`, `unknown`, `not_configured`, or `no_feasible_departure`. |
@@ -942,6 +953,65 @@ Chip colours are a client presentation rule. They do not establish whether or
 how much a condition lowered the score: rider weights, gusts, thresholds and
 rounded display values can differ from a chip's rule. Use the returned factor
 breakdown and standards failures for an accurate scoring explanation.
+
+### Route outline and wind sections (v0.29.0)
+
+`rankings[].outline` and `unranked[].outline` contain
+`{version: 1, points: [[latitude, longitude, distanceM], ...]}`. Coordinates are
+rounded to five decimal places and distances to whole metres. Points run from
+zero to `Math.round(route.distanceM)` in travel order with non-decreasing distance.
+The first and last points survive a Douglas–Peucker simplification limited to
+64 points, using earth-centred metres to handle date-line crossings. Stored
+polyline geometry is decoded, cumulative distances are scaled to the authoritative
+route length, and those distances survive sketch simplification. This is approximate
+chainage because the stored path was already simplified at import. If geometry
+is absent or invalid, actual start/end weather-location coordinates and leg
+midpoints form the fallback; missing usable endpoints/points produce null.
+Outlines are computed once per route for a comparison's dates and windows.
+There is no elevation or basemap data, and this is not navigation geometry.
+
+Every newly assessed departure carrying `rideHours` also carries `windStretches`:
+
+```json
+{"fromM":0,"toM":21500,"startAt":"2026-10-18T09:30:00.000Z","endAt":"2026-10-18T10:34:30.000Z","effect":"tailwind","windFromDegrees":228,"averageWindSpeedKph":17.4,"maximumAdverseGustKph":8.1}
+```
+
+The array uses the same observations as `conditions`. Sustained wind below
+10 km/h is `light`; otherwise the dominant component determines `headwind`,
+`tailwind` or `crosswind`, using the `windDistanceFractions` rule above. Adjacent
+observations merge only with the same effect and eight-point compass sector
+(45° sectors centred on N, NE, E, SE, S, SW, W and NW). Light observations merge
+regardless of direction. **There is no 2% absorption rule:** even a brief adverse
+section retains its own effect. Clients may omit small labels, but must not
+recolour or discard those sections. The maximum is 1,000 entries, bounded by
+route legs. Effects describe the sampled sustained wind; they are not detailed
+wind measurements at every metre of the sketch.
+
+Bounds cover exactly `[0, route.distanceM]` without gaps or overlaps and retain
+unrounded distances. Times use the existing constant-speed model:
+`departure + duration × distance / route.distanceM`. Direction is the same
+rounded circular, distance-weighted mean as `conditions.windFromDegrees`, or null
+for calm/variable direction. Speed is distance weighted and rounded to two decimal
+places. Each adverse-gust maximum uses the existing prevailing-wind estimate;
+the maximum across all stretches equals `conditions.gustExposure.maximumAdverseKph`.
+It does not establish a separate gust direction or an exact time for the peak
+within that section. No observations (or incomplete coverage) produce `[]`, never
+a partial coloured route. A wholly unassessable departure remains `best: null`;
+there is no fabricated departure object. Zero wind scoring weight still samples
+wind and returns sections.
+
+Logged ride plans accept optional `windStretches`, validate continuity, timing,
+distance and the adverse-gust maximum, and preserve them on reads. Omitting the
+field in old plans remains valid; no historical snapshot is back-filled. The
+`POST /rides` body limit is now 400,000 bytes for complete section arrays. Tracked
+recommendations retain their original sections in the immutable baseline, with
+new assessments stored separately. See [tracking storage bounds](ride-tracking-api.md).
+
+Only normalized weather is cached server-side; recommendation response bodies
+are freshly assembled. Existing forecast caches can supply both fields immediately
+on the next recommendation request. Clients holding an older response must request
+recommendations again, or continue their normal refresh schedule. No cache-key or
+algorithm-version bump and no weather refetch is needed for this addition.
 
 ## Algorithm
 
