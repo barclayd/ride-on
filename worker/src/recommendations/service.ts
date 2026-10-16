@@ -50,6 +50,7 @@ export type ComparisonContext = {
   startedAt: Date;
   /** Preview dates reuse evidence without forcing a refresh for an unselected day. */
   refreshDates?: readonly string[];
+  pinned?: { routeId: string; departureAt: string; input: RecommendationInput };
   dependencies: {
     scoreBaselines?: ScoreBaselineStore;
     cache?: ForecastCache;
@@ -70,6 +71,7 @@ export const evaluateComparisons = async (
     startedAt,
     refreshDates = inputs.map((i) => i.date),
     dependencies,
+    pinned,
   }: ComparisonContext,
 ) => {
   const refreshAfterSeconds = forecastRefreshSeconds(
@@ -90,6 +92,17 @@ export const evaluateComparisons = async (
       plan: planDepartures(route, dayInput, startedAt.getTime()),
     })),
   );
+  const pinnedRoute = routes.find((route) => route.id === pinned?.routeId);
+  if (pinned && pinnedRoute)
+    plans.push({
+      route: pinnedRoute,
+      plan: planDepartures(
+        pinnedRoute,
+        pinned.input,
+        startedAt.getTime(),
+        Date.parse(pinned.departureAt),
+      ),
+    });
   const feasible = plans.filter(({ plan }) => plan.departures.length > 0);
   const locations = [
     ...new Map(
@@ -287,6 +300,49 @@ export const evaluateComparisons = async (
   );
   return {
     comparisons,
+    pinnedRefreshAt: pinnedRoute
+      ? (() => {
+          const ids = new Set(pinnedRoute.weatherLocations.map((l) => l.id));
+          const expiry = Math.min(
+            ...results
+              .filter((r) =>
+                ids.has(
+                  r.status === 'unavailable'
+                    ? r.requested.id
+                    : r.location.requested.id,
+                ),
+              )
+              .map((r) =>
+                r.status === 'unavailable'
+                  ? NaN
+                  : forecastStaleAt(
+                      r,
+                      {
+                        ...requestedQuality,
+                        freshnessBasis: input.forecast.freshnessBasis,
+                      },
+                      refreshAfterSeconds,
+                    ),
+              ),
+          );
+          return Number.isFinite(expiry)
+            ? new Date(expiry).toISOString()
+            : null;
+        })()
+      : null,
+    pinned:
+      pinned && pinnedRoute
+        ? recommendRides(
+            [pinnedRoute],
+            pinned.input,
+            results,
+            startedAt.getTime(),
+            quality.maxLocationDistanceM,
+            0,
+            history,
+            new Map([[pinned.routeId, Date.parse(pinned.departureAt)]]),
+          )
+        : null,
     history: {
       revision: history.revision,
       status: feasible.length ? history.status : 'not_evaluated',
