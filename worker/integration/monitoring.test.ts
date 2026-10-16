@@ -734,3 +734,19 @@ run(
     );
   },
 );
+run(
+  'checks remain eligible at the next quarter-hour despite time spent processing the previous job',
+  async (h) => {
+    const ride = await seed(h);
+    await h.restart({ TEST_NOW: '2026-10-09T12:00:07.000Z' });
+    await monitor(h, ride.id);
+    await h.restart({ TEST_NOW: '2026-10-09T12:15:00.000Z' });
+    const { jobs } = await json<{ jobs: { planId: string }[] }>(
+      await h.send('/__test/dispatch'),
+    );
+    assert.deepEqual(
+      jobs.map((j) => j.planId),
+      [ride.id],
+    );
+  },
+);
