@@ -14,7 +14,7 @@ liveTest('deployed API identifies the recommendation build', async () => {
   };
   expect(health).toMatchObject({
     ok: true,
-    version: '0.27.0',
+    version: '0.28.0',
     algorithmVersion: ALGORITHM_VERSION,
   });
   if (process.env.EXPECTED_REVISION)
@@ -22,4 +22,7 @@ liveTest('deployed API identifies the recommendation build', async () => {
 });
 liveTest('deployed private route list requires authentication', async () => {
   expect((await fetch(`${url}/routes`)).status).toBe(401);
+});
+liveTest('deployed tracked ride list requires authentication', async () => {
+  expect((await fetch(`${url}/tracked-rides`)).status).toBe(401);
 });
