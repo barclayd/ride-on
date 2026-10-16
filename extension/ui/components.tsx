@@ -486,7 +486,7 @@ export const RouteTile = (props: {
       <Slot class="ro-conditions">
         {card.best ? (
           <ul class="ro-chips">
-            {/* Temperature, sky, wind, gusts, rain (handoff v4). */}
+            {/* Temperature, sky, wind with gusts, rain (handoff v4). */}
             {[chips[0], ...(sky ? [sky] : []), ...chips.slice(1)].map((chip) =>
               // Keyed by text: a changed chip fades in afresh.
               chip === sky && sky.segments ? (
