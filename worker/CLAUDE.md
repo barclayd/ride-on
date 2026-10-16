@@ -57,6 +57,7 @@ bun run lint:fix
 - `src/users/`: owner-bound saved settings, schema versions and atomic optimistic updates.
 - `src/ground/`: independent, experimental rainfall/drying evidence, shared D1 cache and bounded public-provider diagnostics; never invoked by recommendations.
 - `src/weather/`: generic contracts, Apple Weather and Met Office adapters, provider presets, source policy and KV-compatible cache.
+- `src/monitoring/`: scheduled tracked-ride checks, alert policy, owner-scoped device registration and durable APNs delivery. See `../docs/ride-monitoring.md`; app notification integration follows separately.
 - `migrations/`: D1 migrations, applied before deployment.
 - `test/`: deterministic ingestion, HTTP, algorithm, provider and cache tests.
 - `integration/`: MSW 3 scenarios against the real Worker runtime and fresh local D1/KV.
@@ -72,8 +73,8 @@ local database through `preview_database_id: "ROUTES_DB"`.
 Worker changes merged to main deploy automatically after the workflow checks pass
 and D1 migrations apply. The workflow tags the release with its Git revision and
 verifies it through quota-free health/authentication smoke checks. Manual workflow
-retries also require main. The GitHub `CLOUDFLARE_API_TOKEN` needs Workers deployment
-and D1 migration access. Use `bun run deploy` only when deployment is in scope. Required
+retries also require main. The GitHub `CLOUDFLARE_API_TOKEN` needs Workers deployment, Queues
+and D1 migration access. Provision `ride-monitoring` and `ride-monitoring-failed` before the first monitoring deployment; APNs credentials are optional and separate from WeatherKit. Use `bun run deploy` only when deployment is in scope. Required
 secrets are `MET_OFFICE_API_KEY`, `MET_OFFICE_BPF_API_KEY`, `APPLE_WEATHER_CONFIG_JSON` and `AUTH_CONFIG_JSON`; no
 Strava secrets are used. The configured CPU ceiling is 5 seconds; full collection
 workloads require Workers Paid limits. Do not infer production load capacity from

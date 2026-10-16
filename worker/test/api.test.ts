@@ -29,7 +29,7 @@ test('health identifies the deployed build without authentication or weather cal
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect((await response.json()) as Record<string, unknown>).toEqual({
       ok: true,
-      version: '0.29.0',
+      version: '0.30.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: tag || null,
     });

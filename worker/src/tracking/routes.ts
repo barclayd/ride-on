@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { AppError } from '../errors.ts';
+import { monitoringCapabilities } from '../monitoring/routes.ts';
 import type { ComparisonContext } from '../recommendations/service.ts';
 import { readJsonBody, validateInput } from '../request.ts';
 import type { RouteStore } from '../routes/store.ts';
 import type { Bindings, Env } from '../types.ts';
 import type { UserStore } from '../users/model.ts';
-import { capabilities, type Snapshot } from './model.ts';
+import type { Snapshot } from './model.ts';
 import { refreshTracking } from './refresh.ts';
 import {
   accountTracking,
@@ -82,7 +83,11 @@ export const trackingRoutes = (
     c.header('Location', `/tracked-rides/${row.id}`);
     return c.json(
       {
-        ride: publicTracking(row, now().toISOString()),
+        ride: publicTracking(
+          row,
+          now().toISOString(),
+          monitoringCapabilities(c.env),
+        ),
         outcome: result.outcome,
         replayed: result.replayed,
         replacedTrackedRideId: result.replacedId,
@@ -132,7 +137,7 @@ export const trackingRoutes = (
       last = rows.at(-1);
     return c.json({
       rides: rows.map((row) => {
-        const ride = publicTracking(row, at);
+        const ride = publicTracking(row, at, monitoringCapabilities(c.env));
         return {
           id: ride.id,
           routeId: ride.routeId,
@@ -149,7 +154,7 @@ export const trackingRoutes = (
         };
       }),
       ...(await accountTracking(c.env.ROUTES_DB, owner, at)),
-      capabilities,
+      capabilities: monitoringCapabilities(c.env),
       nextCursor:
         found.results.length > query.limit && last
           ? btoa(JSON.stringify({ at: last.created_at, id: last.id, filter }))
@@ -164,7 +169,11 @@ export const trackingRoutes = (
     );
     if (!row) throw trackingNotFound();
     return c.json({
-      ride: publicTracking(row, now().toISOString()),
+      ride: publicTracking(
+        row,
+        now().toISOString(),
+        monitoringCapabilities(c.env),
+      ),
       ...(await accountTracking(
         c.env.ROUTES_DB,
         c.get('ownerId'),
@@ -188,7 +197,11 @@ export const trackingRoutes = (
       users(c.env),
     );
     return c.json({
-      ride: publicTracking(row, now().toISOString()),
+      ride: publicTracking(
+        row,
+        now().toISOString(),
+        monitoringCapabilities(c.env),
+      ),
       ...(await accountTracking(
         c.env.ROUTES_DB,
         c.get('ownerId'),

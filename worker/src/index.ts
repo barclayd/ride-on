@@ -14,6 +14,8 @@ import { collectGroundEvidence } from './ground/service.ts';
 import { resolveAccess } from './identity/access.ts';
 import { authConfig } from './identity/config.ts';
 import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
+import { notificationRoutes } from './monitoring/routes.ts';
+import { consumeMonitoring, dispatchMonitoring } from './monitoring/service.ts';
 import { ALGORITHM_VERSION } from './recommendations/engine.ts';
 import {
   defaultSettings,
@@ -139,7 +141,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.29.0',
+      version: '0.30.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -151,6 +153,8 @@ export const createApp = (
   );
   app.route('/', identityRoutes());
   for (const path of [
+    '/push-devices',
+    '/push-devices/*',
     '/tracked-rides',
     '/tracked-rides/*',
     '/rides',
@@ -177,6 +181,7 @@ export const createApp = (
       copySessionHeaders(access.headers, c.res.headers);
       await next();
     });
+  app.route('/', notificationRoutes(now));
   app.route('/', rideRoutes(now));
   app.route('/', trackingRoutes(now, store, users, dependencies));
   app.post('/ground-assessment', async (c) => {
@@ -861,4 +866,13 @@ export const createApp = (
   });
   return app;
 };
-export default createApp();
+const app = createApp();
+export default {
+  fetch: app.fetch,
+  scheduled: async (_controller: ScheduledController, env: Env) => {
+    await dispatchMonitoring(env);
+  },
+  queue: async (batch: MessageBatch<unknown>, env: Env) => {
+    await consumeMonitoring(batch, env);
+  },
+} satisfies ExportedHandler<Env>;

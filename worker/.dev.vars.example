@@ -4,3 +4,6 @@ MET_OFFICE_BPF_API_KEY=your-bpf-v2-api-key
 APPLE_WEATHER_CONFIG_JSON=''
 # bun run dev:session fills this with a separate local auth configuration.
 AUTH_CONFIG_JSON=''
+
+# Optional APNs credentials; separate from WeatherKit. See docs/ride-monitoring.md.
+APNS_CONFIG_JSON=''
