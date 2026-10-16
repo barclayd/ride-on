@@ -200,8 +200,8 @@ export const monitorRide = async (
     if (
       !latest ||
       monitor.input_revision !== revision ||
-      (latest.context.weather.refreshAt &&
-        latest.context.weather.refreshAt <= now().toISOString())
+      !latest.context.weather.refreshAt ||
+      latest.context.weather.refreshAt <= now().toISOString()
     ) {
       try {
         row = await refreshTracking(
@@ -244,7 +244,14 @@ export const monitorRide = async (
       createdAt: row.created_at,
       timeZone: row.time_zone,
       lastSuccessAt: row.last_success_at,
-      staleSince: last?.context.assessmentFreshUntil ?? row.created_at,
+      staleSince: last?.context.assessmentFreshUntil
+        ? new Date(
+            Math.min(
+              Date.parse(last.context.assessmentFreshUntil),
+              weatherDueAt(last, now().toISOString()),
+            ),
+          ).toISOString()
+        : row.created_at,
     });
     state = result.state;
     await saveState(state, current ? revision : null);

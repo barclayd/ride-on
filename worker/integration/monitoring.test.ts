@@ -661,3 +661,76 @@ run(
     );
   },
 );
+run(
+  'incomplete comparison forecasts are retried even while the chosen departure stays fresh',
+  async (h) => {
+    const ride = await seed(h);
+    const db = await h.runtime.getD1Database('ROUTES_DB');
+    const snapshot = structuredClone(ride.latestAssessment);
+    snapshot.context.weather.refreshAt = null;
+    snapshot.context.coverageComplete = false;
+    const assessmentId = crypto.randomUUID();
+    await db.batch([
+      db
+        .prepare('INSERT INTO tracking_assessments VALUES (?,?,?,?,?,?)')
+        .bind(
+          'alice',
+          ride.id,
+          assessmentId,
+          FIXED_NOW,
+          assessmentId,
+          JSON.stringify(snapshot),
+        ),
+      db
+        .prepare(
+          'UPDATE tracked_rides SET latest_id = ? WHERE owner_id = ? AND id = ?',
+        )
+        .bind(assessmentId, 'alice', ride.id),
+    ]);
+    const calls = h.requests.length;
+    await h.restart({ TEST_NOW: '2026-10-09T12:15:00.000Z' });
+    await monitor(h, ride.id);
+    const current = await json<{
+      ride: {
+        refresh: { lastSuccessfulAssessmentAt: string };
+        latestAssessment: Snapshot;
+      };
+    }>(await h.send(`/tracked-rides/${ride.id}`));
+    assert.equal(
+      current.ride.refresh.lastSuccessfulAssessmentAt,
+      '2026-10-09T12:15:00.000Z',
+    );
+    assert.equal(current.ride.latestAssessment.context.coverageComplete, true);
+    assert.equal(h.requests.length, calls);
+  },
+);
+run(
+  'an outage starts at the tightened same-day expiry, not the first later check',
+  async (h) => {
+    const ride = await seed(h);
+    await h.restart({ TEST_NOW: '2026-10-09T20:30:00.000Z' });
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(
+          hourlyForecast(request, { modelRunDate: '2026-10-09T20:30:00.000Z' }),
+        ),
+      ),
+    );
+    await monitor(h, ride.id);
+    await h.restart({ TEST_NOW: '2026-10-10T00:00:00.000Z' });
+    h.use(metOffice(() => new HttpResponse(null, { status: 503 })));
+    await monitor(h, ride.id);
+    const db = await h.runtime.getD1Database('ROUTES_DB');
+    const row = await db
+      .prepare(
+        'SELECT state_json FROM tracking_monitors WHERE owner_id = ? AND plan_id = ?',
+      )
+      .bind('alice', ride.id)
+      .first<{ state_json: string }>();
+    assert.ok(row);
+    assert.equal(
+      JSON.parse(row.state_json).unavailableSince,
+      '2026-10-09T23:30:00.000Z',
+    );
+  },
+);
