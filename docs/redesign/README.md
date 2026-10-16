@@ -25,8 +25,8 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava waits on the API ([contract](preferences-api-requests.md)) | #167, #172 |
 | 6 | Widgets and Lock Screen | ⬜ | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
-| 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window and Preferences live; Routes on sample data | #159, #162, #167, #172 |
-| 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done on sample data; API wiring next | #194 |
+| 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, ROUTES_PR |
+| 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, ROUTES_PR |
 
 Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
@@ -490,12 +490,26 @@ Build:
 - [x] Shortlist carousel with status pills, scores, remove
 - [x] Library and History segments, row selection and actions, Details → Ride detail
 - [x] Accessibility sizes (cards widen and stack, rows wrap), Reduce Transparency/Increase Contrast fallbacks
-- [ ] Wire to the API (below)
+- [x] Wire to the API (below)
 
 **Open points.**
-- Everything renders `RouteLibrary.sample`, in the live app too. Wiring: `GET /route-selection`
-  (shortlist and limit), `GET /routes` (library), `GET /rides` (history, with the plan saved at
-  the time) and the shortlist edits back through `PUT /route-selection`.
+- Loads on every visit to the tab (`LiveRoutesView`, `RouteLibraryLoader`): `GET /route-selection`
+  (the shortlist; the cap of 12 is the API's), every page of `GET /routes?limit=100` (library),
+  `GET /rides?limit=100` (History: the newest 100 rides only, for now), `POST /rides/summaries`
+  ("Ridden 3 Oct") and `GET /routes/:id/geometry` for routes whose geometry is `available`, six
+  at a time and kept per route version. A failed reload keeps what's showing. Signed out says to
+  sign in on the Rides tab; the fixture world keeps `RouteLibrary.sample`.
+- Shortlist edits save at once with `PUT /route-selection {expectedVersion, routeIds}`. A 409
+  re-reads the list and replays this device's additions and removals onto it; edits made while a
+  save is in flight go out next. Any other failure puts the shortlist back as the API had it,
+  with "Couldn't Save Your Shortlist". After a save the Rides board reloads, so the cards' status
+  pills follow; until then a new card shows "Checking the forecast…".
+- The status pills and Details come from the last board Rides loaded; Routes fetches one if Rides
+  hasn't loaded yet.
+- A History ride shows the route as ridden (the name, distance and climb saved with the ride),
+  drawn with the saved route's path; a deleted route's ride stays, with no line. A plan the app
+  can't read shows "No forecast saved". Temperature is the middle of the plan's range.
+- An empty library says "Routes you import with the Ride On extension on cycle.travel appear here."
 - Details only shows for routes Rides has ranked (it opens `RideDetailView` for that pick).
 - The "+" items do nothing yet. The cycle.travel import comes back later as a Dynamic Island
   (Live Activity) flow rather than a panel section.

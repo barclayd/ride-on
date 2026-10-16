@@ -10,11 +10,12 @@ import SharedUI
 /// marked as ridden. On iPhone the panel rests at medium or large over the tab bar; on iPad and
 /// Mac it runs down the leading side.
 ///
-/// The caller registers the `RideBoard.Pick` destination "Details" pushes (Ride detail lives in
-/// RideUI, which RoutesUI can't import).
+/// The caller owns `library` and saves shortlist edits, and registers the `RideBoard.Pick`
+/// destination "Details" pushes (Ride detail lives in RideUI, which RoutesUI can't import).
+/// Without a `board`, every shortlisted route shows as checking.
 public struct RoutesView: View {
-    private let board: RideBoard
-    @State private var library: RouteLibrary
+    private let board: RideBoard?
+    @Binding private var library: RouteLibrary
     @State private var selection: Selection?
     @State private var segment = Segment.library
     @State private var query = ""
@@ -28,11 +29,11 @@ public struct RoutesView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.unitSystem) private var unitSystem
 
-    public init(library: RouteLibrary, board: RideBoard) {
+    public init(library: Binding<RouteLibrary>, board: RideBoard?) {
         self.board = board
-        _library = State(initialValue: library)
-        _selection = State(initialValue: library.shortlist.first.map(Selection.route))
-        _camera = State(initialValue: Self.framing(library, selected: nil))
+        _library = library
+        _selection = State(initialValue: library.wrappedValue.shortlist.first.map(Selection.route))
+        _camera = State(initialValue: Self.framing(library.wrappedValue, selected: nil))
     }
 
     enum Selection: Hashable {
@@ -288,11 +289,11 @@ public struct RoutesView: View {
 
     private func status(for id: UUID) -> ShortlistStatus {
         if let pick = pick(for: id) {
-            if pick.id == board.picks.first?.id { return .best(day: pick.start.formatted(.dateTime.weekday(.abbreviated))) }
+            if pick.id == board?.picks.first?.id { return .best(day: pick.start.formatted(.dateTime.weekday(.abbreviated))) }
             if !pick.meetsMinimums { return .belowMinimums }
             return .ranked(start: "\(pick.start.formatted(.dateTime.weekday(.abbreviated))) \(pick.start.formatted(.clockTime))")
         }
-        return board.unfit.contains { $0.route.id == id } ? .tooLong : .checking
+        return board?.unfit.contains { $0.route.id == id } == true ? .tooLong : .checking
     }
 
     // MARK: Library and history
@@ -300,7 +301,9 @@ public struct RoutesView: View {
     @ViewBuilder
     private var libraryList: some View {
         let routes = libraryRoutes.filter(matches)
-        if routes.isEmpty {
+        if library.routes.isEmpty {
+            emptyNote("Routes you import with the Ride On extension on cycle.travel appear here.")
+        } else if routes.isEmpty {
             emptyNote(query.isEmpty ? "Every route is on your shortlist." : "No library routes match.")
         } else {
             ForEach(routes) { route in
@@ -409,7 +412,7 @@ public struct RoutesView: View {
     }
 
     private func pick(for routeID: UUID) -> RideBoard.Pick? {
-        board.picks.first { $0.route.id == routeID }
+        board?.picks.first { $0.route.id == routeID }
     }
 
     private func matches(_ route: RouteLibrary.Route) -> Bool {
@@ -432,7 +435,8 @@ public struct RoutesView: View {
 }
 
 #Preview {
+    @Previewable @State var library = RouteLibrary.sample
     NavigationStack {
-        RoutesView(library: .sample, board: .sample)
+        RoutesView(library: $library, board: .sample)
     }
 }
