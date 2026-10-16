@@ -306,7 +306,9 @@ const expire = async (ask: boolean) => {
   await update((state) => {
     if (!state.shown) return {};
     const { picks, meta } = state.shown;
-    const date = picks[0]?.date;
+    // The ride with alerts is the one asked about (handoff v5), on its own day.
+    const alert = picks.find((p) => p.routeId === state.alertRouteId);
+    const date = (alert ?? picks[0])?.date;
     return {
       expired: state.shown,
       shown: null,
@@ -321,6 +323,7 @@ const expire = async (ask: boolean) => {
               routeId: null,
               rideId: null,
               key: null,
+              alert: alert?.routeId ?? null,
             }
           : state.checkin,
     };
@@ -481,7 +484,15 @@ const savePreferences = async (patch: PreferencesPatch) => {
   syncTimer = setTimeout(flush, 900);
 };
 
-const putSelection = async (change: (routeIds: string[]) => string[]) => {
+// One selection write at a time, so an Undo can't reach the API before the removal it undoes.
+let writing: Promise<unknown> = Promise.resolve();
+const putSelection = (change: (routeIds: string[]) => string[]) => {
+  const next = writing.then(() => writeSelection(change));
+  writing = next.catch(() => {});
+  return next;
+};
+
+const writeSelection = async (change: (routeIds: string[]) => string[]) => {
   const send = (selection: Selection) =>
     api<{ selection: Selection }>('/route-selection', {
       method: 'PUT',
@@ -499,6 +510,33 @@ const putSelection = async (change: (routeIds: string[]) => string[]) => {
     result = await send(await loadSelection());
   }
   await update(() => ({ selection: result.selection }));
+};
+
+// Edit mode removes a tile straight away (21a), so the list and its alerts change on screen first;
+// if the API refuses, its selection comes back, and so do the alerts.
+const select = async (
+  change: (routeIds: string[]) => string[],
+  alertRouteId: string | null,
+) => {
+  const was = (await readState()).alertRouteId;
+  await update((state) => ({
+    selection: state.selection && {
+      ...state.selection,
+      routeIds: change(state.selection.routeIds),
+    },
+    alertRouteId,
+  }));
+  try {
+    await putSelection(change);
+  } catch (error) {
+    const selection = await loadSelection().catch(() => null);
+    await update(() => ({
+      ...(selection && { selection }),
+      alertRouteId: was,
+    }));
+    throw error;
+  }
+  return rank();
 };
 
 const seen = async () =>
@@ -638,9 +676,27 @@ const handle = async (message: Message) => {
       );
       return rank();
     }
-    case 'untrack':
-      await putSelection((ids) => ids.filter((id) => id !== message.routeId));
-      return rank();
+    case 'untrack': {
+      const { alertRouteId } = await readState();
+      return select(
+        (ids) => ids.filter((id) => id !== message.routeId),
+        alertRouteId === message.routeId ? null : alertRouteId,
+      );
+    }
+    case 'track': {
+      const { routeId, index } = message;
+      const { alertRouteId } = await readState();
+      return select(
+        (ids) =>
+          ids.includes(routeId) || ids.length >= MAX_TRACKED
+            ? ids
+            : [...ids.slice(0, index), routeId, ...ids.slice(index)],
+        message.alert ? routeId : alertRouteId,
+      );
+    }
+    // ponytail: local until the API stores alerts (follow-up PR); nothing is sent yet.
+    case 'setAlert':
+      return update(() => ({ alertRouteId: message.routeId }));
     case 'openPopup':
       await update(() => ({ popupTab: message.tab }));
       // Chrome 127+, Safari 16+; without a focused window it throws and the page keeps its state.
@@ -650,7 +706,14 @@ const handle = async (message: Message) => {
     case 'checkin': {
       const { checkin, user, routes } = await readState();
       if (!checkin || !user) return;
-      if (message.answer === 'no') return update(() => ({ checkin: null }));
+      // Answered, the ride's alerts have done their job.
+      const alertRouteId = (state: State) =>
+        state.alertRouteId === checkin.alert ? null : state.alertRouteId;
+      if (message.answer === 'no')
+        return update((state) => ({
+          checkin: null,
+          alertRouteId: alertRouteId(state),
+        }));
       if (message.answer === 'undo') {
         if (checkin.rideId) await deleteRide(checkin.rideId);
         await update(() => ({
@@ -696,7 +759,7 @@ const handle = async (message: Message) => {
             },
             key,
           );
-          await update(() => ({
+          await update((state) => ({
             checkin: {
               ...checkin,
               status: 'done',
@@ -704,6 +767,7 @@ const handle = async (message: Message) => {
               rideId: ride.id,
               key: null,
             },
+            alertRouteId: alertRouteId(state),
           }));
         } catch (error) {
           if (

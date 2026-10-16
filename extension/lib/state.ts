@@ -94,6 +94,7 @@ export type Checkin = {
   routeId: string | null; // the route being logged, or logged once done
   rideId: string | null;
   key: string | null; // Idempotency-Key for routeId, kept so a retry can't log twice
+  alert: string | null; // the ride with alerts when the window ended; asked about instead of the top pick
 };
 
 // One shared view state. The background owns writes; popup and page render it.
@@ -128,6 +129,8 @@ export type State = {
   ridesCursor: string | null;
   summaries: Record<string, RideSummary>; // by route ID, for ride tags
   pendingDeletes: { id: string; at: number }[]; // removed in History, sent after the undo window
+  // ponytail: the one tracked ride with alerts (handoff v5), kept in this browser until the API stores it.
+  alertRouteId: string | null;
 };
 
 export const initialState: State = {
@@ -161,6 +164,7 @@ export const initialState: State = {
   ridesCursor: null,
   summaries: {},
   pendingDeletes: [],
+  alertRouteId: null,
 };
 
 const withDefaults = (state: Partial<State> | undefined): State => {
@@ -209,6 +213,9 @@ export type Message =
     }
   | { type: 'import'; journey: JourneyGpx; track: boolean }
   | { type: 'untrack'; routeId: string }
+  // Undoes an untrack: back in its place in the selection, with its alerts if it had them.
+  | { type: 'track'; routeId: string; index: number; alert: boolean }
+  | { type: 'setAlert'; routeId: string | null }
   | { type: 'openPopup'; tab: Tab }
   | { type: 'setTab'; tab: Tab | null }
   | { type: 'checkin'; answer: 'yes'; routeId: string }

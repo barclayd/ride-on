@@ -739,6 +739,7 @@ test('check-in: settled by a pick, and the plan it sends', () => {
       attribution,
     },
     status: 'ask',
+    alert: null,
     routeId: null,
     rideId: null,
     key: null,

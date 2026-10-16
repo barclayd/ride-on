@@ -11,6 +11,7 @@ import {
   Banners,
   CoverageWarn,
   chooseWindow,
+  EditButton,
   ErrorChip,
   iconUrl,
   injectFonts,
@@ -18,6 +19,8 @@ import {
   RouteTile,
   riddenFor,
   Tags,
+  Toast,
+  useTracking,
   useView,
 } from '../../ui/components';
 import { buildResults, longWeekday } from '../../ui/format';
@@ -69,6 +72,7 @@ const Tick = () => (
 
 const Page = ({ rows }: { rows: Row[] }) => {
   const view = useView(import.meta.env.SAFARI);
+  const tracking = useTracking(view);
   const [busy, setBusy] = useState(new Set<string>());
   const [notice, setNotice] = useState<string | null>(null);
   const synced = useRef(false);
@@ -269,6 +273,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
               {windowText}
             </button>
           )}
+          {count > 0 && <EditButton tracking={tracking} />}
         </div>
       </div>
       {phase !== 'normal' && (
@@ -309,11 +314,13 @@ const Page = ({ rows }: { rows: Row[] }) => {
               blank={blank}
               index={i}
               change={change}
+              tracking={tracking}
             />
           )}
         />
       )}
       <CoverageWarn view={view} />
+      {(cards.length > 0 || tracking.said) && <Toast tracking={tracking} />}
       {rows.map((row) => {
         const routeId = ridden(row.id);
         return (
