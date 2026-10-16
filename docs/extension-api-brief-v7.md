@@ -5,7 +5,7 @@ Implemented in API **0.29.0**, algorithm **comfort-v0.17**.
 ## Review decisions (16 October 2026)
 
 - Dan chose to **preserve actual wind sections**. The proposed 2% sliver absorption
-  below is superseded: no section changes its effect to match a neighbour. The UI
+  was rejected: no section changes its effect to match a neighbour. The UI
   may omit tiny labels, but must still colour each section accurately and retain
   the section containing the strongest adverse gust. There can be up to 1,000
   entries (the route-leg limit), rather than approximately 50.
@@ -26,7 +26,7 @@ Implemented in API **0.29.0**, algorithm **comfort-v0.17**.
   historical snapshots are not back-filled. Storage/request bounds accommodate
   up to 1,000 sections while the existing per-owner storage quota remains.
 
-The original proposal follows for context; these review decisions take precedence.
+The contract below incorporates these review decisions; client implementation follows separately.
 
 The wind redesign replaces the raw gust chip on Journeys tiles and Rides cards
 with a wind pill (`10 mph tailwind`) that opens a "Wind along the ride" dropdown,
@@ -38,16 +38,15 @@ labelled with compass points, a legend and a gusts row.
 
 The bar, legend, pill and gusts row can be built from data the API already returns:
 `conditions` and `rideHours[].conditions` (`windDistanceFractions`,
-`windFromDegrees`, the average components, `gustExposure`). The sketch can't.
-Recommendations carry no route shape, and per-hour shares don't say *where* on the
-route each effect falls. `GET /routes/:id/geometry` is one request per tile and
+`windFromDegrees`, the average components, `gustExposure`). The sketch also needs the new fields below: per-hour shares alone do not say
+*where* on the route each effect falls. `GET /routes/:id/geometry` is one request per tile and
 returns the full path, so it's too heavy for a popup with eight tiles.
 
 This is an additive change: no scoring, ranking, or algorithm-version change.
 
 ## 1. `outline` on each ranked and unranked route
 
-Add a small, simplified outline next to `distanceM`/`ascentM` in the route summary
+The API supplies a small, simplified outline next to `distanceM`/`ascentM` in the route summary
 that `recommend` emits (`rankings[]` and `unranked[]`).
 
 ```json
@@ -62,24 +61,26 @@ that `recommend` emits (`rankings[]` and `unranked[]`).
 ```
 
 - Each point is `[latitude, longitude, distanceM]`, where `distanceM` is the
-  distance along the route, from 0 to `distanceM`. The client uses it to colour the
+  distance along the route, from 0 to `Math.round(route.distanceM)`. The client uses it to colour the
   line by `windStretches` and to place direction chevrons.
 - Use 5 decimal places for coordinates and whole metres for distance.
-- Build it from `route.geometry` when present: decode it, then simplify with
-  Douglas–Peucker in projected metres until there are **at most 64 points**. Keep
-  the first and last point, and keep each surviving point's original
-  along-route distance. When `geometry` is null, fall back to the leg midpoints
-  (`route.legs[].coordinate`, with `(fromM + toM) / 2`), plus the start of the
-  first leg and the end of the last, simplified the same way.
-- `outline` is `null` only when the route has fewer than two usable points.
-- Compute it once per route and cache it with the route summary if that's simpler.
+- Build it from `route.geometry` when present: decode it, calculate cumulative
+  distance scaled to `route.distanceM`, then simplify with Douglas–Peucker in
+  earth-centred metres to **at most 64 points**. Keep the first and last point,
+  and each surviving point's calculated along-route distance. When geometry is
+  absent or invalid, use the leg midpoints (`route.legs[].coordinate`, with
+  `(fromM + toM) / 2`) between the actual start/end `weatherLocations` coordinates
+  at zero and `route.distanceM`, simplified the same way.
+- `outline` is `null` when fewer than two usable points remain, or the fallback
+  lacks usable start/end coordinates.
+- Compute it once per route for the requested comparison.
   It doesn't depend on the departure or the weather.
 - Don't add elevation or any basemap data. The sketch is north-up and drawn
   from these points alone.
 
 ## 2. `windStretches` on each departure
 
-Add `windStretches` to every departure object that carries `rideHours`:
+The API supplies `windStretches` on every departure object that carries `rideHours`:
 `best`, `alternatives[]`, `partialAssessment`, the day winners, and the
 next-window winners. Put it next to `rideHours`.
 
@@ -89,7 +90,7 @@ next-window winners. Put it next to `rideHours`.
     "fromM": 0,
     "toM": 21500,
     "startAt": "2026-10-18T09:30:00.000Z",
-    "endAt": "2026-10-18T10:28:00.000Z",
+    "endAt": "2026-10-18T10:28:25.434Z",
     "effect": "tailwind",
     "windFromDegrees": 228,
     "averageWindSpeedKph": 17.4,
@@ -98,8 +99,8 @@ next-window winners. Put it next to `rideHours`.
   {
     "fromM": 21500,
     "toM": 30500,
-    "startAt": "2026-10-18T10:28:00.000Z",
-    "endAt": "2026-10-18T10:52:00.000Z",
+    "startAt": "2026-10-18T10:28:25.434Z",
+    "endAt": "2026-10-18T10:52:52.826Z",
     "effect": "crosswind",
     "windFromDegrees": 236,
     "averageWindSpeedKph": 18.2,
@@ -108,7 +109,7 @@ next-window winners. Put it next to `rideHours`.
   {
     "fromM": 30500,
     "toM": 46000,
-    "startAt": "2026-10-18T10:52:00.000Z",
+    "startAt": "2026-10-18T10:52:52.826Z",
     "endAt": "2026-10-18T11:35:00.000Z",
     "effect": "headwind",
     "windFromDegrees": 262,
@@ -146,18 +147,21 @@ departure:
      the same estimate as `gustExposure.maximumAdverseKph`. The largest value
      across all stretches must equal `conditions.gustExposure.maximumAdverseKph`.
 
-When the departure has no rows, `windStretches` is `[]`. That includes a departure
-that couldn't be assessed and a wind weight of zero, if that skips sampling.
-Never emit a partial cover.
+When observations are absent or incomplete, `windStretches` is `[]`; never emit
+partial coverage. A wholly unassessable route has `best: null`, not a fabricated
+departure. Zero wind scoring weight still samples wind and returns stretches.
 
 Persisted ride plans accept `windStretches` optionally. Old snapshots stay readable
 and are never back-filled, and new snapshots round-trip without dropping it.
 
 ## 3. Version and cache
 
-- Bump the API to **0.29.0**, as v6 did.
-- If a recommendation-cache key includes the response shape, bump it so cached
-  responses gain both fields. If it doesn't, the fields appear as entries expire.
+- API version is **0.29.0**; scoring remains **comfort-v0.17**.
+- The server caches normalized weather, not recommendation response bodies. Both
+  fields are available on the next recommendation request, including when weather
+  is served from cache. No weather cache key changes or new provider calls.
+- Clients holding an older recommendation response can refresh it or wait for their
+  normal refresh schedule; historical saved snapshots remain unchanged.
 
 ## 4. Docs and tests
 
