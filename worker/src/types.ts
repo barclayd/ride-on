@@ -1,4 +1,4 @@
-export type Env = Cloudflare.Env;
+export type Env = Cloudflare.Env & { APNS_CONFIG_JSON?: string };
 
 export type Bindings = { Bindings: Env; Variables: { ownerId: string } };
 

@@ -61,7 +61,16 @@ export const getTracking = (db: D1Database, owner: string, id: string) =>
     .first<TrackingRow>();
 export const isActive = (row: TrackingRow, now: string) =>
   row.state === 'active' && row.finish_at > now;
-export const publicTracking = (row: TrackingRow, now: string) => {
+export const publicTracking = (
+  row: TrackingRow,
+  now: string,
+  features: {
+    maximumActiveRides: number;
+    manualRefresh: boolean;
+    automaticChecks: boolean;
+    notifications: boolean;
+  } = capabilities,
+) => {
   const baseline = JSON.parse(row.baseline_json) as Snapshot;
   const latest = row.latest_json
     ? (JSON.parse(row.latest_json) as Snapshot)
@@ -112,7 +121,7 @@ export const publicTracking = (row: TrackingRow, now: string) => {
       assessmentFreshUntil: latest?.context.assessmentFreshUntil ?? null,
       closed: row.departure_at <= now || !isActive(row, now),
     },
-    capabilities,
+    capabilities: features,
   };
 };
 export const accountTracking = async (

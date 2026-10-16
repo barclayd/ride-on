@@ -47,6 +47,8 @@ export const createHarness = async (authConfig?: string) => {
         baseUrl: 'https://api.ride-on.test',
       }),
     TEST_NOW: FIXED_NOW,
+    RIDE_MONITORING: 'enabled',
+    APNS_CONFIG_JSON: '',
     GROUND_EVIDENCE_MODE: 'non-commercial',
     MET_OFFICE_API_KEY: WEATHER_KEY,
     MET_OFFICE_BPF_API_KEY: 'integration-bpf-key-not-a-real-secret',

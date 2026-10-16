@@ -1,6 +1,6 @@
 # Ride tracking API
 
-API v0.28.0. Scoring remains `comfort-v0.17`. This release saves **one active plan per account**, preserves the recommendation the rider accepted, and supports explicit refreshes. It does not send notifications or run background checks. Tracking is separate from completed rides (`/rides`).
+API v0.30.0. Scoring remains `comfort-v0.17`. Tracking saves **one active plan per account**, preserves the recommendation the rider accepted, and supports explicit refreshes plus [scheduled monitoring and Apple push delivery](ride-monitoring.md). Tracking is separate from completed rides (`/rides`).
 
 ## Client flow
 
@@ -81,7 +81,7 @@ Foreign or absent records return `404 TRACKED_RIDE_NOT_FOUND` on detail, refresh
 - `comparison`: current comparison, or `null` when the attempt failed, is in progress, or the pinned assessment has become stale.
 - `lastKnownComparison: { asOf, comparison } | null`, explicitly historical when current comparison is unavailable.
 - `refresh`: attempt/success timestamps and availability, described below.
-- `capabilities: { maximumActiveRides: 1, manualRefresh: true, automaticChecks: false, notifications: false }`.
+- `capabilities: { maximumActiveRides: 1, manualRefresh: true, automaticChecks: boolean, notifications: boolean }`. Automatic checks reflect the monitoring switch; notifications additionally require configured APNs credentials. Clients also need permission and a registered device. See [monitoring](ride-monitoring.md).
 
 Each snapshot context stores schema/algorithm versions, generation time, original comparison inputs, route facts and versions/source hashes/geometry references, history context, provider-neutral weather provenance and attribution, comparison coverage and best-known ranking evidence. `pick.candidate` retains Conditions, recommendation priority, factor scores, conditions, standards and encounter-time evidence, ride hours, and route-scoped forecast details. No raw provider body or entire forecast horizon is stored.
 
@@ -145,4 +145,4 @@ There is no account-deletion endpoint in the current API. A future account-erasu
 
 ## Follow-up release
 
-Device registration, background checks, APNs, notification thresholds/cooldowns, quiet hours and evening-before messages are not implemented. Clients must respect the false capability flags and must not describe manual tracking as active notification monitoring. Future notification state must use a separate last-notified assessment; it must never rewrite the accepted baseline.
+Backend monitoring, device registration and APNs are implemented in v0.30.0; see the [agreed rules, API and setup](ride-monitoring.md). Notification state uses a separate last-notified reference and never rewrites the accepted baseline. App notification integration and real-device validation follow separately; clients must respect capabilities and device permission/registration.
