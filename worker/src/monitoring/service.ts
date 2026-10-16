@@ -35,6 +35,12 @@ type Event = {
 };
 const after = (at: Date, ms: number) =>
   new Date(at.getTime() + ms).toISOString();
+// Processing finishes after the cron boundary. Adding 15 minutes to that time
+// would miss the very next tick and turn normal checks into 30-minute checks.
+const nextTick = (at: Date) =>
+  new Date(
+    (Math.floor(at.getTime() / INTERVAL_MS) + 1) * INTERVAL_MS,
+  ).toISOString();
 const active = (row: TrackingRow | null, at: string): row is TrackingRow =>
   !!row && row.state === 'active' && row.departure_at > at;
 const weatherDueAt = (snapshot: Snapshot, at: string) => {
@@ -123,12 +129,7 @@ export const dispatchMonitoring = async (env: Env, at = new Date()) => {
         db
           .prepare(`UPDATE tracking_monitors SET queued_until = ?
       WHERE owner_id = ? AND plan_id = ? AND (queued_until IS NULL OR queued_until <= ?)`)
-          .bind(
-            after(at, INTERVAL_MS),
-            row.owner_id,
-            row.plan_id,
-            at.toISOString(),
-          ),
+          .bind(nextTick(at), row.owner_id, row.plan_id, at.toISOString()),
       ),
     );
     const messages = rows.results.flatMap((row, index) =>
@@ -479,7 +480,7 @@ export const monitorRide = async (
     await db
       .prepare(`UPDATE tracking_monitors SET lease_token = NULL,lease_until = NULL,queued_until = NULL,next_due_at = ?
       WHERE owner_id = ? AND plan_id = ? AND lease_token = ?`)
-      .bind(after(now(), INTERVAL_MS), owner, plan, token)
+      .bind(nextTick(now()), owner, plan, token)
       .run();
   }
 };
