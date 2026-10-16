@@ -19,7 +19,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 |---|---|---|---|
 | 0 | This doc and reference images | ✅ Done | #154 |
 | 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
-| 2 | Rides screen and Track sheet | ✅ Done (window capsule lands with 4); tracking is in memory until the API lands ([requests](ride-tracking-api-requests.md)) | #155, #176 |
+| 2 | Rides screen and Track sheet | ✅ UI built; persistent tracking/manual-refresh API ready in v0.28.0 ([contract](../ride-tracking-api.md)); client integration and notifications pending | #155, #176 |
 | 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)) | #157, #164, #172 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava waits on the API ([contract](preferences-api-requests.md)) | #167, #172 |
@@ -128,10 +128,21 @@ Build:
 - [x] Hero 3b: eased scrim, pick pill, icon stats, track star (gold glass when on) and the
       card's date/Leave–Back header
 - [x] Track sheet (#176). Tracking is in memory only: no persistence or condition-change
-      notifications until the API lands
+      notifications in the client yet
+- [x] Persistent tracking API v0.28.0: one active plan, accepted recommendation references,
+      immutable baseline, explicit refresh, replacement, retained history and erasure ([contract](../ride-tracking-api.md))
+- [ ] Integrate Track sheet with the API; use current tracking version and reference, preserve
+      the original baseline, show unavailable/incomplete checks, and handle replacement confirmation
+- [ ] Background monitoring and notifications (follow-up API PR); gate notification copy and
+      permission requests on capabilities rather than promising delivery in manual-only v1
 - [ ] Reduce Transparency
 
 ### Track sheet
+
+**Current API readiness:** persistence and manual refresh are available. The notification flow
+below describes the future design; v0.28.0 returns `automaticChecks: false` and `notifications: false`.
+Use `refresh.lastSuccessfulAssessmentAt` for a successful-check timestamp and the separate
+comparison/availability fields; a failed attempt must not display “Nothing has changed”.
 
 Canvas boards `TrackFlow`, `TrackSheet`, `TrackSheetTracking`, `TrackSheetDark`. The hero's star
 opens it; tracking a ride means the forecast keeps being checked and the rider is notified if

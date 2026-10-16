@@ -1,5 +1,7 @@
 # Ride tracking: API requests
 
+**Implementation update — API v0.28.0:** the agreed [ride tracking API contract](../ride-tracking-api.md) supersedes the original proposal below. Track/untrack, atomic replacement, explicit refresh and retained history are ready. Use a server-issued `recommendationRef` and `Idempotency-Key`; do not submit a route/departure pair as a baseline. V1 permits one active plan, retains inactive history until explicitly erased, follows edited courses, freezes the original comparison dates/routes/window, and compares ±5 Conditions points with the immutable accepted baseline. The client owns confirmation. Device registration, background checks and notifications are still pending; gate all notification promises on the returned capabilities. The proposal's ten-plan limit, seven-day purge, cascading route deletion and mutable notification baseline were not adopted. Sections 2–4 below are future design input, not implemented endpoints or settled delivery policy.
+
 What the Track sheet (`docs/redesign/README.md` §1, Track sheet) needs from the API. The hero's
 star opens the sheet, and Start Tracking turns the star gold. The rider is promised a notification
 if the forecast changes before they leave, plus a final forecast the evening before. Nothing is

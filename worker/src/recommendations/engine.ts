@@ -832,6 +832,7 @@ export const recommendRides = (
     new Date(nowMs).toISOString(),
     new Date(nowMs).toISOString(),
   ),
+  exactDepartures?: ReadonlyMap<string, number>,
 ) => {
   const forecasts = new Map(
     results.map((result) => [
@@ -873,7 +874,12 @@ export const recommendRides = (
   );
   const normalForDate = compileSeasonalNormal(input.date);
   const evaluated = routes.map((route) => {
-    const plan = planDepartures(route, input, nowMs);
+    const plan = planDepartures(
+      route,
+      input,
+      nowMs,
+      exactDepartures?.get(route.id),
+    );
     const directionality = routeDirectionality(route);
     const climbing = assessClimbing(
       route,

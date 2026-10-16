@@ -34,6 +34,7 @@ export const planDepartures = (
   route: Route,
   input: RecommendationInput,
   nowMs: number,
+  exactDeparture?: number,
 ) => {
   const daylight = daylightWindow(route, input.date, input.timeZone);
   const durationMs =
@@ -66,6 +67,16 @@ export const planDepartures = (
       departures: [] as number[],
     };
   const step = input.riding.departureStepMinutes * 60_000;
+  if (exactDeparture !== undefined)
+    return {
+      daylight,
+      effectiveWindow,
+      durationMs,
+      departures:
+        exactDeparture >= start && exactDeparture + durationMs <= end
+          ? [exactDeparture]
+          : [],
+    };
   // Anchor explicit windows at their requested start, including e.g. 09:10.
   const anchor = requested?.start ?? dayStart;
   const first = anchor + Math.ceil((start - anchor) / step) * step;

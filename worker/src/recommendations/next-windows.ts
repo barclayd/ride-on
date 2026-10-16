@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { AppError } from '../errors.ts';
 import { rideDate } from '../rides/store.ts';
 import type { Route } from '../routes/model.ts';
+import type { RouteRecord } from '../routes/store.ts';
+import { contextFor } from '../tracking/model.ts';
+import { issueReferences, withReference } from '../tracking/references.ts';
 import { ALGORITHM_VERSION, orderDepartures } from './engine.ts';
 import {
   recommendationRequestSchema,
@@ -64,6 +67,7 @@ export const recommendNextWindows = async (
   settings: Settings,
   routes: readonly Route[],
   context: ComparisonContext,
+  records: readonly RouteRecord[],
 ) => {
   const searches = nextWindowSearches(
     raw.after,
@@ -146,6 +150,13 @@ export const recommendNextWindows = async (
         routeId: item.routeId,
         verdict: verdictFor(item),
       })),
+      trackingContext: contextFor(
+        shared,
+        comparisons.map((c) => c.input),
+        records,
+        context.startedAt.toISOString(),
+        evaluation,
+      ),
     };
   });
   type Window = ReturnType<typeof toWindow>;
@@ -153,6 +164,7 @@ export const recommendNextWindows = async (
     item: (typeof evaluated)[number],
     route: NonNullable<typeof item.route>,
     best: NonNullable<typeof route.best>,
+    refs: ReadonlyMap<string, string>,
   ) => ({
     ...item.diagnostic,
     date: best.date,
@@ -169,7 +181,11 @@ export const recommendNextWindows = async (
     coverage: presentRoute(route, settings.riding.departureStepMinutes)
       .coverage,
     warnings: route.warnings,
-    best: { routeId: route.routeId, routeName: route.routeName, ...best },
+    best: {
+      routeId: route.routeId,
+      routeName: route.routeName,
+      ...withReference(best, route.routeId, refs),
+    },
   });
   const windows: Window[] = [];
   const omitted: ((typeof evaluated)[number]['diagnostic'] & {
@@ -201,7 +217,13 @@ export const recommendNextWindows = async (
       });
       continue;
     }
-    windows.push(toWindow(item, item.route, best));
+    const refs = await issueReferences(
+      context.env.ROUTES_DB,
+      context.ownerId,
+      item.trackingContext,
+      [{ routeId: item.route.routeId, candidate: best }],
+    );
+    windows.push(toWindow(item, item.route, best, refs));
   }
   const recommended = [...windows].sort(
     (a, b) =>

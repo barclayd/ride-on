@@ -59,6 +59,9 @@ import {
   storedRouteSummary,
 } from './routes/store.ts';
 import { surfaceSummary } from './routes/surface.ts';
+import { contextFor } from './tracking/model.ts';
+import { issueReferences, withReference } from './tracking/references.ts';
+import { trackingRoutes } from './tracking/routes.ts';
 import type { Bindings, Env } from './types.ts';
 import {
   createD1UserStore,
@@ -136,7 +139,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.27.0',
+      version: '0.28.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -148,6 +151,8 @@ export const createApp = (
   );
   app.route('/', identityRoutes());
   for (const path of [
+    '/tracked-rides',
+    '/tracked-rides/*',
     '/rides',
     '/rides/*',
     '/routes',
@@ -173,6 +178,7 @@ export const createApp = (
       await next();
     });
   app.route('/', rideRoutes(now));
+  app.route('/', trackingRoutes(now, store, users, dependencies));
   app.post('/ground-assessment', async (c) => {
     const input = await readJsonBody(c, assessmentRequestSchema);
     const routes = await store(c.env).getMany(c.get('ownerId'), input.routeIds);
@@ -555,22 +561,32 @@ export const createApp = (
   });
   app.post('/recommendations/next-windows', async (c) => {
     const raw = await readJsonBody(c, nextWindowsSchema);
-    const [user, routes] = await Promise.all([
+    const [user, loaded] = await Promise.all([
       users(c.env).get(c.get('ownerId')),
-      store(c.env).getMany(c.get('ownerId'), raw.routeIds),
+      Promise.all(
+        raw.routeIds.map((id) => store(c.env).get(c.get('ownerId'), id)),
+      ),
     ]);
+    const records = loaded.filter((r) => r !== null);
+    const routes = records.map((r) => r.route);
     const settings = validateInput(
       settingsSchema,
       mergeSettings(raw, user?.settings),
     );
-    const result = await recommendNextWindows(raw, settings, routes, {
-      env: c.env,
-      ownerId: c.get('ownerId'),
-      signal: c.req.raw.signal,
-      now,
-      startedAt: now(),
-      dependencies,
-    });
+    const result = await recommendNextWindows(
+      raw,
+      settings,
+      routes,
+      {
+        env: c.env,
+        ownerId: c.get('ownerId'),
+        signal: c.req.raw.signal,
+        now,
+        startedAt: now(),
+        dependencies,
+      },
+      records,
+    );
     return c.json({
       ...result,
       savedUser: user ? { id: user.id, version: user.version } : null,
@@ -578,10 +594,14 @@ export const createApp = (
   });
   app.post('/recommendations', async (c) => {
     const raw = await readJsonBody(c, recommendationApiRequestSchema);
-    const [user, routes] = await Promise.all([
+    const [user, loaded] = await Promise.all([
       users(c.env).get(c.get('ownerId')),
-      store(c.env).getMany(c.get('ownerId'), raw.routeIds),
+      Promise.all(
+        raw.routeIds.map((id) => store(c.env).get(c.get('ownerId'), id)),
+      ),
     ]);
+    const records = loaded.filter((r) => r !== null);
+    const routes = records.map((r) => r.route);
     const startedAt = now();
     const { window, ...riding } = raw.riding ?? {};
     const settings = validateInput(
@@ -677,10 +697,52 @@ export const createApp = (
     const evaluation = raw.date
       ? (daily.get(raw.date) ?? evaluated)
       : evaluated;
+    const refs = await issueReferences(
+      c.env.ROUTES_DB,
+      c.get('ownerId'),
+      contextFor(
+        comparison,
+        inputs.filter((i) => selection.dates.includes(i.date)),
+        records,
+        startedAt.toISOString(),
+        evaluation,
+      ),
+      evaluation.rankings.flatMap((r) =>
+        r.best
+          ? [r.best, ...r.alternatives].map((candidate) => ({
+              routeId: r.routeId,
+              candidate,
+            }))
+          : [],
+      ),
+    );
+    const dayRefs = new Map<string, Map<string, string>>();
+    for (const item of comparison.comparisons) {
+      const best = item.result.rankings[0];
+      dayRefs.set(
+        item.input.date,
+        await issueReferences(
+          c.env.ROUTES_DB,
+          c.get('ownerId'),
+          contextFor(
+            comparison,
+            [item.input],
+            records,
+            startedAt.toISOString(),
+            item.result,
+          ),
+          best?.best ? [{ routeId: best.routeId, candidate: best.best }] : [],
+        ),
+      );
+    }
     return c.json({
       ...evaluation,
       rankings: evaluation.rankings.map((r) => ({
         ...presentRoute(r, input.riding.departureStepMinutes),
+        best: r.best ? withReference(r.best, r.routeId, refs) : null,
+        alternatives: r.alternatives.map((a) =>
+          withReference(a, r.routeId, refs),
+        ),
         rank: r.rank,
       })),
       unranked: evaluation.unranked.map((r) =>
@@ -711,6 +773,14 @@ export const createApp = (
         : null,
       days: summaries.map((d) => ({
         ...d,
+        best:
+          d.best && d.recommendedRouteId
+            ? withReference(
+                d.best,
+                d.recommendedRouteId,
+                dayRefs.get(d.date) ?? new Map(),
+              )
+            : null,
         selected: selectedDates.includes(d.date),
       })),
       history: comparison.history,
