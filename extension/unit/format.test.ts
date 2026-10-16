@@ -546,7 +546,7 @@ test('gust comfort persists independently of the maximum-gust cutoff', () => {
   expect(draftFrom(applyPatch(prefs, patch), local).gustComfortKph).toBe(30);
 });
 
-test('gusts join the wind chip only when they lower the score: ride maxima, personal comfort and selected units', () => {
+test('the wind chip shows the wind, never the gusts: they live in its dropdown', () => {
   const c: Conditions = {
     temperatureC: { minimum: 19.6, maximum: 19.9 },
     averageWindSpeedKph: 8,
@@ -555,38 +555,25 @@ test('gusts join the wind chip only when they lower the score: ride maxima, pers
     averageTailwindKph: 0,
     maximumPrecipitationProbability: 0,
     maximumGustKph: 49.9,
+    gustExposure: {
+      directionBasis: 'prevailing-wind-estimate',
+      maximumAdverseKph: 49.9,
+    },
   };
-  const chips = conditionChips(c, regionUnits('en-GB'), {
+  const gusty = {
     temperature: prefs.temperature,
     wind: { ...prefs.wind, comfortableGustKph: 25 },
-  });
+  };
+  const chips = conditionChips(c, regionUnits('en-GB'), gusty);
   expect(chips[0]?.text).toBe('20°C');
-  // The gusts are amber on their own half; the gentle wind stays green.
+  // Gusts past comfort leave a gentle wind green.
   expect(chips[1]).toEqual({
     icon: 'wind',
     text: '5 mph',
-    label: 'Wind 5 mph, maximum gusts 31 mph',
-    warn: false,
-    gusts: 'gusts 31',
-  });
-  // Within comfort, the gusts don't show at all, in the label either.
-  expect(
-    conditionChips(c, undefined, {
-      wind: { ...prefs.wind, comfortableGustKph: 55 },
-    })[1],
-  ).toEqual({
-    icon: 'wind',
-    text: '8 km/h',
-    label: 'Wind 8 km/h',
+    label: 'Wind 5 mph',
     warn: false,
   });
-  expect(conditionChips({ ...c, maximumGustKph: undefined })[1]).toEqual({
-    icon: 'wind',
-    text: '8 km/h',
-    label: 'Wind 8 km/h',
-    warn: false,
-  });
-  // Each half is amber for its own part: a strong crosswind with gusts past the limit.
+  // A strong crosswind is amber for the wind itself.
   expect(
     conditionChips(
       {
@@ -595,53 +582,14 @@ test('gusts join the wind chip only when they lower the score: ride maxima, pers
         windDistanceFractions: { headwind: 0, tailwind: 0, crosswind: 1 },
       },
       regionUnits('en-GB'),
-      { wind: { ...prefs.wind, comfortableGustKph: 25 } },
+      gusty,
     )[1],
-  ).toMatchObject({
-    text: '25 mph crosswind',
-    label: 'Crosswind 25 mph, maximum gusts 31 mph',
-    warn: true,
-    gusts: 'gusts 31',
-  });
-});
-
-test('helpful gusts stay hidden while opposing exposure and raw gust limits show them', () => {
-  const c: Conditions = {
-    temperatureC: { minimum: 9, maximum: 13 },
-    averageWindSpeedKph: 8,
-    averageHeadwindKph: 0,
-    averageTailwindKph: 16,
-    averageCrosswindKph: 0,
-    maximumPrecipitationProbability: 0,
-    maximumGustKph: 43,
-    gustExposure: {
-      directionBasis: 'prevailing-wind-estimate',
-      maximumAdverseKph: 0,
-    },
-  };
-  const preferences = { wind: { ...prefs.wind, comfortableGustKph: 25 } };
-  expect(conditionChips(c, undefined, preferences)[1]).toEqual({
+  ).toEqual({
     icon: 'wind',
-    text: '8 km/h',
-    label: 'Wind 8 km/h',
-    warn: false,
+    text: '25 mph crosswind',
+    label: 'Crosswind 25 mph',
+    warn: true,
   });
-  const gusts = (
-    more: Partial<Conditions>,
-    p: Partial<Preferences> = preferences,
-  ) => conditionChips({ ...c, ...more }, undefined, p)[1]?.gusts;
-  expect(
-    gusts({
-      gustExposure: {
-        directionBasis: 'prevailing-wind-estimate',
-        maximumAdverseKph: 30,
-      },
-    }),
-  ).toBe('gusts 43');
-  expect(
-    gusts({}, { ...preferences, minimumStandards: { maximumGustKph: 40 } }),
-  ).toBe('gusts 43');
-  expect(gusts({ gustExposure: undefined })).toBe('gusts 43');
 });
 
 test('recentRides patches keep the lookback', () => {
