@@ -47,13 +47,18 @@ public struct RouteMap: View {
     private var map: some View {
         // Resolved here: `Map` content drops back to system blue for `.accentColor` once it
         // re-renders with a new route.
-        let tint = Color(tint.resolve(in: environment))
+        let resolved = tint.resolve(in: environment)
+        let tint = Color(resolved)
         let lineWidth: CGFloat = 5
         return Map(initialPosition: .rect(framingRect), interactionModes: []) {
             MapPolyline(coordinates: coordinates)
                 .stroke(.white, style: StrokeStyle(lineWidth: lineWidth + 3, lineCap: .round, lineJoin: .round))
-            MapPolyline(coordinates: coordinates)
-                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+            // Keyed on its colour: a polyline keeps its first stroke, so the tint dimmed behind a
+            // sheet would otherwise stay once the sheet has gone.
+            ForEach([resolved], id: \.self) { _ in
+                MapPolyline(coordinates: coordinates)
+                    .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+            }
             if let start = coordinates.first {
                 Annotation("Start", coordinate: start) {
                     Circle()

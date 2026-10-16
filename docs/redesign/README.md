@@ -123,6 +123,7 @@ Build:
 - [x] Other Tracked Routes rows (open Ride detail), Doesn't Fit rows
 - [x] Footer attribution
 - [x] Hero map stretches on overscroll instead of showing the background (#178)
+- [x] Hero route line keeps its colour after a sheet closes, rather than staying dimmed grey (#184)
 - [x] Zoom transition source on the hero and each route row
 - [x] Light/dark and Dynamic Type through `accessibility5` checked on the simulator
 - [x] Hero 3b: eased scrim, pick pill, icon stats, track star (gold glass when on) and the
