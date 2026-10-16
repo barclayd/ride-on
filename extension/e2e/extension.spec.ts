@@ -714,6 +714,77 @@ test('Rides tab opens first with one request for the planned days', async ({
   await page.screenshot({ path: test.info().outputPath('rides.png') });
 });
 
+test('alerts on one ride; Edit removes a ride and Undo brings it back', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  routes.r102 = coast();
+  selection.routeIds = ['r101', 'r102'];
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  const rides = page.locator('.ro-ride');
+  await expect(rides).toHaveCount(2);
+  const toast = page.locator('.ro-toast');
+  const message = toast.locator('span');
+  const hilly = rides.filter({ hasText: 'Hilly Loop' });
+  const coastCard = rides.filter({ hasText: 'Coast & Back' });
+
+  // One ride at a time: a second bell moves the alerts, and Undo moves them back.
+  await page.getByRole('button', { name: 'Get alerts for Hilly Loop' }).click();
+  await expect(message).toHaveText('Alerts on for Hilly Loop');
+  await expect(toast).toHaveAttribute('data-show', 'true');
+  await expect(hilly).toHaveClass(/ro-alert/);
+  await expect(
+    page.getByRole('button', {
+      name: 'Alerts on for Hilly Loop. Turn off alerts',
+    }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page
+    .getByRole('button', { name: 'Get alerts for Coast & Back' })
+    .click();
+  await expect(message).toHaveText(
+    'Alerts moved from Hilly Loop to Coast & Back',
+  );
+  await expect(coastCard).toHaveClass(/ro-alert/);
+  await expect(hilly).not.toHaveClass(/ro-alert/);
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect(hilly).toHaveClass(/ro-alert/);
+  await expect(coastCard).not.toHaveClass(/ro-alert/);
+  await expect(toast).toHaveAttribute('data-show', 'false');
+  // The tile with alerts keeps its size: 1px less padding for the 1px heavier border.
+  const [a, b] = [await hilly.boundingBox(), await coastCard.boundingBox()];
+  expect(a?.width).toBe(b?.width);
+  await page.screenshot({ path: test.info().outputPath('alerts.png') });
+
+  // Edit swaps every bell for an ×; removing the ride with alerts turns them off.
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await expect(page.locator('.ro-bell')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Stop tracking Hilly Loop' }).click();
+  await expect(rides).toHaveCount(1);
+  await expect(message).toHaveText('Stopped tracking Hilly Loop. Alerts off.');
+  await expect(
+    page.getByRole('button', { name: 'Stop tracking Coast & Back' }),
+  ).toBeFocused();
+  await expect.poll(() => selection.routeIds).toEqual(['r102']);
+  await page.screenshot({ path: test.info().outputPath('alerts-edit.png') });
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect(rides).toHaveCount(2);
+  await expect.poll(() => selection.routeIds).toEqual(['r101', 'r102']);
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(
+    page.getByRole('button', {
+      name: 'Alerts on for Hilly Loop. Turn off alerts',
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Alerts on for Hilly Loop. Turn off alerts' })
+    .click();
+  await expect(message).toHaveText('Alerts off for Hilly Loop');
+  await expect(page.locator('.ro-alert')).toHaveCount(0);
+  await expectPanelFits(page);
+});
+
 test('a refresh shows how scores changed, then moves the rides into order', async ({
   context,
   worker,
@@ -1276,6 +1347,41 @@ test('a route changed since the plan is logged only when asked', async ({
   expect(rides).toHaveLength(1);
 });
 
+test('the check-in asks about the ride with alerts, then the alerts end', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  routes.r102 = coast();
+  selection.routeIds = ['r101', 'r102'];
+  await signIn(worker);
+  const shown = {
+    ...SHOWN,
+    picks: [
+      ...SHOWN.picks,
+      { routeId: 'r102', date: day(-1), ...PLAN, rank: 2 },
+    ],
+  };
+  await worker.evaluate(
+    `chrome.storage.local.set({ state: { shown: ${JSON.stringify(shown)}, alertRouteId: 'r102' } })`,
+  );
+  const page = await openPopup(context, extensionId);
+  const checkin = page.locator('.ro-checkin');
+  await expect(checkin).toContainText('Did you ride Coast & Back?');
+  await expect(checkin).toContainText(
+    /You had alerts on for it: 35 km, leave \d\d:\d\d, 14° and dry\./,
+  );
+  await page.getByRole('button', { name: 'Not this time' }).click();
+  await expect(checkin).toHaveCount(0);
+  await expect
+    .poll(() =>
+      worker.evaluate(
+        "chrome.storage.local.get('state').then(({ state }) => state.alertRouteId)",
+      ),
+    )
+    .toBe(null);
+});
+
 test('History, recent roads and removal with undo', async ({
   context,
   worker,
@@ -1499,8 +1605,8 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     'tailwind opportunity',
   );
   await expect(
-    module.getByRole('button', { name: 'Stop tracking Hilly Loop' }),
-  ).toBeVisible();
+    module.getByRole('button', { name: 'Get alerts for Hilly Loop' }),
+  ).toHaveAttribute('aria-pressed', 'false');
   const chip = page.locator('#jr_101 .ro-chip');
   await expect(chip).toHaveText(/^\w{3} \d{1,2} · \d\d:\d\d$/);
   await expect(chip).toHaveAttribute('data-state', 'meets');
@@ -1561,6 +1667,26 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     ],
   });
   expect(selection.routeIds).toEqual(['r101', 'r102']);
+
+  // Edit mode on the page: the × takes the tile away, the row's chip goes back to + Track, and
+  // Undo puts both back.
+  const toast = module.locator('.ro-toast');
+  await module.getByRole('button', { name: 'Edit' }).click();
+  await module
+    .getByRole('button', { name: 'Stop tracking Coast & Back' })
+    .click();
+  await expect(tiles).toHaveCount(1);
+  await expect(toast.locator('span')).toHaveText(
+    'Stopped tracking Coast & Back',
+  );
+  await expect(page.locator('#jr_102 .ro-chip')).toHaveText('+ Track');
+  await expect.poll(() => selection.routeIds).toEqual(['r101']);
+  await module.screenshot({ path: test.info().outputPath('edit.png') });
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect(tiles).toHaveCount(2);
+  await expect.poll(() => selection.routeIds).toEqual(['r101', 'r102']);
+  await module.getByRole('button', { name: 'Done' }).click();
+  await expect(module.locator('.ro-bell')).toHaveCount(2);
 });
 
 test('existing tracked journeys get surface evidence once without another ranking request', async ({

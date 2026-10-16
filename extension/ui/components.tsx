@@ -136,6 +136,8 @@ const STATES: Record<Exclude<CardState, 'meets'>, string> = {
   pending: 'Checking…',
 };
 const MEDALS = ['Gold', 'Silver', 'Bronze'];
+// Called just before a tile is removed, so Ranked can slide the rest into place (21a).
+const Leaving = createContext(() => {});
 // The open sky or wind dropdown, by element id: opening one closes the rest.
 const OpenPanel = createContext<
   [string | null, (id: string | null) => void] | null
@@ -293,12 +295,197 @@ const Notes = ({ card }: { card: Card }) => (
   </>
 );
 
-const untrack = (card: Card) => (
-  <CloseButton
-    title={`Stop tracking ${card.name}`}
-    onClick={() => send({ type: 'untrack', routeId: card.routeId })}
-  />
+// Alerts on one tracked ride, and Edit mode for removing rides (handoff v5). Each list has its own
+// Edit mode and Undo message; which rides are tracked, and which has alerts, is shared state.
+type Said = { text: string; undo?: () => void; at: number };
+export type Tracking = ReturnType<typeof useTracking>;
+
+export const useTracking = (view: View | null) => {
+  const [editing, setEditing] = useState(false);
+  const [said, setSaid] = useState<Said | null>(null);
+  const [shown, setShown] = useState(false);
+  const [held, setHeld] = useState(false); // the pointer or focus is on the message
+  const routeIds = view?.state.selection?.routeIds ?? [];
+  const wanted = view?.state.alertRouteId ?? null;
+  const alert = wanted && routeIds.includes(wanted) ? wanted : null;
+  // Six seconds, held while the rider is on it; a new message starts the count again.
+  useEffect(() => {
+    if (!said || held) return;
+    const timer = setTimeout(() => setShown(false), 6000);
+    return () => clearTimeout(timer);
+  }, [said, held]);
+  const say = (text: string, undo?: () => void) => {
+    setSaid({ text, undo, at: Date.now() });
+    setShown(true);
+  };
+  const failed = (result: { error?: string }) =>
+    result.error && say(result.error);
+  const name = (id: string) =>
+    view?.cards.find((c) => c.routeId === id)?.name ??
+    view?.state.routes[id]?.name ??
+    'your ride';
+  return {
+    editing,
+    setEditing,
+    alert,
+    said,
+    shown,
+    setHeld,
+    undo: () => {
+      setShown(false);
+      said?.undo?.();
+    },
+    // One ride at a time: turning on another moves the alerts.
+    bell: (card: Card) => {
+      const on = alert !== card.routeId;
+      send({ type: 'setAlert', routeId: on ? card.routeId : null });
+      say(
+        !on
+          ? `Alerts off for ${card.name}`
+          : alert
+            ? `Alerts moved from ${name(alert)} to ${card.name}`
+            : `Alerts on for ${card.name}`,
+        () => send({ type: 'setAlert', routeId: alert }),
+      );
+    },
+    remove: (card: Card) => {
+      const had = alert === card.routeId;
+      const index = routeIds.indexOf(card.routeId);
+      // The last ride gone, the list shows its empty state instead.
+      if (routeIds.length <= 1) setEditing(false);
+      say(
+        had
+          ? `Stopped tracking ${card.name}. Alerts off.`
+          : `Stopped tracking ${card.name}`,
+        () =>
+          send({
+            type: 'track',
+            routeId: card.routeId,
+            index,
+            alert: had,
+          }).then(failed),
+      );
+      send({ type: 'untrack', routeId: card.routeId }).then(failed);
+    },
+  };
+};
+
+// Edit / Done for a list of tracked rides (20c).
+export const EditButton = ({ tracking }: { tracking: Tracking }) => (
+  <button
+    type="button"
+    class="ro-edit"
+    data-editing={tracking.editing}
+    onClick={() => tracking.setEditing(!tracking.editing)}
+  >
+    {tracking.editing ? 'Done' : 'Edit'}
+  </button>
 );
+
+// The Undo message (§4), under the list. The dock sticks to the bottom of the view while the list
+// runs past it, so a removal near the top still shows its Undo.
+export const Toast = ({ tracking }: { tracking: Tracking }) => {
+  const { said, shown, setHeld } = tracking;
+  return (
+    <div class="ro-toast-dock">
+      <div
+        class="ro-toast"
+        role="status"
+        aria-live="polite"
+        data-show={shown}
+        onMouseEnter={() => setHeld(true)}
+        onMouseLeave={() => setHeld(false)}
+      >
+        {said && <span key={said.at}>{said.text}</span>}
+        {said?.undo && (
+          <button
+            type="button"
+            tabIndex={shown ? 0 : -1}
+            aria-hidden={!shown || undefined}
+            onClick={tracking.undo}
+            onFocus={() => setHeld(true)}
+            onBlur={() => setHeld(false)}
+          >
+            Undo
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// The handoff's bell (§1): outlined off, filled on.
+const BellIcon = () => (
+  <svg
+    width="17"
+    height="17"
+    viewBox="0 0 16 16"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M8 1.6v1.1" />
+    <path
+      class="ro-bell-body"
+      d="M3.6 11.4V7.6a4.4 4.4 0 0 1 8.8 0v3.8l1.1 1.4H2.5z"
+    />
+    <path d="M6.4 14.3a1.7 1.7 0 0 0 3.2 0" fill="none" />
+  </svg>
+);
+
+// A tile's one corner action: its bell, or in Edit mode an × that removes it (21a).
+const TileAction = (props: {
+  card: Card;
+  tracking: Tracking;
+  disabled: boolean; // no bell for dates that have passed, until new ones are scored
+}) => {
+  const { card, tracking } = props;
+  const snap = useContext(Leaving);
+  if (tracking.editing)
+    return (
+      <button
+        type="button"
+        class="ro-remove"
+        title="Stop tracking"
+        aria-label={`Stop tracking ${card.name}`}
+        onClick={(event) => {
+          // Focus moves on to the next ×, as the tile it was on goes.
+          const all = [
+            ...(event.currentTarget
+              .closest('[data-route]')
+              ?.parentElement?.querySelectorAll<HTMLElement>('.ro-remove') ??
+              []),
+          ];
+          const i = all.indexOf(event.currentTarget);
+          (all[i + 1] ?? all[i - 1])?.focus();
+          snap();
+          tracking.remove(card);
+        }}
+      >
+        ×
+      </button>
+    );
+  const on = tracking.alert === card.routeId;
+  return (
+    <button
+      type="button"
+      class="ro-bell"
+      aria-pressed={on}
+      aria-label={
+        on
+          ? `Alerts on for ${card.name}. Turn off alerts`
+          : `Get alerts for ${card.name}`
+      }
+      title={on ? 'Alerts on. Click to turn off' : 'Get alerts for this ride'}
+      disabled={props.disabled}
+      onClick={() => tracking.bell(card)}
+    >
+      <BellIcon />
+    </button>
+  );
+};
 
 // Counts from the old score to the new one: 800ms, ease-in-out cubic.
 const useCount = (to: number | null) => {
@@ -400,8 +587,9 @@ export const RouteTile = (props: {
   index: number; // staggers the fade-in
   medal?: number | null; // the Rides tab: its place among the scored rides
   change?: Change;
+  tracking: Tracking;
 }) => {
-  const { card, blank, view, medal } = props;
+  const { card, blank, view, medal, tracking } = props;
   const panel = medal !== undefined;
   const rank = medal ?? 3;
   // The Rides tab's heading has the date, unless the window spans days.
@@ -426,7 +614,7 @@ export const RouteTile = (props: {
   const windId = `ro-wind-${card.routeId}`;
   return (
     <div
-      class={`ro-ride ${panel ? (rank < 3 ? `ro-${MEDALS[rank].toLowerCase()}` : '') : tint(card)}`}
+      class={`ro-ride ${panel ? (rank < 3 ? `ro-${MEDALS[rank].toLowerCase()}` : '') : tint(card)}${tracking.alert === card.routeId ? ' ro-alert' : ''}`}
       data-state={card.state}
       data-route={card.routeId}
       data-blank={blank}
@@ -463,7 +651,7 @@ export const RouteTile = (props: {
             </span>
           )}
         </div>
-        {untrack(card)}
+        <TileAction card={card} tracking={tracking} disabled={blank} />
       </div>
       {panel && (notRecommended || card.state !== 'meets') && (
         <div class="ro-pills">
@@ -860,6 +1048,20 @@ export const Ranked = (props: {
   const before = useRef(new Map<string, DOMRect>());
   const tiles = () =>
     list.current?.querySelectorAll<HTMLElement>(':scope > [data-route]') ?? [];
+  // Where each tile sat in the list just before one was removed.
+  const left = useRef<Map<string, DOMRect> | null>(null);
+  const places = () => {
+    const base = list.current?.getBoundingClientRect();
+    return new Map(
+      [...tiles()].map((tile) => {
+        const r = tile.getBoundingClientRect();
+        return [
+          tile.dataset.route ?? '',
+          new DOMRect(r.left - (base?.left ?? 0), r.top - (base?.top ?? 0)),
+        ];
+      }),
+    );
+  };
 
   useEffect(() => {
     const was = last.current;
@@ -957,26 +1159,54 @@ export const Ranked = (props: {
     ...order.filter((id) => byId.has(id)),
     ...cards.map((c) => c.routeId).filter((id) => !order.includes(id)),
   ];
+  // A removal (21a): the rest slide into the gap, 450ms, or move at once with reduced motion.
+  useLayoutEffect(() => {
+    const from = left.current;
+    left.current = null;
+    if (!from || [...from.keys()].every((id) => shown.includes(id))) return;
+    const now = places();
+    for (const tile of tiles()) {
+      const [was, is] = [
+        from.get(tile.dataset.route ?? ''),
+        now.get(tile.dataset.route ?? ''),
+      ];
+      if (!was || !is || (was.x === is.x && was.y === is.y)) continue;
+      tile.animate(
+        [
+          { transform: `translate(${was.x - is.x}px, ${was.y - is.y}px)` },
+          { transform: 'none' },
+        ],
+        { duration: 450, easing: 'cubic-bezier(.2,.8,.2,1)' },
+      );
+    }
+  }, [shown.join()]);
+
   let scored = 0;
   return (
     <OpenPanel.Provider value={open}>
-      <div ref={list} class={props.class}>
-        {shown.map((id, i) => {
-          const now = byId.get(id) as Card;
-          const card = settled
-            ? now
-            : { ...now, score: old.get(id) ?? now.score };
-          return props.render(
-            card,
-            i,
-            card.score !== null ? scored++ : null,
-            changes[id],
-          );
-        })}
-        <span class="ro-sr" aria-live="polite">
-          {said}
-        </span>
-      </div>
+      <Leaving.Provider
+        value={() => {
+          if (!reducedMotion()) left.current = places();
+        }}
+      >
+        <div ref={list} class={props.class}>
+          {shown.map((id, i) => {
+            const now = byId.get(id) as Card;
+            const card = settled
+              ? now
+              : { ...now, score: old.get(id) ?? now.score };
+            return props.render(
+              card,
+              i,
+              card.score !== null ? scored++ : null,
+              changes[id],
+            );
+          })}
+          <span class="ro-sr" aria-live="polite">
+            {said}
+          </span>
+        </div>
+      </Leaving.Provider>
     </OpenPanel.Provider>
   );
 };

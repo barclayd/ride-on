@@ -629,7 +629,7 @@ fieldset {
 }
 .ro-ride-head {
   display: flex;
-  align-items: flex-start; /* × stays on a wrapped name's first line */
+  align-items: flex-start; /* the bell stays on a wrapped name's first line */
   gap: 8px;
 }
 .ro-pills {
@@ -710,11 +710,53 @@ fieldset {
   background: #d0935e;
   color: #3f2310;
 }
-.ro-ride .ro-close {
-  width: 22px;
-  height: 22px;
-  font-size: 15px;
-  margin: -2px -4px 0 0;
+/* A tile's corner action (v5): the bell, or in Edit mode the × (21a). */
+.ro-bell,
+.ro-remove {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+  margin: -4px -6px -4px 0;
+  color: var(--ro-muted-2);
+  cursor: pointer;
+}
+.ro-bell svg {
+  fill: none;
+}
+.ro-bell[aria-pressed="true"] {
+  background: #e3ebd3;
+  color: var(--ro-olive-900);
+}
+.ro-bell[aria-pressed="true"] .ro-bell-body {
+  fill: currentColor;
+}
+.ro-bell:hover:enabled {
+  background: #e6ecdb;
+}
+.ro-bell:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ro-remove {
+  font:
+    400 22px / 1 system-ui,
+    sans-serif;
+}
+.ro-remove:hover {
+  background: var(--ro-tint-2);
+  color: var(--ro-ink);
+}
+/* The ride with alerts: a heavier border, 1px less padding so it keeps its size. */
+.ro-ride.ro-alert {
+  border: 2px solid #6e8a3a;
+  padding: 13px 15px 15px;
 }
 .ro-ride-title {
   flex: 1;
@@ -791,9 +833,13 @@ a.ro-name:hover {
 .ro-flags .ro-pill.ro-flag {
   padding-left: 7px;
 }
-.ro-module .ro-ride .ro-close {
-  margin: 0 -4px 0 0;
-  font-size: 18px;
+.ro-module .ro-bell,
+.ro-module .ro-remove {
+  margin: -3px -6px 0 auto;
+}
+.ro-module .ro-ride.ro-alert {
+  border-color: #6e8a3a;
+  padding: 15px 17px 17px;
 }
 .ro-module .ro-ride .ro-name {
   font-size: 19px;
@@ -2177,7 +2223,82 @@ a.ro-name:hover {
   color: var(--ro-muted);
 }
 
+/* Edit / Done for the tracked rides (20c). */
+.ro-edit {
+  min-width: 64px;
+  border: 1px solid #c9d4b2;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 12px;
+  font: 600 13px var(--ro-sans);
+  color: var(--ro-olive-900);
+  cursor: pointer;
+}
+.ro-edit[data-editing="true"] {
+  background: var(--ro-lime);
+  border-color: var(--ro-lime);
+  color: var(--ro-ink);
+}
+/* The Undo message (v5 §4). The dock sits about 72px under the last tile and sticks to the bottom
+   of the view while the list runs past it; the message hangs above it, centred. */
+.ro-toast-dock {
+  position: sticky;
+  bottom: 18px;
+  z-index: 7;
+  height: 0;
+  margin: 42px 0 18px;
+}
+.ro-stack .ro-toast-dock {
+  bottom: 16px;
+  margin: 44px 0 2px; /* with the stack's gap and padding, 70px under the last card */
+}
+.ro-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: max-content;
+  max-width: calc(100% - 28px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px 9px 14px;
+  border-radius: 10px;
+  background: var(--ro-ink);
+  color: #fff;
+  font: 600 13px / 1.35 var(--ro-sans);
+  text-wrap: pretty;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.ro-toast[data-show="true"] {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.ro-toast button {
+  flex: none;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  padding: 3px 6px;
+  font: 700 13px var(--ro-sans);
+  color: #b9e06a;
+  cursor: pointer;
+}
+.ro-toast button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ro-toast {
+    transform: translate(-50%, 0);
+  }
   .ro-checkin,
   .ro-checkin-track,
   .ro-checkin-track > *,

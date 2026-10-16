@@ -16,6 +16,7 @@ import {
   CloseButton,
   CoverageWarn,
   chooseWindow,
+  EditButton,
   ErrorChip,
   Expired,
   GoogleMark,
@@ -26,6 +27,9 @@ import {
   RouteTile,
   reducedMotion,
   Segmented,
+  Toast,
+  type Tracking,
+  useTracking,
   useView,
   type View,
 } from '../../ui/components';
@@ -399,7 +403,9 @@ const CheckIn = ({ view }: { view: View }) => {
   const [busy, setBusy] = useState(false);
   if (!checkin) return null;
   const tz = view.timeZone;
-  const top = checkin.picks[0];
+  // Asked about the ride that had alerts (19c), else the top pick.
+  const alert = checkin.picks.find((p) => p.routeId === checkin.alert);
+  const top = alert ?? checkin.picks[0];
   const routeId = chosen ?? top.routeId;
   const name = (id: string) => routes[id]?.name ?? 'your route';
   const answer = async (
@@ -426,7 +432,7 @@ const CheckIn = ({ view }: { view: View }) => {
             {conflict
               ? `${name(conflict)} has changed since this plan.`
               : routeId === top.routeId
-                ? `It was ${rankText(top.rank)}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c, view.state.units)} and ${rainText(c)}.`
+                ? `${alert ? 'You had alerts on for it' : `It was ${rankText(top.rank)}`}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c, view.state.units)} and ${rainText(c)}.`
                 : `${km(routes[routeId]?.distanceM ?? 0)} km · instead of ${name(top.routeId)}, ${rankText(top.rank)}`}
           </p>
           <div class="ro-checkin-actions">
@@ -591,7 +597,12 @@ const NextWindows = ({ view }: { view: View }) => {
 };
 
 // The window, how fresh its forecast is, and a refresh button (15a).
-const WindowHeading = ({ view, range }: { view: View; range: string[] }) => {
+const WindowHeading = (props: {
+  view: View;
+  range: string[];
+  tracking: Tracking;
+}) => {
+  const { view, range } = props;
   const [asked, setAsked] = useState(false);
   const busy = asked || view.state.loading;
   // Two turns per loop; it stops at the end of a loop once the data is in.
@@ -617,6 +628,8 @@ const WindowHeading = ({ view, range }: { view: View; range: string[] }) => {
             .join(' · ')}
         </span>
       </div>
+      {/* ponytail: the handoff's suggested Edit mode for the Rides tab (v5 §6), not yet designed. */}
+      {view.cards.length > 0 && <EditButton tracking={props.tracking} />}
       <button
         type="button"
         class="ro-refresh"
@@ -652,6 +665,7 @@ const WindowHeading = ({ view, range }: { view: View; range: string[] }) => {
 };
 
 const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
+  const tracking = useTracking(view);
   if (view.state.expired)
     return (
       <>
@@ -666,7 +680,7 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
     <>
       <CheckIn view={view} />
       {view.range ? (
-        <WindowHeading view={view} range={view.range} />
+        <WindowHeading view={view} range={view.range} tracking={tracking} />
       ) : (
         <Expired view={view} onChoose={onChoose} />
       )}
@@ -693,11 +707,15 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
               index={0}
               medal={medal}
               change={change}
+              tracking={tracking}
             />
           )}
         />
       )}
       <CoverageWarn view={view} />
+      {(view.cards.length > 0 || tracking.said) && (
+        <Toast tracking={tracking} />
+      )}
     </>
   );
 };
