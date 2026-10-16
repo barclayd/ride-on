@@ -682,8 +682,19 @@ const WindPanel = (props: {
 // North up, no basemap (board 13): a grey ribbon coloured where the wind helps or hinders, and a
 // compass left of it where the wind blows. Hovering the wind bar shows where and which way you ride.
 const HEADING = 'M4.3 0L-3 -3L-1 0L-3 3Z';
-const ARROWHEAD = 'M0 0L-5 -3.2L-5 3.2Z';
 const CARDINALS = ['N', 'E', 'S', 'W'];
+// A compass needle drawn pointing north, then turned to where the wind blows: a red tip and a white
+// tail, each with a lit and a shaded side, on a pivot.
+const NEEDLE = { length: 12, width: 3.2 };
+const NEEDLE_SIDES = (['tip', 'tail'] as const).flatMap((half) =>
+  ([-1, 1] as const).map((side) => ({
+    half,
+    side,
+    d: `M0 ${half === 'tip' ? -NEEDLE.length : NEEDLE.length}L${side * NEEDLE.width} 0H0Z`,
+  })),
+);
+// The key's height under the compass: the gap, each line of words, then the speed and its descenders.
+const keyHeight = (lines: number) => 2 * DIAL.r + 18.5 + lines * 11;
 // A tick every 15°, with the letters in place of the four at N, E, S and W.
 const TICKS = Array.from({ length: 24 }, (_, i) => i * 15)
   .filter((deg) => deg % 90)
@@ -706,6 +717,11 @@ const Sketch = (props: { sketch: WindSketch; along: number | null }) => {
       ? null
       : sketch.track[Math.round(along * (sketch.track.length - 1))];
   const lines = y + r + 15;
+  // The compass and its words sit in the middle of the box, however many lines there are.
+  const centre =
+    Math.round(
+      ((SKETCH.height - keyHeight(wind.lines.length)) / 2 - (y - r)) * 10,
+    ) / 10;
   return (
     <>
       <div class="ro-wind-map">
@@ -742,7 +758,7 @@ const Sketch = (props: { sketch: WindSketch; along: number | null }) => {
               <path d={HEADING} />
             </g>
           )}
-          <g class="ro-wind-key">
+          <g class="ro-wind-key" transform={`translate(0 ${centre})`}>
             <circle class="ro-wind-dial" cx={x} cy={y} r={r} />
             <path class="ro-wind-ticks" d={TICKS} />
             {CARDINALS.map((c, i) => {
@@ -752,24 +768,28 @@ const Sketch = (props: { sketch: WindSketch; along: number | null }) => {
                   key={c}
                   class="ro-wind-cardinal"
                   data-north={c === 'N'}
-                  x={x + Math.sin(deg) * (r - 8.5)}
-                  y={y - Math.cos(deg) * (r - 8.5) + 2.3}
+                  x={x + Math.sin(deg) * (r - 4.2)}
+                  y={y - Math.cos(deg) * (r - 4.2) + 2.3}
                   text-anchor="middle"
                 >
                   {c}
                 </text>
               );
             })}
-            {wind.arrow ? (
-              <g class="ro-wind-arrow">
-                <path
-                  d={`M${wind.arrow.x1} ${wind.arrow.y1}L${wind.arrow.x2} ${wind.arrow.y2}`}
-                />
-                <path
-                  d={ARROWHEAD}
-                  transform={`translate(${wind.arrow.x2} ${wind.arrow.y2}) rotate(${wind.arrow.angle})`}
-                />
-                <circle cx={wind.arrow.x1} cy={wind.arrow.y1} r={1.8} />
+            {wind.needle !== null ? (
+              <g
+                class="ro-wind-needle"
+                transform={`translate(${x} ${y}) rotate(${wind.needle})`}
+              >
+                {NEEDLE_SIDES.map((n) => (
+                  <path
+                    key={`${n.half}${n.side}`}
+                    d={n.d}
+                    data-half={n.half}
+                    data-shaded={n.side > 0}
+                  />
+                ))}
+                <circle r={1.7} />
               </g>
             ) : (
               <circle class="ro-wind-calm" cx={x} cy={y} r={2.2} />

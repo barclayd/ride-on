@@ -1086,13 +1086,26 @@ a.ro-name:hover {
   stroke: #aab2bb;
   stroke-width: 0.9;
 }
-.ro-wind-arrow {
-  stroke: var(--ro-ink);
-  stroke-width: 1.6;
+/* A real compass needle: a red tip and a white tail, lit on the left and shaded on the right. */
+.ro-wind-needle path {
+  stroke: rgb(29 33 22 / 0.35);
+  stroke-width: 0.4;
 }
-.ro-wind-arrow circle,
-.ro-wind-arrow path + path {
-  fill: var(--ro-ink);
+.ro-wind-needle [data-half="tip"] {
+  fill: #e0483c;
+}
+.ro-wind-needle [data-half="tip"][data-shaded="true"] {
+  fill: #b5322a;
+}
+.ro-wind-needle [data-half="tail"] {
+  fill: #fff;
+}
+.ro-wind-needle [data-half="tail"][data-shaded="true"] {
+  fill: #d5dbe1;
+}
+.ro-wind-needle circle {
+  fill: #fff;
+  stroke: var(--ro-ink);
   stroke-width: 1;
 }
 .ro-wind-calm {
