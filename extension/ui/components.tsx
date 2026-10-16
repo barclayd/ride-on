@@ -1,9 +1,15 @@
 // Pieces shared by the popup and the Journeys page.
-import type { ComponentChildren } from 'preact';
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { type ComponentChildren, createContext } from 'preact';
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { onStateChange, readState, type State, send } from '../lib/state';
-import type { NextWindow } from '../lib/types';
+import type { Departure, NextWindow, Outline } from '../lib/types';
 import {
   type Banner,
   type Card,
@@ -17,6 +23,7 @@ import {
   skyChip,
   viewOf,
 } from './format';
+import { SKETCH, type WindSketch, windPanel } from './wind';
 
 export const iconUrl = () => browser.runtime.getURL('/ride-on-icon.png');
 export const reducedMotion = () =>
@@ -129,6 +136,10 @@ const STATES: Record<Exclude<CardState, 'meets'>, string> = {
   pending: 'Checking…',
 };
 const MEDALS = ['Gold', 'Silver', 'Bronze'];
+// The open sky or wind dropdown, by element id: opening one closes the rest.
+const OpenPanel = createContext<
+  [string | null, (id: string | null) => void] | null
+>(null);
 
 // A page tile's line, over a static placeholder bar in the same grid cell.
 const Slot = (props: { class: string; children: ComponentChildren }) => (
@@ -396,7 +407,10 @@ export const RouteTile = (props: {
   // The Rides tab's heading has the date, unless the window spans days.
   const dated = !panel || (view.range?.length ?? 0) > 1;
   const notRecommended = card.score !== null && card.score < 50;
-  const [skyOpen, setSkyOpen] = useState(false);
+  // One dropdown open at a time across the grid; Ranked shares it, a lone tile keeps its own.
+  const own = useState<string | null>(null);
+  const [open, setOpen] = useContext(OpenPanel) ?? own;
+  const toggle = (id: string) => setOpen(open === id ? null : id);
   const sky =
     card.best &&
     skyChip(card.best, view.state.user?.preferenceLevels?.sunshine);
@@ -409,6 +423,7 @@ export const RouteTile = (props: {
       )
     : [];
   const skyId = `ro-sky-${card.routeId}`;
+  const windId = `ro-wind-${card.routeId}`;
   return (
     <div
       class={`ro-ride ${panel ? (rank < 3 ? `ro-${MEDALS[rank].toLowerCase()}` : '') : tint(card)}`}
@@ -486,18 +501,18 @@ export const RouteTile = (props: {
       <Slot class="ro-conditions">
         {card.best ? (
           <ul class="ro-chips">
-            {/* Temperature, sky, wind with gusts, rain (handoff v4). */}
+            {/* Temperature, sky, wind, rain (handoff v4); sky and wind open their dropdowns. */}
             {[chips[0], ...(sky ? [sky] : []), ...chips.slice(1)].map((chip) =>
               // Keyed by text: a changed chip fades in afresh.
               chip === sky && sky.segments ? (
                 <li key={chip.text} class="ro-sky-chip">
                   <button
                     type="button"
-                    aria-expanded={skyOpen}
+                    aria-expanded={open === skyId}
                     aria-controls={skyId}
                     aria-label={`${sky.label}. Show expected conditions`}
                     data-partial={sky.partial}
-                    onClick={() => setSkyOpen(!skyOpen)}
+                    onClick={() => toggle(skyId)}
                   >
                     <Icon name={chip.icon} size={16} />
                     {chip.text}
@@ -509,18 +524,25 @@ export const RouteTile = (props: {
                     />
                   </button>
                 </li>
-              ) : chip.gusts ? (
-                // The split wind pill (D): each half amber for its own part.
-                <li
-                  key={`${chip.text} ${chip.gusts}`}
-                  class="ro-split"
-                  aria-label={chip.label}
-                >
-                  <span data-warn={chip.warn}>
+              ) : chip === chips[1] ? (
+                <li key={chip.text} class="ro-wind-chip">
+                  <button
+                    type="button"
+                    aria-expanded={open === windId}
+                    aria-controls={windId}
+                    aria-label={`${chip.label}${chip.warn ? ', costs points' : ''}. Show wind along the ride`}
+                    data-warn={chip.warn}
+                    onClick={() => toggle(windId)}
+                  >
                     <Icon name={chip.icon} size={16} />
                     {chip.text}
-                  </span>
-                  <span data-warn="true">{chip.gusts}</span>
+                    <Icon
+                      name="chevron"
+                      size={12}
+                      weight={1.6}
+                      class="ro-chevron"
+                    />
+                  </button>
                 </li>
               ) : (
                 <li
@@ -538,7 +560,7 @@ export const RouteTile = (props: {
           <span>{card.reason}</span>
         )}
       </Slot>
-      {skyOpen && card.best && sky?.segments && sky.legend && (
+      {open === skyId && card.best && sky?.segments && sky.legend && (
         <div class="ro-sky" id={skyId}>
           <b>Expected conditions along the ride</b>
           <div class="ro-sky-bar" aria-hidden="true">
@@ -546,7 +568,7 @@ export const RouteTile = (props: {
               <span key={i} data-sky={g.kind} style={{ flex: g.share }} />
             ))}
           </div>
-          <div class="ro-sky-ends" aria-hidden="true">
+          <div class="ro-ends" aria-hidden="true">
             <span>{clock(card.best.departureAt, view.timeZone)}</span>
             <span>~{clock(card.best.finishAt, view.timeZone)}</span>
           </div>
@@ -561,6 +583,14 @@ export const RouteTile = (props: {
           </ul>
         </div>
       )}
+      {open === windId && card.best && (
+        <WindPanel
+          id={windId}
+          best={card.best}
+          outline={card.outline}
+          view={view}
+        />
+      )}
       {!blank && <Notes card={card} />}
       {blank || card.score !== null ? (
         <Meter score={card.score} blank={blank} change={props.change} />
@@ -568,6 +598,124 @@ export const RouteTile = (props: {
         card.state === 'incomplete' && <span class="ro-no-score">No score</span>
       )}
     </div>
+  );
+};
+
+// "Wind along the ride" (wind board 7): the route sketch when the API sends one, then the bar, the
+// legend and the gusts.
+const WindPanel = (props: {
+  id: string;
+  best: Departure;
+  outline: Outline | null;
+  view: View;
+}) => {
+  const { best, view } = props;
+  const wind = windPanel(
+    best,
+    props.outline,
+    view.timeZone,
+    view.state.units,
+    view.state.user?.settings.preferences,
+  );
+  return (
+    <div class="ro-wind" id={props.id}>
+      <b>Wind along the ride</b>
+      {wind.sketch && <Sketch sketch={wind.sketch} />}
+      <div class="ro-wind-bar" aria-hidden="true">
+        {wind.blocks.map((g, i) => (
+          <span key={i} data-wind={g.effect} style={{ flex: g.share }}>
+            {g.label}
+          </span>
+        ))}
+      </div>
+      <div class="ro-ends" aria-hidden="true">
+        <span>{clock(best.departureAt, view.timeZone)}</span>
+        <span>~{clock(best.finishAt, view.timeZone)}</span>
+      </div>
+      <ul>
+        {wind.legend.map((l) => (
+          <li key={l.effect}>
+            <i data-wind={l.effect} />
+            <span>{l.name}</span>
+            <span>{l.speed}</span>
+            <span>{l.share}</span>
+          </li>
+        ))}
+      </ul>
+      {wind.gusts && (
+        <div class="ro-gusts" data-warn={wind.gusts.warn}>
+          <Icon name="wind" size={14} weight={1.6} />
+          <div>
+            <b>{wind.gusts.title}</b>
+            <span>{wind.gusts.text}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// North up, no basemap: the route coloured by the wind, arrowheads for the way round.
+const CHEVRON = 'M-2.2 -2.6 L1.4 0 L-2.2 2.6';
+const Sketch = ({ sketch }: { sketch: WindSketch }) => {
+  const { start, finish, wind } = sketch;
+  return (
+    <>
+      <div class="ro-wind-map">
+        <svg
+          width="100%"
+          viewBox={`0 0 ${SKETCH.width} ${SKETCH.height}`}
+          aria-hidden="true"
+        >
+          <polyline class="ro-wind-casing" points={sketch.casing} />
+          {sketch.runs.map((r, i) => (
+            <polyline key={i} data-wind={r.effect} points={r.points} />
+          ))}
+          {sketch.chevrons.map((c, i) => (
+            <path
+              key={i}
+              class="ro-wind-way"
+              d={CHEVRON}
+              transform={`translate(${c.x} ${c.y}) rotate(${c.angle})`}
+            />
+          ))}
+          {finish && (
+            <circle class="ro-wind-finish" cx={finish.x} cy={finish.y} r={4} />
+          )}
+          <circle class="ro-wind-start" cx={start.x} cy={start.y} r={4.5} />
+          {[start.label, ...(finish ? [finish.label] : [])].map((l) => (
+            <text key={l.text} x={l.x} y={l.y} text-anchor={l.anchor}>
+              {l.text}
+            </text>
+          ))}
+          {wind.arrow && (
+            <g class="ro-wind-arrow">
+              <path
+                d={`M${wind.arrow.x1} ${wind.arrow.y1}L${wind.arrow.x2} ${wind.arrow.y2}`}
+              />
+              <path
+                d="M-3.7 -4.4 L2.4 0 L-3.7 4.4"
+                transform={`translate(${wind.arrow.x2} ${wind.arrow.y2}) rotate(${wind.arrow.angle})`}
+              />
+            </g>
+          )}
+          <text class="ro-wind-from" x={10} y={22}>
+            {wind.title}
+          </text>
+          <text x={10} y={35}>
+            {wind.speed}
+          </text>
+          <path
+            class="ro-wind-north"
+            d="M222 20V11M219.4 13.6L222 11L224.6 13.6"
+          />
+          <text class="ro-wind-n" x={222} y={9} text-anchor="middle">
+            N
+          </text>
+        </svg>
+      </div>
+      <p class="ro-sr">{sketch.sentence}</p>
+    </>
   );
 };
 
@@ -603,6 +751,7 @@ export const Ranked = (props: {
   const [settled, setSettled] = useState(!prior);
   const [changes, setChanges] = useState(prior?.changes ?? {});
   const [said, setSaid] = useState('');
+  const open = useState<string | null>(null);
   const last = useRef<Omit<Seen, 'changes'>>(
     prior ?? { window: props.window, cards },
   );
@@ -708,23 +857,25 @@ export const Ranked = (props: {
   ];
   let scored = 0;
   return (
-    <div ref={list} class={props.class}>
-      {shown.map((id, i) => {
-        const now = byId.get(id) as Card;
-        const card = settled
-          ? now
-          : { ...now, score: old.get(id) ?? now.score };
-        return props.render(
-          card,
-          i,
-          card.score !== null ? scored++ : null,
-          changes[id],
-        );
-      })}
-      <span class="ro-sr" aria-live="polite">
-        {said}
-      </span>
-    </div>
+    <OpenPanel.Provider value={open}>
+      <div ref={list} class={props.class}>
+        {shown.map((id, i) => {
+          const now = byId.get(id) as Card;
+          const card = settled
+            ? now
+            : { ...now, score: old.get(id) ?? now.score };
+          return props.render(
+            card,
+            i,
+            card.score !== null ? scored++ : null,
+            changes[id],
+          );
+        })}
+        <span class="ro-sr" aria-live="polite">
+          {said}
+        </span>
+      </div>
+    </OpenPanel.Provider>
   );
 };
 

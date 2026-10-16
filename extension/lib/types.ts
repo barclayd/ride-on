@@ -152,6 +152,7 @@ export type Conditions = {
     tailwind: number;
     crosswind: number;
   };
+  windFromDegrees?: number | null; // distance-weighted mean; null when calm or variable
   precipitationSummary?: PrecipitationSummary;
   // Share of route distance under each forecast symbol; null unless sunshine is weighed and every symbol is known.
   skyConditionDistanceFractions?: Record<
@@ -192,6 +193,8 @@ export type Departure = {
   } | null;
   // Elapsed ride hours in ride order; conditions null when no route sample falls in the hour.
   rideHours?: { start: string; end: string; conditions: Conditions | null }[];
+  // docs/extension-api-brief-v7.md: contiguous stretches covering the route; absent before it ships.
+  windStretches?: WindStretch[];
   // docs/tailwind-opportunity.md: ordering only, never shown as a number. Null when unranked.
   tailwindOpportunity?: { priorityPoints: number } | null;
   date: string;
@@ -208,6 +211,19 @@ export type Departure = {
     penaltyPoints: number;
   };
 };
+export type WindEffect = 'tailwind' | 'crosswind' | 'headwind' | 'light';
+export type WindStretch = {
+  fromM: number;
+  toM: number;
+  startAt: string;
+  endAt: string;
+  effect: WindEffect;
+  windFromDegrees: number | null;
+  averageWindSpeedKph: number;
+  maximumAdverseGustKph: number;
+};
+// docs/extension-api-brief-v7.md: up to 64 points of [latitude, longitude, metres along the route].
+export type Outline = { version: 1; points: [number, number, number][] };
 type ForecastStatistic =
   | { kind: 'deterministic' | 'ensemble-mean' }
   | { kind: 'percentile'; percentile: number };
@@ -231,6 +247,7 @@ export type RouteResult = {
   routeId: string;
   routeName: string;
   distanceKm: number;
+  outline?: Outline | null;
   distanceFit: {
     status: 'within_range' | 'below_range' | 'above_range';
     deviationKm: number;

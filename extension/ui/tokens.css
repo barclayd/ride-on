@@ -858,39 +858,15 @@ a.ro-name:hover {
 .ro-chips li[data-warn="true"] svg {
   color: #b4692a;
 }
-/* The split wind pill: the wind, then 2px apart the amber gusts, each half its own colour. */
-.ro-chips li.ro-split {
-  gap: 2px;
+/* The sky and wind chips open their dropdowns (handoff v4, wind board 7). The sky is never amber and is
+   dashed when part of the ride isn't forecast; the wind is amber when it costs points. */
+.ro-chips li.ro-sky-chip,
+.ro-chips li.ro-wind-chip {
   padding: 0;
   background: none;
 }
-.ro-split > span {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: #eef4e2;
-}
-.ro-split > span:first-child {
-  border-radius: 999px 4px 4px 999px;
-  padding: 4px 8px 4px 7px;
-}
-.ro-split > span:last-child {
-  border-radius: 4px 999px 999px 4px;
-  padding: 4px 10px 4px 8px;
-}
-.ro-split > span[data-warn="true"] {
-  background: var(--ro-warn-bg);
-  color: var(--ro-warn-fg);
-}
-.ro-split > span[data-warn="true"] svg {
-  color: #b4692a;
-}
-/* The sky chip opens the timeline (handoff v4). Never amber; dashed when part of the ride isn't forecast. */
-.ro-chips li.ro-sky-chip {
-  padding: 0;
-  background: none;
-}
-.ro-sky-chip button {
+.ro-sky-chip button,
+.ro-wind-chip button {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -902,7 +878,8 @@ a.ro-name:hover {
   font: inherit;
   cursor: pointer;
 }
-.ro-sky-chip button:hover {
+.ro-sky-chip button:hover,
+.ro-wind-chip button:hover {
   filter: brightness(0.97);
 }
 .ro-sky-chip button[data-partial="true"] {
@@ -914,13 +891,21 @@ a.ro-name:hover {
 .ro-sky-chip button[data-partial="true"] svg {
   color: var(--ro-muted);
 }
+.ro-wind-chip button[data-warn="true"] {
+  background: var(--ro-warn-bg);
+  color: var(--ro-warn-fg);
+}
+.ro-wind-chip button[data-warn="true"] svg {
+  color: #b4692a;
+}
 .ro-chevron {
   transition: transform 0.2s;
 }
 [aria-expanded="true"] > .ro-chevron {
   transform: rotate(180deg);
 }
-.ro-sky {
+.ro-sky,
+.ro-wind {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -928,7 +913,8 @@ a.ro-name:hover {
   border-radius: 8px;
   padding: 10px 12px 12px;
 }
-.ro-sky > b {
+.ro-sky > b,
+.ro-wind > b {
   font: 600 12px var(--ro-sans);
   color: var(--ro-olive-ink);
 }
@@ -939,14 +925,15 @@ a.ro-name:hover {
   border-radius: 5px;
   overflow: hidden;
 }
-.ro-sky-ends {
+.ro-ends {
   display: flex;
   justify-content: space-between;
   margin-top: -3px;
   font: 500 11px var(--ro-serif);
   color: var(--ro-muted);
 }
-.ro-sky ul {
+.ro-sky ul,
+.ro-wind ul {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -954,23 +941,27 @@ a.ro-name:hover {
   padding: 0;
   list-style: none;
 }
-.ro-sky li {
+.ro-sky li,
+.ro-wind li {
   display: flex;
   align-items: center;
   gap: 7px;
   font: 600 12px var(--ro-sans);
   color: var(--ro-ink);
 }
-.ro-sky li i {
+.ro-sky li i,
+.ro-wind li i {
   flex: none;
   width: 10px;
   height: 10px;
   border-radius: 3px;
 }
-.ro-sky li span:first-of-type {
+.ro-sky li span:first-of-type,
+.ro-wind li span:first-of-type {
   flex: 1;
 }
-.ro-sky li span:last-child {
+.ro-sky li span:last-child,
+.ro-wind li span:last-child {
   font: 500 12px var(--ro-serif);
   color: var(--ro-olive-900);
 }
@@ -986,6 +977,149 @@ a.ro-name:hover {
 }
 [data-sky="unknown"] {
   background: repeating-linear-gradient(135deg, #d3d9ca 0 3px, #f5f7f1 3px 6px);
+}
+/* "Wind along the ride": the sky panel's layout, plus the sketch, the speed column and the gusts. */
+.ro-wind-bar {
+  display: flex;
+  gap: 2px;
+  height: 16px;
+  border-radius: 6px;
+  overflow: hidden;
+  font: 700 10px / 16px var(--ro-sans);
+  letter-spacing: 0.02em;
+  color: var(--ro-ink);
+  text-align: center;
+}
+.ro-wind-bar > span {
+  min-width: 0;
+  overflow: hidden;
+}
+[data-wind="tailwind"] {
+  background: #8bc61f;
+}
+[data-wind="crosswind"] {
+  background: #cfd6dd;
+}
+[data-wind="headwind"] {
+  background: #c06a2e;
+}
+[data-wind="light"] {
+  background: repeating-linear-gradient(135deg, #d3d9ca 0 3px, #f5f7f1 3px 6px);
+}
+.ro-wind li span:nth-of-type(2) {
+  font: 500 12px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-wind li span:last-child {
+  width: 34px;
+  text-align: right;
+}
+.ro-wind-map {
+  background: #fff;
+  border: 1px solid #e3e7dc;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.ro-wind-map svg {
+  display: block;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ro-wind-map polyline {
+  stroke-width: 4;
+}
+.ro-wind-map .ro-wind-casing {
+  stroke: var(--ro-ink);
+  stroke-opacity: 0.16;
+  stroke-width: 7;
+}
+.ro-wind-map [data-wind="tailwind"] {
+  stroke: #8bc61f;
+}
+.ro-wind-map [data-wind="crosswind"] {
+  stroke: #cfd6dd;
+}
+.ro-wind-map [data-wind="headwind"] {
+  stroke: #c06a2e;
+}
+.ro-wind-map [data-wind="light"] {
+  stroke: #c9d0bd;
+  stroke-dasharray: 3 2.5;
+}
+.ro-wind-way {
+  stroke: var(--ro-ink);
+  stroke-width: 1.5;
+}
+.ro-wind-start {
+  fill: #fff;
+  stroke: var(--ro-ink);
+  stroke-width: 2;
+}
+.ro-wind-finish {
+  fill: var(--ro-ink);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.ro-wind-arrow {
+  stroke: var(--ro-muted);
+  stroke-width: 2.2;
+}
+.ro-wind-north {
+  stroke: var(--ro-muted);
+  stroke-width: 1.3;
+}
+.ro-wind-map text {
+  font: 500 10px var(--ro-serif);
+  fill: var(--ro-muted);
+  stroke: #fff;
+  stroke-width: 3;
+  paint-order: stroke;
+}
+.ro-wind-map .ro-wind-from {
+  font: 700 10.5px var(--ro-sans);
+  fill: var(--ro-ink);
+}
+.ro-wind-map .ro-wind-n {
+  font: 700 8.5px var(--ro-sans);
+}
+.ro-gusts {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  border-top: 1px solid #e3e7dc;
+  padding-top: 8px;
+}
+.ro-gusts svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--ro-olive-700);
+}
+.ro-gusts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ro-gusts b {
+  font: 600 12px / 16px var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-gusts span {
+  font: 500 12px / 16px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-gusts[data-warn="true"] {
+  border-top: none;
+  border-radius: 6px;
+  padding: 7px 9px 8px;
+  background: var(--ro-warn-bg);
+}
+.ro-gusts[data-warn="true"] svg {
+  color: #b4692a;
+}
+.ro-gusts[data-warn="true"] b,
+.ro-gusts[data-warn="true"] span {
+  color: var(--ro-warn-fg);
 }
 .ro-meter {
   display: flex;

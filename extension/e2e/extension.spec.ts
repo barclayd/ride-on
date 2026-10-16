@@ -143,7 +143,21 @@ const CONDITIONS = {
     maximumAdverseKph: 48,
   },
   windDistanceFractions: { headwind: 0.1, tailwind: 0.7, crosswind: 0.2 },
+  windFromDegrees: 225,
   precipitationSummary: 'dry' as const,
+};
+// A loop out north-east and home west (docs/extension-api-brief-v7.md), [latitude, longitude, metres].
+const OUTLINE = {
+  version: 1,
+  points: [
+    [51.46, -0.3, 0],
+    [51.5, -0.26, 10_000],
+    [51.54, -0.22, 20_000],
+    [51.52, -0.16, 30_000],
+    [51.48, -0.14, 40_000],
+    [51.46, -0.22, 45_000],
+    [51.46, -0.3, 50_000],
+  ],
 };
 const coast = (): RouteSummary => ({
   id: 'r102',
@@ -268,6 +282,29 @@ const best = (date: string, i: number, score: number) => ({
           : { ...sky, overcast: 0, obscured: 0 },
     },
   })),
+  // Out with the south-westerly behind, then across it and home into it, where the gusts are.
+  windStretches: (
+    [
+      [0, 30_000, 'tailwind', 225, 15, 0, 0, 72],
+      [30_000, 40_000, 'crosswind', 270, 15, 20, 72, 96],
+      [40_000, 50_000, 'headwind', 270, 16, 48, 96, 120],
+    ] as const
+  ).map(([fromM, toM, effect, from, kph, adverse, start, end]) => {
+    const at = (minutes: number) =>
+      new Date(
+        Date.parse(`${date}T0${8 + i}:00:00Z`) + minutes * 60_000,
+      ).toISOString();
+    return {
+      fromM,
+      toM,
+      startAt: at(start),
+      endAt: at(end),
+      effect,
+      windFromDegrees: from,
+      averageWindSpeedKph: kph,
+      maximumAdverseGustKph: adverse,
+    };
+  }),
   // Only the first route has an opportunity; never shown as a number.
   tailwindOpportunity: { priorityPoints: i === 0 ? 3.17 : 0 },
 });
@@ -367,6 +404,7 @@ const recommendations = (body: any) => {
           routeId,
           routeName: routes[routeId].name,
           distanceKm: routes[routeId].distanceM / 1000,
+          outline: OUTLINE,
           distanceFit: null,
           estimatedDurationMinutes: 180,
           daylight: { start: `${date}T06:15:00Z`, end: `${date}T17:20:00Z` },
@@ -788,14 +826,24 @@ test('reopening reuses fresh scores; a stale forecast or the refresh button rank
   expect(recCalls()).toHaveLength(4);
 });
 
-test('gust comfort saves separately and appears alongside the ride wind', async ({
+test('gust comfort saves separately; the wind dropdown says where the gusts are', async ({
   context,
   worker,
   extensionId,
 }) => {
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  await expect(page.locator('.ro-ride').first()).toContainText('gusts 48');
+  const card = page.locator('.ro-ride').first();
+  await card.getByRole('button', { name: /Show wind along the ride$/ }).click();
+  // Into the wind on the way home, past the default 35 km/h comfort: amber.
+  const gusts = card.locator('.ro-gusts');
+  await expect(gusts).toHaveAttribute('data-warn', 'true');
+  await expect(gusts.locator('b')).toHaveText('Gusts up to 48 km/h');
+  await expect(gusts.locator('span')).toHaveText(
+    /^Into your face on the way back, \d\d:\d\d–\d\d:\d\d\. Over your 35 km\/h comfort\.$/,
+  );
+  await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('wind-dropdown.png') });
   await page.getByRole('tab', { name: 'Preferences' }).click();
   await page.getByRole('button', { name: /Wind preferences/ }).click();
   const gust = page.getByRole('slider', { name: 'Gust comfort' });
@@ -1371,19 +1419,15 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(chips).toHaveText([
     '9–14°C',
     'Sun and sunny intervals',
-    /^15 km\/h tailwind\s*gusts 48$/,
+    '15 km/h tailwind',
     'Dry',
   ]);
   await expect(chips.nth(0)).toHaveAttribute('data-warn', 'true');
-  await expect(chips.nth(2)).toHaveAttribute(
-    'aria-label',
-    'Tailwind 15 km/h, maximum gusts 48 km/h',
-  );
-  // The split wind pill: this rider prefers calm, so the tailwind costs points, and so do the gusts.
-  const wind = chips.nth(2).locator('span');
-  await expect(wind).toHaveText(['15 km/h tailwind', 'gusts 48']);
-  await expect(wind.nth(0)).toHaveAttribute('data-warn', 'true');
-  await expect(wind.nth(1)).toHaveAttribute('data-warn', 'true');
+  // The wind pill never shows gusts; this rider prefers calm, so the tailwind costs points.
+  const wind = module.getByRole('button', {
+    name: 'Tailwind 15 km/h, costs points. Show wind along the ride',
+  });
+  await expect(wind).toHaveAttribute('data-warn', 'true');
   await expect(chips.nth(3)).toHaveAttribute('data-warn', 'false');
   // The sky chip opens the expected conditions inside the tile, and closes it again.
   const sky = module.getByRole('button', {
@@ -1402,8 +1446,33 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     'Sunny intervals~50%',
     'Cloud~30%',
   ]);
-  await sky.click();
+  // Opening the wind closes the sky: one dropdown at a time.
+  await wind.click();
   await expect(timeline).toBeHidden();
+  await expect(module.locator('[aria-expanded="true"]')).toHaveCount(1);
+  const along = module.locator('.ro-wind');
+  await expect(along.locator('b').first()).toHaveText('Wind along the ride');
+  await expect(along.locator('.ro-wind-bar span')).toHaveText(['SW', 'W', 'W']);
+  await expect(along.locator('li')).toHaveText([
+    'Tailwind15 km/h~60%',
+    'Crosswind15 km/h~20%',
+    'Headwind16 km/h~20%',
+  ]);
+  // The route sketch: casing plus a run per effect, a start and no finish on a loop.
+  const sketch = along.locator('.ro-wind-map svg');
+  await expect(sketch.locator('polyline')).toHaveCount(4);
+  await expect(sketch.locator('text').first()).toHaveText(/^Start \d\d:\d\d$/);
+  await expect(sketch.locator('.ro-wind-finish')).toHaveCount(0);
+  await expect(sketch.locator('.ro-wind-from')).toHaveText(
+    'Wind from SW, then W',
+  );
+  await expect(along.locator('.ro-sr')).toHaveText(
+    'Heads north-east with the wind behind, then south across the wind, then west into the wind. Wind from the south-west, then west.',
+  );
+  await module.screenshot({ path: test.info().outputPath('wind.png') });
+  await wind.click();
+  await expect(along).toBeHidden();
+  await expect(module.locator('[aria-expanded="true"]')).toHaveCount(0);
   // A tailwind opportunity orders the tiles but is never labelled, so every tile keeps one height.
   await expect(module.locator('.ro-ride')).not.toContainText(
     'tailwind opportunity',
@@ -1545,12 +1614,20 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
   await expect(chips).toHaveText([
     '48–57°F',
     'Sun and sunny intervals',
-    /^9 mph tailwind\s*gusts 30$/,
+    '9 mph tailwind',
     'Dry',
   ]);
-  await expect(chips.nth(2)).toHaveAttribute(
-    'aria-label',
-    'Tailwind 9 mph, maximum gusts 30 mph',
+  // The wind dropdown follows: the legend, the gusts and the sketch's speed.
+  const module = journeys.locator('ride-on-module');
+  await module
+    .getByRole('button', { name: /^Tailwind 9 mph, costs points\. Show wind/ })
+    .click();
+  await expect(module.locator('.ro-wind li').first()).toHaveText(
+    'Tailwind9 mph~60%',
+  );
+  await expect(module.locator('.ro-gusts b')).toHaveText('Gusts up to 30 mph');
+  await expect(module.locator('.ro-gusts span')).toContainText(
+    'Over your 22 mph comfort.',
   );
 });
 

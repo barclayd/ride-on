@@ -17,6 +17,7 @@ import type {
   Failure,
   Levels,
   NextWindow,
+  Outline,
   Preferences,
   PreferencesPatch,
   RecentRides,
@@ -310,7 +311,6 @@ export type Chip = {
   text: string;
   label: string;
   warn: boolean; // amber: against what the rider asked for
-  gusts?: string; // the wind chip's amber second half, only when the gusts lower the score
 };
 // The API's defaults, for users that predate them (planning-api.md).
 export const DEFAULT_LEVELS: Levels = { sunshine: 'nice', rain: 'light-ok' };
@@ -335,16 +335,6 @@ export const conditionChips = (
   const pct = Math.round(c.maximumPrecipitationProbability * 100);
   const chance = `${pct}% chance of rain`;
   const summary = c.precipitationSummary ?? (pct < 10 ? 'dry' : 'possible');
-  const gust = c.maximumGustKph;
-  // Only gusts that lower the score: past the rider's comfort, or their hard limit.
-  const gusty =
-    gust !== undefined &&
-    ((c.gustExposure?.maximumAdverseKph ?? gust) >
-      (windComfort?.comfortableGustKph ?? 35) ||
-      (prefs.minimumStandards?.maximumGustKph !== undefined &&
-        gust > prefs.minimumStandards.maximumGustKph))
-      ? gust
-      : undefined;
   const rain =
     summary === 'dry'
       ? null
@@ -359,12 +349,13 @@ export const conditionChips = (
       warn:
         !!comfort && (low < comfort.comfortMinC || high > comfort.comfortMaxC),
     },
-    // A split pill, "11 mph crosswind | gusts 25": the gusts appear only when they lower the score,
-    // so each half is amber only for its own part. Harmless gusts leave the wind alone.
+    // The wind pill opens "Wind along the ride", where the gusts are; the pill never shows them.
     {
       icon: 'wind',
       text: kind ? `${shown} ${kind}` : shown,
-      label: `${kind ? `${kind[0].toUpperCase()}${kind.slice(1)} ${shown}` : `Wind ${shown}`}${gusty === undefined ? '' : `, maximum gusts ${speed(gusty, u)}`}`,
+      label: kind
+        ? `${kind[0].toUpperCase()}${kind.slice(1)} ${shown}`
+        : `Wind ${shown}`,
       // The speed shown against the comfort for its direction; a mix includes some headwind.
       // A rider who prefers calm loses points to any named wind, a tailwind too.
       warn:
@@ -376,7 +367,6 @@ export const conditionChips = (
             (kind === 'crosswind'
               ? (windComfort?.comfortableCrosswindKph ?? 20)
               : (windComfort?.comfortableHeadwindKph ?? 15))),
-      ...(gusty !== undefined && { gusts: `gusts ${speedValue(gusty, u)}` }),
     },
     rain
       ? {
@@ -426,7 +416,7 @@ const skyKinds = (c: Conditions | null): Record<SkyKind, number> | null => {
 };
 // ponytail: 10% of the forecast distance makes sun a real part of a mix; below it the ride is mostly intervals.
 const REAL_PART = 0.1;
-const approx = (x: number) =>
+export const approx = (x: number) =>
   x < 0.025 ? '<5%' : `~${Math.round(x * 20) * 5}%`;
 export const skyChip = (
   b: Departure,
@@ -555,6 +545,7 @@ export type Card = {
   coverage: string | null;
   score: number | null;
   best: Departure | null;
+  outline: Outline | null; // the route sketch's shape (docs/extension-api-brief-v7.md)
   recent: boolean; // shares roads with recent rides, so scored a little lower
 };
 export type Banner = 'provider' | 'nomatch' | 'incomplete' | 'distance';
@@ -614,6 +605,7 @@ export const buildResults = (
       coverage: null,
       score: null,
       best: null,
+      outline: r?.outline ?? null,
       recent: false,
     };
     if (!r)
