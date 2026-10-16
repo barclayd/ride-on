@@ -1215,11 +1215,6 @@ const PrefsTab = ({ view }: { view: View }) => {
                   : "Rides with the least wind rank highest. A tailwind doesn't earn extra points."}
               </span>
             </div>
-            <p class="ro-hint">
-              Comfort falls gradually towards these speeds, then more strongly
-              above them. Gust comfort affects your score; the separate gust
-              limit below controls which rides to skip.
-            </p>
             {(
               [
                 ['Headwind comfort', 'headKph'],
