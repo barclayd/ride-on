@@ -509,6 +509,19 @@ export const RouteTile = (props: {
                     />
                   </button>
                 </li>
+              ) : chip.gusts ? (
+                // The split wind pill (D): each half amber for its own part.
+                <li
+                  key={`${chip.text} ${chip.gusts}`}
+                  class="ro-split"
+                  aria-label={chip.label}
+                >
+                  <span data-warn={chip.warn}>
+                    <Icon name={chip.icon} size={16} />
+                    {chip.text}
+                  </span>
+                  <span data-warn="true">{chip.gusts}</span>
+                </li>
               ) : (
                 <li
                   key={chip.text}
@@ -553,13 +566,6 @@ export const RouteTile = (props: {
         <Meter score={card.score} blank={blank} change={props.change} />
       ) : (
         card.state === 'incomplete' && <span class="ro-no-score">No score</span>
-      )}
-      {/* Why a ride may lead on equal Conditions: ordering only, never a number (handoff v4 §4). */}
-      {!blank && (card.best?.tailwindOpportunity?.priorityPoints ?? 0) > 0 && (
-        <span class="ro-opportunity">
-          <Icon name="arrow" size={14} weight={1.6} />
-          Favourable tailwind opportunity
-        </span>
       )}
     </div>
   );

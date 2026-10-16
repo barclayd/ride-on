@@ -1371,7 +1371,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(chips).toHaveText([
     '9–14°C',
     'Sun and sunny intervals',
-    '15 km/h tailwind, gusts 48',
+    /^15 km\/h tailwind\s*gusts 48$/,
     'Dry',
   ]);
   await expect(chips.nth(0)).toHaveAttribute('data-warn', 'true');
@@ -1379,8 +1379,11 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     'aria-label',
     'Tailwind 15 km/h, maximum gusts 48 km/h',
   );
-  // The gusts lower the score, so the shared chip is amber.
-  await expect(chips.nth(2)).toHaveAttribute('data-warn', 'true');
+  // The split wind pill: this rider prefers calm, so the tailwind costs points, and so do the gusts.
+  const wind = chips.nth(2).locator('span');
+  await expect(wind).toHaveText(['15 km/h tailwind', 'gusts 48']);
+  await expect(wind.nth(0)).toHaveAttribute('data-warn', 'true');
+  await expect(wind.nth(1)).toHaveAttribute('data-warn', 'true');
   await expect(chips.nth(3)).toHaveAttribute('data-warn', 'false');
   // The sky chip opens the expected conditions inside the tile, and closes it again.
   const sky = module.getByRole('button', {
@@ -1401,8 +1404,9 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   ]);
   await sky.click();
   await expect(timeline).toBeHidden();
-  await expect(module.locator('.ro-ride .ro-opportunity')).toHaveText(
-    'Favourable tailwind opportunity',
+  // A tailwind opportunity orders the tiles but is never labelled, so every tile keeps one height.
+  await expect(module.locator('.ro-ride')).not.toContainText(
+    'tailwind opportunity',
   );
   await expect(
     module.getByRole('button', { name: 'Stop tracking Hilly Loop' }),
@@ -1438,6 +1442,18 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(
     module.locator('.ro-ride').nth(1).locator('.ro-pill'),
   ).toHaveText(['Not recommended']);
+  // Tiles in a row share one height, so their Conditions bars line up for scanning.
+  const tiles = module.locator('.ro-ride');
+  const [a, b] = [
+    await tiles.nth(0).boundingBox(),
+    await tiles.nth(1).boundingBox(),
+  ];
+  expect(b?.y).toBe(a?.y);
+  expect(b?.height).toBe(a?.height);
+  const meters = module.getByRole('meter', { name: 'Conditions score' });
+  expect((await meters.nth(1).boundingBox())?.y).toBe(
+    (await meters.nth(0).boundingBox())?.y,
+  );
   await module.screenshot({ path: test.info().outputPath('tiles.png') });
   const imported = calls.find(
     (c) => c.path === '/route-imports' && c.body.source.externalId === '102',
@@ -1529,7 +1545,7 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
   await expect(chips).toHaveText([
     '48–57°F',
     'Sun and sunny intervals',
-    '9 mph tailwind, gusts 30',
+    /^9 mph tailwind\s*gusts 30$/,
     'Dry',
   ]);
   await expect(chips.nth(2)).toHaveAttribute(

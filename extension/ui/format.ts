@@ -310,6 +310,7 @@ export type Chip = {
   text: string;
   label: string;
   warn: boolean; // amber: against what the rider asked for
+  gusts?: string; // the wind chip's amber second half, only when the gusts lower the score
 };
 // The API's defaults, for users that predate them (planning-api.md).
 export const DEFAULT_LEVELS: Levels = { sunshine: 'nice', rain: 'light-ok' };
@@ -335,6 +336,15 @@ export const conditionChips = (
   const chance = `${pct}% chance of rain`;
   const summary = c.precipitationSummary ?? (pct < 10 ? 'dry' : 'possible');
   const gust = c.maximumGustKph;
+  // Only gusts that lower the score: past the rider's comfort, or their hard limit.
+  const gusty =
+    gust !== undefined &&
+    ((c.gustExposure?.maximumAdverseKph ?? gust) >
+      (windComfort?.comfortableGustKph ?? 35) ||
+      (prefs.minimumStandards?.maximumGustKph !== undefined &&
+        gust > prefs.minimumStandards.maximumGustKph))
+      ? gust
+      : undefined;
   const rain =
     summary === 'dry'
       ? null
@@ -349,14 +359,14 @@ export const conditionChips = (
       warn:
         !!comfort && (low < comfort.comfortMinC || high > comfort.comfortMaxC),
     },
-    // Wind and its gusts share one chip, the unit once: "15 km/h tailwind, gusts 48".
+    // A split pill, "11 mph crosswind | gusts 25": the gusts appear only when they lower the score,
+    // so each half is amber only for its own part. Harmless gusts leave the wind alone.
     {
       icon: 'wind',
-      text: `${kind ? `${shown} ${kind}` : shown}${gust === undefined ? '' : `, gusts ${speedValue(gust, u)}`}`,
-      label: `${kind ? `${kind[0].toUpperCase()}${kind.slice(1)} ${shown}` : `Wind ${shown}`}${gust === undefined ? '' : `, maximum gusts ${speed(gust, u)}`}`,
+      text: kind ? `${shown} ${kind}` : shown,
+      label: `${kind ? `${kind[0].toUpperCase()}${kind.slice(1)} ${shown}` : `Wind ${shown}`}${gusty === undefined ? '' : `, maximum gusts ${speed(gusty, u)}`}`,
       // The speed shown against the comfort for its direction; a mix includes some headwind.
       // A rider who prefers calm loses points to any named wind, a tailwind too.
-      // Amber when either the wind or the gusts lower the score.
       warn:
         (!!windComfort &&
           !windComfort.preferTailwind &&
@@ -365,12 +375,8 @@ export const conditionChips = (
           c.averageWindSpeedKph >
             (kind === 'crosswind'
               ? (windComfort?.comfortableCrosswindKph ?? 20)
-              : (windComfort?.comfortableHeadwindKph ?? 15))) ||
-        (gust !== undefined &&
-          ((c.gustExposure?.maximumAdverseKph ?? gust) >
-            (windComfort?.comfortableGustKph ?? 35) ||
-            (prefs.minimumStandards?.maximumGustKph !== undefined &&
-              gust > prefs.minimumStandards.maximumGustKph))),
+              : (windComfort?.comfortableHeadwindKph ?? 15))),
+      ...(gusty !== undefined && { gusts: `gusts ${speedValue(gusty, u)}` }),
     },
     rain
       ? {

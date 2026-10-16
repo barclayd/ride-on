@@ -209,8 +209,7 @@ fieldset {
 .ro-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
-  align-items: start; /* an open timeline doesn't stretch its neighbours */
-  gap: 14px;
+  gap: 14px; /* tiles stretch to their row, an open timeline included, so the row scans evenly */
 }
 .ro-strip {
   display: flex;
@@ -756,6 +755,7 @@ a.ro-name:hover {
   padding: 5px 8px;
 }
 .ro-no-score {
+  margin-top: auto;
   font: 400 12px var(--ro-serif);
   color: var(--ro-muted);
 }
@@ -856,6 +856,33 @@ a.ro-name:hover {
   color: var(--ro-warn-fg);
 }
 .ro-chips li[data-warn="true"] svg {
+  color: #b4692a;
+}
+/* The split wind pill: the wind, then 2px apart the amber gusts, each half its own colour. */
+.ro-chips li.ro-split {
+  gap: 2px;
+  padding: 0;
+  background: none;
+}
+.ro-split > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #eef4e2;
+}
+.ro-split > span:first-child {
+  border-radius: 999px 4px 4px 999px;
+  padding: 4px 8px 4px 7px;
+}
+.ro-split > span:last-child {
+  border-radius: 4px 999px 999px 4px;
+  padding: 4px 10px 4px 8px;
+}
+.ro-split > span[data-warn="true"] {
+  background: var(--ro-warn-bg);
+  color: var(--ro-warn-fg);
+}
+.ro-split > span[data-warn="true"] svg {
   color: #b4692a;
 }
 /* The sky chip opens the timeline (handoff v4). Never amber; dashed when part of the ride isn't forecast. */
@@ -960,26 +987,11 @@ a.ro-name:hover {
 [data-sky="unknown"] {
   background: repeating-linear-gradient(135deg, #d3d9ca 0 3px, #f5f7f1 3px 6px);
 }
-/* 8px under the Conditions bar. */
-.ro-opportunity {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: -2px;
-  font: 600 12px var(--ro-sans);
-  color: var(--ro-olive-ink);
-}
-.ro-module .ro-opportunity {
-  margin-top: -4px;
-}
-.ro-opportunity svg {
-  flex: none;
-  color: var(--ro-olive-700);
-}
 .ro-meter {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: auto; /* tiles in a row match heights, so their Conditions bars line up at the foot */
 }
 .ro-meter > span {
   display: flex;
