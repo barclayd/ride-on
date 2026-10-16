@@ -127,11 +127,16 @@ integration(
       rec = await recommend(h, [route.id]);
     const candidate = rec.rankings[0]?.best;
     assert.ok(candidate?.recommendationRef);
+    assert.ok(candidate.windStretches.length > 0);
     const calls = h.requests.length,
       key = crypto.randomUUID();
     const response = await track(h, candidate.recommendationRef, 0, null, key);
     assert.equal(response.status, 201);
     const created = await json<Mutation>(response);
+    assert.deepEqual(
+      created.ride.baseline.pick.candidate.windStretches,
+      candidate.windStretches,
+    );
     assert.equal(created.ride.baseline.pick.candidate.score, candidate.score);
     assert.equal(
       created.ride.baseline.pick.candidate.departureAt,

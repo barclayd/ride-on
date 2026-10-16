@@ -28,14 +28,15 @@ export const issueReferences = async (
     if (!candidates.length) return refs;
     const id = crypto.randomUUID();
     // Bound abandoned snapshot storage. Never evict an unexpired reference to make room.
-    // At most 500KB per context including its candidates, <=50MB per owner.
+    // At most 2MB per context including its candidates, <=50MB per owner.
+    // Wind sketches preserve up to 1,000 sections instead of hiding short ones.
     if (candidates.length > 48) return refs;
-    const contextJson = boundedJson(context, 200_000);
-    const pickJson = candidates.map((pick) => boundedJson(pick, 80_000));
+    const contextJson = boundedJson(context, 600_000);
+    const pickJson = candidates.map((pick) => boundedJson(pick, 400_000));
     const size = new TextEncoder().encode(
       contextJson + pickJson.join(''),
     ).byteLength;
-    if (size > 500_000) return refs;
+    if (size > 2_000_000) return refs;
     const expiry = candidates.reduce(
       (v, p) => (p.candidate.departureAt > v ? p.candidate.departureAt : v),
       now,

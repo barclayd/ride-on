@@ -29,6 +29,11 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 
 Not in scope yet: Routes tab and Onboarding (not redesigned; they keep working as they are).
 
+API v0.29.0 adds [route outlines and wind sections](../extension-api-brief-v7.md)
+for the wind dropdown, without changing scoring. Short headwind/crosswind sections
+remain visible; clients may omit tiny labels but must preserve the section colours.
+Historical plans can omit `windStretches`; newly generated plans retain them.
+
 API v0.26.0 provides separate opt-in cold sensitivity and seasonal temperature
 tolerance; [contract and calibration](../seasonal-temperature.md). Client controls
 are still pending. Preserve these choices on partial edits and keep the existing

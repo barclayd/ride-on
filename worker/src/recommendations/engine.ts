@@ -6,6 +6,7 @@ import {
 import { haversineKm } from '../geo.ts';
 import { type HistoryAssessment, prepareHistory } from '../rides/overlap.ts';
 import type { Route } from '../routes/model.ts';
+import { type RouteOutline, routeOutline } from '../routes/outline.ts';
 import { skyConditions } from '../weather/conditions.ts';
 import type {
   ForecastDescriptor,
@@ -37,6 +38,7 @@ import { compileTemperature } from './temperature.ts';
 import { temperatureComfort } from './temperature-comfort.ts';
 import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
 import { meanWindFrom } from './wind-direction.ts';
+import { windStretchesFor } from './wind-stretches.ts';
 
 export const ALGORITHM_VERSION = 'comfort-v0.17';
 export const requiredWeather = [
@@ -274,6 +276,7 @@ const assessCandidate = (
   history: HistoryAssessment,
   seasonalNormals: ReadonlyMap<Route['legs'][number], number | null>,
   directionality: number,
+  includeWindStretches = false,
 ) => {
   const rows: Observation[] = [];
   const missing = new Set<string>();
@@ -779,6 +782,9 @@ const assessCandidate = (
     standards: { status: standardsStatus, failures },
     conditions,
     rideHours,
+    windStretches: includeWindStretches
+      ? windStretchesFor(rows, route.distanceM, departure, durationMs)
+      : [],
     drawbacks,
   };
 };
@@ -833,6 +839,7 @@ export const recommendRides = (
     new Date(nowMs).toISOString(),
   ),
   exactDepartures?: ReadonlyMap<string, number>,
+  outlines?: ReadonlyMap<string, RouteOutline | null>,
 ) => {
   const forecasts = new Map(
     results.map((result) => [
@@ -921,6 +928,32 @@ export const recommendRides = (
       )
       .sort(orderDepartures);
     const assessed = climbing.status === 'unknown' ? [] : weatherAssessed;
+    // Only materialize section arrays for returned departures. Keeping up to
+    // 1,000 sections for every searched slot would inflate multi-route memory.
+    // The same prepared observations and pure assessment supply this display pass.
+    const withWind = (candidate: Assessed) => {
+      const detailed = assessCandidate(
+        route,
+        Date.parse(candidate.departureAt),
+        plan.durationMs,
+        input,
+        forecasts,
+        prepared,
+        maxLocationDistanceM,
+        climbing,
+        distance,
+        history,
+        seasonalNormals,
+        directionality,
+        true,
+      );
+      return {
+        ...candidate,
+        windStretches:
+          detailed.status === 'assessed' ? detailed.windStretches : [],
+      };
+    };
+    const best = assessed[0] ? withWind(assessed[0]) : null;
     const partial =
       climbing.status === 'unknown'
         ? [...weatherAssessed].sort(
@@ -940,6 +973,9 @@ export const recommendRides = (
       distanceKm: round(route.distanceM / 1000),
       distanceFit: distance.fit,
       ascentM: route.ascentM,
+      outline: outlines?.has(route.id)
+        ? (outlines.get(route.id) ?? null)
+        : routeOutline(route),
       ascentMPerKm:
         climbing.ascentMPerKm === null ? null : round(climbing.ascentMPerKm),
       estimatedDurationMinutes: round(plan.durationMs / 60_000),
@@ -967,7 +1003,7 @@ export const recommendRides = (
       })),
       partialAssessment: partial
         ? {
-            ...partial,
+            ...withWind(partial),
             status: 'partial' as const,
             score: null,
             recommendationPriority: null,
@@ -979,12 +1015,12 @@ export const recommendRides = (
       departuresStandardsUnknown: assessed.filter(
         (candidate) => candidate.standards.status === 'unknown',
       ).length,
-      best: assessed[0]
+      best: best
         ? {
-            ...assessed[0],
+            ...best,
             forecastDetails: forecastDetailsFor(
               route,
-              assessed[0],
+              best,
               forecasts,
               requiredWeatherFor(input),
             ),
@@ -993,7 +1029,7 @@ export const recommendRides = (
       alternatives: assessed
         .slice(1, 1 + alternativeLimit)
         .map((candidate) => ({
-          ...candidate,
+          ...withWind(candidate),
           forecastDetails: forecastDetailsFor(
             route,
             candidate,

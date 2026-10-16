@@ -5,6 +5,7 @@ import { HttpResponse, http } from 'msw/http';
 import { z } from 'zod';
 import { conditionsSchema } from '../src/recommendations/conditions.ts';
 import { ridingWindowSchema } from '../src/recommendations/planning.ts';
+import { windStretchesSchema } from '../src/recommendations/wind-stretches.ts';
 import { appleWeatherFixture } from '../test/fixtures/apple-weather.ts';
 import { first, upload } from './client.ts';
 import { hourlyForecast, metOffice } from './fixtures.ts';
@@ -66,6 +67,7 @@ const best = z.object({
     appliedPoints: z.number(),
   }),
   conditions: conditionsSchema,
+  windStretches: windStretchesSchema,
   recentRides: z.object({ penaltyPoints: z.number(), status: z.string() }),
   standards: z.object({ status: z.string() }),
 });
