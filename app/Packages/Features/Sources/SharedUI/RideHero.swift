@@ -5,11 +5,11 @@ import DesignSystem
 /// DESIGN-SYSTEM.md §6 component 1: a ride shown full-bleed on its route's map, with the title
 /// block over a bottom scrim. At least `height` tall, taller when large text needs the room. The
 /// caller places it under the status bar and toolbar, and overlays anything tappable (the track
-/// star on Rides) bottom trailing, clear of the title's trailing 84pt. The date and times live in
+/// bell on Rides) bottom trailing, clear of the title's trailing 84pt. The date and times live in
 /// the caller's card below, not on the map.
 public struct RideHero: View {
     var pick: RideBoard.Pick
-    /// "Best pick", shown in an accent pill above the name; `nil` shows no pill.
+    /// "Best pick", shown starred in an accent pill above the name; `nil` shows no pill.
     var eyebrow: String?
     var height: CGFloat
 
@@ -63,7 +63,7 @@ public struct RideHero: View {
 
         return VStack(alignment: .leading, spacing: 4) {
             if let eyebrow {
-                Text(eyebrow)
+                Text("\(Image(systemName: "star.fill")) \(eyebrow)")
                     .font(.footnote.weight(.semibold))
                     .padding(.vertical, 3)
                     .padding(.horizontal, 9)

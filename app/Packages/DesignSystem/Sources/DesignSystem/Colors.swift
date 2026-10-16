@@ -15,7 +15,7 @@ public extension ShapeStyle where Self == Color {
     /// The hero's "Best pick" pill: the light accent (#248A3D) 18% darker, in both schemes, so
     /// white text holds contrast over the map. Keep in step with `AccentColor`.
     static var pickPill: Color { Color(light: 0x1E7132, dark: 0x1E7132) }
-    /// The commit star's on state. Always over the hero map, so one value for both schemes.
+    /// The track bell's on state. Always over the hero map, so one value for both schemes.
     static var committed: Color { Color(light: 0xC88A00, dark: 0xC88A00) }
     /// A Routes card's "Below your minimums" pill, with black text. Always over the map, so one
     /// value for both schemes.

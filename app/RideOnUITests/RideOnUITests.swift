@@ -58,25 +58,25 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Why It Scored 82"].waitForExistence(timeout: 5))
     }
 
-    func testStarTracksAndStopsTrackingTheHeroRide() {
+    func testBellTracksAndStopsTrackingTheHeroRide() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
         app.launch()
 
         // "Track Hilly Loop on …" until tracked, then "Tracking Hilly Loop on …".
-        let star = { (prefix: String) in
-            app.buttons.matching(NSPredicate(format: "identifier == 'track-star' AND label BEGINSWITH %@", prefix)).firstMatch
+        let bell = { (prefix: String) in
+            app.buttons.matching(NSPredicate(format: "identifier == 'track-bell' AND label BEGINSWITH %@", prefix)).firstMatch
         }
-        XCTAssertTrue(star("Track ").waitForExistence(timeout: 5))
-        star("Track ").tap()
+        XCTAssertTrue(bell("Track ").waitForExistence(timeout: 5))
+        bell("Track ").tap()
         XCTAssertTrue(app.staticTexts["Track This Ride"].waitForExistence(timeout: 5))
         app.buttons["Start Tracking"].tap()
-        XCTAssertTrue(star("Tracking ").waitForExistence(timeout: 5))
+        XCTAssertTrue(bell("Tracking ").waitForExistence(timeout: 5))
 
-        star("Tracking ").tap()
+        bell("Tracking ").tap()
         XCTAssertTrue(app.staticTexts["Tracking This Ride"].waitForExistence(timeout: 5))
         app.buttons["Stop Tracking"].tap()
-        XCTAssertTrue(star("Track ").waitForExistence(timeout: 5))
+        XCTAssertTrue(bell("Track ").waitForExistence(timeout: 5))
     }
 
     /// The hero's title block is one accessibility element whose label starts with the route name.

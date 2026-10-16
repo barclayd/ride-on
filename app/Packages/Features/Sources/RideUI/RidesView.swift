@@ -16,7 +16,7 @@ public struct RidesView: View {
     @State private var choosingWindow = false
     /// The ride the Track sheet is open for.
     @State private var tracking: RideBoard.Pick?
-    /// The tracked ride's `Pick.id` as the star shows it: it follows `RideTracker` once the sheet has gone.
+    /// The tracked ride's `Pick.id` as the bell shows it: it follows `RideTracker` once the sheet has gone.
     @State private var shownTracked: String?
     @Namespace private var zoom
     @Environment(RideTracker.self) private var tracker: RideTracker?
@@ -56,7 +56,7 @@ public struct RidesView: View {
                         .matchedTransitionSource(id: hero.id, in: zoom)
 
                         // Beside the link, not inside it, so VoiceOver reaches both.
-                        // ponytail: a tracked ride that isn't the hero has no star to show it.
+                        // ponytail: a tracked ride that isn't the hero has no bell to show it.
                         if shownTracked == hero.id || tracker?.canTrack(trackable(hero)) ?? true {
                             trackButton(hero)
                                 .padding(.trailing, 20)
@@ -95,7 +95,7 @@ public struct RidesView: View {
         }
         .refreshable { await refresh() }
         .sheet(isPresented: $choosingWindow) { RideWindowSheet(board: board, apply: apply) }
-        // The star changes once the sheet has gone, so the change is seen.
+        // The bell changes once the sheet has gone, so the change is seen.
         .sheet(item: $tracking, onDismiss: showTracked) { pick in
             TrackRideSheet(pick: pick, isTracking: shownTracked == pick.id, replacing: replacing(pick))
         }
@@ -145,7 +145,7 @@ public struct RidesView: View {
         return Button {
             tracking = trackable(pick)
         } label: {
-            Image(systemName: isOn ? "star.fill" : "star")
+            Image(systemName: isOn ? "bell.fill" : "bell")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
                 .contentTransition(.symbolEffect(.replace))
@@ -159,7 +159,7 @@ public struct RidesView: View {
         .sensoryFeedback(trigger: isOn) { _, on in on ? .success : .selection }
         .accessibilityLabel(isOn ? "Tracking \(pick.route.name) on \(day)" : "Track \(pick.route.name) on \(day)")
         .accessibilityAddTraits(isOn ? .isSelected : [])
-        .accessibilityIdentifier("track-star")
+        .accessibilityIdentifier("track-bell")
     }
 
     // MARK: Conditions
