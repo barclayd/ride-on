@@ -26,7 +26,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 6 | Widgets and Lock Screen | ⬜ | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window and Preferences live; Routes on sample data | #159, #162, #167, #172 |
-| 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done on sample data; API wiring next | ROUTES_PR |
+| 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done on sample data; API wiring next | #194 |
 
 Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
