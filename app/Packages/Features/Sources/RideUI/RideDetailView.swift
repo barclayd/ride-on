@@ -37,8 +37,8 @@ public struct RideDetailView: View {
     }
 
     private var eyebrow: String? {
-        if pick == board.picks.first { return "Best pick" }
-        return board.days.contains { $0.best == pick } ? "Best that day" : nil
+        if pick.id == board.picks.first?.id { return "Best pick" }
+        return board.days.contains { $0.best?.id == pick.id } ? "Best that day" : nil
     }
 
     public var body: some View {

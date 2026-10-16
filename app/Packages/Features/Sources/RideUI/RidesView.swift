@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import Models
 import Engine
+import Services
 import DesignSystem
 import SharedUI
 
@@ -13,13 +14,12 @@ public struct RidesView: View {
     var apply: @MainActor @Sendable (RideWindow) async -> Void
     @State private var selectedDay: Date
     @State private var choosingWindow = false
-    // ponytail: in memory only, so nothing is watched yet. The tracking API comes later
-    // (docs/redesign/ride-tracking-api-requests.md).
-    @State private var tracked: Set<String> = []
-    /// The ride the Track sheet is open for, and the state it asked for when it closed.
+    /// The ride the Track sheet is open for.
     @State private var tracking: RideBoard.Pick?
-    @State private var trackingChange: (id: String, on: Bool)?
+    /// The tracked ride's `Pick.id` as the star shows it: it follows `RideTracker` once the sheet has gone.
+    @State private var shownTracked: String?
     @Namespace private var zoom
+    @Environment(RideTracker.self) private var tracker: RideTracker?
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.speedSystem) private var speedSystem
     @Environment(\.locale) private var locale
@@ -32,7 +32,7 @@ public struct RidesView: View {
         self.board = board
         self.refresh = refresh
         self.apply = apply
-        let bestDay = board.days.first { $0.best == board.picks.first } ?? board.days.first
+        let bestDay = board.days.first { $0.best?.id == board.picks.first?.id } ?? board.days.first
         _selectedDay = State(initialValue: bestDay?.date ?? board.window.start)
     }
 
@@ -49,16 +49,19 @@ public struct RidesView: View {
                 VStack(spacing: 16) {
                     ZStack(alignment: .bottomTrailing) {
                         NavigationLink(value: hero) {
-                            RideHero(pick: hero, eyebrow: hero == board.picks.first ? "Best pick" : "Best that day")
+                            RideHero(pick: hero, eyebrow: hero.id == board.picks.first?.id ? "Best pick" : "Best that day")
                                 .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
                         .matchedTransitionSource(id: hero.id, in: zoom)
 
                         // Beside the link, not inside it, so VoiceOver reaches both.
-                        trackButton(hero)
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 38)
+                        // ponytail: a tracked ride that isn't the hero has no star to show it.
+                        if shownTracked == hero.id || tracker?.canTrack(trackable(hero)) ?? true {
+                            trackButton(hero)
+                                .padding(.trailing, 20)
+                                .padding(.bottom, 38)
+                        }
                     }
 
                     Group {
@@ -93,15 +96,11 @@ public struct RidesView: View {
         .refreshable { await refresh() }
         .sheet(isPresented: $choosingWindow) { RideWindowSheet(board: board, apply: apply) }
         // The star changes once the sheet has gone, so the change is seen.
-        .sheet(item: $tracking, onDismiss: {
-            guard let change = trackingChange else { return }
-            trackingChange = nil
-            withAnimation(Motion.glassTapLayout) {
-                if change.on { tracked.insert(change.id) } else { tracked.remove(change.id) }
-            }
-        }) { pick in
-            TrackRideSheet(pick: pick, isTracking: tracked.contains(pick.id)) { trackingChange = (pick.id, $0) }
+        .sheet(item: $tracking, onDismiss: showTracked) { pick in
+            TrackRideSheet(pick: pick, isTracking: shownTracked == pick.id, replacing: replacing(pick))
         }
+        .onAppear { shownTracked = tracker?.ride?.pickID }
+        .onChange(of: tracker?.ride?.pickID) { if tracking == nil { showTracked() } }
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button { choosingWindow = true } label: {
@@ -120,12 +119,31 @@ public struct RidesView: View {
         }
     }
 
+    private func showTracked() {
+        guard shownTracked != tracker?.ride?.pickID else { return }
+        withAnimation(Motion.glassTapLayout) { shownTracked = tracker?.ride?.pickID }
+    }
+
+    /// The window's ranking of the same ride: its recommendation compares the whole window, where a
+    /// day's best only compares that day.
+    private func trackable(_ pick: RideBoard.Pick) -> RideBoard.Pick {
+        board.picks.first { $0.id == pick.id } ?? pick
+    }
+
+    /// The other tracked ride that tracking `pick` stops, if there is one.
+    private func replacing(_ pick: RideBoard.Pick) -> String? {
+        guard let ride = tracker?.ride, ride.pickID != pick.id else { return nil }
+        let name = (board.picks + board.days.compactMap(\.best)).first { $0.route.id == ride.routeId }?.route.name
+        let when = "\(ride.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))), \(ride.start.formatted(.clockTime))"
+        return [name, when].compactMap(\.self).joined(separator: " · ")
+    }
+
     /// Opens the Track sheet for the hero's ride; gold glass while it's tracked.
     private func trackButton(_ pick: RideBoard.Pick) -> some View {
-        let isOn = tracked.contains(pick.id)
+        let isOn = shownTracked == pick.id
         let day = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
         return Button {
-            tracking = pick
+            tracking = trackable(pick)
         } label: {
             Image(systemName: isOn ? "star.fill" : "star")
                 .font(.title3.weight(.semibold))
@@ -490,4 +508,5 @@ struct RouteGPX: Transferable {
     NavigationStack {
         RidesView(board: .sample)
     }
+    .environment(RideTracker(live: false))
 }

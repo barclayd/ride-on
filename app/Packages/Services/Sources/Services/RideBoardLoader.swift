@@ -92,7 +92,8 @@ public enum RideBoardLoader {
             guard let route = route(id), let result = results[id] else { return nil }
             let pick = RideBoard.Pick(route: route, start: best.departureAt, finish: best.finishAt, score: Int(best.score.rounded()),
                                       conditions: conditions(best.conditions), meetsMinimums: best.standards.status != "below",
-                                      lastRidden: lastRidden[id], change: change(best), pointsLost: best.pointsLost?.compactMapValues(\.self) ?? [:])
+                                      lastRidden: lastRidden[id], change: change(best), pointsLost: best.pointsLost?.compactMapValues(\.self) ?? [:],
+                                      recommendationRef: best.recommendationRef)
             let others = ([result.best].compactMap { $0 } + result.alternatives).filter { $0.departureAt != best.departureAt }
             let preferences = response.resolvedPreferences
             details[pick.id] = RideDetail(pick: pick, changeSince: best.previous?.generatedAt,
@@ -512,6 +513,8 @@ extension RideBoardLoader {
         /// Null values: the factor is inactive or lacks evidence. Absent before API v0.25.0.
         var pointsLost: [String: Double?]?
         var previous: Previous?
+        /// `nil` when the API couldn't save this ride's assessment for tracking.
+        var recommendationRef: String?
     }
 
     struct Conditions: Decodable {

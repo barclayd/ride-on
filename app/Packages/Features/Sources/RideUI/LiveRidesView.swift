@@ -14,6 +14,7 @@ public struct LiveRidesView: View {
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     /// Saved Preferences changes move `revision` on, and Rides re-ranks.
     @Environment(RiderSettingsStore.self) private var settings: RiderSettingsStore?
+    @Environment(RideTracker.self) private var tracker: RideTracker?
 
     public init() {}
 
@@ -68,6 +69,9 @@ public struct LiveRidesView: View {
     /// `window` is a Ride Window sheet choice, saved before Rides reloads with it.
     private func load(_ window: RideWindow? = nil) async {
         guard RideOnAPI.isSignedIn else { phase = .signedOut; return }
+        // The star needs the tracked ride, read alongside the board.
+        let tracker = tracker
+        async let tracked: Void? = tracker?.load()
         do {
             let board = try await RideBoardLoader.load(window: window)
             settings?.board = board
@@ -80,6 +84,7 @@ public struct LiveRidesView: View {
         } catch {
             phase = .failed(error.localizedDescription)
         }
+        _ = await tracked
     }
 
     private func signIn(_ provider: RideOnAPI.Provider) async {

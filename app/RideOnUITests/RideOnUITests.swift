@@ -71,9 +71,6 @@ final class RideOnUITests: XCTestCase {
         star("Track ").tap()
         XCTAssertTrue(app.staticTexts["Track This Ride"].waitForExistence(timeout: 5))
         app.buttons["Start Tracking"].tap()
-        // The first time, iOS asks about notifications; tracking starts whatever the answer.
-        let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons["Allow"]
-        if allow.waitForExistence(timeout: 2) { allow.tap() }
         XCTAssertTrue(star("Tracking ").waitForExistence(timeout: 5))
 
         star("Tracking ").tap()

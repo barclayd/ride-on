@@ -14,6 +14,7 @@ struct RideOnApp: App {
     private let modelContainer = RideOnModelContainer.make()
     @State private var preferencesStore = PreferencesStore()
     @State private var riderSettings = RiderSettingsStore(live: !FixtureWorld.isEnabled)
+    @State private var rideTracker = RideTracker(live: !FixtureWorld.isEnabled)
 
     // Fixture-world gets fully-fixture services (deterministic E2E); every
     // other launch gets `.live` (Phase 6: real WeatherKit/MapKit/HealthKit/
@@ -33,6 +34,7 @@ struct RideOnApp: App {
                 .environment(\.services, services)
                 .environment(preferencesStore)
                 .environment(riderSettings)
+                .environment(rideTracker)
                 .environment(\.unitSystem, preferencesStore.preferences.effectiveUnitSystem)
                 .environment(\.speedSystem, preferencesStore.preferences.effectiveSpeedSystem)
                 .environment(\.locale, Locale.current.temperatureUnit(preferencesStore.preferences.temperatureUnit))

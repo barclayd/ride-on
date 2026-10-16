@@ -19,7 +19,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 |---|---|---|---|
 | 0 | This doc and reference images | ✅ Done | #154 |
 | 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
-| 2 | Rides screen and Track sheet | ✅ UI built; persistent tracking/manual-refresh API ready in v0.28.0 ([contract](../ride-tracking-api.md)); client integration and notifications pending | #155, #176 |
+| 2 | Rides screen and Track sheet | ✅ Done; tracking wired to API v0.28.0 ([contract](../ride-tracking-api.md)); notifications wait on the API | #155, #176, #184 |
 | 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)) | #157, #164, #172 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava waits on the API ([contract](preferences-api-requests.md)) | #167, #172 |
@@ -127,61 +127,82 @@ Build:
 - [x] Light/dark and Dynamic Type through `accessibility5` checked on the simulator
 - [x] Hero 3b: eased scrim, pick pill, icon stats, track star (gold glass when on) and the
       card's date/Leave–Back header
-- [x] Track sheet (#176). Tracking is in memory only: no persistence or condition-change
-      notifications in the client yet
+- [x] Track sheet (#176)
 - [x] Persistent tracking API v0.28.0: one active plan, accepted recommendation references,
       immutable baseline, explicit refresh, replacement, retained history and erasure ([contract](../ride-tracking-api.md))
-- [ ] Integrate Track sheet with the API; use current tracking version and reference, preserve
-      the original baseline, show unavailable/incomplete checks, and handle replacement confirmation
-- [ ] Background monitoring and notifications (follow-up API PR); gate notification copy and
-      permission requests on capabilities rather than promising delivery in manual-only v1
+- [x] Track sheet on the API (#184): `RideTracker` tracks the window pick's `recommendationRef`
+      with the current tracking version and an idempotency key, refreshes when the Tracking sheet
+      opens, says what changed (or why the check failed), and confirms a replacement
+- [ ] Background monitoring and notifications (follow-up API PR); the notification copy and
+      permission request below switch on when `capabilities.notifications` is true
+- [ ] A tracked ride that isn't the hero has no star, so the rider can only see it by picking its
+      day. Show it somewhere on Rides
 - [ ] Reduce Transparency
 
 ### Track sheet
 
-**Current API readiness:** persistence and manual refresh are available. The notification flow
-below describes the future design; v0.28.0 returns `automaticChecks: false` and `notifications: false`.
-Use `refresh.lastSuccessfulAssessmentAt` for a successful-check timestamp and the separate
-comparison/availability fields; a failed attempt must not display “Nothing has changed”.
-
 Canvas boards `TrackFlow`, `TrackSheet`, `TrackSheetTracking`, `TrackSheetDark`. The hero's star
-opens it; tracking a ride means the forecast keeps being checked and the rider is notified if
-it changes before they leave.
+opens it. Tracking saves the ride's forecast, and each later check compares the latest forecast
+with it until the rider leaves. One ride is tracked at a time.
 
 A content-height detent, so iOS 26 floats it inset as Liquid Glass over the dimmed Rides screen.
 It slides up on the system curve with no bounce (a cross-fade with Reduce Motion). Its mode is
 fixed when it opens.
 
+API v0.28.0 checks only when asked and doesn't notify (`capabilities.notifications: false`), so
+the sheet doesn't promise alerts. The canvas's notification copy is kept for when it does, and is
+marked *(notifications)* below.
+
 1. Grabber; Close (glass circle, `xmark`, `role: .close`) top leading.
-2. Medal: 64pt gold (`.committed`) circle with a white `star.fill`, and a 28pt `bell.fill` badge
-   bottom right.
+2. Medal: 64pt gold (`.committed`) circle with a white `star.fill`. *(notifications)* A 28pt
+   `bell.fill` badge bottom right.
 3. **Track mode** (not tracked):
-   - "Track This Ride" (`.title2` bold, centred), then "We'll keep checking the forecast and
-     notify you if anything changes before you leave."
+   - "Track This Ride" (`.title2` bold, centred), then "We'll save this forecast and compare it
+     with the latest each time you check back." *(notifications)* "We'll keep checking the
+     forecast and notify you if anything changes before you leave."
+   - Another ride is tracked: a card with `star.slash` (gold), "Replaces Your Tracked Ride" and
+     "Ridge Run · Sat 18 Oct, 09:00". Start Tracking replaces it in one request.
    - Ride card: 48pt route thumbnail, "Hilly Loop", "Wed 14 Oct · 09:00 → ~12:00", a 40pt
      `ScoreGauge` showing 86.
-   - **"Notify Me If"**: "Rain moves in" (`cloud.rain`, rain blue); "Gusts pass your 45 km/h
-     limit" (`wind`, cyan); "It drops below your 4° minimum" (`thermometer.low`, indigo); "A
-     better time or day opens up" (`clock`, accent). A limit the rider hasn't set has no row.
-   - Footnote: "Plus the final forecast the evening before." plus " iOS will ask to allow
-     notifications." until they've been asked.
+   - **"We'll Check If"** *(notifications: "Notify Me If")*: "Rain moves in" (`cloud.rain`, rain
+     blue); "Gusts pass your 45 km/h limit" (`wind`, cyan); "It drops below your 4° minimum"
+     (`thermometer.low`, indigo); "A better time or day opens up" (`clock`, accent). A limit the
+     rider hasn't set has no row.
+   - Footnote: "Checked each time you open this ride, until you leave." *(notifications)* "Plus
+     the final forecast the evening before." plus " iOS will ask to allow notifications." until
+     they've been asked.
    - "Start Tracking" (`.glassProminent` capsule, no icon), then "Not Now" (plain accent).
 4. **Tracking mode**:
-   - "Tracking This Ride", then "Forecast checked 10 minutes ago. Nothing has changed since you
-     started tracking."
-   - Notifications denied: a card with `bell.slash` (warning colour), "Notifications Are Off",
-     "You won't hear if anything changes." and a "Turn On" capsule opening Settings.
-   - The same ride card; **"We'll Notify You If"** with the same rows and footnote.
+   - "Tracking This Ride", then what the latest check found, in sentences:
+     - Nothing new: "Forecast checked just now. Nothing has changed since you started tracking."
+     - Changes, most important first: "Gusts now reach 52 km/h, over your 45 km/h limit." "Rain
+       is now forecast." "Ridge Run at 09:30 now looks better." "Its score has dropped 7 points
+       since you started tracking." "Some forecasts were missing, so a better ride might not show."
+     - A failed check never says nothing changed: "Couldn't check the forecast because it isn't
+       available right now. Last checked 2 hours ago."
+     - "Checking the forecast…" while it checks, and "It's time to leave, so the forecast isn't
+       checked any more." once it's closed.
+   - *(notifications)* Notifications denied: a card with `bell.slash` (warning colour),
+     "Notifications Are Off", "You won't hear if anything changes." and a "Turn On" capsule
+     opening Settings.
+   - The same ride card, its gauge showing the latest check's score; **"We'll Check If"**
+     *(notifications: "We'll Notify You If")* with the same rows and footnote.
    - "Stop Tracking" (`.glass` capsule, red label).
 
-Flow: Start Tracking asks for notifications the first time (`requestAuthorization`), then the
-sheet closes and the star turns gold with a bounce and a success haptic. Denied still tracks;
-the Tracking sheet then shows Notifications Are Off. Stop Tracking closes the sheet, then the
-star goes back to outline.
+Flow: Start Tracking shows a spinner in the button while the API saves the ride, then the sheet
+closes and the star turns gold with a bounce and a success haptic. *(notifications)* It asks for
+notifications first, the first time (`requestAuthorization`); denied still tracks. Stop Tracking
+closes the sheet, then the star goes back to outline. Either failing keeps the sheet open with an
+alert ("Couldn't Track This Ride", "Couldn't Stop Tracking"). A pick the API didn't save (no
+`recommendationRef`) has no star.
 
-`TrackRideSheet` (`RideUI/TrackRideSheet.swift`). The limits come from `RiderSettingsStore`
-(`minimumStandards.maximumGustKph`, `minimumTemperature` for the ride's month). "Forecast
-checked 10 minutes ago" is sample copy until the API returns a last-checked time.
+`TrackRideSheet` (`RideUI/TrackRideSheet.swift`) over `RideTracker` (`Services`), which
+`RideOnApp` puts in the environment. It loads with the Rides board and refreshes when the Tracking
+sheet opens, unless the last check is still current (`refresh.refreshAt`). The star always tracks
+the window ranking's pick, since its `recommendationRef` compares the whole window; picks are
+matched by `routeId@departure`, not by reference. The limits come from `RiderSettingsStore`
+(`minimumStandards.maximumGustKph`, `minimumTemperature` for the ride's month). With
+`--fixture-world` the tracked ride lives in memory and every check finds nothing new.
 
 ## 2. Ride detail (push from the hero, zoom transition)
 
