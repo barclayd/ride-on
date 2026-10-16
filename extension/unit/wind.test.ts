@@ -307,25 +307,27 @@ test('the sketch fits right of the wind key, draws the return beside the way out
   // The way back sits 3px beside the way out instead of on top of it.
   expect(casing[3][0]).toBeCloseTo(casing[1][0] - 3);
   expect(casing[3][1]).toBeCloseTo(casing[1][1]);
-  // The sliver keeps its own colour; the arrowheads skip it: one out, one back.
+  // The sliver keeps its own colour.
   expect(s.runs.map((r) => r.effect)).toEqual([
     'tailwind',
     'crosswind',
     'headwind',
   ]);
-  expect(s.chevrons).toHaveLength(2);
-  expect(s.chevrons[0].angle).toBe(-90); // north, up the page
+  // The hover pointer starts on the start dot facing north, up the page, and comes back south.
+  expect(s.track).toHaveLength(201);
+  expect(s.track[0]).toMatchObject({ x: s.start.x, y: s.start.y, angle: -90 });
+  expect(Math.abs(s.track[150].angle - 90)).toBeLessThan(5);
   // Back where it started: a start dot, no finish.
   expect(s.finish).toBeNull();
   expect(s.start.label.text).toBe('Start');
-  // The wind from the south blows up the dial, from its tail dot at the bottom.
+  // The wind from the south blows up the compass, from its tail dot at the bottom.
   expect(s.wind.lines).toEqual(['From S']);
   expect(s.wind.speed).toBe('15 km/h');
   expect(s.wind.arrow).toEqual({
     x1: 32,
-    y1: 44.5,
+    y1: 32.5,
     x2: 32,
-    y2: 25.5,
+    y2: 15.5,
     angle: -90,
   });
   expect(s.sentence).toBe(
