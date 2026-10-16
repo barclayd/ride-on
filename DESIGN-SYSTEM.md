@@ -46,25 +46,29 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 
 | Surface | Treatment | API |
 |---|---|---|
-| Tab bar (Rides, Routes, Preferences) | System glass; shrinks to the selected tab's icon on scroll | `TabView` + `.tabBarMinimizeBehavior(.onScrollDown)` |
+| Tab bar (Rides, Routes, Preferences) | System glass; shrinks to the selected tab's icon on scroll. Never on Routes, where the panel scrolls rather than the screen | `TabView` + `.tabBarMinimizeBehavior(.onScrollDown)` (`.never` on Routes) |
 | Toolbars | System glass. At most 3 groups. Icons only, each with an accessibility label. Related actions share one capsule (share + more) | `.toolbar`, `ToolbarItemGroup`, `ToolbarSpacer` |
 | Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
 | Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero track star `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while tracked |
+| Routes panel | **Regular** glass floating over the map, 8pt from the screen edges and 14pt above the tab bar; grabber, search and "+" pinned, everything else scrolling beneath and fading into the bottom edge | `FloatingPanel` (§6): `.glassEffect(.regular, in: .rect(cornerRadius: 34))`, `.safeAreaBar(edge: .top)` |
+| Controls over the Routes map (map style, my location) | **Clear** glass capsule, white glyphs, held at a fixed size like MapKit's own | `.glassEffect(.clear.interactive(), in: .capsule)`, `.dynamicTypeSize(...xLarge)` + `.accessibilityShowsLargeContentViewer()` |
 | Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
 | Partial-height sheets (Track) | System glass, floating inset over the dimmed screen; Close leading, actions as full-width capsules at the bottom | `.presentationDetents([.height(content)])`, `Button(role: .close)`, `.glassProminent` / `.glass` capsules |
 | Pushed screens' back button | 44pt glass circle, chevron only | stock `NavigationStack` back button |
 | Cards, rows, chips, badges | **Not glass.** Solid `secondarySystemGroupedBackground` | `.background(.background.secondary, in: .rect(cornerRadius: 26))` |
 
 Rules:
-- **Regular glass by default.** Clear glass only over rich media (the hero map), always with a
-  ~35% dark gradient behind it so white glyphs stay legible.
+- **Regular glass by default.** Clear glass only over rich media (the hero map, the Routes
+  map), with a ~35% dark gradient behind it on the hero so white glyphs stay legible (the
+  Routes map is satellite imagery, dark enough on its own).
 - **Scroll edge effects, not dividers.** No hairlines under toolbars or between sections; the
   system edge effect separates scrolling content from chrome.
 - **Group glass that can touch or morph** in one `GlassEffectContainer` (glass can't sample glass).
 - **Tint is for the primary action only.** Toolbars and the tab bar stay monochrome; the
   selected tab carries the accent.
 - **Accessibility fallbacks** (§8): Reduce Transparency → opaque; Increase Contrast → solid
-  with a border. Custom glass must branch on `accessibilityReduceTransparency` itself.
+  with a border. Custom glass must branch on `accessibilityReduceTransparency` itself; Routes
+  does it through `accessibleGlass(_:in:fallback:)`.
 - **Map attribution stays visible.** Anywhere a map shows, "Apple Maps" and the Legal link
   sit at least 10pt from custom content. Using a live `Map` gets this for free.
 
@@ -77,7 +81,9 @@ Rules:
   `#30D158` (the system green pair; the light value is darkened for 4.5:1 on white). Applied
   via `.tint()`. Text on an accent fill is white in light, black in dark. Exception: the hero's
   "Best pick" pill always sits on the dark scrim, so it is `pickPill` (`#1E7132`, the light
-  accent 18% darker) with white text in both schemes.
+  accent 18% darker) with white text in both schemes. Routes cards' "Below your minimums"
+  pill is over the map too, so it is `belowMinimumsPill` (`#FF9F0A`) with black text in both
+  schemes.
 - **Status colours** (always paired with a symbol and words):
 
   | Meaning | Light | Dark |
@@ -124,6 +130,10 @@ en-GB ("Wednesday 14 October", "Wed 14 – Sun 18").
   scrim for the title block and the Maps attribution row along the bottom edge.
 - **Edge-to-edge scrolling** under the tab bar and toolbars; the system scroll edge effect
   handles legibility. Custom bottom bars use `.safeAreaBar(edge: .bottom)`.
+- **Routes** is a full-screen map with the panel floating over it: 34pt radius, medium detent
+  56% of the height above the tab bar, large up to the safe-area top. Selected rows use a 22pt
+  radius, row thumbnails 11pt (`CornerRadius.floatingPanel` / `.selectedRow` /
+  `.panelThumbnail`). On iPad and Mac the panel is a 380pt column down the leading edge.
 - Breakpoints: iPhone = tab bar; iPad/Mac = `NavigationSplitView` with the same screens in
   the detail column.
 
@@ -169,8 +179,27 @@ before adding a custom component in code.
    tailwind) with a dashed gust-limit ring. Drawn with `Canvas`; the native `Slider`s below it
    are the accessible way to set the same values.
 
-Kept until their screens are redesigned: **`DialScreen`** (onboarding, with `AmbianceStyle`)
-and **`SurfaceBar`** (Routes).
+10. **`FloatingPanel`** — the Routes panel (§2, §5). On iPhone it rests at a medium and a large
+    detent; a drag on its header tracks 1:1, rubber-bands past either end, and settles on the
+    detent its momentum projects to (`Motion.panelDetent`). Tapping the grabber toggles it;
+    pulling the content down past its top at large lets it go to medium, like a sheet. On iPad
+    and Mac it's a fixed full-height column with no grabber.
+11. **`ShortlistCard`** — a shortlisted route in the panel's carousel (272 × 158pt, card
+    radius): its loop on satellite imagery, a status pill ("Best pick · Wed", "Thu 09:00",
+    "Below your minimums", "Too long for your window", "Checking the forecast…"), name, ↔
+    distance, `mountain.2` climb, and the score out of 100 when Rides has ranked it. The white
+    check takes it off the shortlist. Selected, it gets a 3pt accent outline. At accessibility
+    sizes it takes the carousel's width and its stats stack.
+12. **`RoutesMap`** — the Routes tab's live map: other shortlisted routes in white, the selected
+    one in the accent with a white casing and start marker, and a callout over its northernmost
+    point ("Hilly Loop 51 km", or the ride's date from History). Tapping within 22pt of a line
+    selects that route. `MapControls` (style menu, my location) sit at its top trailing corner.
+13. **Panel rows** (`LibraryRow`, `HistoryRow`) — a 48pt route thumbnail, name, "42 km · 180 m ·
+    46% unpaved", then the source and last ride (Library) or the forecast saved when the ride
+    was planned (History; never the weather on the day). Selected, the row fills with
+    `.fill.tertiary` and shows "Add to Shortlist" and, for a route Rides has ranked, "Details ›".
+
+Kept until onboarding is redesigned: **`DialScreen`** (with `AmbianceStyle`).
 
 ## 7. Motion
 
@@ -188,6 +217,8 @@ hand-roll `.animation()` calls.
 | Async content arriving | `.smooth` (`Motion.panelMaterialize`), never a hard cut |
 | Haptics — stepped sliders, range handles, pickers | `.sensoryFeedback(.selection)` per step |
 | Track sheet in and out | system sheet presentation (no bounce) |
+| Routes panel settling on a detent | `Motion.panelDetent(velocity:)`: a spring (response 0.35, damping 0.86) starting at the drag's release velocity; `.smooth` with Reduce Motion |
+| Shortlist card press, row selection | `Motion.glassTapLayout` |
 | Star turning gold once the Track sheet has gone | `.contentTransition(.symbolEffect(.replace))` + `.symbolEffect(.bounce)`, `.sensoryFeedback(.success)` |
 
 Reduce Motion: the zoom falls back to a cross-fade, re-rank slides become cross-fades,
@@ -220,6 +251,6 @@ glass transitions use `.materialize`.
 | **Ideal Temperature** (push) | Big range readout, `TemperatureRange`, one-line explanation → "How Your Routes Fit" range bars per route → "Deal-Breakers" steppers. Saves automatically; no Done. |
 | **Comfortable Wind** (push) | `WindEnvelope` → "Limits" sliders (headwind, crosswind, gusts) and crosswind sensitivity → "How Your Routes Fit". Saves automatically. |
 | **Widgets & Lock Screen** | `systemSmall` (score ring, day and time, route, one line of conditions), `systemMedium` (map thumbnail, best pick, times, conditions, runner-up). Lock Screen `accessoryInline`, `accessoryCircular` (score ring + day), `accessoryRectangular`. Tap opens the ride. |
-| **Routes** (tab) | Not yet redesigned: searchable list with suggestion chips, Saved/Ridden segmented toggle. |
+| **Routes** (tab) | Full-screen satellite `RoutesMap` (shortlist in white, selected route in the accent, callout, start marker; `MapControls` top trailing) under the `FloatingPanel`: search capsule ("Search Routes") and "+" menu (Import GPX File, From cycle.travel, Connect Strava) pinned → "Shortlist" with "4 of 12" → `ShortlistCard` carousel → segmented Library N / History N → Library rows, or History rows grouped by month ("October 1 ride") ending with "Weather is the forecast from when you planned each ride, not what you rode in." Selecting a card or row shows it on the map. Focusing search expands the panel. No navigation bar; the tab bar never minimises. |
 | **Onboarding** | Not yet redesigned: one control per screen (`DialScreen`), permissions primed one sentence before each system prompt, location on first Rides entry, Health before ride matching. |
 | **Weather attribution** | Apple Weather mark + "Other data sources" link (https://developer.apple.com/weatherkit/data-source-attribution/) wherever forecast data shows, via `WeatherService.attribution`. |

@@ -260,24 +260,21 @@ public extension RideBoard.Wind {
 public extension RideBoard {
     /// Tuesday 13 October 2026, window Wed 14 – Sun 18 October (docs/redesign/README.md, "Sample data").
     static let sample: RideBoard = {
-        let hilly = RouteSummary(name: "Hilly Loop", distanceKm: 51, ascentM: 640,
-                                 coordinates: loop(center: Coordinate(latitude: 51.79, longitude: -0.66), distanceKm: 51, seed: 0.4),
-                                 cycleTravelURL: URL(string: "https://cycle.travel/map/journey/412907"))
-        let potters = RouteSummary(name: "Potters Bar", distanceKm: 77, ascentM: 410,
-                                   coordinates: loop(center: Coordinate(latitude: 51.698, longitude: -0.181), distanceKm: 77, seed: 1.7),
-                                   cycleTravelURL: URL(string: "https://cycle.travel/map/journey/398114"))
-        let braintree = RouteSummary(name: "Braintree", distanceKm: 51, ascentM: 280,
-                                     coordinates: loop(center: Coordinate(latitude: 51.878, longitude: 0.553), distanceKm: 51, seed: 2.9),
-                                     cycleTravelURL: URL(string: "https://cycle.travel/map/journey/405532"))
-        let eastAnglia = RouteSummary(name: "East Anglia", distanceKm: 112, ascentM: 520,
-                                      coordinates: loop(center: Coordinate(latitude: 52.2, longitude: 0.9), distanceKm: 112, seed: 4.2))
+        func summary(_ shape: SampleRoutes.Shape, journey: Int? = nil) -> RouteSummary {
+            RouteSummary(id: shape.id, name: shape.name, distanceKm: shape.distanceKm, ascentM: shape.ascentM, coordinates: shape.coordinates,
+                         cycleTravelURL: journey.flatMap { URL(string: "https://cycle.travel/map/journey/\($0)") })
+        }
+        let hilly = summary(SampleRoutes.hilly, journey: 412907)
+        let potters = summary(SampleRoutes.potters, journey: 398114)
+        let braintree = summary(SampleRoutes.braintree, journey: 405532)
+        let eastAnglia = summary(SampleRoutes.eastAnglia)
 
         let wednesday = Pick(route: hilly, start: date(14, 9), finish: date(14, 12), score: 86,
                              conditions: Conditions(temperatureC: 9...14, windKph: 15, wind: .tailwind, gustKph: 28, sky: .sunnySpells),
                              lastRidden: date(29, 8, month: 9), change: 4, pointsLost: ["temperature": 2.1, "wind": 0, "dryness": 0])
         let thursday = Pick(route: potters, start: date(15, 9), finish: date(15, 13, 20), score: 79,
                             conditions: Conditions(temperatureC: 12...14, windKph: 18, wind: .crosswind, gustKph: 31, sky: .cloudy),
-                            lastRidden: date(4, 8, month: 10))
+                            lastRidden: date(2, 9, 30, month: 9))
         let braintreeBest = Pick(route: braintree, start: date(14, 9, 30), finish: date(14, 12, 30), score: 61,
                                  conditions: Conditions(temperatureC: 10...14, windKph: 26, wind: .headwind, gustKph: 48, sky: .cloudy),
                                  meetsMinimums: false, pointsLost: ["temperature": 0, "wind": 6.4, "dryness": 0])
@@ -286,7 +283,7 @@ public extension RideBoard {
                             lastRidden: date(29, 8, month: 9))
         let sunday = Pick(route: potters, start: date(18, 9, 30), finish: date(18, 13, 50), score: 71,
                           conditions: Conditions(temperatureC: 10...13, windKph: 12, wind: .tailwind, gustKph: 25, sky: .sunnySpells),
-                          lastRidden: date(4, 8, month: 10))
+                          lastRidden: date(2, 9, 30, month: 9))
         let monday = Pick(route: hilly, start: date(19, 9), finish: date(19, 12), score: 58,
                           conditions: Conditions(temperatureC: 8...12, windKph: 22, wind: .headwind, gustKph: 38, sky: .sunnySpells),
                           lastRidden: date(29, 8, month: 9))
@@ -314,20 +311,6 @@ public extension RideBoard {
     }()
 
     private static func date(_ day: Int, _ hour: Int, _ minute: Int = 0, month: Int = 10) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Europe/London")!
-        return calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: minute))!
-    }
-
-    /// A wobbly closed loop about `distanceKm` round, starting and ending on its east side.
-    private static func loop(center: Coordinate, distanceKm: Double, seed: Double) -> [Coordinate] {
-        let radiusKm = distanceKm / (2 * .pi) * 0.9
-        return (0...120).map { step in
-            let angle = Double(step) / 120 * 2 * .pi
-            let r = radiusKm * (1 + 0.22 * sin(3 * angle + seed) + 0.1 * cos(5 * angle + 2 * seed))
-            let latitude = center.latitude + r / 111 * sin(angle)
-            let longitude = center.longitude + r / (111 * cos(center.latitude * .pi / 180)) * cos(angle)
-            return Coordinate(latitude: latitude, longitude: longitude)
-        }
+        SampleRoutes.date(day, hour, minute, month: month)
     }
 }

@@ -1,530 +1,438 @@
 import SwiftUI
-import SwiftData
-import UniformTypeIdentifiers
+import MapKit
+import CoreLocation
 import Models
-import Services
-import Router
 import DesignSystem
 import SharedUI
 
-extension UTType {
-    /// Declared in `project.yml`'s `UTImportedTypeDeclarations`.
-    static var gpx: UTType {
-        UTType(importedAs: "com.topografix.gpx")
-    }
-
-    static var fit: UTType {
-        UTType(importedAs: "com.garmin.fit")
-    }
-}
-
-private enum RouteChip: String, CaseIterable, Identifiable {
-    case road = "Road"
-    case gravel = "Gravel"
-    case under2h = "Under 2h"
-    case notRiddenLately = "Not ridden lately"
-
-    var id: String { rawValue }
-}
-
-private enum LibraryFilter: String, CaseIterable {
-    case saved = "Saved"
-    case ridden = "Ridden"
-}
-
-/// Routes library per DESIGN-SYSTEM.md §9: searchable list, suggestion
-/// chips, Saved/Ridden toggle, swipe actions, GPX import entry point.
+/// The Routes tab (docs/redesign/README.md, "Routes"): every shortlisted loop on one map, under a
+/// floating panel holding the shortlist Rides ranks, then the rest of the library and the rides
+/// marked as ridden. On iPhone the panel rests at medium or large over the tab bar; on iPad and
+/// Mac it runs down the leading side.
+///
+/// The caller registers the `RideBoard.Pick` destination "Details" pushes (Ride detail lives in
+/// RideUI, which RoutesUI can't import).
 public struct RoutesView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.services) private var services
-    @Environment(PreferencesStore.self) private var preferencesStore
-    @Query(sort: \RouteModel.createdAt, order: .reverse) private var routes: [RouteModel]
-    @Query private var rideLogModels: [RideLogModel]
+    private let board: RideBoard
+    @State private var library: RouteLibrary
+    @State private var selection: Selection?
+    @State private var segment = Segment.library
+    @State private var query = ""
+    @State private var detent = PanelDetent.medium
+    @State private var camera: MapCameraPosition
+    @State private var look = MapLook.satellite
+    @State private var carouselID: UUID?
+    @State private var locationManager = CLLocationManager()
+    @FocusState private var searching: Bool
 
-    @State private var isImporterPresented = false
-    @State private var pendingConfirmation: RouteModel?
-    @State private var importErrorMessage: String?
-    @State private var isPreparingImport = false
-    @State private var isClassifying = false
-    @State private var searchText = ""
-    @State private var activeChips: Set<RouteChip> = []
-    @State private var libraryFilter: LibraryFilter = .saved
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.unitSystem) private var unitSystem
 
-    /// Non-nil on Mac/iPad regular width, where the list drives the split
-    /// view's detail column via selection (Landmarks idiom) instead of
-    /// pushing Route Detail over itself. nil = iPhone push navigation.
-    private var selection: Binding<UUID?>?
+    public init(library: RouteLibrary, board: RideBoard) {
+        self.board = board
+        _library = State(initialValue: library)
+        _selection = State(initialValue: library.shortlist.first.map(Selection.route))
+        _camera = State(initialValue: Self.framing(library, selected: nil))
+    }
 
-    /// Backs the row -> Route Detail zoom (DESIGN-SYSTEM.md §7) on the push
-    /// path, matching the Today card's arrival — same destination, same
-    /// transition. nil on the split path, where selection drives the detail
-    /// column and nothing pushes.
-    private var namespace: Namespace.ID?
+    enum Selection: Hashable {
+        case route(UUID)
+        case ride(String)
+    }
 
-    public init(selection: Binding<UUID?>? = nil, namespace: Namespace.ID? = nil) {
-        self.selection = selection
-        self.namespace = namespace
+    enum Segment: Hashable {
+        case library, history
     }
 
     public var body: some View {
-        Group {
-            if routes.isEmpty {
-                ContentUnavailableView(
-                    "No Routes Yet",
-                    systemImage: "map",
-                    description: Text("Import a GPX file to get started.")
-                )
+        GeometryReader { proxy in
+            let safeArea = proxy.safeAreaInsets
+            if floats {
+                // Medium leaves the top 44% of the space for the map; large reaches the safe area.
+                let large = max(proxy.size.height - 14, 0)
+                let medium = (large * 0.56).rounded()
+                ZStack(alignment: .bottom) {
+                    map(padding: EdgeInsets(top: safeArea.top + 8, leading: 0, bottom: safeArea.bottom + 14 + medium + 8, trailing: 0),
+                        showsCallout: detent == .medium)
+                    controls
+                        .opacity(detent == .large ? 0 : 1)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    panel(heights: medium...large)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 14)
+                }
             } else {
-                VStack(spacing: 0) {
-                    // On Mac the Saved/Ridden scope switch lives in the
-                    // toolbar (HIG: scope controls belong with the window
-                    // chrome, and an in-content macOS Picker paints its
-                    // "Library" label); iPhone keeps it in-content.
-                    #if !os(macOS)
-                    libraryPicker
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                    #endif
-
-                    // Maps' pre-typed suggestion pattern (DESIGN-SYSTEM §9):
-                    // the chips live under the focused search field via
-                    // `.searchSuggestions`; this inline row only appears once
-                    // a filter is active, so it stays visible and removable.
-                    if !activeChips.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(RouteChip.allCases) { chip in
-                                    chipButton(chip)
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 8)
-                        }
-                    }
-
-                    if filteredRoutes.isEmpty {
-                        ContentUnavailableView.search(text: searchText)
-                    } else {
-                        List(selection: selection) {
-                            ForEach(filteredRoutes) { route in
-                                row(for: route)
-                                    .swipeActions(edge: .trailing) {
-                                        Button(role: .destructive) {
-                                            if selection?.wrappedValue == route.id {
-                                                selection?.wrappedValue = nil
-                                            }
-                                            modelContext.delete(route)
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                            }
-                        }
-                        #if os(macOS)
-                        .listStyle(.inset(alternatesRowBackgrounds: true))
-                        #else
-                        .listStyle(.plain)
-                        #endif
-                    }
+                ZStack(alignment: .topLeading) {
+                    map(padding: EdgeInsets(top: safeArea.top + 8, leading: safeArea.leading + 8 + Self.sidePanelWidth + 8, bottom: safeArea.bottom + 8, trailing: 8),
+                        showsCallout: true)
+                    controls
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    panel(heights: nil)
+                        .frame(width: Self.sidePanelWidth)
+                        .padding(8)
                 }
             }
         }
         .navigationTitle("Routes")
-        .searchable(text: $searchText, prompt: "Search routes")
-        .searchSuggestions {
-            ForEach(RouteChip.allCases) { chip in
-                Button {
-                    toggle(chip)
-                } label: {
-                    Label(chip.rawValue, systemImage: activeChips.contains(chip) ? "checkmark.circle.fill" : "circle")
-                }
-            }
-        }
-        .toolbar {
-            #if os(macOS)
-            ToolbarItem(placement: .principal) {
-                libraryPicker
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-            }
-            #endif
-            ToolbarItem(placement: .primaryAction) {
-                Button("Import", systemImage: "square.and.arrow.down") {
-                    isImporterPresented = true
-                }
-            }
-        }
-        .fileImporter(
-            isPresented: $isImporterPresented,
-            allowedContentTypes: [.gpx, .fit, .xml],
-            allowsMultipleSelection: true
-        ) { result in
-            handleImport(result)
-        }
-        // Drag a GPX file anywhere onto the screen (Finder on Mac, Files on
-        // iPad) — same pipeline as the file importer; RouteImporter handles
-        // security-scoped access. `onDrop` + `.fileURL`, not
-        // `.dropDestination(for: URL.self)` — the latter never matches
-        // Finder's `public.file-url` drags on macOS.
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            handleDrop(providers)
-        }
-        // Immediate acknowledgement between drop and the confirmation sheet —
-        // covers the parse/elevation-fetch window (near-instant for files that
-        // carry <ele>, a network hop for planner exports that don't).
-        .overlay {
-            if isPreparingImport {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Importing route…").font(.callout).foregroundStyle(.secondary)
-                }
-                .padding(24)
-                .background(.regularMaterial, in: .rect(cornerRadius: CornerRadius.hero))
-            }
-        }
-        .sheet(item: $pendingConfirmation) { route in
-            ImportConfirmationSheet(route: route, isClassifying: $isClassifying)
-        }
-        .alert("Import Failed", isPresented: .constant(importErrorMessage != nil), presenting: importErrorMessage) { _ in
-            Button("OK") { importErrorMessage = nil }
-        } message: { message in
-            Text(message)
-        }
-        // Mac File menu > "Import GPX…" (RideOnApp's `.commands`) — a
-        // scene-level command has no direct view reference, so it signals
-        // over `NotificationCenter` instead.
-        .onReceive(NotificationCenter.default.publisher(for: .rideOnImportGPXRequested)) { _ in
-            isImporterPresented = true
-        }
-    }
-
-    @ViewBuilder
-    private func row(for route: RouteModel) -> some View {
-        if selection != nil {
-            RouteRow(route: route)
-                .tag(route.id)
-        } else {
-            NavigationLink(value: RouterDestination.routeDetail(routeID: route.id)) {
-                RouteRow(route: route)
-            }
-            .zoomSourceIfAvailable(id: route.id, in: namespace)
-        }
-    }
-
-    private var libraryPicker: some View {
-        Picker("Library", selection: $libraryFilter) {
-            ForEach(LibraryFilter.allCases, id: \.self) { filter in
-                Text(filter.rawValue).tag(filter)
-            }
-        }
-    }
-
-    private func toggle(_ chip: RouteChip) {
-        if activeChips.contains(chip) { activeChips.remove(chip) } else { activeChips.insert(chip) }
-    }
-
-    private func chipButton(_ chip: RouteChip) -> some View {
-        let isActive = activeChips.contains(chip)
-        return Button {
-            toggle(chip)
-        } label: {
-            Text(chip.rawValue)
-                .font(.footnote.weight(.medium))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isActive ? Color.accentColor : Color.secondary.opacity(0.15), in: .capsule)
-                .foregroundStyle(isActive ? Color.white : Color.primary)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var riddenRouteIDs: Set<UUID> {
-        Set(rideLogModels.compactMap(\.routeID))
-    }
-
-    private var filteredRoutes: [RouteModel] {
-        routes.filter { route in
-            matchesSearch(route) && matchesFilter(route) && matchesChips(route)
-        }
-    }
-
-    private func matchesSearch(_ route: RouteModel) -> Bool {
-        searchText.isEmpty || route.name.localizedCaseInsensitiveContains(searchText)
-    }
-
-    private func matchesFilter(_ route: RouteModel) -> Bool {
-        switch libraryFilter {
-        case .saved: true
-        case .ridden: riddenRouteIDs.contains(route.id)
-        }
-    }
-
-    private func matchesChips(_ route: RouteModel) -> Bool {
-        activeChips.allSatisfy { chip in
-            switch chip {
-            case .road: route.effectiveType == .road
-            case .gravel: route.effectiveType == .gravel
-            case .under2h: RouteStats.estimatedRideTime(for: route, preferences: preferencesStore.preferences) < 2 * 3600
-            case .notRiddenLately: !recentlyRidden(route)
-            }
-        }
-    }
-
-    private func recentlyRidden(_ route: RouteModel) -> Bool {
-        let cutoff = Date.now.addingTimeInterval(-14 * 86400)
-        return rideLogModels.contains { $0.routeID == route.id && $0.date > cutoff }
-    }
-
-    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        let urlProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
-        guard !urlProviders.isEmpty else { return false }
-        for provider in urlProviders {
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                guard let url, ["gpx", "xml", "fit"].contains(url.pathExtension.lowercased()) else { return }
-                Task { @MainActor in
-                    handleImport(.success([url]))
-                }
-            }
-        }
-        return true
-    }
-
-    private func handleImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result else { return }
-        let importer = RouteImporter(classifyClient: services.classify, elevationClient: services.elevation, modelContext: modelContext)
-        Task {
-            for url in urls {
-                isPreparingImport = true
-                do {
-                    // Phase 1 (fast): parse + elevation, then surface the sheet
-                    // right away. Phase 2 (slow): classify runs in the
-                    // background while the sheet is already up — its picker
-                    // shows a "detecting" spinner and adopts the suggestion
-                    // when it lands.
-                    let model = try await importer.makeRoute(fileURL: url)
-                    isPreparingImport = false
-                    isClassifying = true
-                    pendingConfirmation = model
-                    Task {
-                        await importer.classify(model)
-                        isClassifying = false
-                    }
-                } catch {
-                    isPreparingImport = false
-                    importErrorMessage = "Couldn't read that GPX file."
-                }
-            }
-        }
-    }
-}
-
-/// Not a DESIGN-SYSTEM.md §6 component — a plain list row built from stock
-/// views (the closed 8-component inventory doesn't need a 9th for this).
-private struct RouteRow: View {
-    var route: RouteModel
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.unitSystem) private var unitSystem
-    // Scales with Dynamic Type so the thumbnail keeps pace with the row's
-    // text instead of shrinking relative to it (REDESIGN.md @ScaledMetric).
-    @ScaledMetric(relativeTo: .headline) private var thumbnailSize: CGFloat = 56
-    @State private var thumbnail: PlatformImage?
-
-    var body: some View {
-        HStack(spacing: 12) {
-            thumbnailView
-                .frame(width: thumbnailSize, height: thumbnailSize)
-                .clipShape(.rect(cornerRadius: CornerRadius.thumbnail))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(route.name)
-                    .font(.headline)
-                Text(route.hasElevationData
-                    ? "\(UnitFormat.distance(km: route.distanceKm, system: unitSystem)) · \(UnitFormat.elevation(m: route.elevationGainM, system: unitSystem)) gain"
-                    : "\(UnitFormat.distance(km: route.distanceKm, system: unitSystem)) · no elevation data")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if let type = route.effectiveType {
-                Text(type.rawValue.capitalized)
-                    .tagCapsule()
-            } else if route.needsClassification {
-                Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Classification pending")
-            }
-        }
-        .task(id: route.id) {
-            thumbnail = await RouteSnapshotService.snapshot(
-                routeID: route.id,
-                coordinates: route.coordinates,
-                size: CGSize(width: 112, height: 112),
-                colorScheme: colorScheme
-            )
-        }
-    }
-
-    // ponytail: `.scaledToFill()`'s aspect-corrected ideal size can exceed
-    // what's proposed — pinning the frame + `.clipped()` here (not just at
-    // the call site) stops that oversized size from leaking into the HStack
-    // layout (see RideCard's `mapLayer` for the same fix, full explanation).
-    @ViewBuilder
-    private var thumbnailView: some View {
-        if let thumbnail {
-            Image(platformImage: thumbnail).resizable().scaledToFill()
-                .frame(width: thumbnailSize, height: thumbnailSize)
-                .clipped()
-        } else {
-            Rectangle().fill(.secondary.opacity(0.15))
-        }
-    }
-}
-
-/// Confirmation step after import: map snapshot hero, name + stats as
-/// title/subtitle, one segmented type control (Landmarks' add-sheet idiom —
-/// a grouped Form here rendered as a jumbled label column on macOS).
-/// DESIGN-SYSTEM.md §2: system glass sheet at `.medium`, no manual
-/// `.presentationBackground`.
-private struct ImportConfirmationSheet: View {
-    var route: RouteModel
-    @Binding var isClassifying: Bool
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.unitSystem) private var unitSystem
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var selection: SuggestedRouteType
-    @State private var snapshot: PlatformImage?
-    /// True once the user taps the picker themselves — stops the arriving
-    /// classification from overriding their choice.
-    @State private var userPickedType = false
-
-    private static let snapshotSize = CGSize(width: 360, height: 160)
-
-    init(route: RouteModel, isClassifying: Binding<Bool>) {
-        self.route = route
-        _isClassifying = isClassifying
-        _selection = State(initialValue: route.effectiveType ?? .gravel)
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Group {
-                    if let snapshot {
-                        Image(platformImage: snapshot).resizable().scaledToFill()
-                    } else {
-                        Rectangle().fill(.secondary.opacity(0.15))
-                    }
-                }
-                .frame(maxWidth: Self.snapshotSize.width)
-                .frame(height: Self.snapshotSize.height)
-                .clipShape(.rect(cornerRadius: CornerRadius.hero))
-
-                VStack(spacing: 4) {
-                    Text(route.name)
-                        .font(.title2.bold())
-                        .multilineTextAlignment(.center)
-                    Text(subtitle)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 8) {
-                    // Custom setter (not `$selection`) so this fires only on a
-                    // real tap — the programmatic adopt-suggestion assignment
-                    // below writes `selection` directly, leaving the flag off.
-                    Picker("Type", selection: Binding(get: { selection }, set: { selection = $0; userPickedType = true })) {
-                        ForEach(SuggestedRouteType.allCases, id: \.self) { type in
-                            Text(type.rawValue.capitalized).tag(type)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    if isClassifying && !userPickedType {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text("Detecting route type…")
-                        }
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .transition(.opacity)
-                    }
-                }
-                .frame(maxWidth: Self.snapshotSize.width)
-            }
-            .animation(Motion.glassTapLayout, value: isClassifying)
-            .onChange(of: isClassifying) { _, nowClassifying in
-                // Classification finished: adopt its suggestion unless the
-                // user already made a pick.
-                if !nowClassifying, !userPickedType, let suggested = route.suggestedType {
-                    selection = suggested
-                }
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("New Route")
-            // Inline, not large: a half-sheet confirmation gets a compact bar
-            // title (Landmarks add-sheet idiom) — large renders a huge
-            // left-aligned headline that unbalances the centred content.
-            .toolbarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        route.userOverriddenType = selection
-                        // Classify failed (e.g. Valhalla outage): the user's
-                        // pick IS the classification — resolve the pending
-                        // state instead of promising a retry that never runs.
-                        if route.needsClassification {
-                            route.surfaces = assumedSurfaces(for: selection, distanceKm: route.distanceKm)
-                            route.needsClassification = false
-                        }
-                        dismiss()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-        #if os(macOS)
-        .frame(minWidth: 440, minHeight: 380)
+        #if os(iOS)
+        .toolbar(.hidden, for: .navigationBar)
         #endif
-        .task {
-            snapshot = await RouteSnapshotService.snapshot(
-                routeID: route.id,
-                coordinates: route.coordinates,
-                size: CGSize(width: Self.snapshotSize.width * 2, height: Self.snapshotSize.height * 2),
-                colorScheme: colorScheme
-            )
+        .sensoryFeedback(.selection, trigger: selection)
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: library.shortlist)
+        .onChange(of: searching) { _, searching in
+            if searching, floats, detent == .medium {
+                withAnimation(Motion.panelDetent()) { detent = .large }
+            }
+        }
+        .onChange(of: selection) { reframe() }
+        .onChange(of: library.shortlist) { reframe() }
+    }
+
+    /// iPhone (and compact iPad): the panel floats at the bottom with detents.
+    private var floats: Bool {
+        #if os(iOS)
+        horizontalSizeClass == .compact
+        #else
+        false
+        #endif
+    }
+
+    private static let sidePanelWidth: CGFloat = 380
+
+    // MARK: Map
+
+    private func map(padding: EdgeInsets, showsCallout: Bool) -> some View {
+        RoutesMap(routes: shortlisted, selected: selectedRoute, calloutDetail: showsCallout ? calloutDetail : nil,
+                  camera: $camera, look: look) { id in
+            select(.route(id))
+        }
+        .safeAreaPadding(padding)
+        .ignoresSafeArea()
+        .overlay(alignment: .top) {
+            // Dims under the status bar so its glyphs and the map controls stay legible (§2).
+            LinearGradient(colors: [.black.opacity(0.34), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 110)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
         }
     }
 
-    private var subtitle: String {
-        let distance = UnitFormat.distance(km: route.distanceKm, system: unitSystem)
-        guard route.hasElevationData else { return "\(distance) · no elevation data" }
-        return "\(distance) · \(UnitFormat.elevation(m: route.elevationGainM, system: unitSystem)) gain"
+    private var controls: some View {
+        MapControls(look: $look) {
+            if locationManager.authorizationStatus == .notDetermined {
+                locationManager.requestWhenInUseAuthorization()
+            }
+            withAnimation(Motion.panelMaterialize) { camera = .userLocation(fallback: camera) }
+        }
+        .padding(.trailing, 16)
+        .animation(Motion.panelMaterialize, value: detent)
     }
 
-    // ponytail: coarse single-bucket breakdown from the user's type pick —
-    // real per-edge surfaces come from /classify when Valhalla is reachable.
-    private func assumedSurfaces(for type: SuggestedRouteType, distanceKm: Double) -> SurfaceBreakdown {
-        switch type {
-        case .road: SurfaceBreakdown(distanceKmBySurface: [.paved: distanceKm])
-        case .gravel: SurfaceBreakdown(distanceKmBySurface: [.unpaved: distanceKm])
-        case .mixed: SurfaceBreakdown(distanceKmBySurface: [.paved: distanceKm / 2, .unpaved: distanceKm / 2])
+    /// The shortlist and the selected route, with a margin, so every drawn loop is in view.
+    private static func framing(_ library: RouteLibrary, selected: RouteLibrary.Route?) -> MapCameraPosition {
+        let drawn = library.shortlist.compactMap { id in library.routes.first { $0.id == id } } + [selected].compactMap { $0 }
+        let box = drawn.flatMap(\.locations).reduce(MKMapRect.null) { box, location in
+            box.union(MKMapRect(origin: MKMapPoint(location), size: MKMapSize(width: 0, height: 0)))
         }
+        guard !box.isNull else { return .userLocation(fallback: .automatic) }
+        return .rect(box.insetBy(dx: -box.width * 0.12, dy: -box.height * 0.12))
+    }
+
+    private func reframe() {
+        withAnimation(Motion.panelMaterialize) { camera = Self.framing(library, selected: selectedRoute) }
+    }
+
+    // MARK: Panel
+
+    private func panel(heights: ClosedRange<CGFloat>?) -> some View {
+        FloatingPanel(detent: $detent, heights: heights) {
+            searching = false
+        } header: {
+            HStack(spacing: 10) {
+                searchField
+                addMenu
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                shortlistHeader
+                carousel
+                Picker("Show", selection: $segment) {
+                    Text("Library \(libraryRoutes.count)").tag(Segment.library)
+                    Text("History \(library.rides.count)").tag(Segment.history)
+                }
+                .pickerStyle(.segmented)
+                .padding(EdgeInsets(top: 6, leading: 16, bottom: 8, trailing: 16))
+                switch segment {
+                case .library: libraryList
+                case .history: historyList
+                }
+            }
+            .animation(Motion.glassTapLayout, value: selection)
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("Search Routes", text: $query)
+                .focused($searching)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("routes-search")
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 36)
+        .background(.fill.tertiary, in: .capsule)
+    }
+
+    private var addMenu: some View {
+        Menu {
+            // ponytail: no-ops until the import flows are rebuilt on the API (docs/redesign/README.md, "Routes").
+            Button {} label: {
+                Label("Import GPX File", systemImage: "doc")
+            }
+            Button {} label: {
+                Text("From cycle.travel")
+                Text("Use the Safari extension")
+                Image(systemName: "safari")
+            }
+            Divider()
+            Button {} label: {
+                Text("Connect Strava")
+                Text("Coming soon")
+                Image(systemName: "link")
+            }
+            .disabled(true)
+        } label: {
+            Image(systemName: "plus")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 36, height: 36)
+                .background(.fill.tertiary, in: .circle)
+                .contentShape(.circle)
+        }
+        .tint(.primary)
+        .accessibilityLabel("Add Routes")
+    }
+
+    // MARK: Shortlist
+
+    private var shortlistHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Shortlist")
+                .font(.headline.bold())
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            Text("\(library.shortlist.count) of \(library.shortlistLimit)")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+        }
+        .padding(EdgeInsets(top: 6, leading: 20, bottom: 4, trailing: 20))
+    }
+
+    @ViewBuilder
+    private var carousel: some View {
+        let routes = shortlisted.filter(matches)
+        if routes.isEmpty {
+            Text(query.isEmpty ? "Add routes from your library to compare them on Rides." : "No shortlisted routes match “\(query)”.")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, minHeight: 155)
+                .overlay {
+                    RoundedRectangle(cornerRadius: CornerRadius.card)
+                        .strokeBorder(.separator, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                }
+                .padding(EdgeInsets(top: 6, leading: 16, bottom: 8, trailing: 16))
+        } else {
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 10) {
+                    ForEach(routes) { route in
+                        let pick = pick(for: route.id)
+                        ShortlistCard(route: route, status: status(for: route.id), score: pick?.score,
+                                      isSelected: selectedRoute?.id == route.id) {
+                            select(.route(route.id))
+                        } remove: {
+                            withAnimation(Motion.glassTapLayout) { library.shortlist.removeAll { $0 == route.id } }
+                        }
+                        .id(route.id)
+                    }
+                }
+                .scrollTargetLayout()
+                // Room for the selected card's outline.
+                .padding(.vertical, 6)
+            }
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollIndicators(.hidden)
+            .scrollPosition(id: $carouselID, anchor: .leading)
+            .padding(.bottom, 2)
+        }
+    }
+
+    private func status(for id: UUID) -> ShortlistStatus {
+        if let pick = pick(for: id) {
+            if pick.id == board.picks.first?.id { return .best(day: pick.start.formatted(.dateTime.weekday(.abbreviated))) }
+            if !pick.meetsMinimums { return .belowMinimums }
+            return .ranked(start: "\(pick.start.formatted(.dateTime.weekday(.abbreviated))) \(pick.start.formatted(.clockTime))")
+        }
+        return board.unfit.contains { $0.route.id == id } ? .tooLong : .checking
+    }
+
+    // MARK: Library and history
+
+    @ViewBuilder
+    private var libraryList: some View {
+        let routes = libraryRoutes.filter(matches)
+        if routes.isEmpty {
+            emptyNote(query.isEmpty ? "Every route is on your shortlist." : "No library routes match.")
+        } else {
+            ForEach(routes) { route in
+                LibraryRow(route: route, isSelected: selection == .route(route.id), canAdd: canAddToShortlist,
+                           pick: pick(for: route.id)) {
+                    select(.route(route.id))
+                } add: {
+                    shortlist(route.id)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var historyList: some View {
+        let rides = library.rides.filter { matches($0.route) }
+        if rides.isEmpty {
+            emptyNote(query.isEmpty ? "Rides you mark as ridden appear here." : "No rides match.")
+        } else {
+            ForEach(Self.months(rides), id: \.start) { month in
+                monthHeader(month.start, count: month.rides.count)
+                ForEach(month.rides) { ride in
+                    HistoryRow(ride: ride, isSelected: selection == .ride(ride.id),
+                               showsAdd: library.routes.contains { $0.id == ride.route.id } && !library.shortlist.contains(ride.route.id),
+                               canAdd: canAddToShortlist, pick: pick(for: ride.route.id)) {
+                        select(.ride(ride.id))
+                    } add: {
+                        shortlist(ride.route.id)
+                    }
+                }
+            }
+            Text("Weather is the forecast from when you planned each ride, not what you rode in.")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 22)
+                .padding(.top, 10)
+        }
+    }
+
+    private func monthHeader(_ month: Date, count: Int) -> some View {
+        let sameYear = Calendar.current.isDate(month, equalTo: .now, toGranularity: .year)
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(month.formatted(sameYear ? .dateTime.month(.wide) : .dateTime.month(.wide).year()))
+                .font(.subheadline.weight(.semibold))
+            Text(count == 1 ? "1 ride" : "\(count) rides")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(EdgeInsets(top: 14, leading: 20, bottom: 2, trailing: 20))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func emptyNote(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundStyle(.tertiary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 22)
+            .padding(.horizontal, 20)
+    }
+
+    /// Rides grouped by calendar month, newest first, as `library.rides` is.
+    private static func months(_ rides: [RouteLibrary.Ride]) -> [(start: Date, rides: [RouteLibrary.Ride])] {
+        rides.reduce(into: []) { months, ride in
+            let start = Calendar.current.dateInterval(of: .month, for: ride.riddenOn)?.start ?? ride.riddenOn
+            if months.last?.start == start {
+                months[months.count - 1].rides.append(ride)
+            } else {
+                months.append((start, [ride]))
+            }
+        }
+    }
+
+    // MARK: State
+
+    private var shortlisted: [RouteLibrary.Route] {
+        library.shortlist.compactMap { id in library.routes.first { $0.id == id } }
+    }
+
+    private var libraryRoutes: [RouteLibrary.Route] {
+        library.routes.filter { !library.shortlist.contains($0.id) }
+    }
+
+    private var canAddToShortlist: Bool { library.shortlist.count < library.shortlistLimit }
+
+    private var selectedRoute: RouteLibrary.Route? {
+        switch selection {
+        case .route(let id): library.routes.first { $0.id == id }
+        case .ride(let id): library.rides.first { $0.id == id }?.route
+        case nil: nil
+        }
+    }
+
+    /// The route's length, or for a ride the day it was ridden.
+    private var calloutDetail: String? {
+        switch selection {
+        case .route:
+            selectedRoute.map { UnitFormat.distance(km: $0.distanceKm, system: unitSystem, fractionDigits: 0) }
+        case .ride(let id):
+            library.rides.first { $0.id == id }.map { RoutesFormat.shortDate($0.riddenOn) }
+        case nil:
+            nil
+        }
+    }
+
+    private func pick(for routeID: UUID) -> RideBoard.Pick? {
+        board.picks.first { $0.route.id == routeID }
+    }
+
+    private func matches(_ route: RouteLibrary.Route) -> Bool {
+        let query = query.trimmingCharacters(in: .whitespaces)
+        return query.isEmpty || route.name.localizedStandardContains(query) || route.source.title.localizedStandardContains(query)
+    }
+
+    private func select(_ selection: Selection) {
+        self.selection = selection
+        if case .route(let id) = selection, library.shortlist.contains(id) {
+            withAnimation(Motion.glassTapLayout) { carouselID = id }
+        }
+    }
+
+    private func shortlist(_ id: UUID) {
+        guard canAddToShortlist, !library.shortlist.contains(id) else { return }
+        withAnimation(Motion.glassTapLayout) { library.shortlist.append(id) }
+        withAnimation(Motion.glassTapLayout) { carouselID = id }
     }
 }
 
-private extension View {
-    /// `matchedTransitionSource` wants a concrete namespace; the split path
-    /// passes nil (no push, no zoom), so this is the conditional wrapper.
-    @ViewBuilder
-    func zoomSourceIfAvailable(id: some Hashable, in namespace: Namespace.ID?) -> some View {
-        if let namespace {
-            self.matchedTransitionSource(id: id, in: namespace)
-        } else {
-            self
-        }
+#Preview {
+    NavigationStack {
+        RoutesView(library: .sample, board: .sample)
     }
 }
