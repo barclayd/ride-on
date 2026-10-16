@@ -104,6 +104,10 @@ public extension RideBoard {
         /// `temperature`, `wind`, `dryness`, `clearSkies`, `sunshine`, `climbing`, `distance`. A
         /// missing key is inactive or unknown, so makes no claim. Not additive.
         public var pointsLost: [String: Double]
+        /// The API's `recommendationRef`: what `POST /tracked-rides` saves (docs/ride-tracking-api.md).
+        /// `nil` when this ride can't be tracked. The window's ranking and each day's best carry
+        /// different references for the same ride, so compare picks by `id`.
+        public var recommendationRef: String?
 
         public var id: String { "\(route.id)@\(start.timeIntervalSinceReferenceDate)" }
 
@@ -117,7 +121,7 @@ public extension RideBoard {
         }
 
         public init(route: RouteSummary, start: Date, finish: Date, score: Int, conditions: Conditions, meetsMinimums: Bool = true, lastRidden: Date? = nil, change: Int? = nil,
-                    pointsLost: [String: Double] = [:]) {
+                    pointsLost: [String: Double] = [:], recommendationRef: String? = nil) {
             self.route = route
             self.start = start
             self.finish = finish
@@ -127,6 +131,7 @@ public extension RideBoard {
             self.lastRidden = lastRidden
             self.change = change
             self.pointsLost = pointsLost
+            self.recommendationRef = recommendationRef
         }
     }
 

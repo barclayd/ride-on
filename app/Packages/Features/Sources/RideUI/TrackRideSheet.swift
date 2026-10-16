@@ -6,22 +6,35 @@ import DesignSystem
 import SharedUI
 
 /// The Track sheet (docs/redesign/README.md §1, Track sheet), opened by the hero's star: what tracking a ride
-/// watches for. Its mode is fixed when it opens. Start Tracking asks for notifications the first
-/// time, then hands `true` to `onChange`; Stop Tracking hands `false`. The star changes once the
-/// sheet has gone.
+/// checks for, saved with `RideTracker`. Its mode is fixed when it opens, and the star changes once
+/// the sheet has gone. The API doesn't notify yet (`RideTracker.notifies`), so until it does the
+/// sheet promises a check each time the rider looks, not an alert.
 struct TrackRideSheet: View {
     var pick: RideBoard.Pick
     var isTracking: Bool
-    var onChange: (Bool) -> Void
+    /// The other plan this one replaces, as "Hilly Loop · Thu 17 Oct, 08:00". Fixed when the sheet opens.
+    @State private var replacing: String?
     @State private var status: UNAuthorizationStatus?
     @State private var height: CGFloat = 640
-    @State private var starting = false
+    @State private var working = false
+    @State private var failure: String?
+    /// The plan as last seen, so the sheet doesn't change while Stop Tracking dismisses it.
+    @State private var shown: TrackedRide?
+    @Environment(RideTracker.self) private var tracker: RideTracker?
     @Environment(RiderSettingsStore.self) private var settings: RiderSettingsStore?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.locale) private var locale
     @Environment(\.speedSystem) private var speedSystem
+
+    init(pick: RideBoard.Pick, isTracking: Bool, replacing: String? = nil) {
+        self.pick = pick
+        self.isTracking = isTracking
+        _replacing = State(initialValue: replacing)
+    }
+
+    private var notifies: Bool { tracker?.notifies ?? false }
 
     var body: some View {
         ScrollView {
@@ -31,15 +44,18 @@ struct TrackRideSheet: View {
                     .font(.title2.bold())
                     .padding(.top, 12)
                     .accessibilityAddTraits(.isHeader)
-                Text(isTracking
-                     ? "Forecast checked 10 minutes ago. Nothing has changed since you started tracking."
-                     : "We'll keep checking the forecast and notify you if anything changes before you leave.")
+                Text(isTracking ? summary
+                     : notifies ? "We'll keep checking the forecast and notify you if anything changes before you leave."
+                     : "We'll save this forecast and compare it with the latest each time you check back.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.top, 6)
-                if isTracking && status == .denied {
+                if isTracking && notifies && status == .denied {
                     notificationsOff.padding(.top, 16)
+                }
+                if !isTracking, let replacing {
+                    replaces(replacing).padding(.top, 16)
                 }
                 rideCard.padding(.top, 16)
                 triggers.padding(.top, 20)
@@ -71,9 +87,22 @@ struct TrackRideSheet: View {
             // Again on return from Settings, so Turn On's card goes once notifications are on.
             if scenePhase == .active { status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus }
         }
+        .task {
+            guard isTracking else { return }
+            shown = tracker?.ride
+            await tracker?.refreshIfDue()
+        }
+        .onChange(of: tracker?.ride) { _, ride in
+            if isTracking, let ride, ride.pickID == pick.id { shown = ride }
+        }
+        .alert(isTracking ? "Couldn't Stop Tracking" : "Couldn't Track This Ride", isPresented: .constant(failure != nil)) {
+            Button("OK") { failure = nil }
+        } message: {
+            Text(failure ?? "")
+        }
     }
 
-    /// The star the hero shows, with the bell that says what tracking does.
+    /// The star the hero shows, with a bell when tracking notifies.
     private var medal: some View {
         Image(systemName: "star.fill")
             .font(.system(size: 30))
@@ -82,15 +111,19 @@ struct TrackRideSheet: View {
             .background(Color.committed.gradient, in: .circle)
             .shadow(color: .committed.opacity(0.35), radius: 9, y: 6)
             .overlay(alignment: .bottomTrailing) {
-                Image(systemName: "bell.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.committed)
-                    .frame(width: 28, height: 28)
-                    .background(.groupedBackground, in: .circle)
-                    .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
-                    .offset(x: 6, y: 4)
+                if notifies { bell }
             }
             .accessibilityHidden(true)
+    }
+
+    private var bell: some View {
+        Image(systemName: "bell.fill")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.committed)
+            .frame(width: 28, height: 28)
+            .background(.groupedBackground, in: .circle)
+            .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
+            .offset(x: 6, y: 4)
     }
 
     private var notificationsOff: some View {
@@ -116,9 +149,31 @@ struct TrackRideSheet: View {
         .background(.cardBackground, in: .rect(cornerRadius: 22))
     }
 
+    /// Only one ride is tracked at a time, so starting this one stops the other.
+    private func replaces(_ ride: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "star.slash")
+                .font(.title3)
+                .foregroundStyle(.committed)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Replaces Your Tracked Ride").font(.subheadline.weight(.semibold))
+                Text(ride).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(.cardBackground, in: .rect(cornerRadius: 22))
+        .accessibilityElement(children: .combine)
+    }
+
     private var rideCard: some View {
         let day = pick.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
         let times = "\(pick.start.formatted(.clockTime)) → ~\(pick.finish.formatted(.clockTime))"
+        // Tracking shows the latest check's score; the hero keeps the one it was ranked with.
+        let score = isTracking ? shown?.latestScore ?? pick.score : pick.score
         return HStack(spacing: 12) {
             RouteMap(pick.route.coordinates, style: .thumbnail, tint: pick.meetsMinimums ? .accentColor : .gray)
                 .frame(width: 48, height: 48)
@@ -130,14 +185,14 @@ struct TrackRideSheet: View {
             }
             .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
-            ScoreGauge(score: pick.score, tint: pick.meetsMinimums ? .accentColor : .gray, size: 40)
+            ScoreGauge(score: score, tint: pick.meetsMinimums ? .accentColor : .gray, size: 40)
         }
         .padding(.vertical, 10)
         .padding(.leading, 10)
         .padding(.trailing, 14)
         .background(.cardBackground, in: .rect(cornerRadius: 22))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(pick.route.name), \(pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))), leave \(pick.start.formatted(.clockTime)), back about \(pick.finish.formatted(.clockTime)). Score \(pick.score).")
+        .accessibilityLabel("\(pick.route.name), \(pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))), leave \(pick.start.formatted(.clockTime)), back about \(pick.finish.formatted(.clockTime)). Score \(score).")
     }
 
     // MARK: Triggers
@@ -156,7 +211,7 @@ struct TrackRideSheet: View {
 
     private var triggers: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(isTracking ? "We'll Notify You If" : "Notify Me If")
+            Text(!notifies ? "We'll Check If" : isTracking ? "We'll Notify You If" : "Notify Me If")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
@@ -178,7 +233,8 @@ struct TrackRideSheet: View {
                 }
             }
             .background(.cardBackground, in: .rect(cornerRadius: 22))
-            Text("Plus the final forecast the evening before.\(status == .notDetermined && !isTracking ? " \(Self.system) will ask to allow notifications." : "")")
+            Text(!notifies ? "Checked each time you open this ride, until you leave."
+                 : "Plus the final forecast the evening before.\(status == .notDetermined && !isTracking ? " \(Self.system) will ask to allow notifications." : "")")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
@@ -191,26 +247,24 @@ struct TrackRideSheet: View {
     @ViewBuilder
     private var actions: some View {
         if isTracking {
-            Button(role: .destructive) {
-                onChange(false)
-                dismiss()
-            } label: {
-                Text("Stop Tracking").frame(maxWidth: .infinity)
+            Button(role: .destructive, action: stop) {
+                label("Stop Tracking")
             }
             .buttonStyle(.glass)
             .buttonBorderShape(.capsule)
             .controlSize(.large)
             .tint(.red)
+            .disabled(working)
         } else {
             VStack(spacing: 4) {
                 Button(action: start) {
-                    Text("Start Tracking").frame(maxWidth: .infinity)
+                    label("Start Tracking")
                 }
                 .buttonStyle(.glassProminent)
                 .buttonBorderShape(.capsule)
                 .controlSize(.large)
                 .keyboardShortcut(.defaultAction)
-                .disabled(starting)
+                .disabled(working)
                 Button("Not Now") { dismiss() }
                     .buttonStyle(.borderless)
                     .controlSize(.large)
@@ -219,17 +273,101 @@ struct TrackRideSheet: View {
         }
     }
 
-    /// Asks for notifications the first time; tracking starts whatever the answer, and the
-    /// Tracking sheet shows Notifications Are Off if it was no.
+    /// The button's title, or a spinner the same size while the API answers.
+    private func label(_ title: String) -> some View {
+        Text(title)
+            .opacity(working ? 0 : 1)
+            .overlay { if working { ProgressView().accessibilityLabel("Saving") } }
+            .frame(maxWidth: .infinity)
+    }
+
+    /// When the API notifies, asks for notifications the first time; tracking starts whatever the
+    /// answer, and the Tracking sheet shows Notifications Are Off if it was no.
     private func start() {
-        starting = true
+        working = true
         Task {
-            if status == .notDetermined {
+            if notifies, status == .notDetermined {
                 _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
             }
-            onChange(true)
-            dismiss()
+            do {
+                try await tracker?.track(pick)
+                dismiss()
+            } catch {
+                failure = error.localizedDescription
+                working = false
+            }
         }
+    }
+
+    private func stop() {
+        working = true
+        Task {
+            do {
+                try await tracker?.stop()
+                dismiss()
+            } catch {
+                failure = error.localizedDescription
+                working = false
+            }
+        }
+    }
+
+    // MARK: Summary
+
+    /// What the latest check found, in sentences. A failed check never says nothing changed.
+    private var summary: String {
+        switch shown?.check {
+        case nil, .due(lastChecked: nil): "The forecast hasn't been checked since you started tracking."
+        case .due(let last?): "Forecast last checked \(ago(last))."
+        case .checking: "Checking the forecast…"
+        case .closed: "It's time to leave, so the forecast isn't checked any more."
+        case .failed(let reason, let last):
+            [Self.failure(reason), last.map { "Last checked \(ago($0))." }].compactMap(\.self).joined(separator: " ")
+        case .checked(let at, let changes):
+            (["Forecast checked \(ago(at))."] + (changes.isEmpty ? ["Nothing has changed since you started tracking."] : changes.map(sentence)))
+                .joined(separator: " ")
+        }
+    }
+
+    private static func failure(_ reason: TrackedRide.Reason) -> String {
+        switch reason {
+        case .routeUnavailable: "Couldn't check the forecast because this route isn't in your library any more."
+        case .noLongerFits: "Couldn't check the forecast because this ride no longer fits your window."
+        case .forecastUnavailable: "Couldn't check the forecast because it isn't available right now."
+        case .missingElevation: "Couldn't check the forecast because this route's elevation is missing."
+        case .other: "Couldn't check the forecast."
+        }
+    }
+
+    private func sentence(_ change: TrackedRide.Change) -> String {
+        let speed = { UnitFormat.speed(kph: $0, system: speedSystem) }
+        let degrees = { UnitFormat.degrees(c: $0, locale: locale) }
+        let percent = { (fraction: Double) in fraction.formatted(.percent.precision(.fractionLength(0))) }
+        let rate = { (mmH: Double) in "\(mmH.formatted(.number.precision(.fractionLength(0...1)))) mm/h" }
+        switch change {
+        case .standard(.gust, let actual, let limit): return "Gusts now reach \(speed(actual)), over your \(speed(limit)) limit."
+        case .standard(.cold, let actual, let limit): return "It now drops to \(degrees(actual)), below your \(degrees(limit)) minimum."
+        case .standard(.heat, let actual, let limit): return "It now reaches \(degrees(actual)), over your \(degrees(limit)) maximum."
+        case .standard(.rainChance, let actual, let limit): return "The chance of rain is now \(percent(actual)), over your \(percent(limit)) limit."
+        case .standard(.rainRate, let actual, let limit): return "Rain now reaches \(rate(actual)), over your \(rate(limit)) limit."
+        case .rain: return "Rain is now forecast."
+        case .betterRoute(let name, let start): return "\(name ?? "Another route")\(when(start)) now looks better."
+        case .betterTime(let start): return "Leaving\(when(start)) now looks better."
+        case .score(let points):
+            let amount = "\(abs(points)) point\(abs(points) == 1 ? "" : "s")"
+            return "Its score has \(points < 0 ? "dropped" : "risen") \(amount) since you started tracking."
+        case .incomplete: return "Some forecasts were missing, so a better ride might not show."
+        }
+    }
+
+    /// " at 10:30", or " on Thursday at 10:30" when it's another day.
+    private func when(_ start: Date) -> String {
+        let day = Calendar.current.isDate(start, inSameDayAs: pick.start) ? "" : " on \(start.formatted(.dateTime.weekday(.wide)))"
+        return "\(day) at \(start.formatted(.clockTime))"
+    }
+
+    private func ago(_ date: Date) -> String {
+        Date.now.timeIntervalSince(date) < 60 ? "just now" : date.formatted(.relative(presentation: .named, unitsStyle: .wide))
     }
 
     private func openNotificationSettings() {
@@ -249,7 +387,8 @@ struct TrackRideSheet: View {
 
 #Preview {
     Text("Rides").sheet(isPresented: .constant(true)) {
-        TrackRideSheet(pick: RideBoard.sample.picks[0], isTracking: false) { _ in }
+        TrackRideSheet(pick: RideBoard.sample.picks[0], isTracking: false, replacing: "Ridge Run · Sat 18 Oct, 09:00")
             .environment(RiderSettingsStore(live: false))
+            .environment(RideTracker(live: false))
     }
 }

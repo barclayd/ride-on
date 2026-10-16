@@ -4,9 +4,10 @@
 
 What the Track sheet (`docs/redesign/README.md` §1, Track sheet) needs from the API. The hero's
 star opens the sheet, and Start Tracking turns the star gold. The rider is promised a notification
-if the forecast changes before they leave, plus a final forecast the evening before. Nothing is
-watched yet: the app keeps tracked rides in memory (a `Set` of `routeId@departure` in
-`RidesView`), so they're gone on relaunch, and no device token is sent anywhere.
+if the forecast changes before they leave, plus a final forecast the evening before. The app now
+tracks through v0.28.0 (`RideTracker`, #185) and checks when the Tracking sheet opens. Nothing
+is watched in the background and no device token is sent, so the sheet drops its notification
+copy while `capabilities.notifications` is false.
 
 Seven requests, in priority order:
 

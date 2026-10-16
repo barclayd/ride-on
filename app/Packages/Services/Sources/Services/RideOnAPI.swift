@@ -17,6 +17,8 @@ public enum RideOnAPI {
         public var status: Int
         public var code: String
         public var message: String
+        /// Seconds to wait before trying again, from `Retry-After`.
+        public var retryAfter: TimeInterval?
         public var errorDescription: String? { message }
     }
 
@@ -81,16 +83,28 @@ public enum RideOnAPI {
     // MARK: Requests
 
     /// GET, or POST (or `method`) with a JSON `body`. A 401 signs out, so the caller can show sign-in.
-    static func send<T: Decodable>(_ path: String, query: [URLQueryItem] = [], auth: Bool = true, method: String = "POST",
-                                   body: (any Encodable)? = nil) async throws -> T {
+    static func send<T: Decodable>(_ path: String, query: [URLQueryItem] = [], auth: Bool = true, method: String? = nil,
+                                   headers: [String: String] = [:], body: (any Encodable)? = nil) async throws -> T {
+        try decoder.decode(T.self, from: await data(path, query: query, auth: auth, method: method, headers: headers, body: body))
+    }
+
+    /// The same, for a response with nothing to read, like `204 No Content`.
+    static func send(_ path: String, query: [URLQueryItem] = [], method: String? = nil, headers: [String: String] = [:],
+                     body: (any Encodable)? = nil) async throws {
+        _ = try await data(path, query: query, auth: true, method: method, headers: headers, body: body)
+    }
+
+    private static func data(_ path: String, query: [URLQueryItem], auth: Bool, method: String?, headers: [String: String],
+                             body: (any Encodable)?) async throws -> Data {
         var components = URLComponents(url: base.appending(path: path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query }
         var request = URLRequest(url: components.url!)
+        request.httpMethod = method ?? (body == nil ? "GET" : "POST")
         if let body {
-            request.httpMethod = method
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(body)
         }
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
         if auth, let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -105,9 +119,10 @@ public enum RideOnAPI {
             if status == 401 { signOut() }
             let detail = try? JSONDecoder().decode(ErrorEnvelope.self, from: data).error
             throw Failure(status: status, code: detail?.code ?? "HTTP_\(status)",
-                          message: detail?.message ?? HTTPURLResponse.localizedString(forStatusCode: status).capitalized)
+                          message: detail?.message ?? HTTPURLResponse.localizedString(forStatusCode: status).capitalized,
+                          retryAfter: http?.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init))
         }
-        return try decoder.decode(T.self, from: data)
+        return data
     }
 
     private struct ErrorEnvelope: Decodable {
