@@ -96,11 +96,23 @@ private func destination(for tab: AppTab) -> some View {
     case .rides:
         // The fixture world keeps E2E off the network.
         if FixtureWorld.isEnabled { RidesView(board: .sample) } else { LiveRidesView() }
-    case .routes:
-        // ponytail: sample library until Routes is wired to the API (docs/redesign/README.md, "Routes").
-        RoutesView(library: .sample, board: .sample)
-            .navigationDestination(for: RideBoard.Pick.self) { RideDetailView(board: .sample, pick: $0) }
+    case .routes: RoutesPage()
     case .preferences: PreferencesView()
+    }
+}
+
+/// The Routes tab, and the Ride detail its shortlist cards push (RoutesUI can't import RideUI).
+private struct RoutesPage: View {
+    @State private var sampleLibrary = RouteLibrary.sample
+    @Environment(RiderSettingsStore.self) private var settings: RiderSettingsStore?
+
+    var body: some View {
+        Group {
+            if FixtureWorld.isEnabled { RoutesView(library: $sampleLibrary, board: .sample) } else { LiveRoutesView() }
+        }
+        .navigationDestination(for: RideBoard.Pick.self) { pick in
+            if let board = settings?.board { RideDetailView(board: board, pick: pick) }
+        }
     }
 }
 

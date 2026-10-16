@@ -1,7 +1,7 @@
 import Foundation
 
 /// Everything the Routes tab shows: the saved routes, which of them are on the shortlist, and
-/// the rides marked as ridden. Presentation values only, like `RideBoard`: the API pass builds
+/// the rides marked as ridden. Presentation values only, like `RideBoard`: `RouteLibraryLoader` builds
 /// it from `GET /routes`, `GET /route-selection` and `GET /rides`; previews and the fixture
 /// world use `.sample`.
 public struct RouteLibrary: Hashable, Sendable {
