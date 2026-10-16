@@ -262,7 +262,7 @@ test('a thousand short stretches all keep their colour', () => {
       180,
     ),
   );
-  const s = windSketch(outAndBack, many, ride(), 'UTC');
+  const s = windSketch(outAndBack, many, ride());
   expect(s?.runs).toHaveLength(1000);
   expect(s?.sentence.split(', then ').length).toBeLessThanOrEqual(4);
   const w = windPanel(ride({ windStretches: many }), outAndBack, 'UTC');
@@ -294,14 +294,14 @@ test('light wind gets its own row, and one effect reads throughout', () => {
 const parse = (points: string) =>
   points.split(' ').map((p) => p.split(',').map(Number));
 
-test('the sketch fits its box, draws the return beside the way out and reads aloud', () => {
-  const s = windSketch(outAndBack, outAndBackWind, ride(), 'UTC');
+test('the sketch fits right of the wind key, draws the return beside the way out and reads aloud', () => {
+  const s = windSketch(outAndBack, outAndBackWind, ride());
   if (!s) throw new Error('no sketch');
   const casing = parse(s.casing);
   for (const [x, y] of casing) {
-    expect(x).toBeGreaterThanOrEqual(76);
-    expect(x).toBeLessThanOrEqual(206);
-    expect(y).toBeGreaterThanOrEqual(12);
+    expect(x).toBeGreaterThanOrEqual(72);
+    expect(x).toBeLessThanOrEqual(220);
+    expect(y).toBeGreaterThanOrEqual(10);
     expect(y).toBeLessThanOrEqual(86);
   }
   // The way back sits 3px beside the way out instead of on top of it.
@@ -317,14 +317,17 @@ test('the sketch fits its box, draws the return beside the way out and reads alo
   expect(s.chevrons[0].angle).toBe(-90); // north, up the page
   // Back where it started: a start dot, no finish.
   expect(s.finish).toBeNull();
-  expect(s.start.label.text).toBe('Start 08:30');
-  // The wind from the south blows up the page.
-  expect(s.wind.title).toBe('Wind from S');
+  expect(s.start.label.text).toBe('Start');
+  // The wind from the south blows up the dial, from its tail dot at the bottom.
+  expect(s.wind.lines).toEqual(['From S']);
   expect(s.wind.speed).toBe('15 km/h');
-  expect(s.wind.arrow?.x1).toBeCloseTo(30);
-  expect(s.wind.arrow?.y1).toBeCloseTo(80);
-  expect(s.wind.arrow?.y2).toBeCloseTo(52);
-  expect(s.wind.arrow?.angle).toBe(-90);
+  expect(s.wind.arrow).toEqual({
+    x1: 32,
+    y1: 44.5,
+    x2: 32,
+    y2: 25.5,
+    angle: -90,
+  });
   expect(s.sentence).toBe(
     'Heads north with the wind behind, then south into the wind. Wind from the south.',
   );
@@ -343,17 +346,18 @@ test('a one-way ride gets a finish, labels clear of the wind key, and the wind t
     oneWay,
     [stretch(0, 9000, 'tailwind', 225), stretch(9000, 16000, 'crosswind', 270)],
     ride({ finishAt: at('10:40') }),
-    'UTC',
   );
   if (!s) throw new Error('no sketch');
-  expect(s.wind.title).toBe('Wind from SW, then W');
-  expect(s.finish?.label.text).toBe('Finish ~10:40');
-  // The start, bottom left, would sit on the route to its right, so it reads left, under the wind arrow.
+  // Two directions take two lines in the key's narrow column.
+  expect(s.wind.lines).toEqual(['From SW', 'then W']);
+  expect(s.finish?.label.text).toBe('Finish');
+  // The start, bottom left, would sit on the route to its right, so it reads left, just clear of the key.
   expect(s.start.label).toMatchObject({ anchor: 'end', x: s.start.x - 8 });
-  // The finish, top right, has the wind label to its left and the edge to its right: it goes below.
+  expect(s.start.label.x - 'Start'.length * 5.3).toBeGreaterThanOrEqual(62);
+  // The finish, top right, has the route to its left and room to its right.
   expect(s.finish?.label).toMatchObject({
-    anchor: 'middle',
-    y: (s.finish?.y ?? 0) + 16,
+    anchor: 'start',
+    x: (s.finish?.x ?? 0) + 8,
   });
   for (const l of [s.start.label, s.finish?.label])
     expect(l?.x).toBeLessThanOrEqual(SKETCH.width);
@@ -365,9 +369,8 @@ test('a one-way ride gets a finish, labels clear of the wind key, and the wind t
     oneWay,
     [stretch(0, 16000, 'light', null, { averageWindSpeedKph: 5 })],
     ride(),
-    'UTC',
   );
-  expect(calm?.wind.title).toBe('Light wind');
+  expect(calm?.wind.lines).toEqual(['Light wind']);
   expect(calm?.wind.arrow).toBeNull();
   expect(calm?.runs).toEqual([{ effect: 'light', points: expect.any(String) }]);
 });

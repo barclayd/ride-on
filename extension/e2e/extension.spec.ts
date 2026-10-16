@@ -1458,14 +1458,18 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     'Crosswind15 km/h~20%',
     'Headwind16 km/h~20%',
   ]);
-  // The route sketch: casing plus a run per effect, a start and no finish on a loop.
+  // The route sketch: halo, ribbon and ink line plus a run per effect, a start and no finish on a loop.
   const sketch = along.locator('.ro-wind-map svg');
-  await expect(sketch.locator('polyline')).toHaveCount(4);
-  await expect(sketch.locator('text').first()).toHaveText(/^Start \d\d:\d\d$/);
+  await expect(sketch.locator('polyline')).toHaveCount(6);
+  await expect(sketch.locator('text').first()).toHaveText('Start');
   await expect(sketch.locator('.ro-wind-finish')).toHaveCount(0);
-  await expect(sketch.locator('.ro-wind-from')).toHaveText(
-    'Wind from SW, then W',
-  );
+  // The wind key: an arrow across the dial, then where the wind comes from and where it turns.
+  await expect(sketch.locator('.ro-wind-arrow')).toHaveCount(1);
+  await expect(sketch.locator('.ro-wind-from')).toHaveText([
+    'From SW',
+    'then W',
+  ]);
+  await expect(sketch.locator('.ro-wind-speed')).toHaveText('15 km/h');
   await expect(along.locator('.ro-sr')).toHaveText(
     'Heads north-east with the wind behind, then south across the wind, then west into the wind. Wind from the south-west, then west.',
   );

@@ -259,7 +259,7 @@ export const windPanel = (
   }));
   const sketch =
     outline && b.windStretches?.length
-      ? windSketch(outline, b.windStretches, b, timeZone, u)
+      ? windSketch(outline, b.windStretches, b, u)
       : null;
   return {
     blocks: blocks.map(({ point: _, ...block }) => block),
@@ -277,7 +277,7 @@ export const windPanel = (
   };
 };
 
-// ---- Route sketch (board 7): a north-up outline coloured by wind, no basemap. ----
+// ---- Route sketch (boards 7 and 13): a north-up wind ribbon and a dial key, no basemap. ----
 
 const EARTH_M = 6_371_000;
 const metresBetween = (a: [number, number], b: [number, number]) => {
@@ -309,16 +309,17 @@ const bearing = (a: [number, number], b: [number, number]) => {
 };
 
 export const SKETCH = { width: 236, height: 96 };
-// The outline fits right of the wind label and arrow, below the N marker.
-const BOX = { left: 80, right: 206, top: 12, bottom: 86 };
+// The outline fits right of the wind key: a north mark, a dial and the words under it.
+const BOX = { left: 72, right: 220, top: 10, bottom: 86 };
+export const DIAL = { x: 32, y: 35, r: 14 };
+const KEY: Box = { left: 2, right: 62, top: 2, bottom: 92 };
 const OFFSET = 3; // an out-and-back's return, drawn beside the way out like a transit map
 const SHORT = 0.05; // stretches under 5% are too short to name or point along
 
 type Point = { x: number; y: number };
 type Box = { left: number; right: number; top: number; bottom: number };
-// ponytail: average glyph widths of the 10px serif labels and the 10.5px bold title.
+// ponytail: the average glyph width of the 10px serif labels.
 const LABEL_CHAR = 5.3;
-const TITLE_CHAR = 6;
 type Run = { from: number; to: number; effect: WindEffect };
 export type SketchLabel = Point & {
   text: string;
@@ -331,7 +332,7 @@ export type WindSketch = {
   start: Point & { label: SketchLabel };
   finish: (Point & { label: SketchLabel }) | null;
   wind: {
-    title: string;
+    lines: string[]; // "From SW", then "then W" when it turns
     speed: string;
     arrow: {
       x1: number;
@@ -404,7 +405,6 @@ export const windSketch = (
   outline: Outline,
   stretches: WindStretch[],
   b: Departure,
-  timeZone: string,
   u: Units = METRIC,
 ): WindSketch | null => {
   const raw = outline.points;
@@ -511,7 +511,7 @@ export const windSketch = (
       },
     ];
   });
-  // One arrow where the wind blows; the label names where it comes from, and where it turns.
+  // One arrow across the dial where the wind blows; the words name where it comes from, and where it turns.
   const named = stretches.filter(
     (s) =>
       s.effect !== 'light' &&
@@ -532,35 +532,22 @@ export const windSketch = (
     const to = (mean + 180) % 360;
     const vx = Math.sin((to * Math.PI) / 180);
     const vy = -Math.cos((to * Math.PI) / 180);
-    const [cx, cy, half] = [30, 66, 14];
+    const half = 9.5;
     return {
-      x1: round1(cx - vx * half),
-      y1: round1(cy - vy * half),
-      x2: round1(cx + vx * half),
-      y2: round1(cy + vy * half),
+      x1: round1(DIAL.x - vx * half),
+      y1: round1(DIAL.y - vy * half),
+      x2: round1(DIAL.x + vx * half),
+      y2: round1(DIAL.y + vy * half),
       angle: round1(((to + 90) % 360) - 180), // to − 90, kept within ±180
     };
   })();
-  const title = !from.length
-    ? 'Light wind'
-    : `Wind from ${from[0]}${from[1] ? `, then ${from[1]}` : ''}`;
-  // Start and finish labels sit left of their dot, else right, clear of the wind label, arrow and route.
-  const taken: Box[] = [
-    { left: 8, right: 12 + title.length * TITLE_CHAR, top: 12, bottom: 38 },
-    ...(arrow
-      ? [
-          {
-            left: Math.min(arrow.x1, arrow.x2) - 5,
-            right: Math.max(arrow.x1, arrow.x2) + 5,
-            top: Math.min(arrow.y1, arrow.y2) - 5,
-            bottom: Math.max(arrow.y1, arrow.y2) + 5,
-          },
-        ]
-      : []),
-    { left: 214, right: 230, top: 0, bottom: 22 }, // N
-  ];
+  const lines = !from.length
+    ? ['Light wind']
+    : [`From ${from[0]}`, ...(from[1] ? [`then ${from[1]}`] : [])];
+  // Start and finish labels sit left of their dot, else right, clear of the wind key and route.
+  const taken: Box[] = [KEY];
   // The route, sampled every 2px. Text over the haloed line reads; text over text doesn't, so
-  // each sample under a label costs 20, and each px² over the title, arrow or N costs 4.
+  // each sample under a label costs 20, and each px² over the wind key costs 4.
   const trail = pts.slice(1).flatMap((p, i) => {
     const a = pts[i];
     const steps = Math.max(1, Math.ceil(Math.hypot(p.x - a.x, p.y - a.y) / 2));
@@ -630,14 +617,14 @@ export const windSketch = (
   const start = {
     x: round1(first.x),
     y: round1(first.y),
-    label: label(first, `Start ${clock(b.departureAt, timeZone)}`),
+    label: label(first, 'Start'),
   };
   const finish = roundTripOf(outline)
     ? null
     : {
         x: round1(last.x),
         y: round1(last.y),
-        label: label(last, `Finish ~${clock(b.finishAt, timeZone)}`),
+        label: label(last, 'Finish'),
       };
   // "Heads north-east with the wind behind, then south across the wind, then west into the wind."
   const WITH: Record<WindEffect, string> = {
@@ -671,7 +658,7 @@ export const windSketch = (
     chevrons,
     start,
     finish,
-    wind: { title, speed: speed(b.conditions.averageWindSpeedKph, u), arrow },
+    wind: { lines, speed: speed(b.conditions.averageWindSpeedKph, u), arrow },
     sentence,
   };
 };
