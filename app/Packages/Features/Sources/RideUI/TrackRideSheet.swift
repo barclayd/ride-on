@@ -102,7 +102,7 @@ struct TrackRideSheet: View {
         }
     }
 
-    /// The star the hero shows, with a bell when tracking notifies.
+    /// A gold star, with a bell when tracking notifies.
     private var medal: some View {
         Image(systemName: "star.fill")
             .font(.system(size: 30))

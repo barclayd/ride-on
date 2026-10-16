@@ -75,13 +75,14 @@ Top to bottom:
    white casing and a start marker; an eased black scrim (at least 340pt, 0 → 80% with no
    visible top edge) sized to the title block. The hero follows canvas board
    `HeroD.dc.html` ("3b"), which supersedes the hero in the screenshots above.
-   - "Best pick" pill (`.footnote` semibold, white on `pickPill` green; "Best that day" for
+   - "★ Best pick" pill (`star.fill` then the label, `.footnote` semibold, white on `pickPill`
+     green; "★ Best that day" for
      another day's best; no pill in detail when it's neither)
    - "Hilly Loop" (`.largeTitle` bold, white)
    - ↔ 51 km · ⛰ 640 m climb (`.subheadline`, white 88%, monospaced digits, wraps at large
      text). Soft text shadow on the whole block. No date or times: they lead the card.
-   - Track star: 48pt clear-glass circle, bottom right, `star`. Tap opens the
-     [Track sheet](#track-sheet); while the ride is tracked it's `star.fill` on gold-tinted glass
+   - Track bell: 48pt clear-glass circle, bottom right, `bell`. Tap opens the
+     [Track sheet](#track-sheet); while the ride is tracked it's `bell.fill` on gold-tinted glass
      (`.committed`). Label "Track Hilly Loop on Wednesday 14 October" ("Tracking …" while on),
      Selected trait while on.
    - The `Map`'s own "Maps" and "Legal" attribution, bottom leading.
@@ -141,15 +142,17 @@ Build:
 - [x] Track sheet on the API (#185): `RideTracker` tracks the window pick's `recommendationRef`
       with the current tracking version and an idempotency key, refreshes when the Tracking sheet
       opens, says what changed (or why the check failed), and confirms a replacement
+- [x] Star in the pick pill; the track star is a bell, so the star means best pick and the bell
+      means tracking
 - [ ] Background monitoring and notifications (follow-up API PR); the notification copy and
       permission request below switch on when `capabilities.notifications` is true
-- [ ] A tracked ride that isn't the hero has no star, so the rider can only see it by picking its
+- [ ] A tracked ride that isn't the hero has no bell, so the rider can only see it by picking its
       day. Show it somewhere on Rides
 - [ ] Reduce Transparency
 
 ### Track sheet
 
-Canvas boards `TrackFlow`, `TrackSheet`, `TrackSheetTracking`, `TrackSheetDark`. The hero's star
+Canvas boards `TrackFlow`, `TrackSheet`, `TrackSheetTracking`, `TrackSheetDark`. The hero's bell
 opens it. Tracking saves the ride's forecast, and each later check compares the latest forecast
 with it until the rider leaves. One ride is tracked at a time.
 
@@ -198,15 +201,15 @@ marked *(notifications)* below.
    - "Stop Tracking" (`.glass` capsule, red label).
 
 Flow: Start Tracking shows a spinner in the button while the API saves the ride, then the sheet
-closes and the star turns gold with a bounce and a success haptic. *(notifications)* It asks for
+closes and the bell turns gold with a bounce and a success haptic. *(notifications)* It asks for
 notifications first, the first time (`requestAuthorization`); denied still tracks. Stop Tracking
-closes the sheet, then the star goes back to outline. Either failing keeps the sheet open with an
+closes the sheet, then the bell goes back to outline. Either failing keeps the sheet open with an
 alert ("Couldn't Track This Ride", "Couldn't Stop Tracking"). A pick the API didn't save (no
-`recommendationRef`) has no star.
+`recommendationRef`) has no bell.
 
 `TrackRideSheet` (`RideUI/TrackRideSheet.swift`) over `RideTracker` (`Services`), which
 `RideOnApp` puts in the environment. It loads with the Rides board and refreshes when the Tracking
-sheet opens, unless the last check is still current (`refresh.refreshAt`). The star always tracks
+sheet opens, unless the last check is still current (`refresh.refreshAt`). The bell always tracks
 the window ranking's pick, since its `recommendationRef` compares the whole window; picks are
 matched by `routeId@departure`, not by reference. The limits come from `RiderSettingsStore`
 (`minimumStandards.maximumGustKph`, `minimumTemperature` for the ride's month). With

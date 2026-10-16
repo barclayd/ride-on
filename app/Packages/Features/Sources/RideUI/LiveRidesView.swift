@@ -69,7 +69,7 @@ public struct LiveRidesView: View {
     /// `window` is a Ride Window sheet choice, saved before Rides reloads with it.
     private func load(_ window: RideWindow? = nil) async {
         guard RideOnAPI.isSignedIn else { phase = .signedOut; return }
-        // The star needs the tracked ride, read alongside the board.
+        // The bell needs the tracked ride, read alongside the board.
         let tracker = tracker
         async let tracked: Void? = tracker?.load()
         do {
