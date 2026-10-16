@@ -320,16 +320,10 @@ test('the sketch fits right of the wind key, draws the return beside the way out
   // Back where it started: a start dot, no finish.
   expect(s.finish).toBeNull();
   expect(s.start.label.text).toBe('Start');
-  // The wind from the south blows up the compass, from its tail dot at the bottom.
+  // The wind from the south blows up the compass: the needle's red tip points north.
   expect(s.wind.lines).toEqual(['From S']);
   expect(s.wind.speed).toBe('15 km/h');
-  expect(s.wind.arrow).toEqual({
-    x1: 32,
-    y1: 32.5,
-    x2: 32,
-    y2: 15.5,
-    angle: -90,
-  });
+  expect(s.wind.needle).toBe(0);
   expect(s.sentence).toBe(
     'Heads north with the wind behind, then south into the wind. Wind from the south.',
   );
@@ -366,13 +360,13 @@ test('a one-way ride gets a finish, labels clear of the wind key, and the wind t
   expect(s.sentence).toBe(
     'Heads north-east with the wind behind, then north-east across the wind. Wind from the south-west, then west.',
   );
-  // Calm all the way: no arrow, no direction.
+  // Calm all the way: no needle, no direction.
   const calm = windSketch(
     oneWay,
     [stretch(0, 16000, 'light', null, { averageWindSpeedKph: 5 })],
     ride(),
   );
   expect(calm?.wind.lines).toEqual(['Light wind']);
-  expect(calm?.wind.arrow).toBeNull();
+  expect(calm?.wind.needle).toBeNull();
   expect(calm?.runs).toEqual([{ effect: 'light', points: expect.any(String) }]);
 });

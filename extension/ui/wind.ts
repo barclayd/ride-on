@@ -337,13 +337,7 @@ export type WindSketch = {
   wind: {
     lines: string[]; // "From SW", then "then W" when it turns
     speed: string;
-    arrow: {
-      x1: number;
-      y1: number;
-      x2: number;
-      y2: number;
-      angle: number;
-    } | null;
+    needle: number | null; // the bearing the wind blows toward, null when it's light all the way
   };
   sentence: string; // for screen readers; the drawing is hidden from them
 };
@@ -505,7 +499,7 @@ export const windSketch = (
       angle: round1((Math.atan2(c.y - a.y, c.x - a.x) * 180) / Math.PI),
     };
   });
-  // One arrow across the compass where the wind blows; the words name where it comes from, and where it turns.
+  // A compass needle pointing where the wind blows; the words name where it comes from, and where it turns.
   const named = stretches.filter(
     (s) =>
       s.effect !== 'light' &&
@@ -521,20 +515,7 @@ export const windSketch = (
       weight: s.toM - s.fromM,
     })),
   );
-  const arrow = (() => {
-    if (mean === null) return null;
-    const to = (mean + 180) % 360;
-    const vx = Math.sin((to * Math.PI) / 180);
-    const vy = -Math.cos((to * Math.PI) / 180);
-    const half = 8.5;
-    return {
-      x1: round1(DIAL.x - vx * half),
-      y1: round1(DIAL.y - vy * half),
-      x2: round1(DIAL.x + vx * half),
-      y2: round1(DIAL.y + vy * half),
-      angle: round1(((to + 90) % 360) - 180), // to − 90, kept within ±180
-    };
-  })();
+  const needle = mean === null ? null : round1((mean + 180) % 360);
   const lines = !from.length
     ? ['Light wind']
     : [`From ${from[0]}`, ...(from[1] ? [`then ${from[1]}`] : [])];
@@ -652,7 +633,7 @@ export const windSketch = (
     track,
     start,
     finish,
-    wind: { lines, speed: speed(b.conditions.averageWindSpeedKph, u), arrow },
+    wind: { lines, speed: speed(b.conditions.averageWindSpeedKph, u), needle },
     sentence,
   };
 };

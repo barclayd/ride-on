@@ -1463,14 +1463,14 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(sketch.locator('polyline')).toHaveCount(5);
   await expect(sketch.locator('text').first()).toHaveText('Start');
   await expect(sketch.locator('.ro-wind-finish')).toHaveCount(0);
-  // The wind key: an arrow across the compass, then where the wind comes from and where it turns.
+  // The wind key: a needle across the compass, then where the wind comes from and where it turns.
   await expect(sketch.locator('.ro-wind-cardinal')).toHaveText([
     'N',
     'E',
     'S',
     'W',
   ]);
-  await expect(sketch.locator('.ro-wind-arrow')).toHaveCount(1);
+  await expect(sketch.locator('.ro-wind-needle')).toHaveCount(1);
   await expect(sketch.locator('.ro-wind-from')).toHaveText([
     'From SW',
     'then W',
