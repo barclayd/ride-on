@@ -221,8 +221,10 @@ export const regionUnits = (locale: string): Units => {
 // From the whole °C, so °F always matches what °C would show (10–11°C reads 50–52°F).
 export const degrees = (c: number, u: Units) =>
   Math.round(u.temperature === '°F' ? Math.round(c) * 1.8 + 32 : c);
+const speedValue = (kph: number, u: Units) =>
+  Math.round(u.wind === 'mph' ? kph * 0.621371 : kph);
 export const speed = (kph: number, u: Units) =>
-  `${Math.round(u.wind === 'mph' ? kph * 0.621371 : kph)} ${u.wind}`;
+  `${speedValue(kph, u)} ${u.wind}`;
 
 // A day strip tile from the API's summary of that day; '–' until it arrives.
 export const tile = (
@@ -332,6 +334,7 @@ export const conditionChips = (
   const pct = Math.round(c.maximumPrecipitationProbability * 100);
   const chance = `${pct}% chance of rain`;
   const summary = c.precipitationSummary ?? (pct < 10 ? 'dry' : 'possible');
+  const gust = c.maximumGustKph;
   const rain =
     summary === 'dry'
       ? null
@@ -346,14 +349,14 @@ export const conditionChips = (
       warn:
         !!comfort && (low < comfort.comfortMinC || high > comfort.comfortMaxC),
     },
+    // Wind and its gusts share one chip, the unit once: "15 km/h tailwind, gusts 48".
     {
       icon: 'wind',
-      text: kind ? `${shown} ${kind}` : shown,
-      label: kind
-        ? `${kind[0].toUpperCase()}${kind.slice(1)} ${shown}`
-        : `Wind ${shown}`,
+      text: `${kind ? `${shown} ${kind}` : shown}${gust === undefined ? '' : `, gusts ${speedValue(gust, u)}`}`,
+      label: `${kind ? `${kind[0].toUpperCase()}${kind.slice(1)} ${shown}` : `Wind ${shown}`}${gust === undefined ? '' : `, maximum gusts ${speed(gust, u)}`}`,
       // The speed shown against the comfort for its direction; a mix includes some headwind.
       // A rider who prefers calm loses points to any named wind, a tailwind too.
+      // Amber when either the wind or the gusts lower the score.
       warn:
         (!!windComfort &&
           !windComfort.preferTailwind &&
@@ -362,22 +365,13 @@ export const conditionChips = (
           c.averageWindSpeedKph >
             (kind === 'crosswind'
               ? (windComfort?.comfortableCrosswindKph ?? 20)
-              : (windComfort?.comfortableHeadwindKph ?? 15))),
+              : (windComfort?.comfortableHeadwindKph ?? 15))) ||
+        (gust !== undefined &&
+          ((c.gustExposure?.maximumAdverseKph ?? gust) >
+            (windComfort?.comfortableGustKph ?? 35) ||
+            (prefs.minimumStandards?.maximumGustKph !== undefined &&
+              gust > prefs.minimumStandards.maximumGustKph))),
     },
-    ...(c.maximumGustKph !== undefined
-      ? [
-          {
-            icon: 'wind' as const,
-            text: `Gusts ${speed(c.maximumGustKph, u)}`,
-            label: `Maximum gusts during the ride ${speed(c.maximumGustKph, u)}`,
-            warn:
-              (c.gustExposure?.maximumAdverseKph ?? c.maximumGustKph) >
-                (windComfort?.comfortableGustKph ?? 35) ||
-              (prefs.minimumStandards?.maximumGustKph !== undefined &&
-                c.maximumGustKph > prefs.minimumStandards.maximumGustKph),
-          },
-        ]
-      : []),
     rain
       ? {
           icon: 'wet',

@@ -795,7 +795,7 @@ test('gust comfort saves separately and appears alongside the ride wind', async 
 }) => {
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  await expect(page.locator('.ro-ride').first()).toContainText('Gusts 48 km/h');
+  await expect(page.locator('.ro-ride').first()).toContainText('gusts 48');
   await page.getByRole('tab', { name: 'Preferences' }).click();
   await page.getByRole('button', { name: /Wind preferences/ }).click();
   const gust = page.getByRole('slider', { name: 'Gust comfort' });
@@ -1371,14 +1371,17 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(chips).toHaveText([
     '9–14°C',
     'Sun and sunny intervals',
-    '15 km/h tailwind',
-    'Gusts 48 km/h',
+    '15 km/h tailwind, gusts 48',
     'Dry',
   ]);
   await expect(chips.nth(0)).toHaveAttribute('data-warn', 'true');
-  await expect(chips.nth(2)).toHaveAttribute('aria-label', 'Tailwind 15 km/h');
-  await expect(chips.nth(3)).toHaveAttribute('data-warn', 'true');
-  await expect(chips.nth(4)).toHaveAttribute('data-warn', 'false');
+  await expect(chips.nth(2)).toHaveAttribute(
+    'aria-label',
+    'Tailwind 15 km/h, maximum gusts 48 km/h',
+  );
+  // The gusts lower the score, so the shared chip is amber.
+  await expect(chips.nth(2)).toHaveAttribute('data-warn', 'true');
+  await expect(chips.nth(3)).toHaveAttribute('data-warn', 'false');
   // The sky chip opens the expected conditions inside the tile, and closes it again.
   const sky = module.getByRole('button', {
     name: 'Sky: sun and sunny intervals. Show expected conditions',
@@ -1526,11 +1529,13 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
   await expect(chips).toHaveText([
     '48–57°F',
     'Sun and sunny intervals',
-    '9 mph tailwind',
-    'Gusts 30 mph',
+    '9 mph tailwind, gusts 30',
     'Dry',
   ]);
-  await expect(chips.nth(2)).toHaveAttribute('aria-label', 'Tailwind 9 mph');
+  await expect(chips.nth(2)).toHaveAttribute(
+    'aria-label',
+    'Tailwind 9 mph, maximum gusts 30 mph',
+  );
 });
 
 test('Journeys page: a passed window asks for new dates, then rescores', async ({
