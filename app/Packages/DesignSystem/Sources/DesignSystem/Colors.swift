@@ -17,6 +17,9 @@ public extension ShapeStyle where Self == Color {
     static var pickPill: Color { Color(light: 0x1E7132, dark: 0x1E7132) }
     /// The commit star's on state. Always over the hero map, so one value for both schemes.
     static var committed: Color { Color(light: 0xC88A00, dark: 0xC88A00) }
+    /// A Routes card's "Below your minimums" pill, with black text. Always over the map, so one
+    /// value for both schemes.
+    static var belowMinimumsPill: Color { Color(light: 0xFF9F0A, dark: 0xFF9F0A) }
 
     /// Route thumbnails: the land behind the outline and the outline's casing (the canvas's
     /// map palette).

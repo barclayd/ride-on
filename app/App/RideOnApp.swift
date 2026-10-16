@@ -62,17 +62,6 @@ struct RideOnApp: App {
         .commands {
             SidebarCommands()
             ToolbarCommands()
-            CommandGroup(after: .importExport) {
-                Button("Import GPX…") {
-                    NotificationCenter.default.post(name: .rideOnImportGPXRequested, object: nil)
-                }
-                .keyboardShortcut("i", modifiers: [.command, .shift])
-            }
-            // Menu-bar twin of Route Detail's Edit toolbar button — enabled
-            // only while a route is showing (see `\.routeEditAction`).
-            CommandGroup(after: .textEditing) {
-                RouteEditMenuItem()
-            }
         }
 
         #if os(macOS)
@@ -99,80 +88,29 @@ struct RideOnApp: App {
     }
 }
 
-/// The "Edit Route Details…" menu-bar command. Reads the focused Route
-/// Detail's edit action so it drives the same sheet the toolbar button opens,
-/// and disables itself when no route is focused.
-private struct RouteEditMenuItem: View {
-    @FocusedValue(\.routeEditAction) private var editAction
-
-    var body: some View {
-        Button("Edit Route Details…") { editAction?() }
-            .keyboardShortcut("e", modifiers: [.command, .shift])
-            .disabled(editAction == nil)
-    }
-}
-
 /// View construction for a tab lives here (not in Router's `AppTab`) since
 /// this is the one target allowed to import every Features package.
-/// `namespace` backs the card/row -> Route Detail zoom transition
-/// (DESIGN-SYSTEM.md §7); every tab gets one since only the App shell can
-/// see both the `matchedTransitionSource` (Ride's card, Routes' rows) and
-/// the `RouterDestination.routeDetail` push it zooms into.
 @MainActor @ViewBuilder
-private func destination(for tab: AppTab, namespace: Namespace.ID) -> some View {
+private func destination(for tab: AppTab) -> some View {
     switch tab {
     case .rides:
         // The fixture world keeps E2E off the network.
         if FixtureWorld.isEnabled { RidesView(board: .sample) } else { LiveRidesView() }
-    case .routes: RoutesView(namespace: namespace)
+    case .routes:
+        // ponytail: sample library until Routes is wired to the API (docs/redesign/README.md, "Routes").
+        RoutesView(library: .sample, board: .sample)
+            .navigationDestination(for: RideBoard.Pick.self) { RideDetailView(board: .sample, pick: $0) }
     case .preferences: PreferencesView()
     }
 }
 
-/// Turns a cross-feature `RouterDestination` value into a concrete view —
-/// the one place that can, since only the App shell imports every Features
-/// product (RideUI/RoutesUI/PreferencesUI can't import each other).
-@MainActor @ViewBuilder
-private func routeDetailDestination(_ destination: RouterDestination, namespace: Namespace.ID) -> some View {
-    switch destination {
-    case .routeDetail(let routeID):
-        RouteDetailView(routeID: routeID)
-            .zoomTransitionIfAvailable(sourceID: routeID, in: namespace)
-    }
-}
-
-// ponytail: `.zoom` navigation transition is iOS-only (unavailable on
-// macOS) — Mac gets a plain push, no zoom, per DESIGN-SYSTEM.md §7's
-// "reduced motion is always a valid fallback" spirit.
-private extension View {
-    @ViewBuilder
-    func zoomTransitionIfAvailable(sourceID: some Hashable, in namespace: Namespace.ID) -> some View {
-        #if os(iOS)
-        self.navigationTransition(.zoom(sourceID: sourceID, in: namespace))
-        #else
-        self
-        #endif
-    }
-}
-
-/// One tab's `NavigationStack` + the `Namespace` its zoom transition shares
-/// between the Today card and the pushed Route Detail. Owns the stack's path
-/// so feature views can push programmatically via `\.navigate` (e.g. the
-/// breakdown sheet's View Route button).
+/// One tab's `NavigationStack`.
 private struct TabPage: View {
     var tab: AppTab
-    @Namespace private var cardNamespace
-    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack(path: $path) {
-            destination(for: tab, namespace: cardNamespace)
-                .navigationDestination(for: RouterDestination.self) { destination in
-                    routeDetailDestination(destination, namespace: cardNamespace)
-                }
-                .environment(\.navigate, NavigateAction { destination in
-                    path.append(destination)
-                })
+        NavigationStack {
+            destination(for: tab)
         }
     }
 }
@@ -212,15 +150,18 @@ struct RootView: View {
 }
 
 private struct TabRoot: View {
+    @State private var selection = AppTab.rides
+
     var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             ForEach(AppTab.allCases) { tab in
-                Tab(tab.title, systemImage: tab.systemImage) {
+                Tab(tab.title, systemImage: tab.systemImage, value: tab) {
                     TabPage(tab: tab)
                 }
             }
         }
-        .tabBarMinimizeBehaviorIfAvailable()
+        // Routes' panel scrolls over a map, so a shrinking tab bar would only uncover more map.
+        .tabBarMinimizes(selection != .routes)
     }
 }
 
@@ -229,9 +170,9 @@ private extension View {
     // `.tabBarMinimizeBehavior(.onScrollDown)` — iOS-only (macOS uses the
     // sidebar, no minimizing tab bar).
     @ViewBuilder
-    func tabBarMinimizeBehaviorIfAvailable() -> some View {
+    func tabBarMinimizes(_ minimizes: Bool) -> some View {
         #if os(iOS)
-        self.tabBarMinimizeBehavior(.onScrollDown)
+        self.tabBarMinimizeBehavior(minimizes ? .onScrollDown : .never)
         #else
         self
         #endif
@@ -240,53 +181,20 @@ private extension View {
 
 private struct SplitRoot: View {
     @State private var selection: AppTab? = .rides
-    @State private var selectedRouteID: UUID?
 
     var body: some View {
-        // Landmarks idiom (REDESIGN.md A): on Mac/iPad the routes list is a
-        // content column driving Route Detail in the detail column, not a
-        // push over itself. Today/You keep the plain two-column layout, so
-        // the split view is swapped per tab.
-        Group {
-            if selection == .routes {
-                NavigationSplitView {
-                    sidebar
-                } content: {
-                    RoutesView(selection: $selectedRouteID)
-                        .navigationSplitViewColumnWidth(min: 300, ideal: 340)
-                } detail: {
-                    if let selectedRouteID {
-                        RouteDetailView(routeID: selectedRouteID)
-                    } else {
-                        ContentUnavailableView("Select a Route", systemImage: "map")
-                    }
-                }
-            } else {
-                NavigationSplitView {
-                    sidebar
-                } detail: {
-                    TabPage(tab: selection ?? .rides)
-                        .backgroundExtensionEffect()
-                }
+        NavigationSplitView {
+            List(AppTab.allCases, selection: $selection) { tab in
+                Label(tab.title, systemImage: tab.systemImage).tag(tab)
             }
+            .listStyle(.sidebar)
+            .navigationTitle("Ride On")
+        } detail: {
+            TabPage(tab: selection ?? .rides)
+                .id(selection)
+                .backgroundExtensionEffect()
         }
         .macMinWindowSize()
-        // ponytail: fixture-only debug hook — land on Route Detail with zero
-        // clicks so its layout can be reproduced/screenshotted headlessly.
-        .onAppear {
-            if FixtureWorld.isEnabled, ProcessInfo.processInfo.arguments.contains("--select-first-route") {
-                selection = .routes
-                selectedRouteID = FixtureWorld.sampleRoute.id
-            }
-        }
-    }
-
-    private var sidebar: some View {
-        List(AppTab.allCases, selection: $selection) { tab in
-            Label(tab.title, systemImage: tab.systemImage).tag(tab)
-        }
-        .listStyle(.sidebar)
-        .navigationTitle("Ride On")
     }
 }
 

@@ -22,7 +22,7 @@ final class RideOnUITests: XCTestCase {
         app.launch()
 
         app.buttons["Routes"].tap()
-        XCTAssertTrue(app.navigationBars["Routes"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Shortlist"].waitForExistence(timeout: 5))
 
         app.buttons["Preferences"].tap()
         XCTAssertTrue(app.staticTexts["Ideal Temperature"].waitForExistence(timeout: 5))
@@ -84,45 +84,41 @@ final class RideOnUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS 'score'", name)).firstMatch
     }
 
-    // ponytail: file-picker UI automation is flaky (system sheet, no stable
-    // accessibility hooks across simulators) — seed a route via fixture-world
-    // instead of driving `.fileImporter`, per Phase 2 spec.
-    func testRoutesTabShowsSeededImportedRoute() {
-        let app = XCUIApplication()
-        // ponytail: distance is now locale-formatted (UnitFormat, km vs mi) —
-        // the simulator's default locale can be en_US, which would render
-        // this route's distance in miles and break the "42.0 km" assertion
-        // below. Pin to a metric, period-decimal locale (en_AU) so the
-        // assertion holds regardless of the host machine's simulator locale;
-        // app strings are all hardcoded English so language is unaffected.
-        app.launchArguments += ["--fixture-world", "-AppleLocale", "en_AU", "-AppleLanguages", "(en)"]
-        app.launch()
-
-        app.buttons["Routes"].tap()
-
-        XCTAssertTrue(app.staticTexts["Chilterns Loop"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '42.0 km'")).firstMatch.exists)
-    }
-
-    func testRoutesSearchFiltersList() {
+    // Routes renders `RouteLibrary.sample` until the API pass.
+    func testRoutesPanelShowsShortlistLibraryAndHistory() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
         app.launch()
 
         app.buttons["Routes"].tap()
-        XCTAssertTrue(app.staticTexts["Chilterns Loop"].waitForExistence(timeout: 5))
+        XCTAssertTrue(routeButton(in: app, startingWith: "Hilly Loop").waitForExistence(timeout: 5))
+        XCTAssertTrue(routeButton(in: app, startingWith: "Lea Valley Gravel").exists)
 
-        let searchField = app.searchFields["Search routes"]
-        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        app.buttons["History 8"].tap()
+        let footnote = app.staticTexts["Weather is the forecast from when you planned each ride, not what you rode in."]
+        app.swipeUp()
+        XCTAssertTrue(footnote.waitForExistence(timeout: 5))
+    }
+
+    func testRoutesSearchFiltersTheLibrary() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world"]
+        app.launch()
+
+        app.buttons["Routes"].tap()
+        XCTAssertTrue(routeButton(in: app, startingWith: "Lea Valley Gravel").waitForExistence(timeout: 5))
+
+        let searchField = app.textFields["routes-search"]
         searchField.tap()
-        searchField.typeText("Chilterns")
+        searchField.typeText("Epping")
 
-        XCTAssertTrue(app.staticTexts["Chilterns Loop"].waitForExistence(timeout: 5))
+        XCTAssertTrue(routeButton(in: app, startingWith: "Epping Forest Trails").waitForExistence(timeout: 5))
+        XCTAssertFalse(routeButton(in: app, startingWith: "Lea Valley Gravel").exists)
+    }
 
-        searchField.buttons["Clear text"].tap()
-        searchField.typeText("zzz-no-such-route")
-
-        XCTAssertFalse(app.staticTexts["Chilterns Loop"].exists)
+    /// Shortlist cards and panel rows are buttons whose labels start with the route name.
+    private func routeButton(in app: XCUIApplication, startingWith name: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
     }
 
     // MARK: - Onboarding (Phase 5)

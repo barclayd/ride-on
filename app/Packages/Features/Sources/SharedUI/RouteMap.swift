@@ -12,6 +12,9 @@ public struct RouteMap: View {
         /// Satellite imagery with a start marker; the route sits in the band between the
         /// toolbar and the hero's title block.
         case hero
+        /// The hero's look, smaller, for a Routes shortlist card: the route sits above the
+        /// card's title block.
+        case card
         /// The route's outline, centred on a plain fill.
         case thumbnail
     }
@@ -29,7 +32,7 @@ public struct RouteMap: View {
 
     public var body: some View {
         switch style {
-        case .hero: map
+        case .hero, .card: map
         case .thumbnail: outline
         }
     }
@@ -49,7 +52,7 @@ public struct RouteMap: View {
         // re-renders with a new route.
         let resolved = tint.resolve(in: environment)
         let tint = Color(resolved)
-        let lineWidth: CGFloat = 5
+        let (lineWidth, marker, ring): (CGFloat, CGFloat, CGFloat) = style == .card ? (4, 12, 2.5) : (5, 16, 3)
         return Map(initialPosition: .rect(framingRect), interactionModes: []) {
             MapPolyline(coordinates: coordinates)
                 .stroke(.white, style: StrokeStyle(lineWidth: lineWidth + 3, lineCap: .round, lineJoin: .round))
@@ -63,8 +66,8 @@ public struct RouteMap: View {
                 Annotation("Start", coordinate: start) {
                     Circle()
                         .fill(tint)
-                        .stroke(.white, lineWidth: 3)
-                        .frame(width: 16, height: 16)
+                        .stroke(.white, lineWidth: ring)
+                        .frame(width: marker, height: marker)
                 }
                 .annotationTitles(.hidden)
             }
@@ -73,12 +76,12 @@ public struct RouteMap: View {
     }
 
     /// The route's bounding box grown by per-edge margins (fractions of the final rect), so it
-    /// sits between the toolbar and the title block.
+    /// sits clear of the toolbar and the title block.
     private var framingRect: MKMapRect {
         let box = coordinates.reduce(MKMapRect.null) { box, coordinate in
             box.union(MKMapRect(origin: MKMapPoint(coordinate), size: MKMapSize(width: 0, height: 0)))
         }
-        let (top, bottom, side) = (0.28, 0.40, 0.14)
+        let (top, bottom, side) = style == .card ? (0.08, 0.49, 0.2) : (0.28, 0.40, 0.14)
         let width = box.width / (1 - 2 * side)
         let height = box.height / (1 - top - bottom)
         return MKMapRect(x: box.minX - side * width, y: box.minY - top * height, width: width, height: height)

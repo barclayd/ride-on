@@ -2,7 +2,7 @@
 
 The approved Claude Design canvas, written down screen by screen so the SwiftUI rebuild has one
 place to check against. The canvas is the visual source of truth:
-https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T (version 30). The rules behind it (materials,
+https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T (version 36). The rules behind it (materials,
 colour, type, motion, accessibility) live in [`DESIGN-SYSTEM.md`](../../DESIGN-SYSTEM.md); this
 doc is the *what*, that one is the *how*.
 
@@ -25,9 +25,10 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava waits on the API ([contract](preferences-api-requests.md)) | #167, #172 |
 | 6 | Widgets and Lock Screen | ⬜ | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
-| 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window and Preferences live; Routes still sample | #159, #162, #167, #172 |
+| 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window and Preferences live; Routes on sample data | #159, #162, #167, #172 |
+| 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done on sample data; API wiring next | ROUTES_PR |
 
-Not in scope yet: Routes tab and Onboarding (not redesigned; they keep working as they are).
+Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
 API v0.29.0 adds [route outlines and wind sections](../extension-api-brief-v7.md)
 for the wind dropdown, without changing scoring. Short headwind/crosswind sections
@@ -53,6 +54,7 @@ priority, and preserve the boolean on unrelated preference edits.
 | The nine components (DESIGN-SYSTEM.md §6) | `app/Packages/Features/Sources/SharedUI/` |
 | Rides, Ride detail, Window sheet, Window passed | `app/Packages/Features/Sources/RideUI/` |
 | Preferences, Ideal Temperature, Comfortable Wind | `app/Packages/Features/Sources/PreferencesUI/` (replaced YouUI; About moved here) |
+| Routes: map, panel, cards, rows | `app/Packages/Features/Sources/RoutesUI/`; data in `app/Packages/Models/Sources/Models/RouteLibrary.swift` (`RouteLibrary.sample`, `SampleRoutes`) |
 | Saved settings (`RiderSettings`, `RiderSettingsStore`) | `app/Packages/Services/Sources/Services/RiderSettings.swift` |
 | Tabs | `app/Packages/Router/Sources/Router/AppTab.swift`: `rides`, `routes`, `preferences` |
 | Accent | `app/App/Assets.xcassets/AccentColor`: `#248A3D` light, `#30D158` dark |
@@ -444,6 +446,62 @@ Build:
 Build:
 - [ ] Widget extension target + timeline from the same `RideBoard` data
 - [ ] All five families
+
+## 9. Routes (tab)
+
+| Library, medium | History, large |
+|---|---|
+| <img src="screens/routes-library.png" width="300"> | <img src="screens/routes-history.png" width="300"> |
+
+A full-screen satellite map with a regular-glass panel floating over it, 8pt from the screen
+edges and 14pt above the tab bar. No navigation bar, and the tab bar never minimises here.
+
+1. **Map** (`RoutesMap`): the other shortlisted routes in white, the selected one in the accent
+   with a white casing and a start marker, and a callout over its northernmost point ("Hilly
+   Loop 51 km"; from History, the ride's date: "Hilly Loop 29 Sep"). Tapping near a line selects
+   it. Top trailing: clear-glass Map Style menu (Satellite, Hybrid, Standard) and My Location.
+2. **Panel** (`FloatingPanel`): medium detent 56% of the height, large up to the safe-area top.
+   Drag the header (1:1, rubber-banded, momentum picks the detent), tap the grabber, or pull the
+   content down at large to go back to medium. Focusing search goes to large.
+3. **Header**, pinned: "Search Routes" capsule (filters the shortlist, library and history by
+   name or source) and a "+" menu: Import GPX File · From cycle.travel ("Use the Safari
+   extension") · Connect Strava ("Coming soon", disabled).
+4. **"Shortlist"**, "4 of 12": `ShortlistCard`s, 272 × 158, snapping to the leading edge. Hilly
+   Loop "Best pick · Wed" 86, Potters Bar "Thu 09:00" 79, Braintree "Below your minimums" 61,
+   East Anglia "Too long for your window". The white check removes a card; tapping one shows it
+   on the map.
+5. Segmented **Library 5 | History 8**.
+6. **Library**: the saved routes not on the shortlist (Lea Valley Gravel, Chilterns Classic,
+   Epping Forest Trails, Box Hill Reps, Ware and Hertford): thumbnail, name, "42 km · 180 m ·
+   46% unpaved", "Strava · Ridden 3 Oct", and a "+" to shortlist it (disabled when full).
+7. **History**: rides grouped by month ("October 1 ride"), each with the day ("Sat 3 Oct"), stats,
+   and the forecast saved when it was planned ("⛅ 13° · 14 km/h · Planned 10:00", or "No
+   forecast saved"). Footnote: "Weather is the forecast from when you planned each ride, not what
+   you rode in."
+8. Selecting a row fills it and shows its actions: "Add to Shortlist" (library routes not on the
+   shortlist) and "Details ›" (routes Rides has ranked) pushing Ride detail.
+
+iPad and Mac: the same map, with the panel as a fixed 380pt column down the leading edge.
+
+Build:
+- [x] Full-screen map with route lines, start marker, callout and map controls
+- [x] Floating panel with medium/large detents, velocity-carrying settle, pull-down to collapse
+- [x] Search, "+" menu (items are no-ops for now)
+- [x] Shortlist carousel with status pills, scores, remove
+- [x] Library and History segments, row selection and actions, Details → Ride detail
+- [x] Accessibility sizes (cards widen and stack, rows wrap), Reduce Transparency/Increase Contrast fallbacks
+- [ ] Wire to the API (below)
+
+**Open points.**
+- Everything renders `RouteLibrary.sample`, in the live app too. Wiring: `GET /route-selection`
+  (shortlist and limit), `GET /routes` (library), `GET /rides` (history, with the plan saved at
+  the time) and the shortlist edits back through `PUT /route-selection`.
+- Details only shows for routes Rides has ranked (it opens `RideDetailView` for that pick).
+- The "+" items do nothing yet. The cycle.travel import comes back later as a Dynamic Island
+  (Live Activity) flow rather than a panel section.
+- The panel can't be grabbed mid-settle; a new drag starts from the detent.
+- The map uses flat `.imagery`/`.hybrid`/`.standard`; `elevation: .realistic` dropped the
+  annotations and blurred the lines.
 
 ## Design language board
 
