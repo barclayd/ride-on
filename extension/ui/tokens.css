@@ -1029,47 +1029,69 @@ a.ro-name:hover {
   stroke-linejoin: round;
 }
 .ro-wind-map polyline {
-  stroke-width: 4;
-}
-.ro-wind-map .ro-wind-casing {
-  stroke: var(--ro-ink);
-  stroke-opacity: 0.16;
   stroke-width: 7;
+  stroke-linecap: butt;
 }
-.ro-wind-map [data-wind="tailwind"] {
-  stroke: #8bc61f;
+.ro-wind-map .ro-wind-halo {
+  stroke: #fff;
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+/* Crosswind is the bare ribbon; the runs end square so neighbours meet without overlapping. */
+.ro-wind-map .ro-wind-base {
+  stroke: #cfd6dd;
+  stroke-linecap: round;
 }
 .ro-wind-map [data-wind="crosswind"] {
   stroke: #cfd6dd;
+}
+.ro-wind-map [data-wind="tailwind"] {
+  stroke: #8bc61f;
 }
 .ro-wind-map [data-wind="headwind"] {
   stroke: #c06a2e;
 }
 .ro-wind-map [data-wind="light"] {
-  stroke: #c9d0bd;
-  stroke-dasharray: 3 2.5;
+  stroke: #eef1e9;
+}
+.ro-wind-map .ro-wind-line {
+  stroke: var(--ro-ink);
+  stroke-width: 1.6;
+  stroke-linecap: round;
 }
 .ro-wind-way {
   stroke: var(--ro-ink);
-  stroke-width: 1.5;
+  stroke-width: 1.6;
 }
 .ro-wind-start {
   fill: #fff;
   stroke: var(--ro-ink);
-  stroke-width: 2;
+  stroke-width: 1.8;
 }
 .ro-wind-finish {
   fill: var(--ro-ink);
   stroke: #fff;
   stroke-width: 1.5;
 }
-.ro-wind-arrow {
-  stroke: var(--ro-muted);
-  stroke-width: 2.2;
+.ro-wind-dial {
+  fill: #f5f7f1;
+  stroke: #cfd6dd;
+  stroke-width: 1.2;
 }
-.ro-wind-north {
-  stroke: var(--ro-muted);
-  stroke-width: 1.3;
+.ro-wind-ticks {
+  stroke: #aab2bb;
+  stroke-width: 1.2;
+}
+.ro-wind-arrow {
+  stroke: var(--ro-ink);
+  stroke-width: 1.6;
+}
+.ro-wind-arrow circle {
+  fill: var(--ro-ink);
+  stroke: none;
+}
+.ro-wind-calm {
+  fill: #aab2bb;
 }
 .ro-wind-map text {
   font: 500 10px var(--ro-serif);
@@ -1078,12 +1100,18 @@ a.ro-name:hover {
   stroke-width: 3;
   paint-order: stroke;
 }
+.ro-wind-map .ro-wind-key text {
+  stroke: none;
+}
 .ro-wind-map .ro-wind-from {
-  font: 700 10.5px var(--ro-sans);
+  font: 700 10px var(--ro-sans);
   fill: var(--ro-ink);
 }
+.ro-wind-map .ro-wind-speed {
+  font-size: 9.5px;
+}
 .ro-wind-map .ro-wind-n {
-  font: 700 8.5px var(--ro-sans);
+  font: 700 8px var(--ro-sans);
 }
 .ro-gusts {
   display: flex;

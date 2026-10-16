@@ -23,7 +23,7 @@ import {
   skyChip,
   viewOf,
 } from './format';
-import { SKETCH, type WindSketch, windPanel } from './wind';
+import { DIAL, SKETCH, type WindSketch, windPanel } from './wind';
 
 export const iconUrl = () => browser.runtime.getURL('/ride-on-icon.png');
 export const reducedMotion = () =>
@@ -664,10 +664,12 @@ const WindPanel = (props: {
   );
 };
 
-// North up, no basemap: the route coloured by the wind, arrowheads for the way round.
-const CHEVRON = 'M-2.2 -2.6 L1.4 0 L-2.2 2.6';
+// North up, no basemap (board 13): a grey ribbon coloured where the wind helps or hinders, an ink
+// line and arrowheads for the way round, and a dial left of it where the wind blows.
+const CHEVRON = 'M-2 -2.6 L1.2 0 L-2 2.6';
 const Sketch = ({ sketch }: { sketch: WindSketch }) => {
   const { start, finish, wind } = sketch;
+  const { x, y, r } = DIAL;
   return (
     <>
       <div class="ro-wind-map">
@@ -676,10 +678,12 @@ const Sketch = ({ sketch }: { sketch: WindSketch }) => {
           viewBox={`0 0 ${SKETCH.width} ${SKETCH.height}`}
           aria-hidden="true"
         >
-          <polyline class="ro-wind-casing" points={sketch.casing} />
-          {sketch.runs.map((r, i) => (
-            <polyline key={i} data-wind={r.effect} points={r.points} />
+          <polyline class="ro-wind-halo" points={sketch.casing} />
+          <polyline class="ro-wind-base" points={sketch.casing} />
+          {sketch.runs.map((run, i) => (
+            <polyline key={i} data-wind={run.effect} points={run.points} />
           ))}
+          <polyline class="ro-wind-line" points={sketch.casing} />
           {sketch.chevrons.map((c, i) => (
             <path
               key={i}
@@ -689,38 +693,62 @@ const Sketch = ({ sketch }: { sketch: WindSketch }) => {
             />
           ))}
           {finish && (
-            <circle class="ro-wind-finish" cx={finish.x} cy={finish.y} r={4} />
+            <circle
+              class="ro-wind-finish"
+              cx={finish.x}
+              cy={finish.y}
+              r={3.6}
+            />
           )}
-          <circle class="ro-wind-start" cx={start.x} cy={start.y} r={4.5} />
+          <circle class="ro-wind-start" cx={start.x} cy={start.y} r={3.6} />
           {[start.label, ...(finish ? [finish.label] : [])].map((l) => (
             <text key={l.text} x={l.x} y={l.y} text-anchor={l.anchor}>
               {l.text}
             </text>
           ))}
-          {wind.arrow && (
-            <g class="ro-wind-arrow">
-              <path
-                d={`M${wind.arrow.x1} ${wind.arrow.y1}L${wind.arrow.x2} ${wind.arrow.y2}`}
-              />
-              <path
-                d="M-3.7 -4.4 L2.4 0 L-3.7 4.4"
-                transform={`translate(${wind.arrow.x2} ${wind.arrow.y2}) rotate(${wind.arrow.angle})`}
-              />
-            </g>
-          )}
-          <text class="ro-wind-from" x={10} y={22}>
-            {wind.title}
-          </text>
-          <text x={10} y={35}>
-            {wind.speed}
-          </text>
-          <path
-            class="ro-wind-north"
-            d="M222 20V11M219.4 13.6L222 11L224.6 13.6"
-          />
-          <text class="ro-wind-n" x={222} y={9} text-anchor="middle">
-            N
-          </text>
+          <g class="ro-wind-key">
+            <text class="ro-wind-n" x={x} y={y - r - 7} text-anchor="middle">
+              N
+            </text>
+            <circle class="ro-wind-dial" cx={x} cy={y} r={r} />
+            <path
+              class="ro-wind-ticks"
+              d={`M${x} ${y - r}v3M${x + r} ${y}h-3M${x} ${y + r}v-3M${x - r} ${y}h3`}
+            />
+            {wind.arrow ? (
+              <g class="ro-wind-arrow">
+                <path
+                  d={`M${wind.arrow.x1} ${wind.arrow.y1}L${wind.arrow.x2} ${wind.arrow.y2}`}
+                />
+                <path
+                  d="M-3 -3 L0 0 L-3 3"
+                  transform={`translate(${wind.arrow.x2} ${wind.arrow.y2}) rotate(${wind.arrow.angle})`}
+                />
+                <circle cx={wind.arrow.x1} cy={wind.arrow.y1} r={1.7} />
+              </g>
+            ) : (
+              <circle class="ro-wind-calm" cx={x} cy={y} r={2.2} />
+            )}
+            {wind.lines.map((line, i) => (
+              <text
+                key={line}
+                class="ro-wind-from"
+                x={x}
+                y={65 + i * 11}
+                text-anchor="middle"
+              >
+                {line}
+              </text>
+            ))}
+            <text
+              class="ro-wind-speed"
+              x={x}
+              y={65 + wind.lines.length * 11 + 1}
+              text-anchor="middle"
+            >
+              {wind.speed}
+            </text>
+          </g>
         </svg>
       </div>
       <p class="ro-sr">{sketch.sentence}</p>
