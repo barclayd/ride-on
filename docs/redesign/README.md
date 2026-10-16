@@ -19,7 +19,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 |---|---|---|---|
 | 0 | This doc and reference images | ✅ Done | #154 |
 | 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
-| 2 | Rides screen and Track sheet | ✅ Done; tracking wired to API v0.28.0 ([contract](../ride-tracking-api.md)); notifications wait on the API | #155, #176, #184 |
+| 2 | Rides screen and Track sheet | ✅ Done; tracking wired to API v0.28.0 ([contract](../ride-tracking-api.md)); notifications wait on the API | #155, #176, #185 |
 | 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)) | #157, #164, #172 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava waits on the API ([contract](preferences-api-requests.md)) | #167, #172 |
@@ -123,7 +123,7 @@ Build:
 - [x] Other Tracked Routes rows (open Ride detail), Doesn't Fit rows
 - [x] Footer attribution
 - [x] Hero map stretches on overscroll instead of showing the background (#178)
-- [x] Hero route line keeps its colour after a sheet closes, rather than staying dimmed grey (#184)
+- [x] Hero route line keeps its colour after a sheet closes, rather than staying dimmed grey (#185)
 - [x] Zoom transition source on the hero and each route row
 - [x] Light/dark and Dynamic Type through `accessibility5` checked on the simulator
 - [x] Hero 3b: eased scrim, pick pill, icon stats, track star (gold glass when on) and the
@@ -131,7 +131,7 @@ Build:
 - [x] Track sheet (#176)
 - [x] Persistent tracking API v0.28.0: one active plan, accepted recommendation references,
       immutable baseline, explicit refresh, replacement, retained history and erasure ([contract](../ride-tracking-api.md))
-- [x] Track sheet on the API (#184): `RideTracker` tracks the window pick's `recommendationRef`
+- [x] Track sheet on the API (#185): `RideTracker` tracks the window pick's `recommendationRef`
       with the current tracking version and an idempotency key, refreshes when the Tracking sheet
       opens, says what changed (or why the check failed), and confirms a replacement
 - [ ] Background monitoring and notifications (follow-up API PR); the notification copy and
