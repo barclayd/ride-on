@@ -1458,12 +1458,18 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     'Crosswind15 km/h~20%',
     'Headwind16 km/h~20%',
   ]);
-  // The route sketch: halo, ribbon and ink line plus a run per effect, a start and no finish on a loop.
+  // The route sketch: halo and ribbon plus a run per effect, a start and no finish on a loop.
   const sketch = along.locator('.ro-wind-map svg');
-  await expect(sketch.locator('polyline')).toHaveCount(6);
+  await expect(sketch.locator('polyline')).toHaveCount(5);
   await expect(sketch.locator('text').first()).toHaveText('Start');
   await expect(sketch.locator('.ro-wind-finish')).toHaveCount(0);
-  // The wind key: an arrow across the dial, then where the wind comes from and where it turns.
+  // The wind key: an arrow across the compass, then where the wind comes from and where it turns.
+  await expect(sketch.locator('.ro-wind-cardinal')).toHaveText([
+    'N',
+    'E',
+    'S',
+    'W',
+  ]);
   await expect(sketch.locator('.ro-wind-arrow')).toHaveCount(1);
   await expect(sketch.locator('.ro-wind-from')).toHaveText([
     'From SW',
@@ -1473,7 +1479,18 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(along.locator('.ro-sr')).toHaveText(
     'Heads north-east with the wind behind, then south across the wind, then west into the wind. Wind from the south-west, then west.',
   );
+  // Hovering the bar puts a pointer on the route; leaving it takes the pointer away.
+  const pointer = sketch.locator('.ro-wind-pointer');
+  await expect(pointer).toHaveCount(0);
+  await along.locator('.ro-wind-bar').hover({ position: { x: 4, y: 8 } });
+  await expect(pointer).toHaveCount(1);
+  const first = await pointer.getAttribute('transform');
+  await along.locator('.ro-wind-bar').hover({ position: { x: 150, y: 8 } });
+  await expect(pointer).not.toHaveAttribute('transform', first ?? '');
+  await expect(pointer).toHaveCount(1);
   await module.screenshot({ path: test.info().outputPath('wind.png') });
+  await along.locator('b').first().hover();
+  await expect(pointer).toHaveCount(0);
   await wind.click();
   await expect(along).toBeHidden();
   await expect(module.locator('[aria-expanded="true"]')).toHaveCount(0);

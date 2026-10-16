@@ -277,7 +277,7 @@ export const windPanel = (
   };
 };
 
-// ---- Route sketch (boards 7 and 13): a north-up wind ribbon and a dial key, no basemap. ----
+// ---- Route sketch (boards 7 and 13): a north-up wind ribbon and a compass key, no basemap. ----
 
 const EARTH_M = 6_371_000;
 const metresBetween = (a: [number, number], b: [number, number]) => {
@@ -309,9 +309,10 @@ const bearing = (a: [number, number], b: [number, number]) => {
 };
 
 export const SKETCH = { width: 236, height: 96 };
-// The outline fits right of the wind key: a north mark, a dial and the words under it.
+// The outline fits right of the wind key: a compass and the words under it.
 const BOX = { left: 72, right: 220, top: 10, bottom: 86 };
-export const DIAL = { x: 32, y: 35, r: 14 };
+export const DIAL = { x: 32, y: 24, r: 19 };
+const TRACK = 200; // the hover pointer's steps along the route
 const KEY: Box = { left: 2, right: 62, top: 2, bottom: 92 };
 const OFFSET = 3; // an out-and-back's return, drawn beside the way out like a transit map
 const SHORT = 0.05; // stretches under 5% are too short to name or point along
@@ -328,7 +329,9 @@ export type SketchLabel = Point & {
 export type WindSketch = {
   casing: string; // polyline points
   runs: { effect: WindEffect; points: string }[];
-  chevrons: (Point & { angle: number })[];
+  // Where the rider is and which way they face at each 1/TRACK of the distance: the pointer the
+  // wind bar moves on hover.
+  track: (Point & { angle: number })[];
   start: Point & { label: SketchLabel };
   finish: (Point & { label: SketchLabel }) | null;
   wind: {
@@ -374,7 +377,7 @@ const exactRuns = (stretches: WindStretch[]): Run[] => {
     })),
   );
 };
-// For the arrowheads and the spoken route only: short runs join the longer neighbour.
+// For the spoken route only: short runs join the longer neighbour.
 const summaryRuns = (exact: Run[]): Run[] => {
   let runs = exact.map((r) => ({ ...r }));
   for (;;) {
@@ -490,28 +493,19 @@ export const windSketch = (
       at(r.to),
     ]),
   }));
-  // Arrowheads for the direction of travel: the middle of each run, or two along a single run.
-  const marks =
-    runs.length > 1
-      ? [...runs]
-          .sort((a, b) => b.to - b.from - (a.to - a.from))
-          .slice(0, 5)
-          .map((r) => (r.from + r.to) / 2)
-      : [0.25, 0.75];
-  const chevrons = marks.flatMap((f) => {
+  // The heading at each step comes from a few px either side, so a wiggle doesn't spin the pointer.
+  const track = Array.from({ length: TRACK + 1 }, (_, i) => {
+    const f = i / TRACK;
     const p = at(f);
-    const a = at(Math.max(0, f - 0.02));
-    const c = at(Math.min(1, f + 0.02));
-    if (Math.hypot(c.x - a.x, c.y - a.y) < 1) return [];
-    return [
-      {
-        x: round1(p.x),
-        y: round1(p.y),
-        angle: round1((Math.atan2(c.y - a.y, c.x - a.x) * 180) / Math.PI),
-      },
-    ];
+    const a = at(Math.max(0, f - 0.03));
+    const c = at(Math.min(1, f + 0.03));
+    return {
+      x: round1(p.x),
+      y: round1(p.y),
+      angle: round1((Math.atan2(c.y - a.y, c.x - a.x) * 180) / Math.PI),
+    };
   });
-  // One arrow across the dial where the wind blows; the words name where it comes from, and where it turns.
+  // One arrow across the compass where the wind blows; the words name where it comes from, and where it turns.
   const named = stretches.filter(
     (s) =>
       s.effect !== 'light' &&
@@ -532,7 +526,7 @@ export const windSketch = (
     const to = (mean + 180) % 360;
     const vx = Math.sin((to * Math.PI) / 180);
     const vy = -Math.cos((to * Math.PI) / 180);
-    const half = 9.5;
+    const half = 8.5;
     return {
       x1: round1(DIAL.x - vx * half),
       y1: round1(DIAL.y - vy * half),
@@ -655,7 +649,7 @@ export const windSketch = (
   return {
     casing: pointsAttr(pts),
     runs: drawn,
-    chevrons,
+    track,
     start,
     finish,
     wind: { lines, speed: speed(b.conditions.averageWindSpeedKph, u), arrow },

@@ -617,11 +617,26 @@ const WindPanel = (props: {
     view.state.units,
     view.state.user?.settings.preferences,
   );
+  // Hovering (or touching) the bar puts a pointer on the route at that share of the distance.
+  const [along, setAlong] = useState<number | null>(null);
+  const point = (e: PointerEvent) => {
+    const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setAlong(Math.min(1, Math.max(0, (e.clientX - bar.left) / bar.width)));
+  };
+  const leave = () => setAlong(null);
   return (
     <div class="ro-wind" id={props.id}>
       <b>Wind along the ride</b>
-      {wind.sketch && <Sketch sketch={wind.sketch} />}
-      <div class="ro-wind-bar" aria-hidden="true">
+      {wind.sketch && <Sketch sketch={wind.sketch} along={along} />}
+      <div
+        class="ro-wind-bar"
+        aria-hidden="true"
+        data-points={!!wind.sketch}
+        onPointerMove={wind.sketch ? point : undefined}
+        onPointerDown={wind.sketch ? point : undefined}
+        onPointerLeave={leave}
+        onPointerCancel={leave}
+      >
         {wind.blocks.map((g, i) => (
           <span
             key={i}
@@ -664,12 +679,33 @@ const WindPanel = (props: {
   );
 };
 
-// North up, no basemap (board 13): a grey ribbon coloured where the wind helps or hinders, an ink
-// line and arrowheads for the way round, and a dial left of it where the wind blows.
-const CHEVRON = 'M-2 -2.6 L1.2 0 L-2 2.6';
-const Sketch = ({ sketch }: { sketch: WindSketch }) => {
+// North up, no basemap (board 13): a grey ribbon coloured where the wind helps or hinders, and a
+// compass left of it where the wind blows. Hovering the wind bar shows where and which way you ride.
+const HEADING = 'M4.3 0L-3 -3L-1 0L-3 3Z';
+const ARROWHEAD = 'M0 0L-5 -3.2L-5 3.2Z';
+const CARDINALS = ['N', 'E', 'S', 'W'];
+// A tick every 15°, with the letters in place of the four at N, E, S and W.
+const TICKS = Array.from({ length: 24 }, (_, i) => i * 15)
+  .filter((deg) => deg % 90)
+  .map((deg) => {
+    const [sin, cos] = [
+      Math.sin((deg * Math.PI) / 180),
+      -Math.cos((deg * Math.PI) / 180),
+    ];
+    const [outer, inner] = [DIAL.r - 1.4, DIAL.r - (deg % 45 ? 3.4 : 4.6)];
+    const f = (n: number) => Math.round(n * 10) / 10;
+    return `M${f(DIAL.x + sin * outer)} ${f(DIAL.y + cos * outer)}L${f(DIAL.x + sin * inner)} ${f(DIAL.y + cos * inner)}`;
+  })
+  .join('');
+const Sketch = (props: { sketch: WindSketch; along: number | null }) => {
+  const { sketch, along } = props;
   const { start, finish, wind } = sketch;
   const { x, y, r } = DIAL;
+  const at =
+    along === null
+      ? null
+      : sketch.track[Math.round(along * (sketch.track.length - 1))];
+  const lines = y + r + 15;
   return (
     <>
       <div class="ro-wind-map">
@@ -682,15 +718,6 @@ const Sketch = ({ sketch }: { sketch: WindSketch }) => {
           <polyline class="ro-wind-base" points={sketch.casing} />
           {sketch.runs.map((run, i) => (
             <polyline key={i} data-wind={run.effect} points={run.points} />
-          ))}
-          <polyline class="ro-wind-line" points={sketch.casing} />
-          {sketch.chevrons.map((c, i) => (
-            <path
-              key={i}
-              class="ro-wind-way"
-              d={CHEVRON}
-              transform={`translate(${c.x} ${c.y}) rotate(${c.angle})`}
-            />
           ))}
           {finish && (
             <circle
@@ -706,25 +733,43 @@ const Sketch = ({ sketch }: { sketch: WindSketch }) => {
               {l.text}
             </text>
           ))}
+          {at && (
+            <g
+              class="ro-wind-pointer"
+              transform={`translate(${at.x} ${at.y}) rotate(${at.angle})`}
+            >
+              <circle r={6.5} />
+              <path d={HEADING} />
+            </g>
+          )}
           <g class="ro-wind-key">
-            <text class="ro-wind-n" x={x} y={y - r - 7} text-anchor="middle">
-              N
-            </text>
             <circle class="ro-wind-dial" cx={x} cy={y} r={r} />
-            <path
-              class="ro-wind-ticks"
-              d={`M${x} ${y - r}v3M${x + r} ${y}h-3M${x} ${y + r}v-3M${x - r} ${y}h3`}
-            />
+            <path class="ro-wind-ticks" d={TICKS} />
+            {CARDINALS.map((c, i) => {
+              const deg = (i * Math.PI) / 2;
+              return (
+                <text
+                  key={c}
+                  class="ro-wind-cardinal"
+                  data-north={c === 'N'}
+                  x={x + Math.sin(deg) * (r - 8.5)}
+                  y={y - Math.cos(deg) * (r - 8.5) + 2.3}
+                  text-anchor="middle"
+                >
+                  {c}
+                </text>
+              );
+            })}
             {wind.arrow ? (
               <g class="ro-wind-arrow">
                 <path
                   d={`M${wind.arrow.x1} ${wind.arrow.y1}L${wind.arrow.x2} ${wind.arrow.y2}`}
                 />
                 <path
-                  d="M-3 -3 L0 0 L-3 3"
+                  d={ARROWHEAD}
                   transform={`translate(${wind.arrow.x2} ${wind.arrow.y2}) rotate(${wind.arrow.angle})`}
                 />
-                <circle cx={wind.arrow.x1} cy={wind.arrow.y1} r={1.7} />
+                <circle cx={wind.arrow.x1} cy={wind.arrow.y1} r={1.8} />
               </g>
             ) : (
               <circle class="ro-wind-calm" cx={x} cy={y} r={2.2} />
@@ -734,7 +779,7 @@ const Sketch = ({ sketch }: { sketch: WindSketch }) => {
                 key={line}
                 class="ro-wind-from"
                 x={x}
-                y={65 + i * 11}
+                y={lines + i * 11}
                 text-anchor="middle"
               >
                 {line}
@@ -743,7 +788,7 @@ const Sketch = ({ sketch }: { sketch: WindSketch }) => {
             <text
               class="ro-wind-speed"
               x={x}
-              y={65 + wind.lines.length * 11 + 1}
+              y={lines + wind.lines.length * 11 + 1}
               text-anchor="middle"
             >
               {wind.speed}

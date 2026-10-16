@@ -989,6 +989,11 @@ a.ro-name:hover {
   color: var(--ro-ink);
   text-align: center;
 }
+/* With a sketch, the bar moves a pointer along the route; a finger can still scroll the page. */
+.ro-wind-bar[data-points="true"] {
+  cursor: crosshair;
+  touch-action: pan-y;
+}
 .ro-wind-bar > span {
   min-width: 0;
   overflow: hidden;
@@ -1054,14 +1059,13 @@ a.ro-name:hover {
 .ro-wind-map [data-wind="light"] {
   stroke: #eef1e9;
 }
-.ro-wind-map .ro-wind-line {
-  stroke: var(--ro-ink);
-  stroke-width: 1.6;
-  stroke-linecap: round;
+.ro-wind-pointer circle {
+  fill: var(--ro-ink);
+  stroke: #fff;
+  stroke-width: 2;
 }
-.ro-wind-way {
-  stroke: var(--ro-ink);
-  stroke-width: 1.6;
+.ro-wind-pointer path {
+  fill: #fff;
 }
 .ro-wind-start {
   fill: #fff;
@@ -1076,19 +1080,20 @@ a.ro-name:hover {
 .ro-wind-dial {
   fill: #f5f7f1;
   stroke: #cfd6dd;
-  stroke-width: 1.2;
+  stroke-width: 1.4;
 }
 .ro-wind-ticks {
   stroke: #aab2bb;
-  stroke-width: 1.2;
+  stroke-width: 0.9;
 }
 .ro-wind-arrow {
   stroke: var(--ro-ink);
   stroke-width: 1.6;
 }
-.ro-wind-arrow circle {
+.ro-wind-arrow circle,
+.ro-wind-arrow path + path {
   fill: var(--ro-ink);
-  stroke: none;
+  stroke-width: 1;
 }
 .ro-wind-calm {
   fill: #aab2bb;
@@ -1110,8 +1115,12 @@ a.ro-name:hover {
 .ro-wind-map .ro-wind-speed {
   font-size: 9.5px;
 }
-.ro-wind-map .ro-wind-n {
-  font: 700 8px var(--ro-sans);
+.ro-wind-map .ro-wind-cardinal {
+  font: 700 6.5px var(--ro-sans);
+  fill: #8a929c;
+}
+.ro-wind-map .ro-wind-cardinal[data-north="true"] {
+  fill: var(--ro-ink);
 }
 .ro-gusts {
   display: flex;
