@@ -197,7 +197,7 @@ const outAndBack: Outline = {
 };
 const outAndBackWind = [
   stretch(0, 11120, 'tailwind', 180),
-  stretch(11120, 11400, 'crosswind', 200), // a sliver: too short to draw
+  stretch(11120, 11400, 'crosswind', 200), // a sliver: too short to label, still drawn
   stretch(11400, 22240, 'headwind', 180, {
     startAt: at('10:00'),
     endAt: at('11:00'),
@@ -230,6 +230,44 @@ test('wind stretches place each effect exactly and say on which leg the gusts ar
   expect(
     windPanel({ ...b, windStretches: [] }, outAndBack, 'UTC').sketch,
   ).toBeNull();
+});
+
+test('gusts split by a short calmer stretch still read as one place', () => {
+  const b = ride({
+    conditions: C({ maximumGustKph: 44, gustExposure: against(44) }),
+    windStretches: [
+      stretch(0, 11120, 'tailwind', 180),
+      stretch(11120, 16000, 'headwind', 180, {
+        startAt: at('10:00'),
+        maximumAdverseGustKph: 41,
+      }),
+      stretch(16000, 16500, 'crosswind', 250, { maximumAdverseGustKph: 20 }),
+      stretch(16500, 22240, 'headwind', 180, {
+        endAt: at('11:00'),
+        maximumAdverseGustKph: 44,
+      }),
+    ],
+  });
+  expect(windPanel(b, outAndBack, 'UTC', METRIC, comfort(35)).gusts?.text).toBe(
+    'Into your face on the way back, 10:00–11:00. Over your 35 km/h comfort.',
+  );
+});
+
+test('a thousand short stretches all keep their colour', () => {
+  const many = Array.from({ length: 1000 }, (_, i) =>
+    stretch(
+      (i * 22240) / 1000,
+      ((i + 1) * 22240) / 1000,
+      i % 2 ? 'headwind' : 'tailwind',
+      180,
+    ),
+  );
+  const s = windSketch(outAndBack, many, ride(), 'UTC');
+  expect(s?.runs).toHaveLength(1000);
+  expect(s?.sentence.split(', then ').length).toBeLessThanOrEqual(4);
+  const w = windPanel(ride({ windStretches: many }), outAndBack, 'UTC');
+  expect(w.blocks).toHaveLength(1000);
+  expect(w.blocks.every((b) => b.label === '')).toBe(true);
 });
 
 test('light wind gets its own row, and one effect reads throughout', () => {
@@ -269,8 +307,12 @@ test('the sketch fits its box, draws the return beside the way out and reads alo
   // The way back sits 3px beside the way out instead of on top of it.
   expect(casing[3][0]).toBeCloseTo(casing[1][0] - 3);
   expect(casing[3][1]).toBeCloseTo(casing[1][1]);
-  // The sliver is absorbed: one run out, one back, an arrowhead on each.
-  expect(s.runs.map((r) => r.effect)).toEqual(['tailwind', 'headwind']);
+  // The sliver keeps its own colour; the arrowheads skip it: one out, one back.
+  expect(s.runs.map((r) => r.effect)).toEqual([
+    'tailwind',
+    'crosswind',
+    'headwind',
+  ]);
   expect(s.chevrons).toHaveLength(2);
   expect(s.chevrons[0].angle).toBe(-90); // north, up the page
   // Back where it started: a start dot, no finish.

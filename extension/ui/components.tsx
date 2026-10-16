@@ -623,7 +623,16 @@ const WindPanel = (props: {
       {wind.sketch && <Sketch sketch={wind.sketch} />}
       <div class="ro-wind-bar" aria-hidden="true">
         {wind.blocks.map((g, i) => (
-          <span key={i} data-wind={g.effect} style={{ flex: g.share }}>
+          <span
+            key={i}
+            data-wind={g.effect}
+            // A 2px gap only between blocks wide enough to keep it: the API can send up to
+            // 1,000 stretches, and gaps between slivers would crowd out their colours.
+            data-apart={
+              i > 0 && g.share >= 0.02 && wind.blocks[i - 1].share >= 0.02
+            }
+            style={{ flex: g.share }}
+          >
             {g.label}
           </span>
         ))}

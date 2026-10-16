@@ -981,7 +981,6 @@ a.ro-name:hover {
 /* "Wind along the ride": the sky panel's layout, plus the sketch, the speed column and the gusts. */
 .ro-wind-bar {
   display: flex;
-  gap: 2px;
   height: 16px;
   border-radius: 6px;
   overflow: hidden;
@@ -993,6 +992,9 @@ a.ro-name:hover {
 .ro-wind-bar > span {
   min-width: 0;
   overflow: hidden;
+}
+.ro-wind-bar > [data-apart="true"] {
+  margin-left: 2px;
 }
 [data-wind="tailwind"] {
   background: #8bc61f;

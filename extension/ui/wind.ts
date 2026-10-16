@@ -174,15 +174,16 @@ const gustsRow = (
             : `At most ${speed(adverse, u)} against you.`
       }`,
     };
-  // Name the stretch when the gusts past comfort fall in one place.
-  const over = spans.flatMap((s, i) =>
-    s.adverse !== null && s.adverse > comfort ? [i] : [],
+  // Name the stretch when the gusts past comfort fall in one place: calmer gaps under 5% of
+  // the ride (the API keeps short stretches) don't split it.
+  const over = spans.filter((s) => s.adverse !== null && s.adverse > comfort);
+  const together = over.every(
+    (s, i) =>
+      i === 0 || s.from - (over[i - 1].from + over[i - 1].share) < SHORT,
   );
-  const together =
-    over.length > 0 && over[over.length - 1] - over[0] === over.length - 1;
   let where = '';
-  if (overComfort && together) {
-    const run = over.map((i) => spans[i]);
+  if (overComfort && over.length && together) {
+    const run = over;
     const end = run[run.length - 1];
     const worst = run.reduce((a, b) =>
       (b.adverse ?? 0) > (a.adverse ?? 0) ? b : a,
@@ -311,7 +312,7 @@ export const SKETCH = { width: 236, height: 96 };
 // The outline fits right of the wind label and arrow, below the N marker.
 const BOX = { left: 80, right: 206, top: 12, bottom: 86 };
 const OFFSET = 3; // an out-and-back's return, drawn beside the way out like a transit map
-const SHORT = 0.05; // stretches under 5% are too short to see
+const SHORT = 0.05; // stretches under 5% are too short to name or point along
 
 type Point = { x: number; y: number };
 type Box = { left: number; right: number; top: number; bottom: number };
@@ -353,14 +354,28 @@ const meanDirection = (items: { degrees: number; weight: number }[]) => {
   return Math.hypot(x, y) < 1e-6 ? null : (Math.atan2(x, y) / rad + 360) % 360;
 };
 
-// Short stretches join the longer neighbour, then neighbours with the same effect merge.
-const runsOf = (stretches: WindStretch[]): Run[] => {
+const mergeRuns = (runs: Run[]) =>
+  runs.reduce<Run[]>((out, r) => {
+    const last = out.at(-1);
+    if (last?.effect === r.effect) last.to = r.to;
+    else out.push({ ...r });
+    return out;
+  }, []);
+// Every stretch in its own colour, neighbours with the same effect merged. The API keeps short
+// stretches on purpose (docs/extension-api-brief-v7.md), so they're drawn, never recoloured.
+const exactRuns = (stretches: WindStretch[]): Run[] => {
   const total = stretches.at(-1)?.toM ?? 0;
-  let runs: Run[] = stretches.map((s) => ({
-    from: s.fromM / total,
-    to: s.toM / total,
-    effect: s.effect,
-  }));
+  return mergeRuns(
+    stretches.map((s) => ({
+      from: s.fromM / total,
+      to: s.toM / total,
+      effect: s.effect,
+    })),
+  );
+};
+// For the arrowheads and the spoken route only: short runs join the longer neighbour.
+const summaryRuns = (exact: Run[]): Run[] => {
+  let runs = exact.map((r) => ({ ...r }));
   for (;;) {
     const short = runs
       .map((r, i) => ({ i, length: r.to - r.from }))
@@ -382,12 +397,7 @@ const runsOf = (stretches: WindStretch[]): Run[] => {
     };
     runs = runs.filter((_, j) => j !== i);
   }
-  return runs.reduce<Run[]>((out, r) => {
-    const last = out.at(-1);
-    if (last?.effect === r.effect) last.to = r.to;
-    else out.push({ ...r });
-    return out;
-  }, []);
+  return mergeRuns(runs);
 };
 
 export const windSketch = (
@@ -470,8 +480,9 @@ export const windSketch = (
       raw[i - 1][1] + t * (raw[i][1] - raw[i - 1][1]),
     ];
   };
-  const runs = runsOf(stretches);
-  const drawn = runs.map((r) => ({
+  const exact = exactRuns(stretches);
+  const runs = summaryRuns(exact);
+  const drawn = exact.map((r) => ({
     effect: r.effect,
     points: pointsAttr([
       at(r.from),
