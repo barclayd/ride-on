@@ -5,8 +5,8 @@ import Services
 import DesignSystem
 import SharedUI
 
-/// The Track sheet (docs/redesign/README.md §1, Track sheet), opened by the hero's star: what tracking a ride
-/// checks for, saved with `RideTracker`. Its mode is fixed when it opens, and the star changes once
+/// The Track sheet (docs/redesign/README.md §1, Track sheet), opened by the hero's bell: what tracking a ride
+/// checks for, saved with `RideTracker`. Its mode is fixed when it opens, and the bell changes once
 /// the sheet has gone. The API doesn't notify yet (`RideTracker.notifies`), so until it does the
 /// sheet promises a check each time the rider looks, not an alert.
 struct TrackRideSheet: View {
@@ -102,28 +102,15 @@ struct TrackRideSheet: View {
         }
     }
 
-    /// A gold star, with a bell when tracking notifies.
+    /// A gold bell, like the hero's; it rings when tracking notifies.
     private var medal: some View {
-        Image(systemName: "star.fill")
+        Image(systemName: notifies ? "bell.and.waves.left.and.right.fill" : "bell.fill")
             .font(.system(size: 30))
             .foregroundStyle(.white)
             .frame(width: 64, height: 64)
             .background(Color.committed.gradient, in: .circle)
             .shadow(color: .committed.opacity(0.35), radius: 9, y: 6)
-            .overlay(alignment: .bottomTrailing) {
-                if notifies { bell }
-            }
             .accessibilityHidden(true)
-    }
-
-    private var bell: some View {
-        Image(systemName: "bell.fill")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.committed)
-            .frame(width: 28, height: 28)
-            .background(.groupedBackground, in: .circle)
-            .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
-            .offset(x: 6, y: 4)
     }
 
     private var notificationsOff: some View {
@@ -152,7 +139,7 @@ struct TrackRideSheet: View {
     /// Only one ride is tracked at a time, so starting this one stops the other.
     private func replaces(_ ride: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "star.slash")
+            Image(systemName: "bell.slash")
                 .font(.title3)
                 .foregroundStyle(.committed)
                 .accessibilityHidden(true)
