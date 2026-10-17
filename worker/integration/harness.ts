@@ -4,6 +4,7 @@ import { build } from 'esbuild';
 import {
   convertV4MiniflareOptions,
   Miniflare,
+  type Request as RuntimeRequest,
   Response as RuntimeResponse,
   type V4MiniflareOptions,
 } from 'miniflare';
@@ -47,12 +48,45 @@ export const createHarness = async (authConfig?: string) => {
         baseUrl: 'https://api.ride-on.test',
       }),
     TEST_NOW: FIXED_NOW,
+    STRAVA_ENABLED: 'false',
     RIDE_MONITORING: 'enabled',
     APNS_CONFIG_JSON: '',
     GROUND_EVIDENCE_MODE: 'non-commercial',
     MET_OFFICE_API_KEY: WEATHER_KEY,
     MET_OFFICE_BPF_API_KEY: 'integration-bpf-key-not-a-real-secret',
     APPLE_WEATHER_CONFIG_JSON: '',
+  };
+  const dispatch = async (outgoing: RuntimeRequest) => {
+    const request = new Request(outgoing.url, {
+      method: outgoing.method,
+      headers: [...outgoing.headers],
+      redirect: outgoing.redirect,
+      ...(!['GET', 'HEAD'].includes(outgoing.method)
+        ? { body: await outgoing.arrayBuffer() }
+        : {}),
+    });
+    requests.push(request.clone());
+    try {
+      const response = await getResponse(handlers, request);
+      if (!response) {
+        unexpected.push(`${request.method} ${request.url}`);
+        return new RuntimeResponse('Unhandled integration request', {
+          status: 599,
+        });
+      }
+      // Response.error() represents an interrupted connection, not an HTTP 500.
+      if (response.type === 'error') return RuntimeResponse.error();
+      return new RuntimeResponse(await response.arrayBuffer(), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: [...response.headers],
+      });
+    } catch (error) {
+      handlerErrors.push(error);
+      return new RuntimeResponse('Integration handler failed', {
+        status: 599,
+      });
+    }
   };
   const options: V4MiniflareOptions = {
     name: 'ride-on-integration',
@@ -66,38 +100,8 @@ export const createHarness = async (authConfig?: string) => {
     cf: {},
     // MSW resolves every actual Worker subrequest. There is deliberately no
     // network fallback: an absent handler fails teardown even if the API catches it.
-    outboundService: async (outgoing) => {
-      const request = new Request(outgoing.url, {
-        method: outgoing.method,
-        headers: [...outgoing.headers],
-        redirect: outgoing.redirect,
-        ...(!['GET', 'HEAD'].includes(outgoing.method)
-          ? { body: await outgoing.arrayBuffer() }
-          : {}),
-      });
-      requests.push(request.clone());
-      try {
-        const response = await getResponse(handlers, request);
-        if (!response) {
-          unexpected.push(`${request.method} ${request.url}`);
-          return new RuntimeResponse('Unhandled integration request', {
-            status: 599,
-          });
-        }
-        // Response.error() represents an interrupted connection, not an HTTP 500.
-        if (response.type === 'error') return RuntimeResponse.error();
-        return new RuntimeResponse(await response.arrayBuffer(), {
-          status: response.status,
-          statusText: response.statusText,
-          headers: [...response.headers],
-        });
-      } catch (error) {
-        handlerErrors.push(error);
-        return new RuntimeResponse('Integration handler failed', {
-          status: 599,
-        });
-      }
-    },
+    outboundService: dispatch,
+    serviceBindings: { STRAVA_STITCH: dispatch },
   };
   const runtime = new Miniflare(convertV4MiniflareOptions(options));
   try {

@@ -2,10 +2,10 @@ import SwiftUI
 import Models
 import DesignSystem
 import SharedUI
+import Services
 
-/// Step 6 — Strava connect, early enough to prefill step 7's speeds
-/// (decision record: "Strava/Health early for prefill"). Wired against
-/// `StravaClientProtocol` only (fixture in sim/tests; real OAuth is Phase 6).
+/// Step 6 introduces the account connection in Preferences. The legacy connect
+/// action is retained only for the deterministic onboarding fixture.
 struct StravaConnectStep: View {
     var isConnected: Bool
     var isConnecting: Bool
@@ -17,12 +17,14 @@ struct StravaConnectStep: View {
     var body: some View {
         DialScreen(
             title: "Connect Strava",
-            bodyText: "Link Strava to sync your routes and prefill your riding speeds from your recent activity.",
+            bodyText: "See your completed cycling activities in Ride On. After setup, sign in and open Preferences → Strava to connect.",
             sky: isConnected ? .sunny : .overcast,
             pageIndex: pageIndex,
             pageCount: pageCount
         ) {
-            if isConnecting {
+            if !FixtureWorld.isEnabled {
+                Text("You can connect at any time from Preferences.").foregroundStyle(.secondary)
+            } else if isConnecting {
                 ProgressView().tint(.white)
             } else {
                 Button(isConnected ? "Connected" : "Connect Strava", action: onConnect)

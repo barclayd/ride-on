@@ -13,20 +13,19 @@ claim the screens are wired. Existing fields and optimistic-save semantics stay
 stable (`expectedVersion`, deep merge, explicit null for removable limits, 409
 for a stale version).
 
-## 1. Strava connection — deferred until connection and sync exist
+## 1. Strava connection — implemented locally; coordinated rollout pending
 
-The proposed read fields cannot yet be derived honestly. The Worker has no
-Strava OAuth connection, token lifecycle or activity sync. A Strava route source
-link and manual ride history do not establish a connected account. Current ride
-records also lack the complete activity classification and moving-time data
-needed for the proposed average. No placeholder connection response or fabricated
-average is being added.
+Updated 17 October: the [shared Strava API](../strava.md) implements account
+connection, central token refresh in Stitch, Ride On disconnect and live completed
+cycling history. Preferences has a dedicated Strava screen. The integration is
+disabled until both backends are deployed. The user scoped this first release to
+connection/history, with route imports later.
 
-Implement connection, refresh/disconnect and activity ingestion together before
-exposing `user.connections.strava`. The proposed future contract is sensible:
-status (`connected` or `needs-reauthorisation`), optional athlete name,
-`lastSyncAt`, nullable `averageSpeedKph`, and qualifying `averageSpeedRides`.
-Absence means never connected, not a successful sync.
+Use `GET /connections/strava` for `configured` and nullable `connection`, with
+status `connected` or `needs-reauthorisation`, athlete ID, connection timestamp
+and private-activity permission. Use `/connections/strava/rides` for paginated
+history. There is no `user.connections.strava`, `lastSyncAt` or fabricated speed
+average. History reads are transient and do not ingest activities into `/rides`.
 
 The proposed average should be total distance divided by total moving time over
 qualifying `Ride`/`GravelRide` activities in the last 90 days, excluding virtual,
@@ -36,8 +35,9 @@ actual qualifying count. Applying that suggestion to saved riding speed must be
 an explicit rider action. “Routes and rides synced” requires evidence that both
 syncs succeeded; otherwise expose separate timestamps/statuses.
 
-Keep the status and average action hidden until that integration exists. This
-review does not reintroduce the removed legacy Strava endpoints.
+Keep the average action hidden until its separate implementation and retention
+review. The connection screen reports unavailable while the backend flag is off.
+The removed legacy Strava token endpoints remain removed.
 
 ## 2. Points lost per factor — implemented
 

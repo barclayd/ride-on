@@ -203,13 +203,10 @@ public struct PreferencesView: View {
 
     private var connections: some View {
         Section("Connections") {
-            LabeledContent {
-                Text(store.strava == nil ? "Not Connected" : "Connected")
+            NavigationLink {
+                StravaConnectionView(live: !FixtureWorld.isEnabled)
             } label: {
-                // ponytail: no Strava screen yet; the API has no Strava connection to manage
-                // (docs/redesign/preferences-api-requests.md, item 1).
-                Row("Strava", "figure.outdoor.cycle", .orange,
-                    subtitle: store.strava?.lastSync.map { "Routes and rides synced \($0.formatted(.clockTime))" })
+                Row("Strava", "figure.outdoor.cycle", .orange, subtitle: "Connection and completed rides")
             }
             #if os(iOS)
             Toggle(isOn: rideMatching) {

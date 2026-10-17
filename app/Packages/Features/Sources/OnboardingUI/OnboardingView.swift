@@ -87,6 +87,9 @@ public struct OnboardingView: View {
     }
 
     private func connectStrava() {
+        // The old direct-token client is retained for fixture tests only. Live
+        // connections require a Ride On login and are managed in Preferences.
+        guard FixtureWorld.isEnabled else { return }
         isConnectingStrava = true
         Task {
             try? await StravaConnect.connect(using: services.strava)
