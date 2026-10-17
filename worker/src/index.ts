@@ -61,6 +61,11 @@ import {
   storedRouteSummary,
 } from './routes/store.ts';
 import { surfaceSummary } from './routes/surface.ts';
+import { stravaHistoryRoutes } from './strava/history-routes.ts';
+import {
+  consumeStravaMessage,
+  dispatchImports,
+} from './strava/import-service.ts';
 import {
   cleanStravaFlows,
   stravaPublicRoutes,
@@ -146,7 +151,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.30.0',
+      version: '0.31.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -159,6 +164,7 @@ export const createApp = (
   app.route('/', identityRoutes());
   app.route('/', stravaPublicRoutes());
   for (const path of [
+    '/history/*',
     '/connections/strava',
     '/connections/strava/*',
     '/push-devices',
@@ -191,6 +197,7 @@ export const createApp = (
     });
   app.route('/', notificationRoutes(now));
   app.route('/', rideRoutes(now));
+  app.route('/', stravaHistoryRoutes(now));
   app.route('/', stravaRoutes());
   app.route('/', trackingRoutes(now, store, users, dependencies));
   app.post('/ground-assessment', async (c) => {
@@ -882,9 +889,17 @@ export default {
     await Promise.all([
       dispatchMonitoring(env),
       cleanStravaFlows(env.ROUTES_DB),
+      dispatchImports(env),
     ]);
   },
   queue: async (batch: MessageBatch<unknown>, env: Env) => {
-    await consumeMonitoring(batch, env);
+    for (const message of batch.messages) {
+      try {
+        if (await consumeStravaMessage(message.body, env)) message.ack();
+        else await consumeMonitoring({ ...batch, messages: [message] }, env);
+      } catch {
+        message.retry({ delaySeconds: 900 });
+      }
+    }
   },
 } satisfies ExportedHandler<Env>;

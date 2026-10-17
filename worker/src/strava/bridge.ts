@@ -45,6 +45,7 @@ export const bridge = async <T>(
   path: string,
   schema: z.ZodType<T>,
   body?: unknown,
+  maxBytes = 128_000,
 ): Promise<T> => {
   if (!configured(env))
     throw new AppError(
@@ -99,7 +100,7 @@ export const bridge = async <T>(
   try {
     const bytes = await readBoundedBody(
       new Request('https://internal', { method: 'POST', body: response.body }),
-      128_000,
+      maxBytes,
     );
     return schema.parse(
       JSON.parse(

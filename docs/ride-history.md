@@ -313,3 +313,7 @@ wall-clock timing, not a production CPU or network benchmark.
 For human calibration, compare
 Richmond against a mostly new route with a small Richmond section, a near-duplicate,
 a reversed version, and a route which merely passes nearby.
+
+## Imported Strava rides
+
+The separate [Strava history APIs](strava.md#automatic-ride-matching-and-history-api-v0310) group temporary activity matches by saved route. They do not insert manual ride logs or affect repetition scoring. Their seven-day retention and launch gate are distinct from the durable manual history described above.

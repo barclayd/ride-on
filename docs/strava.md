@@ -1,9 +1,10 @@
 # Shared Strava connection
 
 Implemented locally on 17 October 2026; **disabled until the coordinated rollout below**.
-This first release connects a Ride On account and displays its completed cycling
-activities. Route imports, automatic ride logging/matching and speed suggestions
-are deferred. Strava history does not enter recommendation scoring or learning.
+The connection release links a Ride On account and displays completed cycling
+activities. API v0.31.0 adds separately gated automatic matching and grouped
+history, described below. Route imports from Strava and speed suggestions remain
+deferred. Strava history does not enter recommendation scoring or learning.
 
 ## Shared application
 
@@ -82,9 +83,9 @@ non-cycling activities can have `rides: []` and a non-null `nextPage`; clients
 must still offer Load More. A full final page may require one additional request
 to discover the end. `fetchedAt` describes this live read, not a background sync.
 
-History is not persisted in D1, SwiftData or an app cache. The Preferences screen
+This live history endpoint does not persist history in D1, SwiftData or an app cache. The Preferences screen
 clears its in-memory history when left or backgrounded, and reloads on return.
-Deleted/edited Strava activities are reflected on the next read. Durable storage
+Deleted/edited Strava activities are reflected on the next read. With importing disabled, durable storage
 contains only the connection mapping, scopes, timestamps, short-lived connection
 attempts and bounded rate-limit counters. Disconnect clears the mapping and
 attempts. Scheduled cleanup expires flow/rate-limit rows.
@@ -140,3 +141,160 @@ redirected to arbitrary localhost or preview URLs.
 Any later durable imports, derived speed defaults or training/learning use need
 their own product and retention design against the current Strava terms. This
 release keeps provider history separate from Ride On's manually logged rides.
+
+## Automatic ride matching and history (API v0.31.0)
+
+This backend feature is implemented behind **`STRAVA_IMPORT_ENABLED=false`**.
+Stitch's event producer is separately gated by **`RIDEON_IMPORT_ENABLED=false`**.
+The existing live `/connections/strava/rides` endpoint remains available under
+its original connection flag. No frontend changes are included in this phase.
+
+### Matching rules
+
+Connecting schedules the last 90 days automatically; the 15-minute scheduler
+recovers missed work. Imports consider every saved route with usable geometry,
+including routes with no tracked plan and routes whose plans have expired.
+Planned dates do not affect matching. Importing a ride never marks a dated plan
+complete, creates a manual `/rides` entry, or changes recommendation scoring.
+
+Coverage is the distance of the saved route accounted for by the activity,
+divided by the saved route's distance. Extra distance, detours and extra laps
+are not penalties. Each recorded path sample can account for only one planned
+sample, so riding the outbound half of an out-and-back cannot count as both
+halves. Forward and reverse directions count; reverse matches are labelled.
+
+- At least 90% coverage: automatically select one clear primary route.
+- At least 50% but below 90%: suggest the route for confirmation.
+- Below 50%: no suggestion.
+- Multiple routes reaching 90%, or the two best matches within five percentage
+  points, require a choice. Mixed-direction evidence also requires review.
+- Missing GPS, gaps greater than 500 metres, missing saved geometry or an
+  incomplete bounded assessment never produce an automatic match.
+
+`strava-route-coverage-v1` samples path distance at 10 metres, uses a provisional
+12-metre position tolerance and a 30-degree heading tolerance, and scores both
+orientations. It is deterministic; no AI service receives Strava data. These
+geometry tolerances need calibration with consented real rides before rollout.
+Assessment is bounded at 100,000 input coordinates, 60,000 sampled pieces per
+path, 1,000 saved routes, 8 MB of saved geometry and 500,000 work units (planned pieces plus nearby comparisons).
+Incomplete results can offer candidates for review but cannot auto-match.
+
+### Frontend API contract
+
+All endpoints require the existing owner-bound Ride On session and return
+`Cache-Control: no-store`. Imports must be enabled; otherwise these endpoints
+return `503 STRAVA_IMPORT_DISABLED`. Other accounts cannot read or review rides.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /connections/strava/imports` | Connection/import status, requested bounds, pending/retrying job counts and sanitized error codes. Session timestamps are epoch milliseconds; requested scan bounds are epoch seconds. |
+| `POST /connections/strava/imports` | Queue a silent import. `{}` requests the last 90 days. Optional UTC `after` and `before` request older history, up to 366 days per request. Returns 202; a concurrent scan returns 409. |
+| `GET /history/routes?limit=30&cursor=…` | One row per matched saved route: `routeId`, current `routeName`, `rideCount`, `firstRiddenAt`, `lastRiddenAt` and `mostRecentRide`. |
+| `GET /history/routes/:routeId/rides?limit=30&cursor=…` | Paginated occurrences of one saved route, newest first. |
+| `GET /history/strava-rides?status=review&limit=30&cursor=…` | Unconfirmed suggestions. `status=all` also includes automatic/confirmed matches, dismissed rides and rides with no matching evidence. |
+| `GET /history/strava-rides/:activityId` | Fetch a ride for review or a push deep link. |
+| `PATCH /history/strava-rides/:activityId` | `{ "expectedVersion": 1, "routeId": "saved-route-uuid" }` confirms or corrects the one primary route. `routeId: null` dismisses it. Any route owned by the rider can be chosen. |
+
+List endpoints return opaque `nextCursor` values (URL-encode them) and accept
+limits from 1 to 100. Ordering is newest ride first with ID as the tie-breaker.
+Refresh the first page after an import or correction; lists are not immutable
+snapshots while new rides arrive. Unconfirmed suggestions are excluded from
+route counts. Automatic matches remain in history while inviting review.
+
+A ride contains only `activityId`, `source: "strava"`, `stravaUrl`, `startedAt`
+(UTC), `averageSpeedMps` (metres/second), `elevationGainM` (total climbing, metres),
+`averagePowerWatts`, and `powerSource` (`meter`, `estimated`, or null), plus the
+match/review and cache metadata. Missing metrics are null, never invented zeros.
+Power is Strava's reported average power, not normalized or weighted power.
+GPS is fetched transiently through the private bridge and is never stored in D1
+or returned by these public history endpoints. Activity titles, descriptions,
+heart rate, elapsed time and full provider payloads are not persisted.
+
+`match` contains `matcherVersion`, `status`, `reason`, `assessmentComplete`,
+`primaryRouteId` (the algorithm's choice) and up to 50 candidate routes. Each
+candidate includes route ID/name/version, coverage fraction, covered distance
+and direction. The ride's **top-level `primaryRouteId` and `decision`** are the
+accepted result after any rider correction; use these to display history.
+`decision` is `automatic`, `confirmed` or `dismissed`. `version` increments on
+sync and review. A stale `expectedVersion` returns
+`409 STRAVA_RIDE_VERSION_CONFLICT`; reload before retrying the user's choice.
+A confirmed or dismissed decision is never overwritten by a later sync while
+that cache record exists. An expired/missing ride returns 404.
+
+Example older-history request:
+
+```json
+{ "after": "2026-01-01T00:00:00Z", "before": "2026-07-01T00:00:00Z" }
+```
+
+### Delivery and recovery
+
+Stitch keeps its single existing Strava webhook subscription. Activity events
+are reduced to athlete/activity IDs, event type and time, then durably sent to
+Ride On's existing `ride-monitoring` queue through `RIDEON_EVENTS`. Queue delivery
+failure returns 503 so Strava can retry. Public callers cannot access the named
+`RideOnStrava` entrypoint or the import readers. Unsigned webhook bodies are
+refresh hints: activity ownership, current resource availability and the private
+grant are checked against Strava before publishing a match or removing one.
+Only an actual activity-detail 404/non-cycling/private-without-access response
+removes an activity; a missing stream merely removes matching evidence.
+
+D1 jobs have leases, revisions, connection-generation checks and a queue outbox.
+Duplicate delivery is safe, completed devices are skipped on retry, and an old
+request cannot write after disconnect or account replacement. Jobs and GPS work
+are bounded; a scan exceeding 1,000 pages reports `import_range_too_large` and
+requires a narrower request. Transient failures, including Strava rate limits,
+retry after at least 15 minutes. A rate-limit response pauses all Ride On import
+reads for 15 minutes; push deliveries can continue. The shared application's
+quota still applies.
+The scheduler silently rescans 90 days daily and when it detects saved-route
+changes, and revalidates older cached activities daily. Older requested history
+must be requested again after cache expiry.
+
+A newly uploaded activity with an automatic match or suggestion creates a push
+outbox entry. APNs uses the existing owner-scoped device registrations and
+credentials. The payload has `type: "strava_ride_match"` and `activityId`, with a
+"New ride logged" alert inviting confirmation/correction. It contains no GPS or
+route name. Historical backfills, unmatched activities, already reviewed rides
+and expired notifications do not notify. Delivery expires after 24 hours;
+stable APNs IDs/collapse IDs reduce duplicates, but delivery is at least once,
+not a promise that a device displays exactly one banner. The frontend is
+responsible for opening the review UI and managing its presentation.
+
+### Retention and launch gate
+
+**This is a temporary cache, not a permanent ride archive.** Strava's API data
+terms also apply to the requested date/speed/elevation/power fields and derived
+matches; omitting GPS does not establish permission for indefinite retention.
+No written retention permission has been supplied. Both import flags therefore
+remain off, and all validation uses synthetic activities.
+
+Imported records, reviews, delivery records and job identifiers have a hard
+seven-day lifetime. Refreshing does not extend a record's original expiry.
+API reads additionally hide data that has not been verified within 48 hours.
+Scheduled cleanup runs even with importing disabled. Disconnect, a replaced
+connection generation, verified revocation or permission loss cascades deletion;
+a verified missing activity removes its cached match and deliveries.
+
+Every history response includes `cache: { mode: "temporary", maximumAgeDays: 7,
+maximumVerificationAgeHours: 48 }` and every ride has `fetchedAt`/`expiresAt`.
+**Corrections survive syncs, but currently expire with the seven-day record.**
+Permanent grouped history and permanent corrections remain a launch constraint:
+obtain Strava's written permission and agree the corresponding retention model
+before enabling this as an enduring history feature. Do not bypass this gate by
+copying cached matches into the permanent manual ride/learning tables.
+
+For rollout, apply `0013_strava_imports.sql` and deploy Ride On's queue consumer
+before enabling Stitch's producer. Both repositories can deploy with their new
+flags false. Production reuses the already-provisioned `ride-monitoring` queue;
+Stitch staging uses `ride-monitoring-staging`, which must have an isolated test
+consumer provisioned before staging event delivery is enabled. No new Strava
+client secret, OAuth callback, subscription or scope is required. After resolving
+retention, configure both import flags and the existing connection flag together,
+and perform a consented live acceptance check. Roll back by disabling both import
+flags; cache expiry/deletion continues. No live imports or push sends were used
+for automated validation.
+
+References: [Strava API terms](https://www.strava.com/legal/api_policy),
+[activity and stream APIs](https://developers.strava.com/docs/reference/),
+[webhook lifecycle](https://developers.strava.com/docs/webhooks/).

@@ -9,6 +9,7 @@
   // Non-commercial prototype confirmed by Dan; use "off" to disable new requests.
   "vars": {
     "STRAVA_ENABLED": "false",
+    "STRAVA_IMPORT_ENABLED": "false",
     "GROUND_EVIDENCE_MODE": "non-commercial",
     "RIDE_MONITORING": "enabled"
   },

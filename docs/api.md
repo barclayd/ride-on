@@ -28,6 +28,8 @@ no extra weather requests, scoring changes or forecast-cache invalidation.
 The reviewed [extension brief v7](extension-api-brief-v7.md) records the contract
 and the decision to preserve short wind sections. Scoring remains `comfort-v0.17`.
 
+API v0.31.0 adds gated [Strava ride importing, route matching and grouped history](strava.md#automatic-ride-matching-and-history-api-v0310), with confirmation/correction APIs and a temporary cache. Live importing remains disabled pending the retention decision.
+
 API v0.28.0 adds [tracked ride plans](ride-tracking-api.md): server-issued recommendation references, one active plan per account, immutable accepted baselines, manual refresh and retained assessment history. API v0.30.0 adds [scheduled monitoring, notification decisions, device registration and Apple push delivery](ride-monitoring.md); app notification integration follows separately. Scoring is unchanged at `comfort-v0.17`.
 
 API v0.26.0 adds opt-in [cold sensitivity and local seasonal tolerance](seasonal-temperature.md) with algorithm `comfort-v0.16`. Existing profiles retain standard, season-independent scoring. Monthly hard minimums remain user-chosen.

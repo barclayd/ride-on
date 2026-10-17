@@ -49,6 +49,7 @@ export const createHarness = async (authConfig?: string) => {
       }),
     TEST_NOW: FIXED_NOW,
     STRAVA_ENABLED: 'false',
+    STRAVA_IMPORT_ENABLED: 'false',
     RIDE_MONITORING: 'enabled',
     APNS_CONFIG_JSON: '',
     GROUND_EVIDENCE_MODE: 'non-commercial',
