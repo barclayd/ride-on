@@ -28,27 +28,58 @@ const candidate = (coverageFraction: number, routeId = 'a'): RouteMatch => ({
   direction: 'forward',
 });
 
-test('inclusive 50% automatic threshold and deterministic best-match selection', () => {
+test('inclusive 50% suggestions and 90% clear automatic matches', () => {
   expect(decideMatches([candidate(0.49999)]).status).toBe('unmatched');
-  expect(decideMatches([candidate(0.5)]).status).toBe('matched');
-  expect(decideMatches([candidate(0.89999)]).status).toBe('matched');
-  expect(decideMatches([candidate(0.9)]).status).toBe('matched');
-  expect(decideMatches([candidate(0.95), candidate(0.92, 'b')]).reason).toBe(
-    'multiple_routes',
-  );
-  expect(decideMatches([candidate(0.92), candidate(0.89, 'b')]).status).toBe(
+  for (const coverage of [0.5, 0.6, 0.89999]) {
+    const result = decideMatches([candidate(coverage)]);
+    expect(result.status).toBe('suggested');
+    expect(result.primaryRouteId).toBeNull();
+    expect(result.reason).toBe('partial_route');
+  }
+  for (const coverage of [0.9, 1]) {
+    const result = decideMatches([candidate(coverage)]);
+    expect(result.status).toBe('matched');
+    expect(result.primaryRouteId).toBe('a');
+  }
+});
+test('ambiguous, incomplete and mixed evidence require confirmation even above 90%', () => {
+  for (const candidates of [
+    [candidate(0.95), candidate(0.92, 'b')],
+    [candidate(0.92), candidate(0.89, 'b')],
+    [candidate(1), candidate(0.9, 'b')],
+  ]) {
+    const result = decideMatches(candidates);
+    expect(result.status).toBe('suggested');
+    expect(result.primaryRouteId).toBeNull();
+    expect(result.reason).toBe('multiple_routes');
+  }
+  expect(decideMatches([candidate(0.96), candidate(0.8, 'b')]).status).toBe(
     'matched',
   );
-  expect(decideMatches([candidate(1)], false).status).toBe('matched');
+  expect(decideMatches([candidate(1)], false)).toMatchObject({
+    status: 'suggested',
+    primaryRouteId: null,
+    reason: 'incomplete_geometry',
+  });
   expect(
-    decideMatches([candidate(0.5, 'b'), candidate(0.8, 'a')]).primaryRouteId,
-  ).toBe('a');
+    decideMatches([{ ...candidate(1), direction: 'mixed' }]),
+  ).toMatchObject({
+    status: 'suggested',
+    primaryRouteId: null,
+    reason: 'mixed_direction',
+  });
+  expect(decideMatches([], false).status).toBe('unavailable');
+});
+test('suggestions rank best coverage first and use stable ordering for ties', () => {
   expect(
-    decideMatches([candidate(0.5, 'b'), candidate(0.5, 'a')]).primaryRouteId,
+    decideMatches([candidate(0.5, 'b'), candidate(0.8, 'a')]).candidates[0]
+      ?.routeId,
   ).toBe('a');
-  expect(
-    decideMatches([{ ...candidate(0.6), direction: 'mixed' }]).primaryRouteId,
-  ).toBe('a');
+  const a = decideMatches([candidate(0.5, 'b'), candidate(0.5, 'a')]);
+  const b = decideMatches([candidate(0.5, 'a'), candidate(0.5, 'b')]);
+  expect(a).toEqual(b);
+  expect(a.primaryRouteId).toBeNull();
+  expect(a.candidates[0]?.routeId).toBe('a');
 });
 test('forward and reversed routes match, regardless of route dates or extra distance', async () => {
   const r = await route();
@@ -65,7 +96,7 @@ test('extra laps do not penalize, but repeating the outbound leg cannot complete
     back = line().reverse();
   const r = await route([...out, ...back.slice(1)]);
   const partial = matchActivity(out, [r]);
-  expect(partial.status).toBe('matched');
+  expect(partial.status).toBe('suggested');
   expect(partial.candidates[0]?.coverageFraction).toBeCloseTo(0.5, 3);
   expect(partial.candidates[0]?.coverageFraction ?? 0).toBeLessThanOrEqual(
     0.51,
@@ -78,11 +109,11 @@ test('extra laps do not penalize, but repeating the outbound leg cannot complete
     ).status,
   ).toBe('matched');
 });
-test('detours do not alter the denominator; partial coverage is automatically logged', async () => {
+test('detours do not alter the denominator; partial coverage is suggested for confirmation', async () => {
   const r = await route();
-  expect(matchActivity(line(0, 50), [r]).status).toBe('matched');
+  expect(matchActivity(line(0, 50), [r]).status).toBe('suggested');
   expect(matchActivity(line(0, 90), [r]).status).toBe('matched');
-  expect(matchActivity(line(0, 60), [r]).status).toBe('matched');
+  expect(matchActivity(line(0, 60), [r]).status).toBe('suggested');
   expect(matchActivity(line(0, 40), [r]).status).toBe('unmatched');
   const extra = [
     ...line(0, 50),
@@ -114,18 +145,17 @@ test('parallel paths, crossings, missing GPS and unsupported gaps provide no mat
       r,
       { ...r, route: { ...r.route, id: crypto.randomUUID(), geometry: null } },
     ]).status,
-  ).toBe('matched');
+  ).toBe('suggested');
 });
-test('two saved versions select one stable primary route', async () => {
+test('two saved versions offer candidates without choosing a primary route', async () => {
   const a = await route(),
     b = await route();
   const result = matchActivity(line(), [a, b]);
-  expect(result.status).toBe('matched');
+  expect(result.status).toBe('suggested');
   expect(result.reason).toBe('multiple_routes');
-  expect(result.primaryRouteId).toBe(
-    [a.route.id, b.route.id].sort()[0] ?? null,
+  expect(result.primaryRouteId).toBeNull();
+  expect(result.candidates.map((c) => c.routeId)).toEqual(
+    [a.route.id, b.route.id].sort(),
   );
-  expect(matchActivity(line(), [b, a]).primaryRouteId).toBe(
-    result.primaryRouteId,
-  );
+  expect(matchActivity(line(), [b, a])).toEqual(result);
 });

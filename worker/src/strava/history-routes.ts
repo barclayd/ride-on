@@ -42,13 +42,16 @@ const cache = {
 };
 
 const retention = { mode: 'ride_date' as const, activityMetricsStored: false };
-// Retained dates and short-lived unmatched evidence share an owner-scoped view.
-const rideSource = `WITH ride_rows AS (
-  SELECT * FROM strava_ride_history WHERE owner_id=?
+// Only fresh evidence can offer a suggestion; retained dates stay independent.
+const rideSource = `WITH evidence AS (
+  SELECT * FROM strava_activity_cache WHERE owner_id=? AND expires_at>? AND fetched_at>?
+), ride_rows AS (
+  SELECT h.*,a.match_json FROM strava_ride_history h LEFT JOIN evidence a
+  ON a.activity_id=h.activity_id AND a.generation=h.generation WHERE h.owner_id=?
   UNION ALL
-  SELECT owner_id,generation,activity_id,ridden_on,primary_route_id,decision,version,fetched_at
-  FROM strava_activity_cache a WHERE owner_id=? AND expires_at>? AND fetched_at>?
-  AND NOT EXISTS(SELECT 1 FROM strava_ride_history h WHERE h.owner_id=a.owner_id AND h.activity_id=a.activity_id))`;
+  SELECT owner_id,generation,activity_id,ridden_on,primary_route_id,decision,version,fetched_at,match_json
+  FROM evidence a WHERE
+  NOT EXISTS(SELECT 1 FROM strava_ride_history h WHERE h.owner_id=a.owner_id AND h.activity_id=a.activity_id))`;
 
 export const stravaHistoryRoutes = (now: () => Date) => {
   const app = new Hono<Bindings>();
@@ -234,19 +237,15 @@ export const stravaHistoryRoutes = (now: () => Date) => {
       at = now().getTime();
     const result =
       await c.env.ROUTES_DB.prepare(`${rideSource} SELECT * FROM ride_rows
-      WHERE (?='all' OR (decision='automatic' AND activity_id IN (
-        SELECT activity_id FROM strava_activity_cache WHERE owner_id=? AND expires_at>? AND fetched_at>?
-        AND json_extract(match_json,'$.reason') IS NOT NULL AND json_extract(match_json,'$.status')='matched')))
+      WHERE (?='all' OR (decision='automatic' AND primary_route_id IS NULL
+        AND json_extract(match_json,'$.status')='suggested'))
       AND (? IS NULL OR ridden_on<? OR (ridden_on=? AND activity_id>?)) ORDER BY ridden_on DESC,activity_id LIMIT ?`)
         .bind(
           c.get('ownerId'),
-          c.get('ownerId'),
           at,
           at - FRESHNESS,
+          c.get('ownerId'),
           query.status,
-          c.get('ownerId'),
-          at,
-          at - FRESHNESS,
           cursor?.[0] ?? null,
           cursor?.[0] ?? null,
           cursor?.[0] ?? null,
@@ -271,7 +270,7 @@ export const stravaHistoryRoutes = (now: () => Date) => {
     const row = await c.env.ROUTES_DB.prepare(
       `${rideSource} SELECT * FROM ride_rows WHERE activity_id=?`,
     )
-      .bind(c.get('ownerId'), c.get('ownerId'), at, at - FRESHNESS, id)
+      .bind(c.get('ownerId'), at, at - FRESHNESS, c.get('ownerId'), id)
       .first<RideHistoryRow>();
     if (!row) throw missing();
     const evidence = await c.env.ROUTES_DB.prepare(
@@ -313,9 +312,9 @@ export const stravaHistoryRoutes = (now: () => Date) => {
         RETURNING *`)
         .bind(
           owner,
-          owner,
           at,
           at - FRESHNESS,
+          owner,
           input.routeId,
           input.routeId === null ? 'dismissed' : 'confirmed',
           id,
@@ -336,7 +335,7 @@ export const stravaHistoryRoutes = (now: () => Date) => {
         .prepare(
           `${rideSource} SELECT version FROM ride_rows WHERE activity_id=?`,
         )
-        .bind(owner, owner, at, at - FRESHNESS, id)
+        .bind(owner, at, at - FRESHNESS, owner, id)
         .first();
       if (!existing) throw missing();
       throw new AppError(
