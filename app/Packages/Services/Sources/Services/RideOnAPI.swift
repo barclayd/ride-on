@@ -38,6 +38,11 @@ public enum RideOnAPI {
         KeychainStore.get(account: tokenAccount).flatMap { String(data: $0, encoding: .utf8) }
     }
 
+    /// Used only for the first request to our own host in a web authentication session.
+    static var browserAuthorizationHeaders: [String: String] {
+        token.map { ["Authorization": "Bearer \($0)"] } ?? [:]
+    }
+
     // MARK: Sign-in
 
     /// Step one: the provider page to open in a web authentication session.
@@ -68,12 +73,12 @@ public enum RideOnAPI {
 
     private static var redirectURI: String { "https://\(host)\(signInDonePath)" }
 
-    private static func randomBase64URL(_ count: Int) -> String {
+    static func randomBase64URL(_ count: Int) -> String {
         var generator = SystemRandomNumberGenerator() // cryptographically secure on Apple platforms
         return base64URL(Data((0..<count).map { _ in UInt8.random(in: .min ... .max, using: &generator) }))
     }
 
-    private static func base64URL(_ data: Data) -> String {
+    static func base64URL(_ data: Data) -> String {
         data.base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")

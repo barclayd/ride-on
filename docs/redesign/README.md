@@ -22,7 +22,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 2 | Rides screen and Track sheet | ✅ Done; tracking wired to API v0.28.0 ([contract](../ride-tracking-api.md)); notifications wait on the API | #155, #176, #185 |
 | 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)) | #157, #164, #172 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
-| 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava waits on the API ([contract](preferences-api-requests.md)) | #167, #172 |
+| 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava connection/history implemented, coordinated rollout pending ([contract](../strava.md)) | #167, #172 |
 | 6 | Widgets and Lock Screen | ⬜ | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
@@ -377,7 +377,8 @@ Build:
 - [x] Form with all sections, menus, stepper, segmented units, Health toggle
 - [x] Distance range editor (push)
 - [x] Settings model mirroring the API `settings` shape, held in an `@Observable` store
-- [ ] Strava status and "Use My Strava Average" (hidden until the API has a Strava connection)
+- [x] Strava account connection, disconnect and completed cycling history (backend rollout pending)
+- [ ] "Use My Strava Average" and route imports (deferred)
 - [x] Account label from `/auth/me` `user.providers` (linked methods, not this session's), and Sign-In Methods on the Account screen
 
 ## 6. Ideal Temperature (push)
@@ -589,8 +590,8 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 
 **Not wired yet.** Unassessable routes aren't shown; a conflicting settings edit (409) keeps
 the old saved window, though that load still uses the new one; dates assume the device and the
-routes share a time zone; "Track a route" is still a no-op. Strava needs its own connection/sync
-implementation ([`preferences-api-requests.md`](preferences-api-requests.md) §1). Crosswind
+routes share a time zone; "Track a route" is still a no-op. Strava connection/history needs
+the [coordinated rollout](../strava.md); route imports and speed suggestions remain deferred. Crosswind
 Sensitivity stays hidden until the API returns a level (v0.25.0). "How Your Routes Fit" is empty
 until Rides has loaded once. The Rides day strip doesn't show the sheet's "Rain until 15:00"
 style notes yet.

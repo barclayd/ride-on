@@ -31,6 +31,27 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(heroTitle(in: app, startingWith: "Hilly Loop").waitForExistence(timeout: 5))
     }
 
+    func testStravaShowsCompletedRidesAndDisconnectsInFixtureWorld() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world"]
+        app.launch()
+        app.buttons["Preferences"].tap()
+        let strava = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Strava'")).firstMatch
+        for _ in 0..<6 {
+            if strava.exists && strava.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(strava.waitForExistence(timeout: 5))
+        strava.tap()
+        XCTAssertTrue(app.staticTexts["Morning Gravel"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.links["View on Strava"].exists || app.buttons["View on Strava"].exists)
+        app.buttons["Disconnect from Ride On"].tap()
+        XCTAssertTrue(app.buttons["Disconnect"].waitForExistence(timeout: 5))
+        app.buttons["Disconnect"].tap()
+        XCTAssertTrue(app.buttons["Connect with Strava"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Morning Gravel"].exists)
+    }
+
     func testRidesDayStripSwapsTheHeroToThatDaysBest() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]

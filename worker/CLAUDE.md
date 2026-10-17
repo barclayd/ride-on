@@ -6,6 +6,7 @@ providers and deterministic route/departure ranking. The legacy `/classify` and
 remain separate; adapt them after the API algorithm has been calibrated.
 
 Read `../docs/api.md` for contracts, defaults, setup, validation and limitations.
+Read `../docs/strava.md` for the shared Stitch connection and coordinated rollout. Keep Strava credentials in Stitch and do not revive the legacy token proxy.
 Read `../docs/ride-history.md` for ride logging, geometry enrichment and repetition scoring.
 Read `../docs/planning-api.md` for multi-day searches, presets and coverage.
 Read `../docs/extension-api-brief-v3.md` for planned snapshots, next-window suggestions and route-history summaries.
@@ -47,6 +48,8 @@ bun run lint:fix
 ```
 
 ## Structure
+
+- `src/strava/`: owner-bound handoff and transient cycling history through Stitch’s private named service binding, disabled until coordinated rollout.
 
 - `src/index.ts`: Hono routes and dependency composition; `createApp` accepts test dependencies.
 - `src/identity/`: Better Auth Google/Apple/passkeys, session-only access, stable owner bindings and PKCE browser handoff. See `../docs/authentication.md`.

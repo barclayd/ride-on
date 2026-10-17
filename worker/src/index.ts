@@ -61,6 +61,11 @@ import {
   storedRouteSummary,
 } from './routes/store.ts';
 import { surfaceSummary } from './routes/surface.ts';
+import {
+  cleanStravaFlows,
+  stravaPublicRoutes,
+  stravaRoutes,
+} from './strava/routes.ts';
 import { contextFor } from './tracking/model.ts';
 import { issueReferences, withReference } from './tracking/references.ts';
 import { trackingRoutes } from './tracking/routes.ts';
@@ -152,7 +157,10 @@ export const createApp = (
     c.json({ webcredentials: { apps: ['R2GGK3VN2C.com.danbarclay.rideon'] } }),
   );
   app.route('/', identityRoutes());
+  app.route('/', stravaPublicRoutes());
   for (const path of [
+    '/connections/strava',
+    '/connections/strava/*',
     '/push-devices',
     '/push-devices/*',
     '/tracked-rides',
@@ -183,6 +191,7 @@ export const createApp = (
     });
   app.route('/', notificationRoutes(now));
   app.route('/', rideRoutes(now));
+  app.route('/', stravaRoutes());
   app.route('/', trackingRoutes(now, store, users, dependencies));
   app.post('/ground-assessment', async (c) => {
     const input = await readJsonBody(c, assessmentRequestSchema);
@@ -870,7 +879,10 @@ const app = createApp();
 export default {
   fetch: app.fetch,
   scheduled: async (_controller: ScheduledController, env: Env) => {
-    await dispatchMonitoring(env);
+    await Promise.all([
+      dispatchMonitoring(env),
+      cleanStravaFlows(env.ROUTES_DB),
+    ]);
   },
   queue: async (batch: MessageBatch<unknown>, env: Env) => {
     await consumeMonitoring(batch, env);

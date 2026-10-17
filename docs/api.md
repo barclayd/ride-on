@@ -34,6 +34,11 @@ API v0.26.0 adds opt-in [cold sensitivity and local seasonal tolerance](seasonal
 API v0.10.0 added [multi-day planning, preference presets and richer result metadata](planning-api.md).
 That guide is the authoritative contract for the extension's next integration.
 
+The [shared Strava connection API](strava.md) adds account connection, disconnect
+and live completed cycling history under `/connections/strava`. It is disabled
+pending a coordinated Stitch/Ride On rollout. Route imports and speed suggestions
+remain deferred.
+
 ## Run locally
 
 Use Node.js 24+ and Bun 1.4.0. From `worker/`:
