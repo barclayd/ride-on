@@ -145,6 +145,7 @@ Build:
       opens, says what changed (or why the check failed), and confirms a replacement
 - [x] Star in the pick pill; the track star is a bell, so the star means best pick and the bell
       means tracking
+- [x] Track sheet medal and Replaces card are bells too (`bell.fill`, `bell.slash`)
 - [ ] Background monitoring and notifications (follow-up API PR); the notification copy and
       permission request below switch on when `capabilities.notifications` is true
 - [ ] A tracked ride that isn't the hero has no bell, so the rider can only see it by picking its
@@ -166,13 +167,13 @@ the sheet doesn't promise alerts. The canvas's notification copy is kept for whe
 marked *(notifications)* below.
 
 1. Grabber; Close (glass circle, `xmark`, `role: .close`) top leading.
-2. Medal: 64pt gold (`.committed`) circle with a white `star.fill`. *(notifications)* A 28pt
-   `bell.fill` badge bottom right.
+2. Medal: 64pt gold (`.committed`) circle with a white `bell.fill`, matching the hero's bell.
+   *(notifications)* It rings: `bell.and.waves.left.and.right.fill`.
 3. **Track mode** (not tracked):
    - "Track This Ride" (`.title2` bold, centred), then "We'll save this forecast and compare it
      with the latest each time you check back." *(notifications)* "We'll keep checking the
      forecast and notify you if anything changes before you leave."
-   - Another ride is tracked: a card with `star.slash` (gold), "Replaces Your Tracked Ride" and
+   - Another ride is tracked: a card with `bell.slash` (gold), "Replaces Your Tracked Ride" and
      "Ridge Run · Sat 18 Oct, 09:00". Start Tracking replaces it in one request.
    - Ride card: 48pt route thumbnail, "Hilly Loop", "Wed 14 Oct · 09:00 → ~12:00", a 40pt
      `ScoreGauge` showing 86.
@@ -222,7 +223,7 @@ matched by `routeId@departure`, not by reference. The limits come from `RiderSet
 |---|---|
 | <img src="screens/ride-detail-light.png" width="300"> | <img src="screens/ride-detail-dark.png" width="300"> |
 
-1. **Hero**, 400pt, same art and title block as Rides, no commit star in the hero.
+1. **Hero**, 400pt, same art and title block as Rides, no track bell in the hero.
 2. **Verdict card**: `ScoreGauge` (64pt ring, 86), "✓ Meets your preferences", "▲ 4 since 07:00 ·
    last ridden 29 Sep". Then notes with symbols:
    - 🌡 "Starts at 9°, a degree under your ideal range."

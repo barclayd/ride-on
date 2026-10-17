@@ -35,7 +35,7 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
    the actual best score each day, the wind strip is the actual wind along the route. No
    stock illustrations.
 6. **One tinted action per screen, at most.** Zero is fine (Rides and Ride detail have none).
-   The track star's gold is an on state, not a tinted action: it stays clear glass until the ride
+   The track bell's gold is an on state, not a tinted action: it stays clear glass until the ride
    is tracked.
 7. **Typography over iconography for data.** Scores, temperatures and times are typeset with
    monospaced digits. A verdict never relies on colour alone: it always has a symbol and words.
@@ -49,7 +49,7 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 | Tab bar (Rides, Routes, Preferences) | System glass; shrinks to the selected tab's icon on scroll. Never on Routes, where the panel scrolls rather than the screen | `TabView` + `.tabBarMinimizeBehavior(.onScrollDown)` (`.never` on Routes) |
 | Toolbars | System glass. At most 3 groups. Icons only, each with an accessibility label. Related actions share one capsule (share + more) | `.toolbar`, `ToolbarItemGroup`, `ToolbarSpacer` |
 | Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
-| Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero track star `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while tracked |
+| Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero track bell `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while tracked |
 | Routes panel | **Regular** glass floating over the map, 8pt from the screen edges and 14pt above the tab bar; grabber, search and "+" pinned, everything else scrolling beneath and fading into the bottom edge | `FloatingPanel` (§6): `.glassEffect(.regular, in: .rect(cornerRadius: 34))`, `.safeAreaBar(edge: .top)` |
 | Controls over the Routes map (map style, my location) | **Clear** glass capsule, white glyphs, held at a fixed size like MapKit's own | `.glassEffect(.clear.interactive(), in: .capsule)`, `.dynamicTypeSize(...xLarge)` + `.accessibilityShowsLargeContentViewer()` |
 | Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
@@ -94,7 +94,7 @@ Rules:
   | Crosswind | `#E8A100` | `#FFD60A` |
   | Headwind | `#C93400` | `#FF453A` |
   | Rain chance | `#0A66D8` | `#64B5FF` |
-  | Committed (tracked star, Track sheet medal) | `#C88A00` | `#C88A00` |
+  | Committed (tracked bell, Track sheet medal) | `#C88A00` | `#C88A00` |
 
 - **Temperature ramp** (`ConditionPalette`, the only custom palette): Apple Weather's
   convention, deep blue below 0° through green to red above 30°. Used by the Ideal
