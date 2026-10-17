@@ -49,7 +49,7 @@ bun run lint:fix
 
 ## Structure
 
-- `src/strava/`: owner-bound handoff and transient cycling history through Stitch’s private named service binding, disabled until coordinated rollout.
+- `src/strava/`: owner-bound handoff, live cycling history and gated temporary activity imports/matching through Stitch’s private named service binding. Grouped `/history` APIs, D1 import/push outboxes and the shared monitoring queue are documented in `../docs/strava.md`. Keep import flags off until the retention launch constraint is resolved.
 
 - `src/index.ts`: Hono routes and dependency composition; `createApp` accepts test dependencies.
 - `src/identity/`: Better Auth Google/Apple/passkeys, session-only access, stable owner bindings and PKCE browser handoff. See `../docs/authentication.md`.

@@ -4,6 +4,11 @@ import {
   dispatchMonitoring,
   jobSchema,
 } from '../src/monitoring/service.ts';
+import {
+  acceptStravaEvent,
+  dispatchImports,
+  runImportJob,
+} from '../src/strava/import-service.ts';
 import type { Env } from '../src/types.ts';
 
 // Only time and request logging differ from production. Storage, authentication,
@@ -15,6 +20,22 @@ export default {
     context: ExecutionContext,
   ) {
     const now = () => new Date(env.TEST_NOW);
+    if (new URL(request.url).pathname === '/__test/strava-dispatch') {
+      const jobs: unknown[] = [];
+      await dispatchImports(env, now(), async (messages) => {
+        jobs.push(...messages.map((m) => m.body));
+      });
+      return Response.json({ jobs });
+    }
+    if (new URL(request.url).pathname === '/__test/strava-event') {
+      await acceptStravaEvent(env, await request.json(), now());
+      return Response.json({ ok: true });
+    }
+    if (new URL(request.url).pathname === '/__test/strava-job') {
+      const body = (await request.json()) as { id: string };
+      await runImportJob(env, body.id, now);
+      return Response.json({ ok: true });
+    }
     if (new URL(request.url).pathname === '/__test/monitor') {
       const body = jobSchema.parse(await request.json());
       let result = 'unhandled';

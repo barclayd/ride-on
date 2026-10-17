@@ -10,6 +10,7 @@ import { copySessionHeaders } from '../identity/routes.ts';
 import { readJsonBody, validateInput } from '../request.ts';
 import type { Bindings } from '../types.ts';
 import { athleteSchema, bridge, configured, historySchema } from './bridge.ts';
+import { startDefaultImport } from './import-service.ts';
 
 const opaque = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const random = () =>
@@ -44,7 +45,7 @@ const connection = (db: D1Database, owner: string) =>
     .prepare('SELECT * FROM strava_connections WHERE owner_id = ?')
     .bind(owner)
     .first<Connection>();
-const throttle = async (db: D1Database, key: string, max = 30) => {
+export const throttle = async (db: D1Database, key: string, max = 30) => {
   const window = Math.floor(Date.now() / 60_000);
   const row = await db
     .prepare(`INSERT INTO strava_limits VALUES (?, ?, 1) ON CONFLICT(key) DO UPDATE SET
@@ -319,7 +320,13 @@ export const stravaRoutes = () => {
         );
       throw error;
     }
-    if (!results[0]?.results[0]) throw invalid();
+    const connected = results[0]?.results[0];
+    if (!connected) throw invalid();
+    try {
+      await startDefaultImport(c.env, connected);
+    } catch {
+      console.error('Strava initial import will retry on schedule');
+    }
     return c.json({ connected: true });
   });
   app.get('/connections/strava/rides', async (c) => {
