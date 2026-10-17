@@ -359,8 +359,7 @@ const mergeRuns = (runs: Run[]) =>
     else out.push({ ...r });
     return out;
   }, []);
-// Every stretch in its own colour, neighbours with the same effect merged. The API keeps short
-// stretches on purpose (docs/extension-api-brief-v7.md), so they're drawn, never recoloured.
+// Every stretch with its own effect, neighbours with the same effect merged.
 const exactRuns = (stretches: WindStretch[]): Run[] => {
   const total = stretches.at(-1)?.toM ?? 0;
   return mergeRuns(
@@ -371,7 +370,8 @@ const exactRuns = (stretches: WindStretch[]): Run[] => {
     })),
   );
 };
-// For the spoken route only: short runs join the longer neighbour.
+// The sketch and the spoken route: short runs join the longer neighbour, so each part of the route
+// takes the wind over most of it. The bar keeps every stretch the API sends.
 const summaryRuns = (exact: Run[]): Run[] => {
   let runs = exact.map((r) => ({ ...r }));
   for (;;) {
@@ -477,9 +477,8 @@ export const windSketch = (
       raw[i - 1][1] + t * (raw[i][1] - raw[i - 1][1]),
     ];
   };
-  const exact = exactRuns(stretches);
-  const runs = summaryRuns(exact);
-  const drawn = exact.map((r) => ({
+  const runs = summaryRuns(exactRuns(stretches));
+  const drawn = runs.map((r) => ({
     effect: r.effect,
     points: pointsAttr([
       at(r.from),

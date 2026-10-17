@@ -197,7 +197,7 @@ const outAndBack: Outline = {
 };
 const outAndBackWind = [
   stretch(0, 11120, 'tailwind', 180),
-  stretch(11120, 11400, 'crosswind', 200), // a sliver: too short to label, still drawn
+  stretch(11120, 11400, 'crosswind', 200), // a sliver: in the bar, not on the sketch
   stretch(11400, 22240, 'headwind', 180, {
     startAt: at('10:00'),
     endAt: at('11:00'),
@@ -232,6 +232,25 @@ test('wind stretches place each effect exactly and say on which leg the gusts ar
   ).toBeNull();
 });
 
+test('the sketch colours each part of the route by the wind over most of it', () => {
+  // Mostly tailwind with crosswind flecks, then mostly headwind with a tailwind fleck.
+  const mixed = [
+    stretch(0, 3000, 'tailwind', 180),
+    stretch(3000, 3500, 'crosswind', 250),
+    stretch(3500, 7000, 'tailwind', 180),
+    stretch(7000, 7600, 'crosswind', 250),
+    stretch(7600, 11120, 'tailwind', 180),
+    stretch(11120, 16000, 'headwind', 180),
+    stretch(16000, 16800, 'tailwind', 0),
+    stretch(16800, 22240, 'headwind', 180),
+  ];
+  const s = windSketch(outAndBack, mixed, ride());
+  expect(s?.runs.map((r) => r.effect)).toEqual(['tailwind', 'headwind']);
+  expect(
+    windPanel(ride({ windStretches: mixed }), outAndBack, 'UTC').blocks,
+  ).toHaveLength(8);
+});
+
 test('gusts split by a short calmer stretch still read as one place', () => {
   const b = ride({
     conditions: C({ maximumGustKph: 44, gustExposure: against(44) }),
@@ -253,7 +272,7 @@ test('gusts split by a short calmer stretch still read as one place', () => {
   );
 });
 
-test('a thousand short stretches all keep their colour', () => {
+test('a thousand short stretches stay in the bar; the sketch draws a few long runs', () => {
   const many = Array.from({ length: 1000 }, (_, i) =>
     stretch(
       (i * 22240) / 1000,
@@ -263,7 +282,7 @@ test('a thousand short stretches all keep their colour', () => {
     ),
   );
   const s = windSketch(outAndBack, many, ride());
-  expect(s?.runs).toHaveLength(1000);
+  expect(s?.runs.length).toBeLessThanOrEqual(20);
   expect(s?.sentence.split(', then ').length).toBeLessThanOrEqual(4);
   const w = windPanel(ride({ windStretches: many }), outAndBack, 'UTC');
   expect(w.blocks).toHaveLength(1000);
@@ -307,12 +326,8 @@ test('the sketch fits right of the wind key, draws the return beside the way out
   // The way back sits 3px beside the way out instead of on top of it.
   expect(casing[3][0]).toBeCloseTo(casing[1][0] - 3);
   expect(casing[3][1]).toBeCloseTo(casing[1][1]);
-  // The sliver keeps its own colour.
-  expect(s.runs.map((r) => r.effect)).toEqual([
-    'tailwind',
-    'crosswind',
-    'headwind',
-  ]);
+  // The sliver takes the colour of the longer side; the bar still shows it.
+  expect(s.runs.map((r) => r.effect)).toEqual(['tailwind', 'headwind']);
   // The hover pointer starts on the start dot facing north, up the page, and comes back south.
   expect(s.track).toHaveLength(201);
   expect(s.track[0]).toMatchObject({ x: s.start.x, y: s.start.y, angle: -90 });
