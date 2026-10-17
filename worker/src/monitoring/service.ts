@@ -7,6 +7,7 @@ import { refreshTracking } from '../tracking/refresh.ts';
 import { getTracking, type TrackingRow } from '../tracking/store.ts';
 import type { Env } from '../types.ts';
 import { createD1UserStore } from '../users/model.ts';
+import { activePause, readPause } from '../users/pause.ts';
 import { type Device, sendPush } from './apns.ts';
 import { pushPayload } from './message.ts';
 import {
@@ -16,6 +17,7 @@ import {
   INTERVAL_MS,
   initialState,
   type MonitorState,
+  summaryAt,
 } from './policy.ts';
 
 export const jobSchema = z.strictObject({
@@ -23,7 +25,11 @@ export const jobSchema = z.strictObject({
   planId: z.uuid(),
 });
 type Job = z.infer<typeof jobSchema>;
-type Monitor = { state_json: string | null; input_revision: string | null };
+type Monitor = {
+  state_json: string | null;
+  input_revision: string | null;
+  resume_pending: number;
+};
 type Event = {
   id: string;
   decision_json: string;
@@ -98,17 +104,24 @@ const inputRevision = async (
     algorithm: ALGORITHM_VERSION,
   });
 };
-const cancelPending = async (db: D1Database, owner: string, plan: string) => {
+const cancelPending = async (
+  db: D1Database,
+  owner: string,
+  plan: string,
+  token: string,
+) => {
   await db.batch([
     db
       .prepare(`UPDATE push_deliveries SET status = 'cancelled' WHERE status = 'pending' AND notification_id IN
-      (SELECT id FROM tracking_notifications WHERE owner_id = ? AND plan_id = ?)`)
-      .bind(owner, plan),
+      (SELECT id FROM tracking_notifications WHERE owner_id = ? AND plan_id = ?)
+      AND EXISTS (SELECT 1 FROM tracking_monitors WHERE owner_id = ? AND plan_id = ? AND lease_token = ?)`)
+      .bind(owner, plan, owner, plan, token),
     db
       .prepare(
-        "UPDATE tracking_notifications SET status = 'superseded' WHERE owner_id = ? AND plan_id = ? AND status = 'pending'",
+        `UPDATE tracking_notifications SET status = 'superseded' WHERE owner_id = ? AND plan_id = ? AND status = 'pending'
+        AND EXISTS (SELECT 1 FROM tracking_monitors WHERE owner_id = ? AND plan_id = ? AND lease_token = ?)`,
       )
-      .bind(owner, plan),
+      .bind(owner, plan, owner, plan, token),
   ]);
 };
 export const dispatchMonitoring = async (env: Env, at = new Date()) => {
@@ -167,16 +180,34 @@ export const monitorRide = async (
     .bind(token, after(now(), 5 * 60_000), owner, plan, now().toISOString())
     .run();
   if (!claim.meta.changes) return;
-  const saveState = (state: MonitorState, revision: string | null) =>
+  const held = () =>
     db
-      .prepare(`UPDATE tracking_monitors SET state_json = ?, input_revision = ?
+      .prepare(
+        'SELECT 1 FROM tracking_monitors WHERE owner_id = ? AND plan_id = ? AND lease_token = ? AND lease_until > ?',
+      )
+      .bind(owner, plan, token, now().toISOString())
+      .first();
+  const saveState = (
+    state: MonitorState,
+    revision: string | null,
+    resumePending = false,
+  ) =>
+    db
+      .prepare(`UPDATE tracking_monitors SET state_json = ?, input_revision = ?, resume_pending = ?
     WHERE owner_id = ? AND plan_id = ? AND lease_token = ?`)
-      .bind(JSON.stringify(state), revision, owner, plan, token)
+      .bind(
+        JSON.stringify(state),
+        revision,
+        Number(resumePending),
+        owner,
+        plan,
+        token,
+      )
       .run();
   try {
     let row = await getTracking(db, owner, plan);
     if (!active(row, now().toISOString())) {
-      await cancelPending(db, owner, plan);
+      await cancelPending(db, owner, plan, token);
       await db
         .prepare(
           'DELETE FROM tracking_monitors WHERE owner_id = ? AND plan_id = ? AND lease_token = ?',
@@ -187,11 +218,28 @@ export const monitorRide = async (
     }
     const monitor = await db
       .prepare(
-        'SELECT state_json,input_revision FROM tracking_monitors WHERE owner_id = ? AND plan_id = ?',
+        'SELECT state_json,input_revision,resume_pending FROM tracking_monitors WHERE owner_id = ? AND plan_id = ?',
       )
       .bind(owner, plan)
       .first<Monitor>();
     if (!monitor) return;
+    const pause = await readPause(db, owner);
+    if (activePause(pause, now())) {
+      // Also covers plans first tracked during the pause. No weather refresh,
+      // policy decision or notification reference update occurs while paused.
+      await cancelPending(db, owner, plan, token);
+      await db
+        .prepare(`UPDATE tracking_monitors SET resume_pending = 1
+          WHERE owner_id = ? AND plan_id = ? AND lease_token = ?`)
+        .bind(owner, plan, token)
+        .run();
+      return;
+    }
+    const resumePending =
+      !!monitor.resume_pending ||
+      (!monitor.state_json &&
+        !!pause?.resumesAt &&
+        pause.resumesAt > row.created_at);
     const baseline = JSON.parse(row.baseline_json) as Snapshot;
     let state: MonitorState = monitor.state_json
       ? JSON.parse(monitor.state_json)
@@ -204,6 +252,8 @@ export const monitorRide = async (
       !latest.context.weather.refreshAt ||
       latest.context.weather.refreshAt <= now().toISOString()
     ) {
+      if (!(await held()) || activePause(await readPause(db, owner), now()))
+        return;
       try {
         row = await refreshTracking(
           plan,
@@ -223,7 +273,12 @@ export const monitorRide = async (
       }
     }
     row = await getTracking(db, owner, plan);
-    if (!active(row, now().toISOString())) return;
+    if (
+      !active(row, now().toISOString()) ||
+      !(await held()) ||
+      activePause(await readPause(db, owner), now())
+    )
+      return;
     const stableInputs =
       revision === (await inputRevision(db, owner, baseline));
     // Do not make an outage/change decision while a manual refresh or input edit is in flight.
@@ -234,6 +289,24 @@ export const monitorRide = async (
     )
       return;
     const current = snapshotFor(row, now().toISOString());
+    if (resumePending) {
+      // A successful assessment becomes the reference, without replaying any
+      // score, breach, option, recovery, outage or summary from the pause.
+      // Keep this durable marker until weather is available after resuming.
+      const summaryDone =
+        state.summaryDone ||
+        summaryAt(row.departure_at, row.time_zone) <= now().toISOString();
+      if (current) {
+        state = {
+          ...(await initialState(current, now().toISOString())),
+          lastNotifiedAt: state.lastNotifiedAt,
+          summaryDone,
+        };
+      } else state.summaryDone = summaryDone;
+      await cancelPending(db, owner, plan, token);
+      await saveState(state, current ? revision : null, !current);
+      return;
+    }
     const last = row.latest_json
       ? (JSON.parse(row.latest_json) as Snapshot)
       : null;
@@ -255,7 +328,8 @@ export const monitorRide = async (
         : row.created_at,
     });
     state = result.state;
-    await saveState(state, current ? revision : null);
+    if (!(await saveState(state, current ? revision : null)).meta.changes)
+      return;
     let event = await db
       .prepare(`SELECT n.* FROM tracking_notifications n WHERE owner_id = ? AND plan_id = ?
       AND status IN ('pending','accepted','failed')
@@ -270,7 +344,7 @@ export const monitorRide = async (
           ? !current || event.assessment_id !== row.latest_id
           : !!current))
     ) {
-      await cancelPending(db, owner, plan);
+      await cancelPending(db, owner, plan, token);
       event = null;
     }
     // Coalesce unsent changes to the current decision. A confirmed APNs acceptance
@@ -279,7 +353,7 @@ export const monitorRide = async (
       result.alert &&
       (!event || event.decision_json !== JSON.stringify(result.alert))
     ) {
-      await cancelPending(db, owner, plan);
+      await cancelPending(db, owner, plan, token);
       const devices = await db
         .prepare(
           'SELECT * FROM push_devices WHERE owner_id = ? ORDER BY id LIMIT 20',
@@ -350,7 +424,7 @@ export const monitorRide = async (
           .first<Event>();
       } else event = null;
     } else if (!result.alert && event && !event.accepted_at) {
-      await cancelPending(db, owner, plan);
+      await cancelPending(db, owner, plan, token);
       event = null;
     }
     if (!event) return;
@@ -361,12 +435,6 @@ export const monitorRide = async (
       .all<Device & { apns_id: string; attempts: number }>();
     for (const device of deliveries.results) {
       const live = await getTracking(db, owner, plan);
-      const held = await db
-        .prepare(
-          'SELECT 1 FROM tracking_monitors WHERE owner_id = ? AND plan_id = ? AND lease_token = ? AND lease_until > ?',
-        )
-        .bind(owner, plan, token, now().toISOString())
-        .first();
       const registered = await db
         .prepare(
           'SELECT 1 FROM push_devices WHERE id = ? AND owner_id = ? AND version = ?',
@@ -374,7 +442,8 @@ export const monitorRide = async (
         .bind(device.id, owner, device.version)
         .first();
       if (
-        !held ||
+        !(await held()) ||
+        activePause(await readPause(db, owner), now()) ||
         !active(live, now().toISOString()) ||
         event.expires_at <= now().toISOString() ||
         revision !== (await inputRevision(db, owner, baseline)) ||

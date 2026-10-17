@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { decodeJwt, decodeProtectedHeader } from 'jose';
 import { HttpResponse, http } from 'msw/http';
+import type { MonitorState } from '../src/monitoring/policy.ts';
 import type { Snapshot } from '../src/tracking/model.ts';
 import { first, upload } from './client.ts';
 import { hourlyForecast, metOffice } from './fixtures.ts';
@@ -47,7 +48,11 @@ const monitor = async (h: Harness, plan: string) => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { result: 'ack' });
 };
-const seed = async (h: Harness) => {
+const seed = async (
+  h: Harness,
+  pauseUntil?: string | null,
+  monitorInitially = true,
+) => {
   h.use(metOffice());
   assert.equal(
     (
@@ -66,6 +71,16 @@ const seed = async (h: Harness) => {
     ).status,
     201,
   );
+  if (pauseUntil !== undefined)
+    assert.equal(
+      (
+        await h.send('/users/me/pause', {
+          method: 'PUT',
+          body: JSON.stringify({ until: pauseUntil }),
+        })
+      ).status,
+      200,
+    );
   const route = await upload(h);
   const rec = await json<{
     rankings: { best: { recommendationRef: string } }[];
@@ -88,7 +103,7 @@ const seed = async (h: Harness) => {
   });
   assert.equal(created.status, 201);
   const { ride } = await json<{ ride: Ride }>(created);
-  await monitor(h, ride.id);
+  if (monitorInitially) await monitor(h, ride.id);
   return ride;
 };
 const register = async (
@@ -142,6 +157,28 @@ const notifications = (h: Harness, id: string) =>
 const clearCache = async (h: Harness) => {
   const kv = await h.runtime.getKVNamespace('WEATHER_CACHE');
   for (const k of (await kv.list()).keys) await kv.delete(k.name);
+};
+const pause = async (h: Harness, until: string | null = null) => {
+  const r = await h.send('/users/me/pause', {
+    method: 'PUT',
+    body: JSON.stringify({ until }),
+  });
+  assert.equal(r.status, 200);
+};
+const resume = async (h: Harness) => {
+  assert.equal(
+    (await h.send('/users/me/pause', { method: 'DELETE' })).status,
+    200,
+  );
+};
+const monitorState = async (h: Harness, id: string) => {
+  const db = await h.runtime.getD1Database('ROUTES_DB');
+  return db
+    .prepare(
+      'SELECT state_json,resume_pending FROM tracking_monitors WHERE owner_id = ? AND plan_id = ?',
+    )
+    .bind('alice', id)
+    .first<{ state_json: string | null; resume_pending: number }>();
 };
 run(
   'device registration is authenticated, owner-scoped, bounded, rotates tokens and never exposes them',
@@ -748,5 +785,414 @@ run(
       jobs.map((j) => j.planId),
       [ride.id],
     );
+  },
+);
+
+run(
+  'pausing cancels all unsent deliveries and stops weather and every alert while preserving the plan and reference',
+  async (h) => {
+    const ride = await seed(h);
+    await register(h);
+    await change(h, ride, -6);
+    await monitor(h, ride.id); // A durable pending delivery, with credentials absent.
+    assert.equal(
+      first((await notifications(h, ride.id)).notifications).devicesPending,
+      1,
+    );
+    const before = await monitorState(h, ride.id);
+    await pause(h);
+    const history = (await notifications(h, ride.id)).notifications;
+    assert.equal(first(history).status, 'cancelled');
+    assert.equal(first(history).devicesPending, 0);
+    assert.equal(
+      (await monitorState(h, ride.id))?.state_json,
+      before?.state_json,
+    );
+    await clearCache(h);
+    const calls = h.requests.length;
+    await h.restart({
+      TEST_NOW: '2026-10-09T19:00:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    h.use(); // Any forecast or APNs request is a test failure.
+    await monitor(h, ride.id);
+    assert.equal(h.requests.length, calls);
+    assert.deepEqual((await notifications(h, ride.id)).notifications, history);
+    assert.equal(
+      (await monitorState(h, ride.id))?.state_json,
+      before?.state_json,
+    );
+    const current = await json<{ ride: Ride & { state: string } }>(
+      await h.send(`/tracked-rides/${ride.id}`),
+    );
+    assert.equal(current.ride.state, 'active');
+    assert.deepEqual(current.ride.baseline, ride.baseline);
+    await h.restart({ TEST_NOW: ride.departureAt });
+    await monitor(h, ride.id);
+    assert.equal(await monitorState(h, ride.id), null);
+    assert.equal(h.requests.length, calls);
+  },
+);
+
+run(
+  'explicit resume rebases quietly, drops a missed evening summary and then alerts on new weather changes',
+  async (h) => {
+    const ride = await seed(h);
+    await register(h);
+    await pause(h);
+    await change(h, ride, -12);
+    // Resume after the summary, without ever running a monitor during the pause.
+    await h.restart({
+      TEST_NOW: '2026-10-09T19:00:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    const payloads: { reasons: string[] }[] = [];
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(
+          hourlyForecast(request, {
+            modelRunDate: '2026-10-09T19:00:00.000Z',
+            values: () => ({ screenTemperature: 2 }),
+          }),
+        ),
+      ),
+      http.post(
+        'https://api.sandbox.push.apple.com/3/device/:token',
+        async ({ request }) => {
+          payloads.push((await request.json()) as { reasons: string[] });
+          return new HttpResponse(null, { status: 200 });
+        },
+      ),
+    );
+    await resume(h);
+    await monitor(h, ride.id);
+    assert.equal(payloads.length, 0);
+    assert.equal((await notifications(h, ride.id)).notifications.length, 0);
+    const { ride: current } = await json<{ ride: Ride }>(
+      await h.send(`/tracked-rides/${ride.id}`),
+    );
+    assert.deepEqual(current.baseline, ride.baseline);
+    const saved = await monitorState(h, ride.id);
+    assert.ok(saved?.state_json);
+    const state = JSON.parse(saved.state_json) as MonitorState;
+    assert.equal(saved.resume_pending, 0);
+    assert.equal(state.summaryDone, true);
+    assert.equal(
+      state.reference.score,
+      current.latestAssessment.pick.candidate.score,
+    );
+    await monitor(h, ride.id);
+    assert.equal(payloads.length, 0);
+    await change(
+      h,
+      current,
+      current.latestAssessment.pick.candidate.score -
+        current.baseline.pick.candidate.score -
+        6,
+    );
+    await monitor(h, ride.id);
+    assert.deepEqual(first(payloads).reasons, ['score_worsened']);
+  },
+);
+
+run(
+  'a dated pause resumes from cron alone and never sends a missed summary',
+  async (h) => {
+    const ride = await seed(h);
+    await register(h);
+    await pause(h, '2026-10-10');
+    const calls = h.requests.length;
+    await h.restart({ TEST_NOW: '2026-10-09T22:45:00.000Z' });
+    await monitor(h, ride.id);
+    assert.equal(h.requests.length, calls);
+    await h.restart({
+      TEST_NOW: '2026-10-09T23:00:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(
+          hourlyForecast(request, {
+            modelRunDate: '2026-10-09T23:00:00.000Z',
+            values: () => ({ screenTemperature: 2 }),
+          }),
+        ),
+      ),
+    );
+    const { jobs } = await json<{
+      jobs: { ownerId: string; planId: string }[];
+    }>(await h.send('/__test/dispatch'));
+    assert.deepEqual(jobs, [{ ownerId: 'alice', planId: ride.id }]);
+    for (const job of jobs) await monitor(h, job.planId);
+    assert.ok(h.requests.length > calls);
+    assert.equal((await monitorState(h, ride.id))?.resume_pending, 0);
+    assert.equal((await notifications(h, ride.id)).notifications.length, 0);
+    await h.restart({ TEST_NOW: '2026-10-09T23:15:00.000Z' });
+    await monitor(h, ride.id);
+    assert.equal((await notifications(h, ride.id)).notifications.length, 0);
+    assert.equal(
+      (await json<{ user: { pause: unknown } }>(await h.send('/users/me'))).user
+        .pause,
+      null,
+    );
+  },
+);
+
+run(
+  'plans can be created and manually refreshed while paused, then start scheduled monitoring quietly',
+  async (h) => {
+    // Recommendations and tracked-ride creation remain available while paused.
+    const ride = await seed(h, '2026-10-10');
+    const state = await monitorState(h, ride.id);
+    assert.equal(state?.state_json, null);
+    assert.equal(state?.resume_pending, 1);
+    await register(h);
+    const response = await h.send(`/tracked-rides/${ride.id}/refresh`, {
+      method: 'POST',
+    });
+    assert.equal(response.status, 200);
+    await h.restart({
+      TEST_NOW: '2026-10-09T23:00:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(
+          hourlyForecast(request, {
+            modelRunDate: '2026-10-09T23:00:00.000Z',
+            values: () => ({ screenTemperature: 2 }),
+          }),
+        ),
+      ),
+    );
+    await monitor(h, ride.id);
+    assert.equal((await monitorState(h, ride.id))?.resume_pending, 0);
+    assert.equal((await notifications(h, ride.id)).notifications.length, 0);
+  },
+);
+
+run(
+  'resume stays quiet through an outage until a successful assessment supplies the reference',
+  async (h) => {
+    const ride = await seed(h);
+    await register(h);
+    await pause(h);
+    await clearCache(h);
+    await h.restart({
+      TEST_NOW: '2026-10-09T19:00:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    await resume(h);
+    h.use(metOffice(() => new HttpResponse(null, { status: 503 })));
+    await monitor(h, ride.id);
+    await h.restart({ TEST_NOW: '2026-10-09T20:00:00.000Z' });
+    await monitor(h, ride.id);
+    assert.equal((await monitorState(h, ride.id))?.resume_pending, 1);
+    assert.equal((await notifications(h, ride.id)).notifications.length, 0);
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(
+          hourlyForecast(request, { modelRunDate: '2026-10-09T20:00:00.000Z' }),
+        ),
+      ),
+    );
+    await monitor(h, ride.id);
+    assert.equal((await monitorState(h, ride.id))?.resume_pending, 0);
+    await monitor(h, ride.id);
+    assert.equal((await notifications(h, ride.id)).notifications.length, 0);
+  },
+);
+
+run(
+  'pausing during a weather refresh invalidates the running monitor and prevents its alert',
+  async (h) => {
+    const ride = await seed(h);
+    await register(h);
+    const state = await monitorState(h, ride.id);
+    await h.restart({
+      TEST_NOW: '2026-10-09T18:00:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    let release = () => {},
+      entered = () => {};
+    const wait = new Promise<void>((r) => {
+      release = r;
+    });
+    const started = new Promise<void>((r) => {
+      entered = r;
+    });
+    h.use(
+      metOffice(async ({ request }) => {
+        entered();
+        await wait;
+        return HttpResponse.json(
+          hourlyForecast(request, {
+            modelRunDate: '2026-10-09T18:00:00.000Z',
+            values: () => ({ screenTemperature: 2 }),
+          }),
+        );
+      }),
+    );
+    const pending = monitor(h, ride.id);
+    await started;
+    try {
+      await pause(h);
+    } finally {
+      release();
+    }
+    await pending;
+    assert.equal(
+      (await monitorState(h, ride.id))?.state_json,
+      state?.state_json,
+    );
+    assert.equal((await monitorState(h, ride.id))?.resume_pending, 1);
+    assert.equal((await notifications(h, ride.id)).notifications.length, 0);
+  },
+);
+
+run(
+  'pausing during an APNs request cancels the remaining device and prevents the old monitor advancing the reference',
+  async (h) => {
+    const ride = await seed(h);
+    await register(h);
+    await register(h, 'b'.repeat(64));
+    await h.restart({ APNS_CONFIG_JSON: config });
+    let release = () => {},
+      entered = () => {},
+      sends = 0;
+    const wait = new Promise<void>((r) => {
+      release = r;
+    });
+    const started = new Promise<void>((r) => {
+      entered = r;
+    });
+    h.use(
+      metOffice(),
+      http.post(
+        'https://api.sandbox.push.apple.com/3/device/:token',
+        async () => {
+          sends++;
+          entered();
+          await wait;
+          return new HttpResponse(null, { status: 200 });
+        },
+      ),
+    );
+    await change(h, ride, -6);
+    const pending = monitor(h, ride.id);
+    await started;
+    let pausedState: string | null | undefined;
+    try {
+      await pause(h);
+      pausedState = (await monitorState(h, ride.id))?.state_json;
+    } finally {
+      release();
+    }
+    await pending;
+    assert.equal(sends, 1);
+    const history = first((await notifications(h, ride.id)).notifications);
+    assert.equal(history.status, 'cancelled');
+    assert.equal(history.devicesPending, 0);
+    assert.equal((await monitorState(h, ride.id))?.state_json, pausedState);
+  },
+);
+
+run(
+  'a plan created during a pause rebases even when its first job runs only after automatic expiry',
+  async (h) => {
+    const ride = await seed(h, '2026-10-10', false);
+    assert.equal((await monitorState(h, ride.id))?.resume_pending, 0);
+    await register(h);
+    await h.restart({
+      TEST_NOW: '2026-10-09T23:00:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(
+          hourlyForecast(request, {
+            modelRunDate: '2026-10-09T23:00:00.000Z',
+            values: () => ({ screenTemperature: 2 }),
+          }),
+        ),
+      ),
+    );
+    await monitor(h, ride.id);
+    assert.equal((await notifications(h, ride.id)).notifications.length, 0);
+    const saved = await monitorState(h, ride.id);
+    assert.equal(saved?.resume_pending, 0);
+    assert.ok(saved?.state_json);
+    assert.equal(
+      (JSON.parse(saved.state_json) as MonitorState).summaryDone,
+      true,
+    );
+    // DELETE after automatic resume is a no-op for the comparison reference.
+    await resume(h);
+    assert.deepEqual(await monitorState(h, ride.id), saved);
+  },
+);
+
+run(
+  'clearing an expired pause before a new plan has ever been monitored preserves its quiet first assessment',
+  async (h) => {
+    const ride = await seed(h, '2026-10-10', false);
+    await register(h);
+    await h.restart({
+      TEST_NOW: '2026-10-09T23:00:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(
+          hourlyForecast(request, {
+            modelRunDate: '2026-10-09T23:00:00.000Z',
+            values: () => ({ screenTemperature: 2 }),
+          }),
+        ),
+      ),
+    );
+    await resume(h);
+    assert.equal((await monitorState(h, ride.id))?.resume_pending, 1);
+    await monitor(h, ride.id);
+    assert.equal((await monitorState(h, ride.id))?.resume_pending, 0);
+    assert.equal((await notifications(h, ride.id)).notifications.length, 0);
+  },
+);
+
+run(
+  'a short pause before summary time keeps the later evening summary eligible',
+  async (h) => {
+    const ride = await seed(h);
+    await register(h);
+    await pause(h);
+    await resume(h);
+    await monitor(h, ride.id);
+    const saved = await monitorState(h, ride.id);
+    assert.ok(saved?.state_json);
+    assert.equal(
+      (JSON.parse(saved.state_json) as MonitorState).summaryDone,
+      false,
+    );
+    await h.restart({
+      TEST_NOW: '2026-10-09T18:00:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    const payloads: { reasons: string[] }[] = [];
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(
+          hourlyForecast(request, { modelRunDate: '2026-10-09T18:00:00.000Z' }),
+        ),
+      ),
+      http.post(
+        'https://api.sandbox.push.apple.com/3/device/:token',
+        async ({ request }) => {
+          payloads.push((await request.json()) as { reasons: string[] });
+          return new HttpResponse(null, { status: 200 });
+        },
+      ),
+    );
+    await monitor(h, ride.id);
+    assert.ok(first(payloads).reasons.includes('evening_summary'));
   },
 );

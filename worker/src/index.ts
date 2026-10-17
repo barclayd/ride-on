@@ -82,6 +82,13 @@ import {
   type UserStore,
   updateUserSchema,
 } from './users/model.ts';
+import {
+  activePause,
+  deletePause,
+  pauseInputSchema,
+  putPause,
+  readPause,
+} from './users/pause.ts';
 import type { ForecastCache } from './weather/cache.ts';
 import { weatherProviderIdForPolicy } from './weather/choices.ts';
 import type { ForecastProvider } from './weather/contracts.ts';
@@ -107,6 +114,25 @@ export const createApp = (
     dependencies.routeStore ?? createD1RouteStore(env.ROUTES_DB);
   const users = (env: Env) =>
     dependencies.userStore ?? createD1UserStore(env.ROUTES_DB);
+  const requireUser = async (env: Env, owner: string) => {
+    const user = await users(env).get(owner);
+    if (!user)
+      throw new AppError(
+        404,
+        'USER_NOT_FOUND',
+        'Create your user profile with POST /users.',
+      );
+    return user;
+  };
+  const publicUser = async (env: Env, user: User) => ({
+    ...user,
+    pause: activePause(
+      await readPause(env.ROUTES_DB, user.id, user.settings.timeZone),
+      now(),
+    ),
+    weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
+    preferenceLevels: preferenceLevels(user.settings.preferences),
+  });
   const selections = (env: Env) =>
     dependencies.routeSelectionStore ??
     createD1RouteSelectionStore(env.ROUTES_DB);
@@ -151,7 +177,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.33.0',
+      version: '0.34.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -292,42 +318,30 @@ export const createApp = (
         'Your user profile already exists. Use PATCH /users/me to update it.',
       );
     c.header('Location', '/users/me');
-    return c.json(
-      {
-        user: {
-          ...user,
-          weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
-          preferenceLevels: preferenceLevels(user.settings.preferences),
-        },
-      },
-      201,
-    );
+    return c.json({ user: await publicUser(c.env, user) }, 201);
   });
   app.get('/users/me', async (c) => {
-    const user = await users(c.env).get(c.get('ownerId'));
-    if (!user)
-      throw new AppError(
-        404,
-        'USER_NOT_FOUND',
-        'Create your user profile with POST /users.',
-      );
+    const user = await requireUser(c.env, c.get('ownerId'));
+    return c.json({ user: await publicUser(c.env, user) });
+  });
+  app.put('/users/me/pause', async (c) => {
+    const input = await readJsonBody(c, pauseInputSchema);
+    const user = await requireUser(c.env, c.get('ownerId'));
+    await putPause(c.env.ROUTES_DB, user, input.until, now());
     return c.json({
-      user: {
-        ...user,
-        weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
-        preferenceLevels: preferenceLevels(user.settings.preferences),
-      },
+      user: await publicUser(c.env, await requireUser(c.env, user.id)),
+    });
+  });
+  app.delete('/users/me/pause', async (c) => {
+    const user = await requireUser(c.env, c.get('ownerId'));
+    await deletePause(c.env.ROUTES_DB, user.id, now());
+    return c.json({
+      user: await publicUser(c.env, await requireUser(c.env, user.id)),
     });
   });
   app.patch('/users/me', async (c) => {
     const input = await readJsonBody(c, updateUserSchema);
-    const current = await users(c.env).get(c.get('ownerId'));
-    if (!current)
-      throw new AppError(
-        404,
-        'USER_NOT_FOUND',
-        'Create your user profile with POST /users.',
-      );
+    const current = await requireUser(c.env, c.get('ownerId'));
     const conflict = () =>
       new AppError(
         409,
@@ -347,13 +361,7 @@ export const createApp = (
     };
     if (!(await users(c.env).update(user, input.expectedVersion)))
       throw conflict();
-    return c.json({
-      user: {
-        ...user,
-        weatherProviderId: weatherProviderIdForPolicy(user.settings.weather),
-        preferenceLevels: preferenceLevels(user.settings.preferences),
-      },
-    });
+    return c.json({ user: await publicUser(c.env, user) });
   });
   app.get('/route-sources', (c) =>
     c.json({

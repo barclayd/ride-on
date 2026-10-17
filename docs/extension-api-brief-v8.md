@@ -1,6 +1,6 @@
 # Extension API brief v8: pause Ride On
 
-Proposed against API **0.33.0**, algorithm **comfort-v0.17**. For the API agent.
+Implemented in API **0.34.0**, algorithm **comfort-v0.17**. See [the API contract](api.md#pause) and [monitoring behavior](ride-monitoring.md#account-pauses). Client follow-up remains separate.
 
 Design handoff v6 (screen 22b) lets a rider who isn't cycling for a while pause
 Ride On. While paused, clients hide forecasts, scores and alerts, and tracked rides
@@ -161,9 +161,9 @@ from `GET /users/me` when they open (and the extension also does on a daily alar
     without an alert. A dated pause ends from the cron alone. A summary missed
     during the pause isn't sent afterwards.
 
-## Decisions to confirm with Dan
+## Contract decisions
 
-Each has a recommendation, and the contract above assumes it.
+Implemented using the recommendations in this handoff, as requested:
 
 1. **Changes during the pause stay quiet when it ends.** The alternative is an alert
    on resume if conditions moved a lot while paused. *Recommended: quiet*, because
