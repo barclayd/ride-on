@@ -75,8 +75,9 @@ Top to bottom:
    white casing and a start marker; an eased black scrim (at least 340pt, 0 → 80% with no
    visible top edge) sized to the title block. The hero follows canvas board
    `HeroD.dc.html` ("3b"), which supersedes the hero in the screenshots above.
-   - "★ Best pick" pill (`star.fill` then the label, `.footnote` semibold, white on `pickPill`
-     green; "★ Best that day" for
+   - "★ Best pick" pill (a small `star.fill`, `.caption2` bold at `.small` scale, 4pt before the
+     label, as on canvas board `HeroA`; `.footnote` semibold, white on `pickPill` green, 7pt
+     leading and 9pt trailing; "★ Best that day" for
      another day's best; no pill in detail when it's neither)
    - "Hilly Loop" (`.largeTitle` bold, white)
    - ↔ 51 km · ⛰ 640 m climb (`.subheadline`, white 88%, monospaced digits, wraps at large
