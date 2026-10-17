@@ -63,12 +63,19 @@ public struct RideHero: View {
 
         return VStack(alignment: .leading, spacing: 4) {
             if let eyebrow {
-                Text("\(Image(systemName: "star.fill")) \(eyebrow)")
-                    .font(.footnote.weight(.semibold))
-                    .padding(.vertical, 3)
-                    .padding(.horizontal, 9)
-                    .background(pick.meetsMinimums ? Color.pickPill : Color.gray.mix(with: .black, by: 0.18), in: .capsule)
-                    .padding(.bottom, 2)
+                // A small star, about two thirds of the label's height, like canvas board `HeroA`.
+                HStack(spacing: 4) {
+                    Image(systemName: "star.fill")
+                        .font(.caption2.weight(.bold))
+                        .imageScale(.small)
+                    Text(eyebrow)
+                }
+                .font(.footnote.weight(.semibold))
+                .padding(.vertical, 3)
+                .padding(.leading, 7)
+                .padding(.trailing, 9)
+                .background(pick.meetsMinimums ? Color.pickPill : Color.gray.mix(with: .black, by: 0.18), in: .capsule)
+                .padding(.bottom, 2)
             }
             Text(pick.route.name)
                 .font(.largeTitle.bold())
