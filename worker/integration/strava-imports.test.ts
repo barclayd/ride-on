@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { HttpResponse, http } from 'msw';
+import { unstable_splitSqlQuery } from 'wrangler';
 import type { ActivityRow } from '../src/strava/import-model.ts';
 import {
   BOB_TOKEN,
@@ -217,7 +220,7 @@ scenario(
   },
 );
 scenario(
-  'partial rides log automatically, are owner-scoped and optional corrections survive updates',
+  'partial rides require confirmation, are owner-scoped and rider choices survive updates',
   async (h) => {
     const routeId = await seed(h);
     h.use(activityHandler({ points: points.slice(0, 61) }));
@@ -226,17 +229,39 @@ scenario(
     assert.equal(
       (await json<{ routes: unknown[] }>(await h.send('/history/routes')))
         .routes.length,
-      1,
+      0,
     );
     const review = await json<{
       rides: {
         activityId: string;
         version: number;
-        primaryRouteId: string;
+        primaryRouteId: string | null;
+        status: string;
+        suggestedRouteId: string | null;
       }[];
     }>(await h.send('/history/strava-rides?status=review'));
     assert.equal(review.rides.length, 1);
-    assert.equal(review.rides[0]?.primaryRouteId, routeId);
+    assert.equal(review.rides[0]?.primaryRouteId, null);
+    assert.equal(review.rides[0]?.status, 'suggested');
+    assert.equal(review.rides[0]?.suggestedRouteId, routeId);
+    assert.equal(
+      (
+        await json<{ rides: unknown[] }>(
+          await h.send(`/history/routes/${routeId}/rides`),
+        )
+      ).rides.length,
+      0,
+    );
+    assert.equal(
+      (
+        await (
+          await dbFor(h)
+        )
+          .prepare('SELECT COUNT(*) AS n FROM strava_ride_history')
+          .first<{ n: number }>()
+      )?.n,
+      0,
+    );
     let cached = await row(h);
     assert.ok(cached);
     assert.equal(
@@ -252,7 +277,28 @@ scenario(
       (await change(cached.version, crypto.randomUUID())).status,
       404,
     );
-    assert.equal((await change(cached.version, routeId)).status, 200);
+    const confirmed = await change(cached.version, routeId);
+    assert.equal(confirmed.status, 200);
+    assert.equal(
+      (await json<{ ride: { status: string } }>(confirmed)).ride.status,
+      'logged',
+    );
+    assert.equal(
+      (
+        await json<{ routes: { rideCount: number }[] }>(
+          await h.send('/history/routes'),
+        )
+      ).routes[0]?.rideCount,
+      1,
+    );
+    assert.equal(
+      (
+        await json<{ rides: unknown[] }>(
+          await h.send('/history/strava-rides?status=review'),
+        )
+      ).rides.length,
+      0,
+    );
     assert.equal((await change(cached.version, null)).status, 409);
     h.use(activityHandler());
     await event(h, '101', 'update', Math.floor(time / 1000) + 1);
@@ -447,7 +493,7 @@ scenario(
   },
 );
 scenario(
-  'new matches push once per device, backfill and unmatched activities stay quiet',
+  'new matches and suggestions send distinct pushes once; backfill and unmatched stay quiet',
   async (h) => {
     await seed(h);
     const key = generateKeyPairSync('ec', {
@@ -479,9 +525,22 @@ scenario(
       'https://api.sandbox.push.apple.com/3/device/:token',
       async ({ request }) => {
         deliveries++;
-        assert.equal(request.headers.get('apns-collapse-id'), 'strava-101');
-        const data = (await request.json()) as { activityId: string };
-        assert.equal(data.activityId, '101');
+        const data = (await request.json()) as {
+          activityId: string;
+          aps: { alert: { title: string; body: string } };
+        };
+        assert.equal(
+          request.headers.get('apns-collapse-id'),
+          `strava-${data.activityId}`,
+        );
+        if (data.activityId === '101') {
+          assert.equal(data.aps.alert.title, 'New ride logged');
+          assert.match(data.aps.alert.body, /view or correct/);
+        } else {
+          assert.equal(data.activityId, '103');
+          assert.equal(data.aps.alert.title, 'Did you ride this route?');
+          assert.match(data.aps.alert.body, /confirm it before adding/);
+        }
         return new HttpResponse(null, { status: 200 });
       },
     );
@@ -501,6 +560,20 @@ scenario(
     await dispatch(h);
     await drain(h);
     assert.equal(deliveries, 1);
+    h.use(activityHandler({ points: points.slice(0, 61) }), emptyPage, push);
+    await event(h, '103');
+    await drain(h);
+    await event(h, '103');
+    await drain(h);
+    assert.equal(deliveries, 2);
+    assert.equal(
+      (
+        await json<{ routes: { rideCount: number }[] }>(
+          await h.send('/history/routes'),
+        )
+      ).routes[0]?.rideCount,
+      1,
+    );
   },
 );
 
@@ -737,6 +810,8 @@ scenario(
         'primaryRouteId',
         'riddenOn',
         'source',
+        'status',
+        'suggestedRouteId',
         'version',
       ].sort(),
     );
@@ -917,5 +992,281 @@ scenario(
       0,
     );
     assert.equal((await h.send('/history/strava-rides/101')).status, 404);
+  },
+);
+
+scenario(
+  'ambiguous routes stay out of history until the rider chooses one primary route',
+  async (h) => {
+    const routeId = await seed(h);
+    const uploaded = await h.send('/routes', {
+      contentType: 'application/gpx+xml',
+      body: '<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Alternative loop</name><trkseg><trkpt lat="51.5" lon="-0.10001"/><trkpt lat="51.52" lon="-0.10001"/></trkseg></trk></gpx>',
+    });
+    assert.equal(uploaded.status, 201);
+    const alternative = (await json<{ route: { id: string } }>(uploaded)).route
+      .id;
+    h.use(activityHandler());
+    await event(h);
+    await drain(h);
+    const response = await json<{
+      ride: {
+        status: string;
+        primaryRouteId: null;
+        suggestedRouteId: string;
+        version: number;
+      };
+      evidence: {
+        match: { reason: string; candidates: { routeId: string }[] };
+      };
+    }>(await h.send('/history/strava-rides/101'));
+    assert.equal(response.ride.status, 'suggested');
+    assert.equal(response.ride.primaryRouteId, null);
+    assert.equal(response.evidence.match.reason, 'multiple_routes');
+    assert.deepEqual(
+      response.evidence.match.candidates.map((c) => c.routeId).sort(),
+      [routeId, alternative].sort(),
+    );
+    assert.equal(
+      (await json<{ routes: unknown[] }>(await h.send('/history/routes')))
+        .routes.length,
+      0,
+    );
+    const chosen =
+      response.ride.suggestedRouteId === routeId ? alternative : routeId;
+    assert.equal(
+      (
+        await h.send('/history/strava-rides/101', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedVersion: response.ride.version,
+            routeId: chosen,
+          }),
+        })
+      ).status,
+      200,
+    );
+    await event(h, '101', 'update', time / 1000 + 1);
+    await drain(h);
+    const groups = (
+      await json<{ routes: { routeId: string; rideCount: number }[] }>(
+        await h.send('/history/routes'),
+      )
+    ).routes;
+    assert.deepEqual(
+      groups.map((g) => [g.routeId, g.rideCount]),
+      [[chosen, 1]],
+    );
+    assert.equal(
+      (
+        await json<{ rides: unknown[] }>(
+          await h.send('/history/strava-rides?status=review'),
+        )
+      ).rides.length,
+      0,
+    );
+  },
+);
+
+scenario(
+  'unconfirmed suggestions expire without history while confirmed dates survive',
+  async (h) => {
+    const routeId = await seed(h);
+    h.use(activityHandler({ points: points.slice(0, 61) }), emptyPage);
+    await event(h, '101');
+    await event(h, '102');
+    await drain(h);
+    const cached = await row(h, '102');
+    assert.ok(cached);
+    assert.equal(
+      (
+        await h.send('/history/strava-rides/102', {
+          method: 'PATCH',
+          body: JSON.stringify({ expectedVersion: cached.version, routeId }),
+        })
+      ).status,
+      200,
+    );
+    await h.restart({ TEST_NOW: new Date(time + 8 * day).toISOString() });
+    await dispatch(h);
+    assert.equal(await row(h, '101'), null);
+    assert.equal((await h.send('/history/strava-rides/101')).status, 404);
+    assert.equal(
+      (
+        await h.send('/history/strava-rides/101', {
+          method: 'PATCH',
+          body: JSON.stringify({ expectedVersion: 1, routeId }),
+        })
+      ).status,
+      404,
+    );
+    const retained = await json<{
+      ride: { status: string; riddenOn: string };
+      evidence: unknown;
+    }>(await h.send('/history/strava-rides/102'));
+    assert.equal(retained.ride.status, 'logged');
+    assert.equal(retained.ride.riddenOn, '2026-10-08');
+    assert.equal(retained.evidence, null);
+    assert.equal(
+      (
+        await json<{ routes: { rideCount: number }[] }>(
+          await h.send('/history/routes'),
+        )
+      ).routes[0]?.rideCount,
+      1,
+    );
+    assert.equal(
+      (
+        await json<{ rides: unknown[] }>(
+          await h.send('/history/strava-rides?status=review'),
+        )
+      ).rides.length,
+      0,
+    );
+  },
+);
+
+scenario(
+  'upgrade reclassifies old 50% automatic history and preserves rider decisions and dates',
+  async (h) => {
+    const routeId = await seed(h);
+    h.use(activityHandler(), emptyPage);
+    const cases = [
+      { id: '201', coverage: 0.9, expected: 'matched' },
+      { id: '202', coverage: 0.5, expected: 'suggested' },
+      { id: '203', coverage: 0.95, alternative: 0.92, expected: 'suggested' },
+      { id: '204', coverage: 1, complete: false, expected: 'suggested' },
+      { id: '205', coverage: 1, direction: 'mixed', expected: 'suggested' },
+      {
+        id: '206',
+        coverage: 0.6,
+        decision: 'confirmed',
+        expected: 'suggested',
+      },
+      {
+        id: '207',
+        coverage: 0.6,
+        decision: 'dismissed',
+        expected: 'suggested',
+      },
+      { id: '208', coverage: 0.6, missing: true, expected: 'unavailable' },
+      { id: '209', coverage: 0.96, alternative: 0.8, expected: 'matched' },
+      { id: '210', coverage: 0.92, alternative: 0.89, expected: 'suggested' },
+      { id: '211', coverage: 0.89999, expected: 'suggested' },
+    ];
+    const db = await dbFor(h);
+    for (const c of cases) {
+      await event(h, c.id);
+      await drain(h);
+      const original = await row(h, c.id);
+      assert.ok(original);
+      if (c.decision) {
+        assert.equal(
+          (
+            await h.send(`/history/strava-rides/${c.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                expectedVersion: original.version,
+                routeId: c.decision === 'confirmed' ? routeId : null,
+              }),
+            })
+          ).status,
+          200,
+        );
+      }
+      const match = JSON.parse(original.match_json);
+      match.matcherVersion = 'strava-route-coverage-v2';
+      match.assessmentComplete = c.complete ?? true;
+      match.candidates[0].coverageFraction = c.coverage;
+      match.candidates[0].direction = c.direction ?? 'forward';
+      if (c.alternative)
+        match.candidates.push({
+          ...match.candidates[0],
+          routeId: crypto.randomUUID(),
+          coverageFraction: c.alternative,
+        });
+      await db
+        .prepare(
+          'UPDATE strava_activity_cache SET match_json=? WHERE activity_id=?',
+        )
+        .bind(JSON.stringify(match), c.id)
+        .run();
+      if (c.missing)
+        await db
+          .prepare('DELETE FROM strava_activity_cache WHERE activity_id=?')
+          .bind(c.id)
+          .run();
+    }
+    const migration = await readFile(
+      fileURLToPath(
+        new URL(
+          '../migrations/0015_strava_match_confirmation.sql',
+          import.meta.url,
+        ).href,
+      ),
+      'utf8',
+    );
+    await db.batch(
+      unstable_splitSqlQuery(migration).map((sql) => db.prepare(sql)),
+    );
+    for (const c of cases) {
+      const history = await db
+        .prepare('SELECT * FROM strava_ride_history WHERE activity_id=?')
+        .bind(c.id)
+        .first<{
+          primary_route_id: string | null;
+          decision: string;
+          ridden_on: string;
+          version: number;
+        }>();
+      assert.ok(history);
+      const logged = c.expected === 'matched' || c.decision === 'confirmed';
+      assert.equal(history.primary_route_id, logged ? routeId : null, c.id);
+      assert.equal(history.decision, c.decision ?? 'automatic');
+      assert.equal(history.ridden_on, '2026-10-08');
+      const response = await json<{
+        ride: { status: string; version: number };
+      }>(await h.send(`/history/strava-rides/${c.id}`));
+      assert.equal(
+        response.ride.status,
+        c.decision === 'dismissed'
+          ? 'dismissed'
+          : logged
+            ? 'logged'
+            : c.expected,
+        c.id,
+      );
+      assert.equal(response.ride.version, history.version);
+      if (!c.missing) {
+        const updated = await row(h, c.id);
+        assert.ok(updated);
+        assert.equal(JSON.parse(updated.match_json).status, c.expected, c.id);
+        assert.equal(updated.version, history.version);
+      }
+    }
+    assert.equal(
+      (
+        await json<{ routes: { rideCount: number }[] }>(
+          await h.send('/history/routes'),
+        )
+      ).routes[0]?.rideCount,
+      3,
+    );
+    const pending = await row(h, '202');
+    assert.ok(pending);
+    assert.equal(
+      (
+        await h.send('/history/strava-rides/202', {
+          method: 'PATCH',
+          body: JSON.stringify({ expectedVersion: pending.version, routeId }),
+        })
+      ).status,
+      200,
+    );
+    // A minimal record with no old evidence is queued for safe reassessment.
+    await dispatch(h);
+    assert.ok(
+      (await jobs(h)).results.find((j) => j.job_key === 'activity:208'),
+    );
   },
 );

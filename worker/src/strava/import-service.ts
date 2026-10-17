@@ -218,7 +218,7 @@ export const runImportJob = async (
         const notification =
           job.notify_at !== null &&
           job.notify_at + DAY > at &&
-          match.status === 'matched'
+          (match.status === 'matched' || match.status === 'suggested')
             ? job.notify_at
             : null;
         await db.batch([

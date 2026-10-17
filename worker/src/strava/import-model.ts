@@ -123,12 +123,28 @@ export type RideHistoryRow = Pick<
   | 'primary_route_id'
   | 'decision'
   | 'version'
-> & { verified_at: number };
-export const presentRideDate = (r: RideHistoryRow) => ({
-  activityId: r.activity_id,
-  source: 'strava' as const,
-  riddenOn: r.ridden_on,
-  primaryRouteId: r.primary_route_id,
-  decision: r.decision,
-  version: r.version,
-});
+> & { verified_at: number; match_json?: string | null };
+export const presentRideDate = (r: RideHistoryRow) => {
+  const match = r.match_json ? (JSON.parse(r.match_json) as MatchResult) : null;
+  const status =
+    r.decision === 'dismissed'
+      ? ('dismissed' as const)
+      : r.primary_route_id !== null
+        ? ('logged' as const)
+        : match?.status === 'suggested'
+          ? ('suggested' as const)
+          : match?.status === 'unmatched'
+            ? ('unmatched' as const)
+            : ('unavailable' as const);
+  return {
+    activityId: r.activity_id,
+    source: 'strava' as const,
+    riddenOn: r.ridden_on,
+    status,
+    primaryRouteId: r.primary_route_id,
+    suggestedRouteId:
+      status === 'suggested' ? (match?.candidates[0]?.routeId ?? null) : null,
+    decision: r.decision,
+    version: r.version,
+  };
+};

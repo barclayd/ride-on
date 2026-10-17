@@ -37,7 +37,7 @@ export const deliverImportPush = async (
     return true;
   const expires = activity.notification_at + DAY;
   const match = JSON.parse(activity.match_json) as MatchResult;
-  if (!(match.status === 'matched')) return true;
+  if (match.status !== 'matched' && match.status !== 'suggested') return true;
   const devices = await db
     .prepare('SELECT * FROM push_devices WHERE owner_id=? ORDER BY id LIMIT 20')
     .bind(job.owner_id)
@@ -90,8 +90,14 @@ export const deliverImportPush = async (
         payload: JSON.stringify({
           aps: {
             alert: {
-              title: 'New ride logged',
-              body: 'Your ride has been added to your route history. Open Ride On to view or correct it.',
+              title:
+                match.status === 'suggested'
+                  ? 'Did you ride this route?'
+                  : 'New ride logged',
+              body:
+                match.status === 'suggested'
+                  ? 'Your Strava ride may match a saved route. Open Ride On to confirm it before adding it to your history.'
+                  : 'Your ride has been added to your route history. Open Ride On to view or correct it.',
             },
             sound: 'default',
           },

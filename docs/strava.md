@@ -1,8 +1,8 @@
 # Shared Strava connection
 
 The connection links a Ride On account and displays completed cycling activities.
-API v0.32.0 enables automatic matching and grouped date-only history under the
-product policy below. Route imports from Strava and speed suggestions remain
+API v0.33.0 distinguishes suggested matches from logged rides in grouped date-only
+history under the product policy below. Route imports from Strava and speed suggestions remain
 deferred. Strava history does not enter recommendation scoring or learning.
 
 ## Shared application
@@ -140,7 +140,7 @@ redirected to arbitrary localhost or preview URLs.
 Route imports, derived speed defaults and training/learning remain deferred.
 Provider history stays separate from Ride On's manually logged rides.
 
-## Automatic ride matching and history (API v0.32.0)
+## Automatic ride matching and history (API v0.33.0)
 
 Production uses `STRAVA_ENABLED=true` and `STRAVA_IMPORT_ENABLED=true` in Ride On,
 with `RIDEON_IMPORT_ENABLED=true` in Stitch. These are operational kill switches.
@@ -160,18 +160,21 @@ Each recorded path sample can account for only one planned sample; repeating
 one stretch does not inflate coverage. Forward, reverse and mixed-direction
 coverage count.
 
-- At least 50% coverage: automatically log the best matching saved route.
-- Below 50%: no route history entry and no notification.
-- Highest coverage wins; exact ties use route ID in ascending order. One primary
-  route per activity. Close alternatives do not require confirmation.
-- Missing GPS or no usable evidence cannot produce a match. When bounded work or
-  gaps leave an incomplete assessment but a candidate reaches 50%, the best
-  assessed candidate is accepted. `assessmentComplete` and `reason` expose this
-  limitation while temporary evidence is available.
-- Riders can optionally correct or dismiss any retained match, even after its
-  matching evidence expires. These decisions survive repeat imports.
+- At least 90% coverage: log automatically only when assessment is complete,
+  direction is consistently forward or reverse, and no alternative is similarly plausible.
+- At least 50% but below 90%: suggest the best matching route and wait for the
+  rider's confirmation. Suggestions do not enter grouped route history or counts.
+- Ambiguous, mixed-direction or incomplete assessments also require confirmation,
+  even at 90%+ coverage. Alternatives are ambiguous when the second route reaches
+  90% or is within five percentage points of the best route (strictly less than
+  five). Missing GPS with no usable candidate cannot produce a suggestion.
+- Below 50%: no suggestion, route history entry or notification.
+- Candidates rank by coverage, then route ID for stable ties. One primary route
+  per activity; suggested routes have no primary route until confirmed.
+- Riders can correct or dismiss logged rides, even after matching evidence expires.
+  Confirmations and dismissals survive repeat imports.
 
-`strava-route-coverage-v2` uses 10-metre path samples, a provisional 12-metre
+`strava-route-coverage-v3` uses 10-metre path samples, a provisional 12-metre
 position tolerance and a 30-degree heading tolerance. Work is bounded at 100,000
 input coordinates, 60,000 sampled pieces per path, 1,000 saved routes, 8 MB saved
 geometry and 500,000 work units. It is deterministic; no AI service receives
@@ -181,9 +184,10 @@ real rides; automated validation uses synthetic data.
 ### Retained date and temporary evidence
 
 Dan chose this product policy on 17 October 2026: retain the local ride date
-against the matched saved route, without a required confirmation. This decision
-is not a claim of Strava approval or an exemption from the API terms; none has
-been supplied. It supersedes the previous product launch gate.
+against the matched saved route. Clear matches are logged automatically; uncertain
+matches require confirmation under the rules above. Confirmation and data
+retention are separate product decisions. Date-only retention is not a claim of
+Strava approval or an exemption from the API terms; none has been supplied. It supersedes the previous product launch gate.
 
 `strava_ride_history` stores only the activity's local calendar date (`ridden_on`)
 as ride content. Owner, connection generation, activity ID, route ID, decision,
@@ -204,8 +208,10 @@ review timestamps stay in `strava_activity_cache` for at most seven days from
 first fetch. Refreshing does not extend that cache's original expiry. Evidence
 older than 48 hours since verification is hidden, and expired cache/jobs/push
 records are removed even with imports disabled. The date record survives cache
-expiry. Disconnect, connection replacement or verified revocation cascades all
-imported history. Verified source unavailability removes the date and cache;
+expiry for logged rides. New unconfirmed suggestions only exist in the temporary
+cache: they can be offered again after a fresh import, but cannot silently become
+logged dates when the cache expires. Disconnect, connection replacement or
+verified revocation cascades all imported history. Verified source unavailability removes the date and cache;
 deleting the saved route removes its associated dates. A dismissal is retained
 as a minimal tombstone so a later sync does not recreate the match.
 
@@ -221,13 +227,26 @@ reads and corrections are denied.
 | `POST /connections/strava/imports` | Queue a silent import. `{}` requests the last 90 days. Optional UTC `after`/`before` request up to 366 days per request. Returns 202; concurrent scan returns 409. |
 | `GET /history/routes?limit=30&cursor=…` | Groups by saved route: `routeId`, current `routeName`, `rideCount`, `firstRiddenOn`, `lastRiddenOn`, `mostRecentRide`. Dates are local `YYYY-MM-DD`. |
 | `GET /history/routes/:routeId/rides?limit=30&cursor=…` | Paginated date-only occurrences, including dates whose evidence expired. |
-| `GET /history/strava-rides?status=all&limit=30&cursor=…` | Date records, including dismissals and temporary unmatched activities. `all` is the default. `status=review` optionally filters automatic matches whose fresh evidence has a caveat; these are already logged. |
+| `GET /history/strava-rides?status=all&limit=30&cursor=…` | Date records plus temporary suggestions and unmatched activities. `all` is the default. `status=review` returns only fresh suggestions awaiting confirmation; none count in grouped history. |
 | `GET /history/strava-rides/:activityId` | `{ ride, evidence, retention, cache }`. `evidence` becomes null when stale/expired; retained `ride` remains readable. |
-| `PATCH /history/strava-rides/:activityId` | Optional correction: `{ "expectedVersion": 1, "routeId": "saved-route-uuid" }`. `routeId: null` dismisses. Works after cache expiry and returns the date-only `ride`. |
+| `PATCH /history/strava-rides/:activityId` | Confirm a suggestion or correct a logged ride: `{ "expectedVersion": 1, "routeId": "saved-route-uuid" }`. `routeId: null` dismisses. Confirmed/automatic dates can be corrected after cache expiry; new suggestions require fresh evidence. Returns the date-only `ride`. |
 
 A date-only `ride` contains `activityId`, `source: "strava"`, `riddenOn`,
-`primaryRouteId`, `decision` (`automatic`, `confirmed`, `dismissed`) and `version`.
-Confirmation is not required for history inclusion. History responses advertise
+`primaryRouteId`, `suggestedRouteId`, `status`, `decision` (`automatic`, `confirmed`,
+`dismissed`) and `version`. `status` is the frontend presentation state:
+
+- `logged`: clear automatic match or rider-confirmed route; included in history.
+- `suggested`: awaiting confirmation, `primaryRouteId: null`; `suggestedRouteId`
+  identifies the highest-ranked candidate. Fetch detail for alternatives/coverage.
+- `dismissed`: rider rejected the match, excluded from history.
+- `unmatched`: fresh assessment found no candidate at 50%+.
+- `unavailable`: no usable fresh assessment and no logged route.
+
+`decision: automatic` means no manual choice has been made; it does **not** mean
+that the ride is logged. Use `status` for UI behaviour. Only `status: logged`
+contributes to route counts. `suggestedRouteId` is null in every other state and
+is derived from fresh temporary evidence, never stored in the date record.
+History responses advertise
 `retention: { mode: "ride_date", activityMetricsStored: false }`.
 
 Detail `evidence` includes the temporary UTC `startedAt`, Strava link, match
@@ -240,7 +259,8 @@ Lists accept limits 1–100 and return opaque `nextCursor` values; URL-encode th
 Order is local ride date descending, then ID ascending. Distinct activities on
 the same date count separately. Refresh page one after an import or correction.
 A stale version returns `409 STRAVA_RIDE_VERSION_CONFLICT`; reload before retrying.
-Dismissed and unmatched records are excluded from grouped route counts.
+Suggestions, dismissed, unmatched and unavailable records are excluded from
+grouped route counts.
 
 Example older-history request:
 
@@ -271,16 +291,25 @@ verified first (up to 100 per dispatch). Rate limits or unavailable upstreams ca
 delay this bounded work; retained dates remain visible while fresh evidence does
 not. Source deletion events provide the prompt cleanup path.
 
-New matches send “New ride logged”, inviting the rider to view or correct the
-route. No confirmation is needed. Payload type is `strava_ride_match`, with the
-activity ID. Backfills, unmatched activities, reviewed rides and expired pushes
-stay quiet. A retained activity does not re-notify when its evidence is rebuilt.
+Clear matches send “New ride logged”, inviting the rider to view or correct the
+route. Suggestions send “Did you ride this route?”, inviting confirmation before
+history inclusion. Payload type remains `strava_ride_match`, with the activity
+ID; load the latest detail before presenting a confirmation or correction.
+Backfills, unmatched activities, reviewed rides and expired pushes stay quiet. A retained activity does not re-notify when its evidence is rebuilt.
 Notifications expire after 24 hours; accepted devices are skipped on retry and
 stable APNs IDs reduce duplicate banners. Existing device/APNs setup is reused.
 
-Deploy the updated Stitch reader before the Ride On consumer, apply migration
-0014, then enable both production import flags and the connection flag. A short
-producer/consumer rollout gap is recovered by the initial 90-day scan. Staging
+Migration 0015 reclassifies existing v2 automatic matches using cached evidence:
+clear matches keep counting, uncertain matches become suggestions. Existing
+confirmations/dismissals and local dates are preserved. Automatic records whose
+evidence is absent stop counting until a fresh assessment; the bounded dispatcher
+queues reassessment, including retained dates older than 90 days. Old client
+versions are invalidated for changed automatic records. This change requires no
+Stitch deployment or flag changes.
+
+The original date-only rollout deployed the updated Stitch reader before the
+Ride On consumer and migration 0014, then enabled both production import flags
+and the connection flag. A short producer/consumer rollout gap is recovered by the initial 90-day scan. Staging
 keeps its producer disabled until its isolated queue/consumer is provisioned.
 No new Strava credentials, callback, scope or subscription is required. Roll back
 by disabling both import flags; evidence cleanup continues. This schema migration
