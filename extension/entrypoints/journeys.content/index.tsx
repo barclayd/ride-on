@@ -15,6 +15,7 @@ import {
   ErrorChip,
   iconUrl,
   injectFonts,
+  PausedLine,
   Ranked,
   RouteTile,
   riddenFor,
@@ -135,12 +136,16 @@ const Page = ({ rows }: { rows: Row[] }) => {
     );
   });
 
-  if (view && !view.range) passed.current = true;
-  const phase = !view?.range
-    ? 'expired'
-    : passed.current
-      ? 'confirmed'
-      : 'normal';
+  const paused = !!view?.paused;
+  if (view && !view.range && !paused) passed.current = true;
+  // Paused: no window, no scores, nothing passed (handoff v6 §4).
+  const phase = paused
+    ? 'paused'
+    : !view?.range
+      ? 'expired'
+      : passed.current
+        ? 'confirmed'
+        : 'normal';
   const recs = view?.state.recs;
   const fresh =
     !!view?.range &&
@@ -276,7 +281,8 @@ const Page = ({ rows }: { rows: Row[] }) => {
           {count > 0 && <EditButton tracking={tracking} />}
         </div>
       </div>
-      {phase !== 'normal' && (
+      {paused && <PausedLine view={view} />}
+      {(phase === 'expired' || phase === 'confirmed') && (
         <div class="ro-passed" data-phase={phase}>
           <div aria-hidden={phase !== 'expired'} inert={phase !== 'expired'}>
             {asked.current}
@@ -351,13 +357,15 @@ const Page = ({ rows }: { rows: Row[] }) => {
               disabled={working}
               onClick={() => toggle(row.id)}
             >
-              {blank
-                ? view.range
-                  ? 'Checking…'
-                  : 'Tracked'
-                : card
-                  ? card.chip
-                  : 'Checking…'}
+              {paused
+                ? 'Tracked'
+                : blank
+                  ? view.range
+                    ? 'Checking…'
+                    : 'Tracked'
+                  : card
+                    ? card.chip
+                    : 'Checking…'}
             </button>
           ) : (
             <button

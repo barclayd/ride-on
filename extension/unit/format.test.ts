@@ -20,6 +20,7 @@ import type {
   User,
 } from '../lib/types';
 import {
+  activePause,
   applyPatch,
   buildResults,
   checkinDay,
@@ -33,6 +34,7 @@ import {
   draftFrom,
   draftPatch,
   ended,
+  instant,
   logged,
   monthLabel,
   planFor,
@@ -690,6 +692,43 @@ test('the shown window, its end and its picks', () => {
   expect(view.range).toBeNull();
   expect(view.cards).toEqual([]);
   expect(view.timeText).toContain('08:00');
+});
+
+test('a pause turns back on at 00:00 local on its date', () => {
+  // Still BST at midnight before the clocks go back, GMT after.
+  expect(instant('2026-10-25', '00:00', TZ)).toBe('2026-10-24T23:00:00.000Z');
+  expect(instant('2026-10-26', '00:00', TZ)).toBe('2026-10-26T00:00:00.000Z');
+  expect(instant('2026-10-21', '00:00', 'America/New_York')).toBe(
+    '2026-10-21T04:00:00.000Z',
+  );
+  const pause = { until: '2026-10-21', resumesAt: '2026-10-20T23:00:00.000Z' };
+  expect(activePause(pause, new Date('2026-10-20T22:59:00Z'))).toBe(pause);
+  expect(activePause(pause, new Date('2026-10-20T23:00:00Z'))).toBeNull();
+  // When I choose: until the rider turns it back on.
+  const open = { until: null, resumesAt: null };
+  expect(activePause(open, new Date('2027-10-20T00:00:00Z'))).toBe(open);
+  expect(activePause(null, NOW)).toBeNull();
+});
+
+test('paused: every tracked ride, in tracked order, without scores', () => {
+  const pause = { until: '2026-10-21', resumesAt: '2026-10-20T23:00:00.000Z' };
+  const view = viewOf({ ...shownState, pause }, NOW);
+  expect(view.paused).toEqual(pause);
+  expect(view.cards.map((c) => [c.routeId, c.best, c.score])).toEqual([
+    ['b', null, null],
+    ['a', null, null],
+  ]);
+  expect(view.banners).toEqual([]);
+  expect(view.coverageWarn).toBe(false);
+  // The days and times stay as they were, greyed out.
+  expect(view.range).toEqual(['2026-10-14']);
+  expect(view.timeText).toBe(viewOf(shownState, NOW).timeText);
+  // A pause left past its return date no longer counts.
+  expect(
+    viewOf({ ...shownState, pause }, new Date('2026-10-21T08:00:00Z')).paused,
+  ).toBeNull();
+  // The shown window is the scored one, paused or not.
+  expect(shownOf({ ...shownState, pause }, NOW)?.picks).toHaveLength(2);
 });
 
 const ride = (id: string, routeId: string, riddenOn: string): Ride => ({

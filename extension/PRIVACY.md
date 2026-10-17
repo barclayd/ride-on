@@ -24,8 +24,8 @@ To score your routes, the Ride On API sends route coordinates and times to its w
 ## Stored in your browser
 
 Your session token is kept in the extension's private storage, readable only by its background
-worker. Settings, recent rides, the latest recommendations and which ride you turned alerts on for
-live in Chrome's extension storage
+worker. Settings, recent rides, the latest recommendations, which ride you turned alerts on for
+and whether Ride On is paused live in Chrome's extension storage
 (`chrome.storage.local`). All of it stays on your device; signing out removes the session token.
 
 ## What it doesn't do

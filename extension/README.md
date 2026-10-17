@@ -88,5 +88,7 @@ TestFlight. See [STORE.md](STORE.md) "App Store (Safari)".
 Contracts: `docs/api.md`. Rankings are one `POST /recommendations` across the planned days, with
 `previewDays: 7` for the day strip. The default window, sunshine, rain and km/mi are stored only in
 this browser, and so, until the API stores alerts, is which tracked ride has its bell on (no alert
-is sent yet). Only the background service worker calls the API; the popup and content script
+is sent yet). A pause is also kept in this browser until the API stores it on the profile
+(`docs/extension-api-brief-v8.md`); while paused the background asks for no forecasts, and a
+`chrome.alarms` alarm turns Ride On back on at 00:00 on the chosen day. Only the background service worker calls the API; the popup and content script
 message it and render the shared state in `storage.local`.

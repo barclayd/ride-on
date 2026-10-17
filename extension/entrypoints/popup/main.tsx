@@ -22,6 +22,7 @@ import {
   GoogleMark,
   iconUrl,
   injectFonts,
+  PausedLine,
   ProviderDown,
   Ranked,
   RouteTile,
@@ -34,6 +35,7 @@ import {
   type View,
 } from '../../ui/components';
 import {
+  addDays,
   checkinDay,
   clock,
   convert,
@@ -257,6 +259,72 @@ const Days = (props: {
   );
 };
 
+type Return = '3' | '7' | 'choose';
+
+// Hides forecasts, scores and alerts until the day it turns back on (handoff v6 §1).
+const PauseCard = ({ view }: { view: View }) => {
+  const { paused, today } = view;
+  const until = paused?.until ?? null;
+  // The date is stored, not the option; one a day or more old matches neither.
+  const option: Return | null = !paused
+    ? null
+    : until === null
+      ? 'choose'
+      : until === addDays(today, 3)
+        ? '3'
+        : until === addDays(today, 7)
+          ? '7'
+          : null;
+  return (
+    <section class="ro-card ro-pause" data-paused={!!paused}>
+      <div class="ro-pause-top">
+        <div class="ro-pause-text">
+          <span>Pause Ride On</span>
+          <span>
+            Hide forecasts, scores and alerts. Your rides stay listed.
+          </span>
+        </div>
+        <Switch
+          on={!!paused}
+          label="Pause Ride On"
+          onClick={() =>
+            send(
+              paused
+                ? { type: 'resume' }
+                : { type: 'pause', until: addDays(today, 7) },
+            )
+          }
+        />
+      </div>
+      {paused && (
+        <div class="ro-pause-return">
+          <span class="ro-pause-label">Turn back on</span>
+          <Segmented<Return>
+            label="Turn back on"
+            options={[
+              { value: '3', label: 'After 3 days' },
+              { value: '7', label: 'After a week' },
+              { value: 'choose', label: 'When I choose' },
+            ]}
+            value={option}
+            onChange={(value) =>
+              send({
+                type: 'pause',
+                until: value === 'choose' ? null : addDays(today, +value),
+              })
+            }
+          />
+          <span class="ro-pause-when">
+            {until
+              ? `Back on ${shortDate(until)}.`
+              : 'Stays paused until you switch it off here.'}
+          </span>
+        </div>
+      )}
+    </section>
+  );
+};
+
 const WhenTab = ({ view }: { view: View }) => {
   const { planning, defaultPlanning } = view.state;
   const set = (change: Partial<Planning>) =>
@@ -275,9 +343,12 @@ const WhenTab = ({ view }: { view: View }) => {
       ? [Math.max(chosen[0], sun[0]), Math.min(chosen[1], sun[1])]
       : chosen;
   const saved = JSON.stringify(defaultPlanning) === JSON.stringify(planning);
+  // Paused: the rider's days and times stay as they are, greyed out (handoff v6 §2).
+  const dim = { 'data-dim': !!view.paused, inert: !!view.paused };
   return (
     <>
-      <section class="ro-card">
+      <PauseCard view={view} />
+      <section {...dim} class="ro-card ro-dims">
         <Days view={view} set={set} />
         {view.banners.includes('provider') && (
           <div class="ro-note">
@@ -286,7 +357,7 @@ const WhenTab = ({ view }: { view: View }) => {
         )}
         {coverage && <div class="ro-note">{coverage}</div>}
       </section>
-      <section class="ro-card">
+      <section {...dim} class="ro-card ro-dims">
         <div class="ro-card-head">
           <span class="ro-label">Time</span>
           <span class="ro-value">{view.timeText}</span>
@@ -381,8 +452,9 @@ const WhenTab = ({ view }: { view: View }) => {
           )}
       </section>
       <button
+        {...dim}
         type="button"
-        class="ro-default"
+        class="ro-default ro-dims"
         data-saved={saved}
         onClick={() => send({ type: 'saveDefaultPlanning' })}
       >
@@ -401,7 +473,7 @@ const CheckIn = ({ view }: { view: View }) => {
   const [picking, setPicking] = useState(false);
   const [chosen, setChosen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  if (!checkin) return null;
+  if (!checkin || view.paused) return null; // asked again once it turns back on
   const tz = view.timeZone;
   // Asked about the ride that had alerts (19c), else the top pick.
   const alert = checkin.picks.find((p) => p.routeId === checkin.alert);
@@ -666,6 +738,8 @@ const WindowHeading = (props: {
 
 const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
   const tracking = useTracking(view);
+  // Paused: the status line only; every ride card is a score.
+  if (view.paused) return <PausedLine view={view} />;
   if (view.state.expired)
     return (
       <>
@@ -1547,6 +1621,13 @@ const App = () => {
             <span>Ride On</span>
             <span>for cycle.travel</span>
           </div>
+          {view.paused && (
+            <span class="ro-paused-pill">
+              {view.paused.until
+                ? `Paused until ${weekday(view.paused.until)} ${dayOfMonth(view.paused.until)}`
+                : 'Paused'}
+            </span>
+          )}
         </div>
         <div class="ro-tabs" role="tablist">
           {TABS.map(([id, label]) => (

@@ -96,6 +96,11 @@ export type Checkin = {
   key: string | null; // Idempotency-Key for routeId, kept so a retry can't log twice
   alert: string | null; // the ride with alerts when the window ended; asked about instead of the top pick
 };
+// Paused: no forecasts, scores, alerts or check-in. until is the local day it turns back on, null until the rider does.
+export type Pause = {
+  until: string | null;
+  resumesAt: string | null; // 00:00 on until in the profile's time zone
+};
 
 // One shared view state. The background owns writes; popup and page render it.
 export type State = {
@@ -131,6 +136,8 @@ export type State = {
   pendingDeletes: { id: string; at: number }[]; // removed in History, sent after the undo window
   // ponytail: the one tracked ride with alerts (handoff v5), kept in this browser until the API stores it.
   alertRouteId: string | null;
+  // ponytail: kept in this browser until the API stores it on the profile (docs/extension-api-brief-v8.md).
+  pause: Pause | null;
 };
 
 export const initialState: State = {
@@ -165,6 +172,7 @@ export const initialState: State = {
   summaries: {},
   pendingDeletes: [],
   alertRouteId: null,
+  pause: null,
 };
 
 const withDefaults = (state: Partial<State> | undefined): State => {
@@ -216,6 +224,8 @@ export type Message =
   // Undoes an untrack: back in its place in the selection, with its alerts if it had them.
   | { type: 'track'; routeId: string; index: number; alert: boolean }
   | { type: 'setAlert'; routeId: string | null }
+  | { type: 'pause'; until: string | null }
+  | { type: 'resume' }
   | { type: 'openPopup'; tab: Tab }
   | { type: 'setTab'; tab: Tab | null }
   | { type: 'checkin'; answer: 'yes'; routeId: string }
