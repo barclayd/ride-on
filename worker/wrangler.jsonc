@@ -8,8 +8,8 @@
   "compatibility_flags": ["nodejs_compat"],
   // Non-commercial prototype confirmed by Dan; use "off" to disable new requests.
   "vars": {
-    "STRAVA_ENABLED": "false",
-    "STRAVA_IMPORT_ENABLED": "false",
+    "STRAVA_ENABLED": "true",
+    "STRAVA_IMPORT_ENABLED": "true",
     "GROUND_EVIDENCE_MODE": "non-commercial",
     "RIDE_MONITORING": "enabled"
   },

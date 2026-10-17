@@ -11,6 +11,8 @@ import {
   getConnection,
   importsEnabled,
   presentActivity,
+  presentRideDate,
+  type RideHistoryRow,
   stravaId,
 } from './import-model.ts';
 import { publishImportJobs } from './import-service.ts';
@@ -23,7 +25,7 @@ const pageQuery = z.strictObject({
   limit: z.coerce.number().int().min(1).max(100).default(30),
   cursor: z.string().max(300).optional(),
 });
-const cursorSchema = z.tuple([z.iso.datetime(), z.string().min(1).max(80)]);
+const cursorSchema = z.tuple([z.iso.date(), z.string().min(1).max(80)]);
 const decodeCursor = (value?: string) => {
   if (!value) return null;
   try {
@@ -38,6 +40,15 @@ const cache = {
   maximumAgeDays: 7,
   maximumVerificationAgeHours: 48,
 };
+
+const retention = { mode: 'ride_date' as const, activityMetricsStored: false };
+// Retained dates and short-lived unmatched evidence share an owner-scoped view.
+const rideSource = `WITH ride_rows AS (
+  SELECT * FROM strava_ride_history WHERE owner_id=?
+  UNION ALL
+  SELECT owner_id,generation,activity_id,ridden_on,primary_route_id,decision,version,fetched_at
+  FROM strava_activity_cache a WHERE owner_id=? AND expires_at>? AND fetched_at>?
+  AND NOT EXISTS(SELECT 1 FROM strava_ride_history h WHERE h.owner_id=a.owner_id AND h.activity_id=a.activity_id))`;
 
 export const stravaHistoryRoutes = (now: () => Date) => {
   const app = new Hono<Bindings>();
@@ -73,6 +84,7 @@ export const stravaHistoryRoutes = (now: () => Date) => {
       session,
       jobs,
       cache,
+      retention,
     });
   });
   app.post('/connections/strava/imports', async (c) => {
@@ -128,25 +140,23 @@ export const stravaHistoryRoutes = (now: () => Date) => {
         after: new Date(after).toISOString(),
         before: new Date(before).toISOString(),
         cache,
+        retention,
       },
       202,
     );
   });
   app.get('/history/routes', async (c) => {
     const query = validateInput(pageQuery, c.req.query()),
-      cursor = decodeCursor(query.cursor),
-      at = now().getTime();
+      cursor = decodeCursor(query.cursor);
     const rows =
       await c.env.ROUTES_DB.prepare(`SELECT a.primary_route_id AS routeId,r.name AS routeName,COUNT(*) AS rideCount,
-      MAX(a.started_at) AS lastRiddenAt,MIN(a.started_at) AS firstRiddenAt
-      FROM strava_activity_cache a JOIN routes r ON r.owner_id=a.owner_id AND r.id=a.primary_route_id
-      WHERE a.owner_id=? AND a.expires_at>? AND a.fetched_at>? AND a.decision!='dismissed'
-      GROUP BY a.primary_route_id HAVING (? IS NULL OR MAX(a.started_at)<? OR (MAX(a.started_at)=? AND a.primary_route_id>?))
-      ORDER BY lastRiddenAt DESC,routeId LIMIT ?`)
+      MAX(a.ridden_on) AS lastRiddenOn,MIN(a.ridden_on) AS firstRiddenOn
+      FROM strava_ride_history a JOIN routes r ON r.owner_id=a.owner_id AND r.id=a.primary_route_id
+      WHERE a.owner_id=? AND a.decision!='dismissed'
+      GROUP BY a.primary_route_id HAVING (? IS NULL OR MAX(a.ridden_on)<? OR (MAX(a.ridden_on)=? AND a.primary_route_id>?))
+      ORDER BY lastRiddenOn DESC,routeId LIMIT ?`)
         .bind(
           c.get('ownerId'),
-          at,
-          at - FRESHNESS,
           cursor?.[0] ?? null,
           cursor?.[0] ?? null,
           cursor?.[0] ?? null,
@@ -157,19 +167,19 @@ export const stravaHistoryRoutes = (now: () => Date) => {
           routeId: string;
           routeName: string;
           rideCount: number;
-          lastRiddenAt: string;
-          firstRiddenAt: string;
+          lastRiddenOn: string;
+          firstRiddenOn: string;
         }>();
     const routes = await Promise.all(
       rows.results.slice(0, query.limit).map(async (r) => {
         const latest =
-          await c.env.ROUTES_DB.prepare(`SELECT * FROM strava_activity_cache WHERE owner_id=? AND primary_route_id=?
-        AND expires_at>? AND fetched_at>? AND decision!='dismissed' ORDER BY started_at DESC,activity_id LIMIT 1`)
-            .bind(c.get('ownerId'), r.routeId, at, at - FRESHNESS)
-            .first<ActivityRow>();
+          await c.env.ROUTES_DB.prepare(`SELECT * FROM strava_ride_history WHERE owner_id=? AND primary_route_id=?
+        AND decision!='dismissed' ORDER BY ridden_on DESC,activity_id LIMIT 1`)
+            .bind(c.get('ownerId'), r.routeId)
+            .first<RideHistoryRow>();
         return {
           ...r,
-          mostRecentRide: latest ? presentActivity(latest) : null,
+          mostRecentRide: latest ? presentRideDate(latest) : null,
         };
       }),
     );
@@ -178,9 +188,9 @@ export const stravaHistoryRoutes = (now: () => Date) => {
       routes,
       nextCursor:
         rows.results.length > query.limit && last
-          ? encodeCursor(last.lastRiddenAt, last.routeId)
+          ? encodeCursor(last.lastRiddenOn, last.routeId)
           : null,
-      cache,
+      retention,
     });
   });
   app.get('/history/routes/:routeId/rides', async (c) => {
@@ -188,82 +198,93 @@ export const stravaHistoryRoutes = (now: () => Date) => {
     if (!(await createD1RouteStore(c.env.ROUTES_DB).get(c.get('ownerId'), id)))
       throw missing();
     const query = validateInput(pageQuery, c.req.query()),
-      cursor = decodeCursor(query.cursor),
-      at = now().getTime();
+      cursor = decodeCursor(query.cursor);
     const result =
-      await c.env.ROUTES_DB.prepare(`SELECT * FROM strava_activity_cache WHERE owner_id=? AND primary_route_id=?
-      AND decision!='dismissed' AND expires_at>? AND fetched_at>? AND (? IS NULL OR started_at<? OR (started_at=? AND activity_id>?))
-      ORDER BY started_at DESC,activity_id LIMIT ?`)
+      await c.env.ROUTES_DB.prepare(`SELECT * FROM strava_ride_history WHERE owner_id=? AND primary_route_id=?
+      AND decision!='dismissed' AND (? IS NULL OR ridden_on<? OR (ridden_on=? AND activity_id>?))
+      ORDER BY ridden_on DESC,activity_id LIMIT ?`)
         .bind(
           c.get('ownerId'),
           id,
-          at,
-          at - FRESHNESS,
           cursor?.[0] ?? null,
           cursor?.[0] ?? null,
           cursor?.[0] ?? null,
           cursor?.[1] ?? null,
           query.limit + 1,
         )
-        .all<ActivityRow>();
-    const rides = result.results.slice(0, query.limit).map(presentActivity),
+        .all<RideHistoryRow>();
+    const rides = result.results.slice(0, query.limit).map(presentRideDate),
       last = rides.at(-1);
     return c.json({
       routeId: id,
       rides,
       nextCursor:
         result.results.length > query.limit && last
-          ? encodeCursor(last.startedAt, last.activityId)
+          ? encodeCursor(last.riddenOn, last.activityId)
           : null,
-      cache,
+      retention,
     });
   });
   app.get('/history/strava-rides', async (c) => {
     const query = validateInput(
-        pageQuery.extend({
-          status: z.enum(['review', 'all']).default('review'),
-        }),
+        pageQuery.extend({ status: z.enum(['review', 'all']).default('all') }),
         c.req.query(),
       ),
       cursor = decodeCursor(query.cursor),
       at = now().getTime();
     const result =
-      await c.env.ROUTES_DB.prepare(`SELECT * FROM strava_activity_cache WHERE owner_id=? AND expires_at>? AND fetched_at>?
-      AND (?='all' OR (decision='automatic' AND json_extract(match_json,'$.status')='suggested'))
-      AND (? IS NULL OR started_at<? OR (started_at=? AND activity_id>?)) ORDER BY started_at DESC,activity_id LIMIT ?`)
+      await c.env.ROUTES_DB.prepare(`${rideSource} SELECT * FROM ride_rows
+      WHERE (?='all' OR (decision='automatic' AND activity_id IN (
+        SELECT activity_id FROM strava_activity_cache WHERE owner_id=? AND expires_at>? AND fetched_at>?
+        AND json_extract(match_json,'$.reason') IS NOT NULL AND json_extract(match_json,'$.status')='matched')))
+      AND (? IS NULL OR ridden_on<? OR (ridden_on=? AND activity_id>?)) ORDER BY ridden_on DESC,activity_id LIMIT ?`)
         .bind(
+          c.get('ownerId'),
           c.get('ownerId'),
           at,
           at - FRESHNESS,
           query.status,
+          c.get('ownerId'),
+          at,
+          at - FRESHNESS,
           cursor?.[0] ?? null,
           cursor?.[0] ?? null,
           cursor?.[0] ?? null,
           cursor?.[1] ?? null,
           query.limit + 1,
         )
-        .all<ActivityRow>();
-    const rides = result.results.slice(0, query.limit).map(presentActivity),
+        .all<RideHistoryRow>();
+    const rides = result.results.slice(0, query.limit).map(presentRideDate),
       last = rides.at(-1);
     return c.json({
       rides,
       nextCursor:
         result.results.length > query.limit && last
-          ? encodeCursor(last.startedAt, last.activityId)
+          ? encodeCursor(last.riddenOn, last.activityId)
           : null,
-      cache,
+      retention,
     });
   });
   app.get('/history/strava-rides/:activityId', async (c) => {
     const id = validateInput(stravaId, c.req.param('activityId')),
       at = now().getTime();
     const row = await c.env.ROUTES_DB.prepare(
+      `${rideSource} SELECT * FROM ride_rows WHERE activity_id=?`,
+    )
+      .bind(c.get('ownerId'), c.get('ownerId'), at, at - FRESHNESS, id)
+      .first<RideHistoryRow>();
+    if (!row) throw missing();
+    const evidence = await c.env.ROUTES_DB.prepare(
       'SELECT * FROM strava_activity_cache WHERE owner_id=? AND activity_id=? AND expires_at>? AND fetched_at>?',
     )
       .bind(c.get('ownerId'), id, at, at - FRESHNESS)
       .first<ActivityRow>();
-    if (!row) throw missing();
-    return c.json({ ride: presentActivity(row), cache });
+    return c.json({
+      ride: presentRideDate(row),
+      evidence: evidence ? presentActivity(evidence) : null,
+      retention,
+      cache,
+    });
   });
   app.patch('/history/strava-rides/:activityId', async (c) => {
     const id = validateInput(stravaId, c.req.param('activityId'));
@@ -274,38 +295,48 @@ export const stravaHistoryRoutes = (now: () => Date) => {
         routeId: z.uuid().nullable(),
       }),
     );
-    const at = now().getTime();
+    const at = now().getTime(),
+      owner = c.get('ownerId'),
+      db = c.env.ROUTES_DB;
     if (
       input.routeId !== null &&
-      !(await createD1RouteStore(c.env.ROUTES_DB).get(
-        c.get('ownerId'),
-        input.routeId,
-      ))
+      !(await createD1RouteStore(db).get(owner, input.routeId))
     )
       throw missing();
-    const row =
-      await c.env.ROUTES_DB.prepare(`UPDATE strava_activity_cache SET decision=?,primary_route_id=?,reviewed_at=?,version=version+1
-      WHERE owner_id=? AND activity_id=? AND version=? AND expires_at>? AND fetched_at>?
-      AND (? IS NULL OR EXISTS(SELECT 1 FROM routes WHERE owner_id=? AND id=?)) RETURNING *`)
+    // One transaction preserves corrections across concurrent imports and cache expiry.
+    const result = await db.batch<RideHistoryRow>([
+      db
+        .prepare(`${rideSource} INSERT INTO strava_ride_history(owner_id,generation,activity_id,ridden_on,primary_route_id,decision,version,verified_at)
+        SELECT owner_id,generation,activity_id,ridden_on,?,?,version+1,verified_at FROM ride_rows
+        WHERE activity_id=? AND version=? AND (? IS NULL OR EXISTS(SELECT 1 FROM routes WHERE owner_id=? AND id=?))
+        ON CONFLICT(owner_id,activity_id) DO UPDATE SET primary_route_id=excluded.primary_route_id,decision=excluded.decision,version=excluded.version
+        RETURNING *`)
         .bind(
-          input.routeId === null ? 'dismissed' : 'confirmed',
-          input.routeId,
-          at,
-          c.get('ownerId'),
-          id,
-          input.expectedVersion,
+          owner,
+          owner,
           at,
           at - FRESHNESS,
           input.routeId,
-          c.get('ownerId'),
+          input.routeId === null ? 'dismissed' : 'confirmed',
+          id,
+          input.expectedVersion,
           input.routeId,
-        )
-        .first<ActivityRow>();
+          owner,
+          input.routeId,
+        ),
+      db
+        .prepare(`UPDATE strava_activity_cache SET primary_route_id=h.primary_route_id,decision=h.decision,version=h.version,reviewed_at=?
+        FROM strava_ride_history h WHERE strava_activity_cache.owner_id=h.owner_id AND strava_activity_cache.activity_id=h.activity_id
+        AND h.owner_id=? AND h.activity_id=? AND h.version=? AND changes()=1`)
+        .bind(at, owner, id, input.expectedVersion + 1),
+    ]);
+    const row = result[0]?.results[0];
     if (!row) {
-      const existing = await c.env.ROUTES_DB.prepare(
-        'SELECT version FROM strava_activity_cache WHERE owner_id=? AND activity_id=? AND expires_at>? AND fetched_at>?',
-      )
-        .bind(c.get('ownerId'), id, at, at - FRESHNESS)
+      const existing = await db
+        .prepare(
+          `${rideSource} SELECT version FROM ride_rows WHERE activity_id=?`,
+        )
+        .bind(owner, owner, at, at - FRESHNESS, id)
         .first();
       if (!existing) throw missing();
       throw new AppError(
@@ -314,7 +345,7 @@ export const stravaHistoryRoutes = (now: () => Date) => {
         'This ride changed. Reload it before saving your choice.',
       );
     }
-    return c.json({ ride: presentActivity(row), cache });
+    return c.json({ ride: presentRideDate(row), retention });
   });
   return app;
 };

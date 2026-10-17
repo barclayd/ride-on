@@ -37,17 +37,13 @@ export const pageSchema = z.object({
   activityIds: z.array(stravaId).max(30),
   nextPage: z.number().int().min(2).max(10000).nullable(),
 });
-const metric = z.number().finite().nonnegative().nullable();
 export const activitySchema = z.discriminatedUnion('available', [
   z.object({ available: z.literal(false) }),
   z.object({
     available: z.literal(true),
     activityId: stravaId,
     startedAt: z.iso.datetime(),
-    averageSpeedMps: metric,
-    elevationGainM: metric,
-    averagePowerWatts: metric,
-    powerSource: z.enum(['meter', 'estimated']).nullable(),
+    riddenOn: z.iso.date(),
     points: z
       .array(
         z.tuple([
@@ -91,10 +87,7 @@ export type ActivityRow = {
   generation: string;
   activity_id: string;
   started_at: string;
-  average_speed_mps: number | null;
-  elevation_gain_m: number | null;
-  average_power_watts: number | null;
-  power_source: 'meter' | 'estimated' | null;
+  ridden_on: string;
   match_json: string;
   decision: 'automatic' | 'confirmed' | 'dismissed';
   primary_route_id: string | null;
@@ -110,10 +103,7 @@ export const presentActivity = (r: ActivityRow) => ({
   source: 'strava' as const,
   stravaUrl: `https://www.strava.com/activities/${r.activity_id}`,
   startedAt: r.started_at,
-  averageSpeedMps: r.average_speed_mps,
-  elevationGainM: r.elevation_gain_m,
-  averagePowerWatts: r.average_power_watts,
-  powerSource: r.power_source,
+  riddenOn: r.ridden_on,
   match: JSON.parse(r.match_json) as MatchResult,
   decision: r.decision,
   primaryRouteId: r.primary_route_id,
@@ -122,4 +112,23 @@ export const presentActivity = (r: ActivityRow) => ({
   version: r.version,
   fetchedAt: new Date(r.fetched_at).toISOString(),
   expiresAt: new Date(r.expires_at).toISOString(),
+});
+
+export type RideHistoryRow = Pick<
+  ActivityRow,
+  | 'owner_id'
+  | 'generation'
+  | 'activity_id'
+  | 'ridden_on'
+  | 'primary_route_id'
+  | 'decision'
+  | 'version'
+> & { verified_at: number };
+export const presentRideDate = (r: RideHistoryRow) => ({
+  activityId: r.activity_id,
+  source: 'strava' as const,
+  riddenOn: r.ridden_on,
+  primaryRouteId: r.primary_route_id,
+  decision: r.decision,
+  version: r.version,
 });

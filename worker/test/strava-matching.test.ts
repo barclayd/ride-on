@@ -28,18 +28,27 @@ const candidate = (coverageFraction: number, routeId = 'a'): RouteMatch => ({
   direction: 'forward',
 });
 
-test('inclusive 50% suggestions and 90% automatic threshold with conservative ambiguity', () => {
+test('inclusive 50% automatic threshold and deterministic best-match selection', () => {
   expect(decideMatches([candidate(0.49999)]).status).toBe('unmatched');
-  expect(decideMatches([candidate(0.5)]).status).toBe('suggested');
-  expect(decideMatches([candidate(0.89999)]).status).toBe('suggested');
+  expect(decideMatches([candidate(0.5)]).status).toBe('matched');
+  expect(decideMatches([candidate(0.89999)]).status).toBe('matched');
   expect(decideMatches([candidate(0.9)]).status).toBe('matched');
   expect(decideMatches([candidate(0.95), candidate(0.92, 'b')]).reason).toBe(
     'multiple_routes',
   );
   expect(decideMatches([candidate(0.92), candidate(0.89, 'b')]).status).toBe(
-    'suggested',
+    'matched',
   );
-  expect(decideMatches([candidate(1)], false).status).toBe('suggested');
+  expect(decideMatches([candidate(1)], false).status).toBe('matched');
+  expect(
+    decideMatches([candidate(0.5, 'b'), candidate(0.8, 'a')]).primaryRouteId,
+  ).toBe('a');
+  expect(
+    decideMatches([candidate(0.5, 'b'), candidate(0.5, 'a')]).primaryRouteId,
+  ).toBe('a');
+  expect(
+    decideMatches([{ ...candidate(0.6), direction: 'mixed' }]).primaryRouteId,
+  ).toBe('a');
 });
 test('forward and reversed routes match, regardless of route dates or extra distance', async () => {
   const r = await route();
@@ -56,7 +65,7 @@ test('extra laps do not penalize, but repeating the outbound leg cannot complete
     back = line().reverse();
   const r = await route([...out, ...back.slice(1)]);
   const partial = matchActivity(out, [r]);
-  expect(partial.status).toBe('suggested');
+  expect(partial.status).toBe('matched');
   expect(partial.candidates[0]?.coverageFraction).toBeCloseTo(0.5, 3);
   expect(partial.candidates[0]?.coverageFraction ?? 0).toBeLessThanOrEqual(
     0.51,
@@ -69,11 +78,11 @@ test('extra laps do not penalize, but repeating the outbound leg cannot complete
     ).status,
   ).toBe('matched');
 });
-test('detours do not alter the denominator; partial coverage is offered for review', async () => {
+test('detours do not alter the denominator; partial coverage is automatically logged', async () => {
   const r = await route();
-  expect(matchActivity(line(0, 50), [r]).status).toBe('suggested');
+  expect(matchActivity(line(0, 50), [r]).status).toBe('matched');
   expect(matchActivity(line(0, 90), [r]).status).toBe('matched');
-  expect(matchActivity(line(0, 60), [r]).status).toBe('suggested');
+  expect(matchActivity(line(0, 60), [r]).status).toBe('matched');
   expect(matchActivity(line(0, 40), [r]).status).toBe('unmatched');
   const extra = [
     ...line(0, 50),
@@ -82,7 +91,7 @@ test('detours do not alter the denominator; partial coverage is offered for revi
   ];
   expect(matchActivity(extra, [r]).status).toBe('matched');
 });
-test('parallel paths, crossings, missing GPS and gaps never produce an automatic match', async () => {
+test('parallel paths, crossings, missing GPS and unsupported gaps provide no match', async () => {
   const r = await route();
   expect(matchActivity(line(0, 100, -0.0995), [r]).status).toBe('unmatched');
   const crossing = Array.from({ length: 101 }, (_, i) => ({
@@ -105,13 +114,18 @@ test('parallel paths, crossings, missing GPS and gaps never produce an automatic
       r,
       { ...r, route: { ...r.route, id: crypto.randomUUID(), geometry: null } },
     ]).status,
-  ).toBe('suggested');
+  ).toBe('matched');
 });
-test('two saved versions of the same route require a single rider choice', async () => {
+test('two saved versions select one stable primary route', async () => {
   const a = await route(),
     b = await route();
   const result = matchActivity(line(), [a, b]);
-  expect(result.status).toBe('suggested');
+  expect(result.status).toBe('matched');
   expect(result.reason).toBe('multiple_routes');
-  expect(result.primaryRouteId).toBeNull();
+  expect(result.primaryRouteId).toBe(
+    [a.route.id, b.route.id].sort()[0] ?? null,
+  );
+  expect(matchActivity(line(), [b, a]).primaryRouteId).toBe(
+    result.primaryRouteId,
+  );
 });
