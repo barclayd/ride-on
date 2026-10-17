@@ -7,9 +7,8 @@ export type MatchRoute = {
 
 import type { Coordinate } from '../weather/contracts.ts';
 
-export const ACTIVITY_MATCHER = 'strava-route-coverage-v1';
-export const SUGGEST_COVERAGE = 0.5;
-export const AUTO_COVERAGE = 0.9;
+export const ACTIVITY_MATCHER = 'strava-route-coverage-v2';
+export const AUTO_COVERAGE = 0.5;
 const STEP_M = 10;
 const TOLERANCE_M = 12;
 const COS_HEADING = Math.cos(Math.PI / 6);
@@ -119,7 +118,7 @@ export type RouteMatch = {
 };
 export type MatchResult = {
   matcherVersion: typeof ACTIVITY_MATCHER;
-  status: 'matched' | 'suggested' | 'unmatched' | 'unavailable';
+  status: 'matched' | 'unmatched' | 'unavailable';
   reason: string | null;
   primaryRouteId: string | null;
   assessmentComplete: boolean;
@@ -130,7 +129,7 @@ export const decideMatches = (
   complete = true,
 ): MatchResult => {
   const sorted = candidates
-    .filter((r) => r.coverageFraction >= SUGGEST_COVERAGE)
+    .filter((r) => r.coverageFraction >= AUTO_COVERAGE)
     .sort(
       (a, b) =>
         b.coverageFraction - a.coverageFraction ||
@@ -143,28 +142,19 @@ export const decideMatches = (
     !!second &&
     (second.coverageFraction >= AUTO_COVERAGE ||
       first.coverageFraction - second.coverageFraction < 0.05);
-  const automatic =
-    !!first &&
-    complete &&
-    !ambiguous &&
-    first.coverageFraction >= AUTO_COVERAGE &&
-    first.direction !== 'mixed';
+  // Select the best qualifying route, including ties and partial evidence.
+  // Route ID is the stable tie-breaker, independent of input ordering.
+  const automatic = !!first && first.coverageFraction >= AUTO_COVERAGE;
   return {
     matcherVersion: ACTIVITY_MATCHER,
-    status: automatic
-      ? 'matched'
-      : first
-        ? 'suggested'
-        : complete
-          ? 'unmatched'
-          : 'unavailable',
+    status: automatic ? 'matched' : complete ? 'unmatched' : 'unavailable',
     reason: !complete
       ? 'incomplete_geometry'
       : ambiguous
         ? 'multiple_routes'
         : first?.direction === 'mixed'
           ? 'mixed_direction'
-          : first && !automatic
+          : first && first.coverageFraction < 0.9
             ? 'partial_route'
             : null,
     primaryRouteId: automatic ? first.routeId : null,
@@ -262,7 +252,7 @@ export const matchActivity = (
         1,
         Math.round((matched / length) * 1_000_000) / 1_000_000,
       );
-      if (fraction >= SUGGEST_COVERAGE)
+      if (fraction >= AUTO_COVERAGE)
         candidates.push({
           routeId: record.route.id,
           routeName: record.route.name,

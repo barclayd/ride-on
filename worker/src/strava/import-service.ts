@@ -162,6 +162,16 @@ export const runImportJob = async (
         await db.batch([
           db
             .prepare(
+              `DELETE FROM strava_ride_history WHERE owner_id=? AND activity_id=? AND generation=? AND ${jobGuard}`,
+            )
+            .bind(
+              c.owner_id,
+              input.activityId,
+              c.generation,
+              ...guardArgs(job, at),
+            ),
+          db
+            .prepare(
               `DELETE FROM strava_activity_cache WHERE owner_id=? AND activity_id=? AND generation=? AND ${jobGuard}`,
             )
             .bind(
@@ -208,39 +218,59 @@ export const runImportJob = async (
         const notification =
           job.notify_at !== null &&
           job.notify_at + DAY > at &&
-          ['matched', 'suggested'].includes(match.status)
+          match.status === 'matched'
             ? job.notify_at
             : null;
         await db.batch([
-          // Expiry is hard: refreshes cannot silently retain a derived decision forever.
+          // Matching evidence expires independently of the minimal ride-date record.
           db
             .prepare(
               `DELETE FROM strava_activity_cache WHERE owner_id=? AND activity_id=? AND expires_at<=? AND ${jobGuard}`,
             )
             .bind(c.owner_id, input.activityId, at, ...guardArgs(job, at)),
           db
-            .prepare(`INSERT INTO strava_activity_cache(owner_id,generation,activity_id,started_at,average_speed_mps,elevation_gain_m,average_power_watts,
-            power_source,match_json,decision,primary_route_id,first_seen_at,fetched_at,expires_at,notification_at)
-            SELECT ?,?,?,?,?,?,?,?,?,'automatic',?,?,?,?,? WHERE ${jobGuard}
-            ON CONFLICT(owner_id,activity_id) DO UPDATE SET started_at=excluded.started_at,average_speed_mps=excluded.average_speed_mps,
-            elevation_gain_m=excluded.elevation_gain_m,average_power_watts=excluded.average_power_watts,power_source=excluded.power_source,
-            match_json=excluded.match_json,primary_route_id=CASE WHEN decision='automatic' THEN excluded.primary_route_id ELSE primary_route_id END,
-            fetched_at=excluded.fetched_at,version=version+1,notification_at=COALESCE(notification_at,excluded.notification_at)`)
+            .prepare(`INSERT INTO strava_activity_cache(owner_id,generation,activity_id,started_at,ridden_on,
+            match_json,decision,primary_route_id,version,reviewed_at,first_seen_at,fetched_at,expires_at,notification_at)
+            SELECT ?,?,?,?,?,?,COALESCE(h.decision,'automatic'),
+            CASE WHEN h.decision IN ('confirmed','dismissed') THEN h.primary_route_id ELSE ? END,
+            COALESCE(h.version,0)+1,CASE WHEN h.decision IN ('confirmed','dismissed') THEN ? ELSE NULL END,?,?,?,
+            CASE WHEN h.activity_id IS NULL THEN ? ELSE NULL END
+            FROM (SELECT 1) LEFT JOIN strava_ride_history h ON h.owner_id=? AND h.activity_id=? AND h.generation=? WHERE ${jobGuard}
+            ON CONFLICT(owner_id,activity_id) DO UPDATE SET started_at=excluded.started_at,ridden_on=excluded.ridden_on,
+            match_json=excluded.match_json,decision=excluded.decision,primary_route_id=excluded.primary_route_id,
+            reviewed_at=COALESCE(strava_activity_cache.reviewed_at,excluded.reviewed_at),
+            fetched_at=excluded.fetched_at,version=MAX(strava_activity_cache.version+1,excluded.version),
+            notification_at=COALESCE(strava_activity_cache.notification_at,excluded.notification_at)`)
             .bind(
               c.owner_id,
               c.generation,
               input.activityId,
               activity.startedAt,
-              activity.averageSpeedMps,
-              activity.elevationGainM,
-              activity.averagePowerWatts,
-              activity.powerSource,
+              activity.riddenOn,
               JSON.stringify(match),
               match.primaryRouteId,
               at,
               at,
+              at,
               at + CACHE_TTL,
               notification,
+              c.owner_id,
+              input.activityId,
+              c.generation,
+              ...guardArgs(job, at),
+            ),
+          db
+            .prepare(`INSERT INTO strava_ride_history(owner_id,generation,activity_id,ridden_on,primary_route_id,decision,version,verified_at)
+            SELECT owner_id,generation,activity_id,ridden_on,primary_route_id,decision,version,fetched_at
+            FROM strava_activity_cache a WHERE owner_id=? AND activity_id=? AND generation=? AND ${jobGuard}
+            AND (primary_route_id IS NOT NULL OR decision!='automatic' OR EXISTS(SELECT 1 FROM strava_ride_history h WHERE h.owner_id=a.owner_id AND h.activity_id=a.activity_id))
+            AND (primary_route_id IS NULL OR EXISTS(SELECT 1 FROM routes r WHERE r.owner_id=a.owner_id AND r.id=a.primary_route_id))
+            ON CONFLICT(owner_id,activity_id) DO UPDATE SET ridden_on=excluded.ridden_on,primary_route_id=excluded.primary_route_id,
+            decision=excluded.decision,version=excluded.version,verified_at=excluded.verified_at`)
+            .bind(
+              c.owner_id,
+              input.activityId,
+              c.generation,
               ...guardArgs(job, at),
             ),
         ]);
@@ -327,9 +357,11 @@ export const dispatchImports = async (
     }
   }
   const stale = await db
-    .prepare(`SELECT owner_id,generation,activity_id FROM strava_activity_cache WHERE fetched_at<=? AND expires_at>?
-    ORDER BY fetched_at LIMIT 100`)
-    .bind(time - DAY, time)
+    .prepare(`SELECT owner_id,generation,activity_id FROM (
+      SELECT owner_id,generation,activity_id,fetched_at AS verified_at FROM strava_activity_cache WHERE expires_at>?
+      UNION ALL SELECT owner_id,generation,activity_id,verified_at FROM strava_ride_history)
+      GROUP BY owner_id,generation,activity_id HAVING MAX(verified_at)<=? ORDER BY MAX(verified_at),activity_id LIMIT 100`)
+    .bind(time, time - DAY)
     .all<{ owner_id: string; generation: string; activity_id: string }>();
   if (stale.results.length)
     await db.batch(

@@ -20,6 +20,7 @@ const detail = (id = '101', changes: Record<string, unknown> = {}) => ({
   available: true,
   activityId: id,
   startedAt: '2026-10-09T09:00:00.000Z',
+  riddenOn: '2026-10-08',
   averageSpeedMps: 7.5,
   elevationGainM: 350,
   averagePowerWatts: null,
@@ -154,13 +155,17 @@ scenario(
       routes: {
         routeId: string;
         rideCount: number;
-        mostRecentRide: { averageSpeedMps: number };
+        mostRecentRide: { riddenOn: string };
       }[];
     }>(response);
     assert.equal(result.routes.length, 1, JSON.stringify(await row(h)));
     assert.equal(result.routes[0]?.routeId, routeId);
     assert.equal(result.routes[0]?.rideCount, 3);
-    assert.equal(result.routes[0]?.mostRecentRide.averageSpeedMps, 7.5);
+    assert.equal(result.routes[0]?.mostRecentRide.riddenOn, '2026-10-08');
+    assert.doesNotMatch(
+      JSON.stringify(result),
+      /averageSpeed|elevationGain|averagePower|startedAt|match_json/,
+    );
     const first = await json<{
       rides: { activityId: string }[];
       nextCursor: string;
@@ -203,7 +208,7 @@ scenario(
     assert.equal(cached.notification_at, null);
     assert.doesNotMatch(
       JSON.stringify(cached),
-      /points|polyline|latitude|longitude|access_token/,
+      /points|polyline|latitude|longitude|access_token|average_speed|elevation_gain|average_power|power_source/,
     );
     const manual = await (await dbFor(h))
       .prepare('SELECT COUNT(*) AS n FROM rides')
@@ -212,7 +217,7 @@ scenario(
   },
 );
 scenario(
-  'partial suggestions require confirmation, are owner-scoped and corrections survive updates',
+  'partial rides log automatically, are owner-scoped and optional corrections survive updates',
   async (h) => {
     const routeId = await seed(h);
     h.use(activityHandler({ points: points.slice(0, 61) }));
@@ -221,17 +226,17 @@ scenario(
     assert.equal(
       (await json<{ routes: unknown[] }>(await h.send('/history/routes')))
         .routes.length,
-      0,
+      1,
     );
     const review = await json<{
       rides: {
         activityId: string;
         version: number;
-        match: { status: string };
+        primaryRouteId: string;
       }[];
-    }>(await h.send('/history/strava-rides'));
+    }>(await h.send('/history/strava-rides?status=review'));
     assert.equal(review.rides.length, 1);
-    assert.equal(review.rides[0]?.match.status, 'suggested');
+    assert.equal(review.rides[0]?.primaryRouteId, routeId);
     let cached = await row(h);
     assert.ok(cached);
     assert.equal(
@@ -263,8 +268,11 @@ scenario(
     assert.equal(cached?.decision, 'dismissed');
     assert.equal(cached?.primary_route_id, null);
     assert.equal(
-      (await json<{ rides: unknown[] }>(await h.send('/history/strava-rides')))
-        .rides.length,
+      (
+        await json<{ rides: unknown[] }>(
+          await h.send('/history/strava-rides?status=review'),
+        )
+      ).rides.length,
       0,
     );
   },
@@ -360,7 +368,7 @@ scenario(
   },
 );
 scenario(
-  'rate limits retry durably; stale and expired data fail closed even when imports are disabled',
+  'rate limits retry durably; evidence expires while ride dates remain',
   async (h) => {
     await seed(h);
     h.use(
@@ -386,7 +394,11 @@ scenario(
     await run(h, pending.id);
     assert.ok(await row(h));
     await h.restart({ TEST_NOW: new Date(time + 3 * day).toISOString() });
-    assert.equal((await h.send('/history/strava-rides/101')).status, 404);
+    const stale = await json<{ ride: { riddenOn: string }; evidence: unknown }>(
+      await h.send('/history/strava-rides/101'),
+    );
+    assert.equal(stale.ride.riddenOn, '2026-10-08');
+    assert.equal(stale.evidence, null);
     await h.restart({
       TEST_NOW: new Date(time + 8 * day).toISOString(),
       STRAVA_IMPORT_ENABLED: 'false',
@@ -587,7 +599,7 @@ scenario(
 );
 
 scenario(
-  'a review racing an import remains authoritative and expiry removes reviews and delivery records',
+  'a correction racing an import remains authoritative after evidence and delivery expiry',
   async (h) => {
     const routeId = await seed(h);
     h.use(activityHandler());
@@ -667,5 +679,243 @@ scenario(
     for (const j of pending.results) await run(h, j.id);
     assert.ok(await row(h, '101'));
     assert.ok(await row(h, '102'));
+  },
+);
+
+scenario(
+  'date-only history and optional corrections survive evidence expiry and repeat imports without duplicates',
+  async (h) => {
+    const routeId = await seed(h);
+    h.use(activityHandler(), emptyPage);
+    await event(h);
+    await drain(h);
+    let initial = await row(h);
+    assert.ok(initial);
+    await event(h, '101', 'update', time / 1000 + 1);
+    await drain(h);
+    assert.equal(
+      (
+        await h.send('/history/strava-rides/101', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedVersion: initial.version,
+            routeId: null,
+          }),
+        })
+      ).status,
+      409,
+    );
+    initial = await row(h);
+    assert.ok(initial);
+    assert.equal(initial.reviewed_at, null);
+    const future = time + 8 * day;
+    await h.restart({
+      TEST_NOW: new Date(future).toISOString(),
+      STRAVA_IMPORT_ENABLED: 'false',
+    });
+    await dispatch(h);
+    assert.equal(await row(h), null);
+    await h.restart({ STRAVA_IMPORT_ENABLED: 'true' });
+    const retained = await json<{
+      ride: {
+        activityId: string;
+        riddenOn: string;
+        primaryRouteId: string;
+        version: number;
+      };
+      evidence: unknown;
+    }>(await h.send('/history/strava-rides/101'));
+    assert.equal(retained.ride.riddenOn, '2026-10-08');
+    assert.equal(retained.ride.primaryRouteId, routeId);
+    assert.equal(retained.evidence, null);
+    assert.equal(retained.ride.version, initial.version);
+    assert.deepEqual(
+      Object.keys(retained.ride).sort(),
+      [
+        'activityId',
+        'decision',
+        'primaryRouteId',
+        'riddenOn',
+        'source',
+        'version',
+      ].sort(),
+    );
+    const change = await h.send('/history/strava-rides/101', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        expectedVersion: retained.ride.version,
+        routeId: null,
+      }),
+    });
+    assert.equal(change.status, 200);
+    assert.equal(
+      (
+        await h.send('/history/strava-rides/101', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedVersion: retained.ride.version,
+            routeId,
+          }),
+        })
+      ).status,
+      409,
+    );
+    // A late/repeated create can neither resurrect a dismissal nor repeat its push.
+    await event(h, '101', 'create', future / 1000);
+    const pending = await (await dbFor(h))
+      .prepare("SELECT id FROM strava_import_jobs WHERE job_key='activity:101'")
+      .first<{ id: string }>();
+    assert.ok(pending);
+    await run(h, pending.id);
+    const refreshed = await row(h);
+    assert.ok(refreshed);
+    assert.equal(refreshed.decision, 'dismissed');
+    assert.equal(refreshed.primary_route_id, null);
+    assert.equal(refreshed.notification_at, null);
+    assert.ok(refreshed.version > retained.ride.version);
+    const history = await (await dbFor(h))
+      .prepare('SELECT * FROM strava_ride_history')
+      .all();
+    assert.equal(history.results.length, 1);
+    assert.doesNotMatch(
+      JSON.stringify(history.results),
+      /started_at|average|power|elevation|match_json|coverage|direction|routeName|points/,
+    );
+    assert.equal(
+      (await json<{ routes: unknown[] }>(await h.send('/history/routes')))
+        .routes.length,
+      0,
+    );
+    assert.equal(
+      (
+        await h.send('/history/strava-rides/101', {
+          token: BOB_TOKEN,
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedVersion: refreshed.version,
+            routeId: null,
+          }),
+        })
+      ).status,
+      404,
+    );
+    h.use(
+      http.get(`${origin}/import-activity/123`, () =>
+        HttpResponse.json({ available: false }),
+      ),
+    );
+    await event(h, '101', 'delete', future / 1000 + 1);
+    await run(h, pending.id);
+    assert.equal(
+      (
+        await (
+          await dbFor(h)
+        )
+          .prepare('SELECT COUNT(*) AS n FROM strava_ride_history')
+          .first<{ n: number }>()
+      )?.n,
+      0,
+    );
+    assert.equal((await h.send('/history/strava-rides/101')).status, 404);
+  },
+);
+
+scenario(
+  'old ride dates remain grouped and are revalidated after cache expiry; route deletion removes them',
+  async (h) => {
+    const routeId = await seed(h);
+    h.use(
+      activityHandler({
+        startedAt: '2025-01-01T23:30:00.000Z',
+        riddenOn: '2025-01-02',
+      }),
+      emptyPage,
+    );
+    await event(h);
+    await drain(h);
+    await h.restart({ TEST_NOW: new Date(time + 8 * day).toISOString() });
+    await dispatch(h);
+    assert.equal(await row(h), null);
+    const history = await json<{
+      routes: {
+        rideCount: number;
+        firstRiddenOn: string;
+        lastRiddenOn: string;
+      }[];
+    }>(await h.send('/history/routes'));
+    assert.equal(history.routes[0]?.rideCount, 1);
+    assert.equal(history.routes[0]?.firstRiddenOn, '2025-01-02');
+    assert.equal(history.routes[0]?.lastRiddenOn, '2025-01-02');
+    const db = await dbFor(h);
+    const refresh = await db
+      .prepare(
+        "SELECT id FROM strava_import_jobs WHERE job_key='activity:101' AND revision>completed_revision",
+      )
+      .first<{ id: string }>();
+    assert.ok(refresh);
+    await run(h, refresh.id);
+    assert.equal(
+      (
+        await db
+          .prepare('SELECT COUNT(*) AS n FROM strava_ride_history')
+          .first<{ n: number }>()
+      )?.n,
+      1,
+    );
+    await db
+      .prepare('DELETE FROM routes WHERE owner_id=? AND id=?')
+      .bind('alice', routeId)
+      .run();
+    assert.equal(
+      (
+        await db
+          .prepare('SELECT COUNT(*) AS n FROM strava_ride_history')
+          .first<{ n: number }>()
+      )?.n,
+      0,
+    );
+  },
+);
+
+scenario(
+  'below-threshold activities never create permanent history, and disconnect removes retained dates',
+  async (h) => {
+    await seed(h);
+    h.use(activityHandler({ points: points.slice(0, 40) }));
+    await event(h);
+    await drain(h);
+    const db = await dbFor(h);
+    assert.equal(
+      (
+        await db
+          .prepare('SELECT COUNT(*) AS n FROM strava_ride_history')
+          .first<{ n: number }>()
+      )?.n,
+      0,
+    );
+    h.use(activityHandler());
+    await event(h, '101', 'update', time / 1000 + 1);
+    await drain(h);
+    assert.equal(
+      (
+        await db
+          .prepare('SELECT COUNT(*) AS n FROM strava_ride_history')
+          .first<{ n: number }>()
+      )?.n,
+      1,
+    );
+    await db
+      .prepare('DELETE FROM strava_connections WHERE owner_id=?')
+      .bind('alice')
+      .run();
+    assert.equal(
+      (
+        await db
+          .prepare('SELECT COUNT(*) AS n FROM strava_ride_history')
+          .first<{ n: number }>()
+      )?.n,
+      0,
+    );
+    assert.equal((await h.send('/history/strava-rides/101')).status, 404);
   },
 );
