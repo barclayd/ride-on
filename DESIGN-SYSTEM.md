@@ -198,6 +198,24 @@ before adding a custom component in code.
     46% unpaved", then the source and last ride (Library) or the forecast saved when the ride
     was planned (History; never the weather on the day). Selected, the row fills with
     `.fill.tertiary` and shows "Add to Shortlist" and, for a route Rides has ranked, "Details ›".
+14. **`ShareBar`** — shares of a whole in ride order, each in its own colour, like the bar in
+    Settings › iPhone Storage: a 16pt (scaled) continuous rounded bar with 2pt gaps. A segment may
+    carry a `.caption2` label over where it starts ("SW", "W"). Its card writes the ride's start
+    under the leading edge and "~finish" under the trailing one, with a worded legend below (dot,
+    name, "~45%", or "Throughout" when there's only one). Hidden from VoiceOver; the legend speaks.
+    Sky colours: sunny `.yellow`, sunny intervals `.yellow` 50%, cloud `.gray`, not forecast yet
+    `.gray` 15%. Wind colours as `RouteProfile`: tailwind accent, crosswind `.orange`, headwind
+    `.red`, light wind `.gray`.
+15. **`WindCompass`** — Weather's wind dial (104pt, scaled, at most 160pt): ticks every 5°, N E S W
+    (N in `.primary`), an arrow across the dial the way the wind blows, the average speed in the
+    middle. No arrow when the wind is too light to name a direction. Hidden from VoiceOver: the
+    header beside it says the same.
+16. **`WindRouteMap`** — "Wind on the Ride"'s map: the route coloured by the wind's effect (`ShareBar`'s
+    wind colours, white casing), Start marker, and Finish unless the ride ends where it started. A
+    muted standard map without points of interest, ignoring touches, 180pt, flush with the top of
+    its card. Where the road is ridden twice the return is drawn 3pt to the right of the way out, as
+    on a transit map, so both colours show. Shown only when the API placed the wind stretches along
+    the route. VoiceOver reads the journey: "Heads north-east with the wind behind, then …".
 
 Kept until onboarding is redesigned: **`DialScreen`** (with `AmbianceStyle`).
 
@@ -243,7 +261,7 @@ glass transitions use `.materialize`.
 | Screen | What's on it |
 |---|---|
 | **Rides** (tab) | `RideHero` for the best pick in the window → conditions card (date, then 09:00 Leave ┄ 🚲 about 3h ┄ ~12:00 Back, then "✓ Meets your preferences", last ridden, `ConditionChip`s, score with bar and change badge) → "Your Window" `DayStrip` → "Other Tracked Routes" rows (route thumbnail, name, departure → return · distance, conditions or "Below your minimums", score) → "Doesn't Fit Your Window" → Apple Weather attribution, "Updated 08:12. Pull down to refresh." Toolbar: window capsule (leading), "+" track a route (trailing). Pull to refresh. |
-| **Ride detail** (push, zoom from hero) | Shorter `RideHero` → verdict card (`ScoreGauge`, verdict, change since last update, last ridden, one or two notes) → "Departure" `DeparturePicker` → "Forecast on the Ride" hourly grid (time, sky, temperature, wind, gusts, rain chance) → "Along the Route" `RouteProfile` → "Why It Scored 86" `FactorRow`s → Add to Calendar, Open in cycle.travel (accent list buttons) → Apple Weather attribution. Toolbar: back (leading), share + more in one capsule (trailing). |
+| **Ride detail** (push, zoom from hero) | Shorter `RideHero` → verdict card (`ScoreGauge`, verdict, change since last update, last ridden, one or two notes) → "Departure" `DeparturePicker` → "Forecast on the Ride" hourly grid (time, sky, temperature, wind, gusts, rain chance) → "Sky on the Ride" (symbol and summary, sun `ShareBar`, legend) → "Wind on the Ride" (`WindRouteMap`, "Wind from the south-west" beside a `WindCompass`, wind `ShareBar`, legend with speeds, gusts row) → "Along the Route" `RouteProfile` → "Why It Scored 86" `FactorRow`s → Add to Calendar, Open in cycle.travel (accent list buttons) → Apple Weather attribution. Toolbar: back (leading), share + more in one capsule (trailing). |
 | **Window sheet** | Large detent (the days list plus Hours need the height). Grabber, Cancel (glass circle, `xmark`) leading, centred "Ride Window", Done (tinted circle, `checkmark`) trailing. Quick picks (Tomorrow, This Weekend, Next 5 Days) → "Days" multi-select list, each day showing its best route and score, sky and temperature → "Hours": segmented Daylight / Custom, Leave After and Back By (`DatePicker(.hourAndMinute)` when Custom). |
 | **Track sheet** | Content-height detent, floating glass. Grabber, Close (glass circle, `xmark`) leading → gold star medal → "Track This Ride" and one sentence → "Replaces Your Tracked Ride" card when another ride is tracked → ride card (thumbnail, name, day and times, 40pt `ScoreGauge`) → "We'll Check If" rows (rain, gusts over your limit, below your minimum, a better time or day) and a footnote → "Start Tracking" (`.glassProminent`, the one tinted action) and "Not Now". Tracking mode: "Tracking This Ride" and what the latest check found, "We'll Check If", "Stop Tracking" (`.glass`, red label). Once the API notifies: a bell badge on the medal, "Notify Me If" / "We'll Notify You If", the evening-before footnote and a Notifications Are Off card when denied. |
 | **Window passed** | Rides when the saved window is in the past. No hero, so the toolbar is regular glass and the capsule shows the stale range. `ContentUnavailableView` ("Your Window Has Passed", one sentence, "Choose Dates" as the one `.borderedProminent` button) → "Quick Picks" rows with each range's best route and score. |

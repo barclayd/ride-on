@@ -54,7 +54,20 @@ public struct RideDetailView: View {
                     }
                     RideSection("Forecast on the Ride") {
                         forecastCard
-                        if let windFrom = departure.windFrom { footnote("Wind from the \(windFrom).") }
+                        if departure.windBreakdown == nil, let windFrom = departure.windFrom {
+                            footnote("Wind from the \(windFrom).")
+                        }
+                    }
+                    if let sky = departure.sky {
+                        RideSection("Sky on the Ride") {
+                            SkyOnTheRide(sky: sky, start: departure.start, finish: departure.finish)
+                        }
+                    }
+                    if let wind = departure.windBreakdown {
+                        RideSection("Wind on the Ride") {
+                            WindOnTheRide(wind: wind, coordinates: pick.route.coordinates,
+                                          start: departure.start, finish: departure.finish)
+                        }
                     }
                     if !elevation.isEmpty {
                         RideSection("Along the Route") {
@@ -333,7 +346,7 @@ public struct RideDetailView: View {
 }
 
 /// Icons in a fixed-width column, so the titles of stacked labels line up.
-private struct IconColumn: LabelStyle {
+struct IconColumn: LabelStyle {
     @ScaledMetric(relativeTo: .body) private var width = 26.0
 
     func makeBody(configuration: Configuration) -> some View {
