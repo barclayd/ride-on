@@ -4,7 +4,7 @@ API v0.30.0 implements the backend policy agreed on 16 October 2026. It extends 
 
 ## Agreed decisions
 
-All active tracked rides, including existing records and accounts without devices, receive automatic assessments until their accepted departure. Stopping, replacing or erasing a plan cancels pending work. Tracking history still remains active until estimated finish, as before; monitoring ends at departure.
+Except while the account is paused, all active tracked rides, including existing records and accounts without devices, receive automatic assessments until their accepted departure. Stopping, replacing or erasing a plan cancels pending work. Tracking history still remains active until estimated finish, as before; monitoring ends at departure.
 
 | Event | Rule | Ordinary three-hour gap |
 | --- | --- | --- |
@@ -25,6 +25,37 @@ Preference, course, history, scoring-version and weather-source changes quietly 
 Pending changes are recomputed against the current assessment. Withdrawn changes are cancelled; newer assessments supersede obsolete unsent deliveries. A retry is allowed only while the plan is active, before departure, with the same inputs, current assessment and current device registration. A push already accepted by Apple cannot be recalled if the rider subsequently stops the plan.
 
 At summary time, an unavailable assessment produces an explicit availability message with the last successful check when known. It counts as the outage notice; recovery follows once current assessments resume. No-device accounts keep their assessment current but cannot receive pushes or advance the last-notified reference. An eligible summary may retry after 19:00 until departure, with current content; it is never replayed after departure. Outage/summary state only counts as notified after an APNs acceptance.
+
+### Account pauses
+
+API v0.34.0 implements the [pause contract](api.md#pause). An account pause
+suppresses **every** monitoring alert: score changes, minimum breaches/recoveries,
+better options, evening summaries, forecast outages and recovery notices. It
+cancels all unsent device deliveries, including the remaining devices of a
+partially accepted event. An APNs request already in flight or accepted cannot be
+recalled. Pause/resume writes revoke monitor leases so an old job cannot publish
+an alert or overwrite the reference after the account changes state.
+
+Paused jobs check account state and departure, then stop before any assessment or
+weather request. The accepted baseline and notification reference remain intact,
+and the tracked plan stays active. Monitoring still ends at departure. The
+existing 15-minute dispatcher continues checking due plans; the consumer resolves
+return dates from the current saved profile zone, so automatic resume needs no
+client, extra timer, or cleanup write.
+
+Both explicit resume and dated expiry leave a durable quiet-rebase marker. The
+first successful current assessment becomes the new notification reference and
+sends nothing; if weather is unavailable, this marker survives until a successful
+assessment. Pending breaches and outage/recovery state restart quietly, while
+actual delivery history and the last accepted notification time remain intact.
+A summary whose time has passed by that first assessment is marked handled and
+never replayed. Later summaries and new weather changes follow the ordinary rules.
+This also applies when pause and resume both happen between scheduled checks,
+and to plans first tracked during a pause.
+
+Pause is independent of preference `version`, so it does not use a preference
+change to trigger this rebase. Explicit forecast and manual refresh endpoints
+remain available; clients stop their automatic requests while paused.
 
 ## Scheduling, reliability and bounds
 
@@ -84,7 +115,7 @@ On a tap, authenticate and fetch `/tracked-rides/{trackedRideId}`. Treat the pus
 
 ## Deployment and operation
 
-The migration enrolls existing active plans. The Worker has both scheduled and queue entry points alongside its unchanged HTTP routing. Set `RIDE_MONITORING` to `disabled` to pause new monitoring/sends; return it to `enabled` to resume. App capability flags reflect this switch. `notifications` also requires at least one configured APNs environment; individual registration reports the requested environment's readiness.
+Migration `0011` enrolls existing active plans. Migration `0016` adds independent account pauses and the durable resume marker; apply it before deploying v0.34.0. The Worker has both scheduled and queue entry points alongside its unchanged HTTP routing. Set `RIDE_MONITORING` to `disabled` to pause new monitoring/sends; return it to `enabled` to resume. App capability flags reflect this switch. `notifications` also requires at least one configured APNs environment; individual registration reports the requested environment's readiness.
 
 Both queues were provisioned on 16 October 2026. For a new environment, create them once before deploying the binding (the deployment identity needs Queues permission):
 
@@ -110,4 +141,4 @@ The sender uses native Workers `fetch`; `node:http2` is not supported for this p
 
 ## Verification
 
-`bun run check` covers deterministic policy scenarios and real Workers/D1/KV integration with synthetic weather and APNs responses: cooldown/reset thresholds, breaches/recoveries, unknown data, quiet rebases, best options, summaries and DST, outage recovery, authentication/ownership, token rotation, duplicate jobs, retry isolation, lifecycle cancellation and poison messages. `bun run build:check` validates the deployable bundle and bindings. No live weather quota or real user pushes are used by tests.
+`bun run check` covers deterministic policy scenarios and real Workers/D1/KV integration with synthetic weather and APNs responses: cooldown/reset thresholds, breaches/recoveries, unknown data, quiet rebases, best options, summaries and DST, outage recovery, authentication/ownership, token rotation, duplicate jobs, retry isolation, lifecycle cancellation and poison messages. Pause scenarios cover cancellation, skipped weather, preserved baselines, quiet explicit/cron resume, missed summaries, outage recovery, plans created while paused, and concurrent weather/APNs requests. `bun run build:check` validates the deployable bundle and bindings. No live weather quota or real user pushes are used by tests.

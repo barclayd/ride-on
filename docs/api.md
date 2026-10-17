@@ -28,6 +28,8 @@ no extra weather requests, scoring changes or forecast-cache invalidation.
 The reviewed [extension brief v7](extension-api-brief-v7.md) records the contract
 and the decision to preserve short wind sections. Scoring remains `comfort-v0.17`.
 
+API v0.34.0 adds [account-wide pauses](#pause), including automatic return dates and quiet resumption of scheduled monitoring. Scoring remains `comfort-v0.17`.
+
 API v0.33.0 separates [Strava route suggestions from grouped date-only history](strava.md#automatic-ride-matching-and-history-api-v0330). Clear matches at 90%+ coverage are logged automatically; 50–89% and ambiguous or incomplete matches require confirmation. Confirmed dates and corrections survive temporary evidence expiry.
 
 API v0.28.0 adds [tracked ride plans](ride-tracking-api.md): server-issued recommendation references, one active plan per account, immutable accepted baselines, manual refresh and retained assessment history. API v0.30.0 adds [scheduled monitoring, notification decisions, device registration and Apple push delivery](ride-monitoring.md); app notification integration follows separately. Scoring is unchanged at `comfort-v0.17`.
@@ -99,7 +101,7 @@ Authorization: Bearer <token>
 ```
 
 Returns `201 { "user": { "id": "user_<server-generated-id>", "schemaVersion": 1, "version": 1,
-"displayName": "Dan", "createdAt": "...", "updatedAt": "...", "settings": { ... } } }`
+"displayName": "Dan", "createdAt": "...", "updatedAt": "...", "settings": { ... }, "pause": null } }`
 with every resolved setting and `Location: /users/me`. `settings` is optional at
 creation; omitted values use the documented API defaults. This example is a
 partial profile, not an import of the complete reviewed profile.
@@ -142,6 +144,68 @@ Apple Weather; existing saved source policies are preserved. Responses
 include `savedUser: { "id": "dan", "version": 1 }` (or `null`) and the exact
 resolved settings, so a result can be traced to the profile used. Date, route IDs
 and the day's time window belong to the recommendation request, not the profile.
+
+### Pause
+
+From v0.34.0, every user response (`POST /users`, `GET /users/me`,
+`PATCH /users/me`, and the pause endpoints) includes a top-level `pause`, next to
+`settings`. It is `null` when Ride On is on, otherwise:
+
+```json
+{
+  "until": "2026-10-25",
+  "resumesAt": "2026-10-24T23:00:00.000Z",
+  "pausedAt": "2026-10-18T09:12:00.000Z"
+}
+```
+
+`until` is the local return date. `resumesAt` is the UTC instant of the start of
+that day in `settings.timeZone` (default `Europe/London`), including days where a
+clock change skips midnight. Clients compare against this instant rather than
+calculating it. A time-zone edit recalculates the return instant. At or after it,
+reads return `pause: null` without needing a storage cleanup or a client write.
+`until: null` and `resumesAt: null` mean paused until explicitly turned back on.
+
+```http
+PUT /users/me/pause
+Content-Type: application/json
+
+{ "until": "2026-10-25" }
+```
+
+Use `{ "until": null }` for an indefinite pause. A date must be a real
+`YYYY-MM-DD` date after today in the profile's zone and no more than 365 calendar
+days ahead. Invalid, past, same-day and over-limit dates return
+`422 PAUSE_DATE_OUT_OF_RANGE`; a missing key, wrong type or unknown field returns
+400. The response is `200 { "user": { … } }`, with the complete profile.
+Changing the return date keeps `pausedAt`; repeating a request is idempotent.
+Starting again after expiry records a new `pausedAt`.
+
+`DELETE /users/me/pause` turns Ride On back on immediately and returns the same
+whole-user response with `pause: null`. It also succeeds when already on. Both
+endpoints require the existing owner session, return `404 USER_NOT_FOUND` for a
+missing profile, and use `Cache-Control: no-store`.
+
+Pause writes are last-write-wins and do not accept `expectedVersion`, increment
+`version`, or change `updatedAt`. Pause state lives in a separate `user_pauses`
+table, outside `user_json`: a concurrent preference edit cannot erase it and a
+pause cannot cause a preference-version conflict. The user `schemaVersion` stays
+1. `PATCH /users/me`, saved settings and recommendation overrides reject pause
+fields; use the dedicated endpoints.
+
+While paused, [scheduled monitoring](ride-monitoring.md#account-pauses) makes no
+assessments or weather calls, sends no alerts of any kind and cancels pending
+deliveries. Plans and their accepted baselines stay intact. Explicit or automatic
+resume starts with a quiet reference assessment; missed summaries are dropped.
+The 15-minute cron handles dated returns with no client open.
+
+Recommendations, next-window searches, manual refresh, tracked-ride creation and
+route endpoints remain available. Clients read `user.pause` when opening or
+returning to the foreground, hide forecasts/scores/check-ins, keep the route name
+and distance, and stop automatic forecast calls while paused. The extension also
+reads on a daily alarm and at `resumesAt`; on resume it fetches fresh recommendations.
+The extension's default pause sends today + 7 in the rider's zone; its other
+choices send today + 3 or `null`. Client UI integration is a separate follow-up.
 
 ### Tailwind opportunity preference
 
@@ -1393,7 +1457,7 @@ The migration and deployment commands above target production. Use
 
 Malformed inputs: 400; invalid/missing token: 401; unknown or another owner's route:
 404; duplicate profile, stale profile/route/selection version or unversioned changed import: 409; oversized body: 413; unsupported media type: 415; unsupported route source, invalid GPX or too many
-weather locations: 422; missing access configuration: 503. Errors use
+weather locations or an invalid/out-of-range pause date (`PAUSE_DATE_OUT_OF_RANGE`): 422; missing access configuration: 503. Errors use
 `{ "error": { "code": "...", "message": "..." } }`. Weather/provider problems are
 represented in a successful assessment response with explicit unavailable data,
 not hidden behind a generic error or a fabricated best ride.

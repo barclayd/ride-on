@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  defaultSettings,
   settingsPatchSchema,
   settingsSchema,
 } from '../recommendations/input.ts';
@@ -32,7 +33,9 @@ export const userSchema = z.strictObject({
   displayName,
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  settings: settingsSchema,
+  settings: settingsSchema.extend({
+    timeZone: settingsSchema.shape.timeZone.default(defaultSettings.timeZone),
+  }),
 });
 export type User = z.infer<typeof userSchema>;
 export type UserStore = Readonly<{

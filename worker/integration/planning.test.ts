@@ -175,6 +175,7 @@ const readUser = async (r: { json: () => Promise<unknown> }) =>
   z
     .object({
       user: userSchema.extend({
+        pause: z.null(),
         weatherProviderId: z.string().nullable(),
         preferenceLevels: z.object({ sunshine: z.string(), rain: z.string() }),
       }),
