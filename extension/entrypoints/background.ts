@@ -33,9 +33,11 @@ import {
   type WeatherProvider,
 } from '../lib/types';
 import {
+  activePause,
   applyPatch,
   DEFAULT_LEVELS,
   ended,
+  instant,
   localDate,
   logged,
   newest,
@@ -43,6 +45,7 @@ import {
   planningDates,
   searchPatch,
   shownOf,
+  zoneOf,
 } from '../ui/format';
 
 // Serialise read-modify-write so concurrent handlers never drop each other's changes.
@@ -230,9 +233,13 @@ const current = (state: State) =>
   state.recsKey === recRequest(state)?.key &&
   Date.now() < Date.parse(state.recs?.weather.refreshAt ?? '');
 
+const paused = async () => !!activePause((await readState()).pause, new Date());
+
 let recommendation = 0;
 const recommend = async () => {
   const id = ++recommendation;
+  // Paused: no forecasts or scores until it turns back on.
+  if (await paused()) return update(() => ({ loading: false }));
   const request = recRequest(await readState());
   if (!request)
     return update(() => ({ recs: null, loading: false, shown: null }));
@@ -271,6 +278,7 @@ const show = async (patch: Partial<State>) => {
 // While the shown window has ended: the next windows worth riding, in one call.
 const suggest = async () => {
   const id = ++recommendation;
+  if (await paused()) return update(() => ({ loading: false }));
   const { user, selection, expired, search, unit } = await readState();
   if (!user || !expired || !selection?.routeIds.length)
     return update(() => ({ next: null, loading: false }));
@@ -444,10 +452,32 @@ const refresh = async (force = false) => {
   }));
   const tags = loadSummaries().catch(() => {}); // tags only; the panel works without them
   const state = await readState();
-  const { shown, expired } = state;
-  if (!expired && shown && ended(shown, new Date())) await expire(true);
+  const { shown, expired, pause } = state;
+  // Paused: nothing to rank or ask about. Past its date, it turns back on.
+  if (pause) {
+    if (!activePause(pause, new Date())) await resume();
+  } else if (!expired && shown && ended(shown, new Date())) await expire(true);
   else if (force || expired || !current(state)) await rank();
   await tags;
+};
+
+// ponytail: the pause is kept in this browser until the API stores it on the profile
+// (docs/extension-api-brief-v8.md); it doesn't reach the rider's other devices yet.
+const RESUME = 'resume';
+const armResume = async () => {
+  const { pause } = await readState();
+  if (pause?.resumesAt)
+    await browser.alarms.create(RESUME, { when: Date.parse(pause.resumesAt) });
+  else await browser.alarms.clear(RESUME);
+};
+
+// Fresh scores straight away; a window that ended while paused goes to what's next, without asking about it.
+const resume = async () => {
+  await update(() => ({ pause: null }));
+  await armResume();
+  const { shown, expired } = await readState();
+  if (!expired && shown && ended(shown, new Date())) return expire(false);
+  return rank();
 };
 
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
@@ -697,6 +727,21 @@ const handle = async (message: Message) => {
     // ponytail: local until the API stores alerts (follow-up PR); nothing is sent yet.
     case 'setAlert':
       return update(() => ({ alertRouteId: message.routeId }));
+    // Back on at 00:00 local on until; the rider's days, times and alerts stay as they are.
+    case 'pause': {
+      const { until } = message;
+      recommendation++; // a ranking in flight is dropped
+      await update((state) => ({
+        pause: {
+          until,
+          resumesAt: until && instant(until, '00:00', zoneOf(state.user)),
+        },
+        loading: false,
+      }));
+      return armResume();
+    }
+    case 'resume':
+      return resume();
     case 'openPopup':
       await update(() => ({ popupTab: message.tab }));
       // Chrome 127+, Safari 16+; without a focused window it throws and the page keeps its state.
@@ -854,6 +899,11 @@ export default defineBackground(() => {
     })),
   );
   revive().catch(() => {});
+  // Alarms may not outlive a browser restart or an update, so each wake sets it again.
+  armResume().catch(() => {});
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === RESUME) refresh().catch(() => {});
+  });
   browser.runtime.onMessage.addListener(
     (message: Message, _sender, sendResponse) => {
       handle(message).then(

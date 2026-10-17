@@ -98,6 +98,23 @@ export const Segmented = <T extends string>(props: {
   </fieldset>
 );
 
+// "Ride On is paused until Sun 18 Oct." and a link that turns it back on (handoff v6 §4).
+export const PausedLine = ({ view }: { view: View }) => {
+  const until = view.paused?.until;
+  return (
+    <div class="ro-paused">
+      <span>Ride On is paused{until && ` until ${shortDate(until)}`}.</span>
+      <button
+        type="button"
+        class="ro-link"
+        onClick={() => send({ type: 'resume' })}
+      >
+        Turn back on
+      </button>
+    </div>
+  );
+};
+
 export const CloseButton = (props: { title: string; onClick: () => void }) => (
   <button
     type="button"
@@ -612,6 +629,36 @@ export const RouteTile = (props: {
     : [];
   const skyId = `ro-sky-${card.routeId}`;
   const windId = `ro-wind-${card.routeId}`;
+  // Paused (handoff v6 §4): name and distance in the plain style; Edit still removes it.
+  if (view.paused)
+    return (
+      <div
+        class="ro-ride"
+        data-route={card.routeId}
+        style={{ '--ro-i': props.index }}
+      >
+        <div class="ro-ride-head">
+          <div class="ro-ride-title">
+            {props.href ? (
+              <a class="ro-name" href={props.href}>
+                {card.name}
+              </a>
+            ) : (
+              <span class="ro-name">{card.name}</span>
+            )}
+          </div>
+          {tracking.editing && (
+            <TileAction card={card} tracking={tracking} disabled={false} />
+          )}
+        </div>
+        <div class="ro-facts">
+          <span>
+            <Icon name="route" size={15} />
+            {card.km} km
+          </span>
+        </div>
+      </div>
+    );
   return (
     <div
       class={`ro-ride ${panel ? (rank < 3 ? `ro-${MEDALS[rank].toLowerCase()}` : '') : tint(card)}${tracking.alert === card.routeId ? ' ro-alert' : ''}`}

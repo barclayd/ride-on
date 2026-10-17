@@ -15,10 +15,12 @@ import {
   addDays,
   applyPatch,
   datesLabel,
+  dayOfMonth,
   longWeekday,
   newest,
   planningDates,
   shortDate,
+  weekday,
 } from '../ui/format';
 
 const EXTENSION = path.resolve('.output/chrome-mv3-e2e');
@@ -1382,6 +1384,91 @@ test('the check-in asks about the ride with alerts, then the alerts end', async 
     .toBe(null);
 });
 
+test('pausing hides forecasts until Ride On turns back on', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  freshFor = -1; // stale at once, so every open would normally rank again
+  const page = await openPopup(context, extensionId);
+  await expect(page.locator('.ro-ride').first()).toContainText('Hilly Loop');
+  expect(recCalls()).toHaveLength(1);
+
+  await page.getByRole('tab', { name: 'When' }).click();
+  const card = page.locator('.ro-pause');
+  const toggle = card.getByRole('switch', { name: 'Pause Ride On' });
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(card.locator('.ro-pause-return')).toHaveCount(0);
+  await toggle.click();
+  // After a week by default; the days and times stay, greyed out.
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(
+    card.getByRole('button', { name: 'After a week' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(card).toContainText(`Back on ${shortDate(day(7))}.`);
+  const pill = page.locator('.ro-paused-pill');
+  await expect(pill).toHaveText(
+    `Paused until ${weekday(day(7))} ${dayOfMonth(day(7))}`,
+  );
+  const dims = page.locator('.ro-dims');
+  await expect(dims).toHaveCount(3);
+  for (const dim of await dims.all())
+    await expect(dim).toHaveCSS('opacity', '0.45');
+  await card.getByRole('button', { name: 'After 3 days' }).click();
+  await expect(card).toContainText(`Back on ${shortDate(day(3))}.`);
+  await expect(pill).toHaveText(
+    `Paused until ${weekday(day(3))} ${dayOfMonth(day(3))}`,
+  );
+  await expect
+    .poll(() =>
+      worker.evaluate(
+        "chrome.alarms.get('resume').then((alarm) => alarm?.scheduledTime)",
+      ),
+    )
+    .toBe(
+      Date.parse(
+        (await worker.evaluate(
+          "chrome.storage.local.get('state').then(({ state }) => state.pause.resumesAt)",
+        )) as string,
+      ),
+    );
+  await card.getByRole('button', { name: 'When I choose' }).click();
+  await expect(card).toContainText(
+    'Stays paused until you switch it off here.',
+  );
+  await expect(pill).toHaveText('Paused');
+  await expect
+    .poll(() => worker.evaluate("chrome.alarms.get('resume')"))
+    .toBeUndefined();
+  await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('when-paused.png') });
+
+  // The Rides tab has the status line and no cards; reopening asks for no forecasts.
+  await page.getByRole('tab', { name: 'Rides' }).click();
+  await expect(page.locator('.ro-paused')).toContainText('Ride On is paused.');
+  await expect(page.locator('.ro-ride')).toHaveCount(0);
+  const summaries = calls.filter((c) => c.path === '/rides/summaries').length;
+  const again = await openPopup(context, extensionId);
+  await expect(again.locator('.ro-paused')).toBeVisible();
+  await expect
+    .poll(() => calls.filter((c) => c.path === '/rides/summaries').length)
+    .toBeGreaterThan(summaries);
+  await again.waitForTimeout(300);
+  expect(recCalls()).toHaveLength(1);
+  await again.screenshot({ path: test.info().outputPath('rides-paused.png') });
+  await again.close();
+
+  // Turning back on fetches fresh scores straight away.
+  await page.getByRole('button', { name: 'Turn back on' }).click();
+  await expect(page.locator('.ro-ride').first()).toContainText('Hilly Loop');
+  await expect(pill).toHaveCount(0);
+  expect(recCalls()).toHaveLength(2);
+  await page.getByRole('tab', { name: 'When' }).click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(dims.first()).toHaveCSS('opacity', '1');
+});
+
 test('History, recent roads and removal with undo', async ({
   context,
   worker,
@@ -1830,6 +1917,65 @@ test('Journeys page: a passed window asks for new dates, then rescores', async (
     path: test.info().outputPath('journeys-confirmed.png'),
     fullPage: true,
   });
+});
+
+test('Journeys page: paused, tiles show name and distance until turned back on', async ({
+  context,
+  worker,
+}) => {
+  routes.r102 = coast();
+  selection.routeIds = ['r101', 'r102'];
+  await signIn(worker);
+  const pause = { until: day(7), resumesAt: `${day(7)}T00:00:00.000Z` };
+  await worker.evaluate(
+    `chrome.storage.local.set({ state: { pause: ${JSON.stringify(pause)}, alertRouteId: 'r102' } })`,
+  );
+  await fakeCycleTravel(context);
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys');
+
+  const module = page.locator('ride-on-module');
+  const line = module.locator('.ro-paused');
+  await expect(line).toContainText(
+    `Ride On is paused until ${shortDate(day(7))}.`,
+  );
+  const tiles = module.locator('.ro-ride');
+  await expect(tiles).toHaveCount(2);
+  // Tracked order, plain: no scores, chips, bells or alert border.
+  await expect(tiles.first()).toContainText('Hilly Loop');
+  await expect(tiles.first()).toContainText('51 km');
+  await expect(module.locator('.ro-meter, .ro-chips, .ro-bell')).toHaveCount(0);
+  await expect(module.locator('.ro-alert, .ro-flags')).toHaveCount(0);
+  await expect(module.locator('.ro-window, .ro-passed')).toHaveCount(0);
+  await expect(page.locator('#jr_101 .ro-chip')).toHaveText('Tracked');
+  expect(recCalls()).toHaveLength(0);
+  // Edit still works.
+  await module.getByRole('button', { name: 'Edit' }).click();
+  await expect(module.locator('.ro-remove')).toHaveCount(2);
+  await module.getByRole('button', { name: 'Done' }).click();
+  await page.screenshot({
+    path: test.info().outputPath('journeys-paused.png'),
+    fullPage: true,
+  });
+
+  await line.getByRole('button', { name: 'Turn back on' }).click();
+  await expect(line).toHaveCount(0);
+  await expect(
+    tiles.first().getByRole('meter', { name: 'Conditions score' }),
+  ).toBeVisible();
+  // The ride with alerts gets its bell and border back.
+  await expect(tiles.filter({ hasText: 'Coast & Back' })).toHaveClass(
+    /ro-alert/,
+  );
+  await expect(module.locator('.ro-window')).toBeVisible();
+  expect(recCalls()).toHaveLength(1);
+  await expect
+    .poll(() =>
+      worker.evaluate(
+        "chrome.storage.local.get('state').then(({ state }) => state.pause)",
+      ),
+    )
+    .toBe(null);
 });
 
 // Safari injects content scripts again into open pages (on enable, on site access).

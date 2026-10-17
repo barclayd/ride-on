@@ -4,6 +4,7 @@ import type {
   Checkin,
   Days,
   LocalPrefs,
+  Pause,
   Pick,
   Planning,
   Search,
@@ -92,7 +93,7 @@ export const qualityColour = (score: number) =>
 
 // A local date and time as a UTC instant.
 // ponytail: can be an hour out within an hour of a DST change; fine for "has the window ended".
-const instant = (date: string, time: string, timeZone: string) => {
+export const instant = (date: string, time: string, timeZone: string) => {
   const guess = new Date(`${date}T${time}:00Z`);
   const local = Date.parse(
     `${localDate(guess, timeZone)}T${clock(guess, timeZone)}:00Z`,
@@ -915,12 +916,21 @@ export const applyPatch = (
   };
 };
 
+// The pause, until the moment it turns back on.
+export const activePause = (pause: Pause | null, now: Date) =>
+  pause && !(pause.resumesAt && Date.parse(pause.resumesAt) <= now.getTime())
+    ? pause
+    : null;
+
+export const zoneOf = (user: State['user']) =>
+  user?.settings.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 // Everything the popup and page render, from the stored state.
 export const viewOf = (state: State, now: Date) => {
   const { user, planning, expired, recs } = state;
-  const timeZone =
-    user?.settings.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = zoneOf(user);
   const today = localDate(now, timeZone);
+  const paused = activePause(state.pause, now);
   // An ended window reads as passed until new dates are picked.
   const range = expired ? null : planningDates(planning.days, today);
   const selected = (recs?.days ?? []).filter((d) => range?.includes(d.date));
@@ -968,8 +978,21 @@ export const viewOf = (state: State, now: Date) => {
     provider:
       state.providers.find((p) => p.id === user?.weatherProviderId)?.name ??
       'Your forecast provider',
+    paused,
     ...results,
-    banners: range ? results.banners : [],
+    banners: range && !paused ? results.banners : [],
+    // Paused: every tracked ride in tracked order, without scores.
+    ...(paused && {
+      cards: buildResults(
+        state.selection?.routeIds ?? [],
+        state.routes,
+        null,
+        [],
+        timeZone,
+        state.units,
+      ).cards,
+      coverageWarn: false,
+    }),
   };
 };
 
@@ -977,7 +1000,7 @@ export const viewOf = (state: State, now: Date) => {
 export const shownOf = (state: State, now: Date): Shown | null => {
   const { recs } = state;
   if (!recs?.range) return null;
-  const view = viewOf({ ...state, expired: null }, now);
+  const view = viewOf({ ...state, expired: null, pause: null }, now);
   const { time } = state.planning;
   const last = recs.range.end;
   const ends = [

@@ -32,6 +32,8 @@ export default defineConfig({
       'unlimitedStorage',
       // Re-injects the Journeys script into pages left on an old copy by an update.
       'scripting',
+      // Turns Ride On back on at the end of a pause, with no panel open.
+      'alarms',
     ],
     // For scripting; Safari asks per site, so this also lists cycle.travel for the popup's request.
     host_permissions: [`${apiUrl}/*`, 'https://cycle.travel/*'],
