@@ -73,6 +73,8 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(hero.waitForExistence(timeout: 5))
         hero.tap()
         XCTAssertTrue(app.staticTexts["Why It Scored 86"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Sky on the Ride"].exists)
+        XCTAssertTrue(app.staticTexts["Wind on the Ride"].exists)
 
         // An hour later scores 82; the factors follow the departure.
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Wednesday' AND label CONTAINS '10:00'")).firstMatch.tap()

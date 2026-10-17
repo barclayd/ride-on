@@ -56,10 +56,15 @@ public extension RideDetail {
         /// Felt wind along the route, in order, covering its whole length.
         public var wind: [WindStretch]
         public var factors: [Factor]
+        /// "Sky on the Ride"; `nil` when sunshine doesn't count or isn't forecast.
+        public var sky: SkyBreakdown?
+        /// "Wind on the Ride"; `nil` when the API has no wind stretches or hours for it.
+        public var windBreakdown: WindBreakdown?
 
         public var id: Date { start }
 
-        public init(start: Date, finish: Date, score: Int, hours: [Hour], windFrom: String?, wind: [WindStretch], factors: [Factor]) {
+        public init(start: Date, finish: Date, score: Int, hours: [Hour], windFrom: String?, wind: [WindStretch], factors: [Factor],
+                    sky: SkyBreakdown? = nil, windBreakdown: WindBreakdown? = nil) {
             self.start = start
             self.finish = finish
             self.score = score
@@ -67,6 +72,8 @@ public extension RideDetail {
             self.windFrom = windFrom
             self.wind = wind
             self.factors = factors
+            self.sky = sky
+            self.windBreakdown = windBreakdown
         }
     }
 
@@ -218,7 +225,42 @@ public extension RideDetail {
             Factor("Novelty", score: s(60), reason: novelty),
         ]
 
-        return Departure(start: start, finish: finish, score: score, hours: hours, windFrom: "west-south-west", wind: wind, factors: factors)
+        return Departure(start: start, finish: finish, score: score, hours: hours, windFrom: "west-south-west", wind: wind, factors: factors,
+                         sky: sky(hours), windBreakdown: windBreakdown(route, wind: wind, conditions: conditions, start: start, finish: finish))
+    }
+
+    /// Each hour's sky as distance shares; the finish hour is part-ridden.
+    private static func sky(_ hours: [Hour]) -> SkyBreakdown? {
+        let kinds: [RideBoard.Sky: [SkyBreakdown.Kind: Double]] = [
+            .sunny: [.sunny: 1], .sunnySpells: [.sunny: 0.35, .sunnyIntervals: 0.65], .cloudy: [.cloud: 1], .rain: [.cloud: 1],
+        ]
+        let parts = hours.enumerated().map { i, hour in (km: i == hours.count - 1 ? 0.4 : 1.0, kinds: kinds[hour.sky] ?? [:]) }
+        let km = parts.reduce(0) { $0 + $1.km }
+        var ride: [SkyBreakdown.Kind: Double] = [:]
+        for part in parts { for (kind, share) in part.kinds { ride[kind, default: 0] += share * part.km / km } }
+        let categories = hours.contains { $0.sky == .rain } ? ["precipitation": 1.0] : hours.contains { $0.sky == .cloudy } ? ["cloudy": 1.0] : [:]
+        return SkyBreakdown.make(ride: ride, hours: parts, categories: categories, partial: false)
+    }
+
+    /// The felt-wind stretches with a wind from the south-west, veering west for the last.
+    private static func windBreakdown(_ route: RideBoard.RouteSummary, wind: [WindStretch], conditions: RideBoard.Conditions,
+                                      start: Date, finish: Date) -> WindBreakdown {
+        let effects: [RideBoard.Wind: WindBreakdown.Effect] = [.tailwind: .tailwind, .crosswind: .crosswind, .headwind: .headwind]
+        let adverse: [RideBoard.Wind: Double] = [.tailwind: 0.15, .crosswind: 0.85, .headwind: 1]
+        let duration = finish.timeIntervalSince(start)
+        let stretches = wind.enumerated().map { i, s in
+            let from = s.startKm / route.distanceKm, to = s.endKm / route.distanceKm
+            return WindBreakdown.Stretch(effects[s.wind] ?? .crosswind, from: from, to: to, fromDegrees: i == wind.count - 1 ? 262 : 238,
+                                         kph: conditions.windKph + [0, 2, 1][i % 3],
+                                         adverseGustKph: (conditions.gustKph * (adverse[s.wind] ?? 1)).rounded(),
+                                         start: start.addingTimeInterval(from * duration), end: start.addingTimeInterval(to * duration))
+        }
+        let roundTrip = WindBreakdown.isRoundTrip(route.coordinates)
+        let gusts = WindBreakdown.gusts(peakKph: conditions.gustKph, adverseKph: stretches.compactMap(\.adverseGustKph).max(),
+                                        comfortKph: 35, limitKph: gustLimit, stretches: stretches, roundTrip: roundTrip,
+                                        speed: { "\(Int($0.rounded())) \(kph)" }, clock: clock)
+        let average = stretches.reduce(0) { $0 + $1.share * $1.kph }
+        return WindBreakdown(stretches: stretches, averageKph: average, gusts: gusts, roundTrip: roundTrip, exact: true)
     }
 
     /// Rolling ground with one big climb at about 60% of the way, peaking near 29% of the

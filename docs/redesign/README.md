@@ -239,12 +239,34 @@ matched by `routeId@departure`, not by reference. The limits come from `RiderSet
    | 11:00 | sun | 13° | 17 km/h | 28 | 5% |
    | 12:00 | sun behind cloud | 14° | 16 km/h | 27 | 5% |
 
-   Footnote: "Wind from the west-south-west."
-5. **"Along the Route"**: `RouteProfile`. Elevation area chart 0–200 m over 0–50 km, peak marker
+   Footnote: "Wind from the west-south-west.", only when there's no "Wind on the Ride" below.
+5. **"Sky on the Ride"** card, the extension's sun chip as a block: multicolour `cloud.sun` and
+   "Sun and sunny intervals" (`.headline`; "Part of the ride isn't forecast yet." under it when
+   some isn't), a `ShareBar` of sunny / sunny intervals / cloud / not forecast yet in ride order,
+   "09:00" and "~12:00" under its ends, then the legend: ● Sunny ~75%, ● Sunny intervals ~25%.
+   Summaries follow the extension: "Sunny throughout", "Sunny where forecast", "Sunny intervals",
+   "Sun and cloud", "Cloudy", "Overcast", "Fog". No card when nothing is forecast, or when the
+   sky is mostly showers or night (the forecast grid already says so).
+6. **"Wind on the Ride"** card, the extension's wind panel as a block:
+   - `WindRouteMap`: the loop in tailwind green, crosswind orange and headwind red, Start marker.
+     Only when the API placed the wind stretches (`windStretches`); ride hours alone don't place
+     the wind finely enough to colour the road.
+   - "Wind from the south-west" (`.headline`), "Then from the west." under it, a `WindCompass`
+     (arrow towards the north-east, "10 mph") trailing. Light all the way: "Light wind", "Under
+     10 km/h all the way.", no arrow. Stacks at accessibility sizes.
+   - A `ShareBar` of the stretches with compass points where the wind turns ("SW" … "W"), only
+     when it does; "09:00" and "~12:00" under its ends.
+   - Legend, largest first: ● Tailwind 9 mph ~65%, ● Crosswind 11 mph ~20%, ● Headwind 10 mph
+     ~20%. Light wind reads "under 6 mph".
+   - Divider, then `wind` "Gusts up to 28 km/h" (semibold) and the extension's sentence: "Mostly
+     behind you, so they help. At most 28 km/h against you." Over your comfort or limit the
+     symbol turns orange and the sentence says where: "From the side on the way back,
+     10:31–11:40. Over your 35 km/h comfort."
+7. **"Along the Route"**: `RouteProfile`. Elevation area chart 0–200 m over 0–50 km, peak marker
    "186 m" at ~31 km; under it a wind strip (accent tailwind 0–32 km, yellow crosswind 32–42 km,
    red headwind 42–51 km) and a legend: Tailwind "First 32 km", Crosswind "Next 10 km", Headwind
    "Last 9 km".
-6. **"Why It Scored 86"**: one `FactorRow` per factor, name + score + bar + one sentence.
+8. **"Why It Scored 86"**: one `FactorRow` per factor, name + score + bar + one sentence.
 
    | Factor | Score | Sentence |
    |---|---|---|
@@ -258,9 +280,9 @@ matched by `routeId@departure`, not by reference. The limits come from `RiderSet
    | Novelty | 60 | You rode it 15 days ago, on 29 September. |
 
    Footnote: "Each factor is weighted by your preferences."
-7. **Actions** card (accent list buttons): "Add to Calendar" (trailing "Wed 09:00–12:00"),
+9. **Actions** card (accent list buttons): "Add to Calendar" (trailing "Wed 09:00–12:00"),
    "Open in cycle.travel".
-8. **Footer**: the forecast provider's attribution ("Apple Weather · Other data sources", or the
+10. **Footer**: the forecast provider's attribution ("Apple Weather · Other data sources", or the
    provider's own line, such as "Powered by Met Office data"); "Updated 08:12."
 
 Chrome: back (44pt circle, `chevron.left`, label "Rides") leading; one capsule with share and
@@ -284,7 +306,14 @@ Build:
 - [x] Sample data: `RideDetail.sample(for:on:)` in `Models/RideDetail.swift`, built from any pick
 - [x] Notes and factor sentences measured against your preferences (`resolvedPreferences`), live
 - [x] Footer shows the forecast provider's own attribution (`weather.attribution`)
-- [x] "Wind from the …" footnote from `windFromDegrees` in 16 compass words, hidden when null ([reviewed contract](ride-detail-api-requests.md) §1)
+- [x] "Wind from the …" footnote from `windFromDegrees` in 16 compass words, hidden when null or when "Wind on the Ride" shows ([reviewed contract](ride-detail-api-requests.md) §1)
+- [x] "Sky on the Ride": the extension's sky chip rules (`extension/ui/format.ts` `skyChip`) over
+      `conditions.skyConditionShares` per ride hour and for the ride, `sunshineAssessment` for
+      what isn't forecast yet (`RideDetail.SkyBreakdown`)
+- [x] "Wind on the Ride": the extension's wind panel (`extension/ui/wind.ts`) over `windStretches`,
+      falling back to `rideHours[]` without the map; gusts sentence against your comfort and limit
+      in your units and the response time zone (`RideDetail.WindBreakdown`)
+- [x] Both checked in light, dark and at accessibility sizes on the simulator
 - [x] "▲ 4 since 07:00" badge from `best.previous`, only when the rounded change is at least 1 (§2)
 - [x] Additional-factor decision: explain the seven existing factors; keep time feasibility and recent-rides deductions separate, with no invented Surface match or Intent scores (§3)
 
@@ -581,6 +610,8 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 | Departure tiles | `best` + up to three `alternatives` |
 | Forecast on the Ride | `rideHours[]` |
 | Wind strip | `rideHours[]` dominant wind, merged into stretches |
+| Sky on the Ride | `rideHours[].conditions.skyConditionShares` (or `skyConditionDistanceFractions`), `best.conditions` for the ride, `sunshineAssessment` |
+| Wind on the Ride | `windStretches[]` (map, bar, legend, gusts placement), else `rideHours[]`; `best.conditions` gusts; `resolvedPreferences` gust comfort and limit |
 | Why It Scored | `factors`, sorted by score |
 | Notes | Built in the app from `best.conditions`, `rideHours[]`, `recentRides` and `distanceFit`, measured against `resolvedPreferences`; `drawbacks` only when preferences are missing |
 | Factor sentences | `factors` + `conditions`; Wind and Temperature quote your limits from `resolvedPreferences` |

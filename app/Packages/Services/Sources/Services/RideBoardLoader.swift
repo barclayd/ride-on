@@ -99,7 +99,9 @@ public enum RideBoardLoader {
             details[pick.id] = RideDetail(pick: pick, changeSince: best.previous?.generatedAt,
                                           notes: preferences.map { notes(best, fit: result.distanceFit, preferences: $0, units: units) } ?? notes(best.drawbacks),
                                           elevation: [],
-                                          departures: ([best] + others).prefix(4).map { departure($0, route: route, preferences: preferences, units: units) })
+                                          departures: ([best] + others).prefix(4).map {
+                                              departure($0, route: route, preferences: preferences, units: units, timeZone: calendar.timeZone)
+                                          })
             return pick
         }
 
@@ -226,7 +228,8 @@ public enum RideBoardLoader {
         }
     }
 
-    static func departure(_ d: Departure, route: RideBoard.RouteSummary, preferences: Preferences?, units: ProseUnits) -> RideDetail.Departure {
+    static func departure(_ d: Departure, route: RideBoard.RouteSummary, preferences: Preferences?, units: ProseUnits,
+                          timeZone: TimeZone = .current) -> RideDetail.Departure {
         let hours = d.rideHours.compactMap { hour in
             hour.conditions.map { c in
                 RideDetail.Hour(time: hour.start, sky: sky(c), temperatureC: ((c.temperatureC.minimum + c.temperatureC.maximum) / 2).rounded(),
@@ -235,7 +238,96 @@ public enum RideBoardLoader {
         }
         return RideDetail.Departure(start: d.departureAt, finish: d.finishAt, score: Int(d.score.rounded()), hours: hours,
                                     windFrom: d.conditions.windFromDegrees.map(compass), wind: stretches(d),
-                                    factors: factors(d, route: route, preferences: preferences, units: units))
+                                    factors: factors(d, route: route, preferences: preferences, units: units),
+                                    sky: skyBreakdown(d),
+                                    windBreakdown: windBreakdown(d, route: route, preferences: preferences, units: units, timeZone: timeZone))
+    }
+
+    // MARK: Sky and wind on the ride (the extension's sky chip and wind panel: extension/ui/format.ts, wind.ts)
+
+    /// `nil` when sunshine isn't weighed, isn't forecast, or the sky is showers or night alone.
+    static func skyBreakdown(_ d: Departure) -> RideDetail.SkyBreakdown? {
+        guard let assessed = d.sunshineAssessment, assessed.status != "unavailable" else { return nil }
+        // Before `skyConditionShares`, an hour with a gap has no shares: count it all as not forecast.
+        let hours = d.rideHours.compactMap { hour -> (km: Double, kinds: [RideDetail.SkyBreakdown.Kind: Double])? in
+            guard let c = hour.conditions, c.distanceKm > 0 else { return nil }
+            return (c.distanceKm, skyKinds(c) ?? [.unknown: 1])
+        }
+        let km = hours.reduce(0) { $0 + $1.km }
+        let mean = km > 0 ? Dictionary(uniqueKeysWithValues: RideDetail.SkyBreakdown.Kind.allCases.map { kind in
+            (kind, hours.reduce(0) { $0 + ($1.kinds[kind] ?? 0) * $1.km } / km)
+        }) : nil
+        guard let ride = skyKinds(d.conditions) ?? mean else { return nil }
+        return .make(ride: ride, hours: hours,
+                     categories: d.conditions.skyConditionShares ?? d.conditions.skyConditionDistanceFractions ?? [:],
+                     partial: assessed.status != "complete" || assessed.unknownDistanceFraction > 0)
+    }
+
+    /// Cloud, overcast, mist, showers and night all count as cloud.
+    static func skyKinds(_ c: Conditions) -> [RideDetail.SkyBreakdown.Kind: Double]? {
+        guard let f = c.skyConditionShares ?? c.skyConditionDistanceFractions else { return nil }
+        let named = ["sunny", "sunnyIntervals", "unknown"]
+        return [.sunny: f["sunny"] ?? 0, .sunnyIntervals: f["sunnyIntervals"] ?? 0, .unknown: f["unknown"] ?? 0,
+                .cloud: f.filter { !named.contains($0.key) }.values.reduce(0, +)]
+    }
+
+    /// The API's wind stretches; before them, each ride hour; with neither, the whole ride's summary.
+    static func windBreakdown(_ d: Departure, route: RideBoard.RouteSummary, preferences p: Preferences?, units u: ProseUnits,
+                              timeZone: TimeZone) -> RideDetail.WindBreakdown {
+        typealias Wind = RideDetail.WindBreakdown
+        let metres = d.windStretches?.last?.toM ?? 0
+        let stretches: [Wind.Stretch]
+        if let wire = d.windStretches, metres > 0 {
+            stretches = wire.map {
+                Wind.Stretch(effect($0.effect), from: $0.fromM / metres, to: $0.toM / metres, fromDegrees: $0.windFromDegrees,
+                             kph: $0.averageWindSpeedKph, adverseGustKph: $0.maximumAdverseGustKph, start: $0.startAt, end: $0.endAt)
+            }
+        } else {
+            let hours = d.rideHours.compactMap { hour in hour.conditions.flatMap { $0.distanceKm > 0 ? (hour, $0) : nil } }
+            let km = hours.reduce(0) { $0 + $1.1.distanceKm }
+            var from = 0.0
+            stretches = km > 0 ? hours.map { hour, c in
+                let share = c.distanceKm / km
+                defer { from += share }
+                return span(c, from: from, to: from + share, start: hour.start, end: hour.end ?? min(d.finishAt, hour.start.addingTimeInterval(3600)))
+            } : [span(d.conditions, from: 0, to: 1, start: d.departureAt, end: d.finishAt)]
+        }
+        let roundTrip = Wind.isRoundTrip(route.coordinates)
+        var style = Date.FormatStyle.dateTime.hour(.twoDigits(amPM: .abbreviated)).minute(.twoDigits)
+        style.timeZone = timeZone
+        let gusts = Wind.gusts(peakKph: d.conditions.maximumGustKph, adverseKph: d.conditions.gustExposure?.maximumAdverseKph,
+                               comfortKph: p?.wind.comfortableGustKph, limitKph: p?.minimumStandards?.maximumGustKph,
+                               stretches: stretches, roundTrip: roundTrip, speed: u.speed, clock: { $0.formatted(style) })
+        return Wind(stretches: stretches, averageKph: d.conditions.averageWindSpeedKph, gusts: gusts, roundTrip: roundTrip,
+                    exact: d.windStretches?.isEmpty == false && metres > 0)
+    }
+
+    static func effect(_ wire: String) -> RideDetail.WindBreakdown.Effect {
+        switch wire {
+        case "tailwind": .tailwind
+        case "crosswind": .crosswind
+        case "headwind": .headwind
+        default: .light
+        }
+    }
+
+    /// A ride hour, or the whole ride, as one stretch: its main effect, with how much of it each covers.
+    static func span(_ c: Conditions, from: Double, to: Double, start: Date, end: Date) -> RideDetail.WindBreakdown.Stretch {
+        typealias Wind = RideDetail.WindBreakdown
+        let effects: [(Wind.Effect, Double)]
+        if c.averageWindSpeedKph < Wind.namedKph {
+            effects = [(.light, 1)]
+        } else if let f = c.windDistanceFractions {
+            effects = [(.tailwind, f.tailwind), (.crosswind, f.crosswind), (.headwind, f.headwind)]
+        } else {
+            effects = [(.tailwind, c.averageTailwindKph), (.crosswind, c.averageCrosswindKph), (.headwind, c.averageHeadwindKph)]
+        }
+        // The first largest wins, like the extension.
+        let main = effects.dropFirst().reduce(effects[0]) { $1.1 > $0.1 ? $1 : $0 }.0
+        let parts = c.windDistanceFractions != nil || c.averageWindSpeedKph < Wind.namedKph
+            ? Dictionary(uniqueKeysWithValues: effects) : [main: 1]
+        return Wind.Stretch(main, from: from, to: to, fromDegrees: c.windFromDegrees, kph: c.averageWindSpeedKph,
+                            adverseGustKph: c.gustExposure?.maximumAdverseKph, start: start, end: end, parts: parts)
     }
 
     /// 248° → "west-south-west".
@@ -498,7 +590,21 @@ extension RideBoardLoader {
             var temperature, wind, dryness: Double
         }
         struct Standards: Decodable { var status: String }
-        struct Hour: Decodable { var start: Date; var conditions: Conditions? }
+        struct Hour: Decodable { var start: Date; var end: Date?; var conditions: Conditions? }
+        struct WindStretch: Decodable {
+            var fromM, toM: Double
+            var startAt, endAt: Date
+            /// `tailwind`, `crosswind`, `headwind` or `light` (under 10 km/h).
+            var effect: String
+            var windFromDegrees: Double?
+            var averageWindSpeedKph: Double
+            var maximumAdverseGustKph: Double?
+        }
+        struct SunshineAssessment: Decodable {
+            /// `complete`, `partial` or `unavailable`.
+            var status: String
+            var unknownDistanceFraction: Double
+        }
         struct RecentRides: Decodable { var penaltyPoints: Double }
         struct Previous: Decodable { var score: Double; var generatedAt: Date }
         var departureAt: Date
@@ -508,6 +614,10 @@ extension RideBoardLoader {
         var standards: Standards
         var conditions: Conditions
         var rideHours: [Hour]
+        /// Covers the ride in order; empty when coverage is incomplete. Absent before API v0.29.0.
+        var windStretches: [WindStretch]?
+        /// `nil` when sunshine has no weight.
+        var sunshineAssessment: SunshineAssessment?
         var drawbacks: [String]
         var recentRides: RecentRides?
         /// Null values: the factor is inactive or lacks evidence. Absent before API v0.25.0.
@@ -533,6 +643,8 @@ extension RideBoardLoader {
         var windDistanceFractions: Shares?
         var precipitationSummary: String?
         var skyConditionDistanceFractions: [String: Double]?
+        /// The same shares plus `unknown`, kept when part of the ride isn't forecast.
+        var skyConditionShares: [String: Double]?
         var cloudCoverFraction: Cloud?
         var maximumHeadwindKph: Double?
         var maximumCrosswindKph: Double?
