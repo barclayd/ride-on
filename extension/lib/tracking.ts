@@ -1,5 +1,5 @@
 import { api, getSecret, setSecret } from './api';
-import type { Departure } from './types';
+import type { AlertTriggers, Departure } from './types';
 
 export type TrackedRide = {
   id: string;
@@ -12,6 +12,7 @@ export type TrackedRide = {
     pick: { candidate: Departure };
     context: { routes: { id: string; name: string }[] };
   };
+  alerts?: { triggers: AlertTriggers } | null;
   latestAssessment: { pick: { candidate: Departure } } | null;
   latestAssessmentKind: 'current' | 'last_known' | null;
   refresh: {
@@ -25,11 +26,18 @@ export type Tracker = {
   ride: TrackedRide | null;
   version: number;
   error: string | null;
+  // From the API's capabilities; absent before brief v11.
+  triggers?: boolean; // it takes the rider's triggers with a tracked ride
+  summaryTime?: string; // local time of the evening-before forecast
 };
 export const loadTracker = async (): Promise<Tracker> => {
   const list = await api<{
     activeTrackedRideId: string | null;
     trackingVersion: number;
+    capabilities?: {
+      alertTriggers?: boolean;
+      finalForecastLocalTime?: string;
+    };
   }>('/tracked-rides');
   const ride = list.activeTrackedRideId
     ? (
@@ -38,18 +46,28 @@ export const loadTracker = async (): Promise<Tracker> => {
         )
       ).ride
     : null;
-  return { ready: true, ride, version: list.trackingVersion, error: null };
+  return {
+    ready: true,
+    ride,
+    version: list.trackingVersion,
+    error: null,
+    triggers: list.capabilities?.alertTriggers === true,
+    summaryTime: list.capabilities?.finalForecastLocalTime,
+  };
 };
 // Persist the action key before sending, so a service-worker restart cannot duplicate it.
+// The API rejects fields it doesn't know, so triggers go only once it says it takes them.
 export const saveTrackedRide = async (
   reference: string,
   version: number,
   replace: string | null,
+  triggers: AlertTriggers | null,
 ) => {
   const body = {
     recommendationRef: reference,
     expectedTrackingVersion: version,
     replaceTrackedRideId: replace,
+    ...(triggers && { alerts: { triggers } }),
   };
   const signature = JSON.stringify(body);
   const previous = await getSecret<{ signature: string; key: string }>(

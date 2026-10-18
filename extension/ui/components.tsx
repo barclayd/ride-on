@@ -9,7 +9,13 @@ import {
 } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { onStateChange, readState, type State, send } from '../lib/state';
-import type { Departure, NextWindow, Outline, ScoreChange } from '../lib/types';
+import type {
+  AlertTriggers,
+  Departure,
+  NextWindow,
+  Outline,
+  ScoreChange,
+} from '../lib/types';
 import {
   type Banner,
   type Card,
@@ -25,6 +31,7 @@ import {
 } from './format';
 import { type Rain, rainPanel } from './rain';
 import { type TemperaturePanel, temperaturePanel } from './temperature';
+import { asksPermission } from './triggers';
 import { DIAL, SKETCH, type WindSketch, windPanel } from './wind';
 
 export const iconUrl = () => browser.runtime.getURL('/ride-on-icon.png');
@@ -327,15 +334,59 @@ const Notes = ({ card }: { card: Card }) => (
 // Edit mode and Undo message; which rides are tracked, and which has alerts, is shared state.
 type Said = { text: string; undo?: () => void; at: number };
 export type Tracking = ReturnType<typeof useTracking>;
+// The alerts dialog (v10, 29c), and the bell that opened it, which gets focus back.
+type Asking = { card: Card; from: HTMLElement | null };
+
+// Alerts on, against whatever has them now.
+const startAlerts = async (
+  routeId: string,
+  recommendationRef: string,
+  triggers?: AlertTriggers,
+) => {
+  const { tracker } = await readState();
+  return send({
+    type: 'setAlert',
+    routeId,
+    recommendationRef,
+    triggers,
+    expectedTrackingVersion: tracker.version,
+    replaceTrackedRideId: tracker.ride?.id ?? null,
+  });
+};
+const stopAlerts = async (routeId: string) => {
+  const { tracker } = await readState();
+  if (tracker.ride?.routeId !== routeId) return {};
+  return send({
+    type: 'setAlert',
+    routeId: null,
+    expectedTrackingVersion: tracker.version,
+    replaceTrackedRideId: tracker.ride.id,
+  });
+};
 
 export const useTracking = (view: View | null) => {
   const [editing, setEditing] = useState(false);
   const [said, setSaid] = useState<Said | null>(null);
   const [shown, setShown] = useState(false);
   const [held, setHeld] = useState(false); // the pointer or focus is on the message
+  const [asking, setAsking] = useState<Asking | null>(null);
   const routeIds = view?.state.selection?.routeIds ?? [];
   const wanted = view?.state.alertRouteId ?? null;
   const alert = wanted;
+  const tracker = view?.state.tracker;
+  // The ride alerts move from, when it's another ride.
+  const active = tracker?.ride?.refresh.closed ? null : tracker?.ride;
+  const movingFrom = (card: Card) =>
+    active && active.routeId !== card.routeId
+      ? (active.baseline.context.routes.find((r) => r.id === active.routeId)
+          ?.name ??
+        view?.state.routes[active.routeId]?.name ??
+        'Your ride')
+      : null;
+  const close = () => {
+    asking?.from?.focus();
+    setAsking(null);
+  };
   // Six seconds, held while the rider is on it; a new message starts the count again.
   useEffect(() => {
     if (!said || held) return;
@@ -361,37 +412,87 @@ export const useTracking = (view: View | null) => {
       setShown(false);
       said?.undo?.();
     },
-    // The selected recommendation pins the departure. A replacement is explicit.
-    bell: async (card: Card) => {
-      const tracker = view?.state.tracker;
+    asking,
+    movingFrom,
+    close,
+    // The selected recommendation pins the departure. An off bell asks which alerts first (29c);
+    // an on bell turns them off straight away.
+    bell: async (card: Card, from: HTMLElement | null) => {
       if (!tracker?.ready || tracker.error)
         return say('Refresh to check your tracked ride first.');
+      const ref = card.best?.recommendationRef;
       const on =
         alert !== card.routeId ||
         tracker.ride?.departureAt !== card.best?.departureAt;
-      if (on && !card.best?.recommendationRef)
-        return say('Refresh this ride before tracking it.');
-      if (
-        on &&
-        tracker.ride &&
-        !confirm(`Replace your tracked ride with ${card.name}?`)
-      )
-        return;
-      const result = await send({
-        type: 'setAlert',
-        routeId: on ? card.routeId : null,
-        recommendationRef: on
-          ? (card.best?.recommendationRef ?? undefined)
-          : undefined,
-        expectedTrackingVersion: tracker.version,
-        replaceTrackedRideId: tracker.ride?.id ?? null,
-      });
+      if (on) {
+        if (!ref) return say('Refresh this ride before tracking it.');
+        return setAsking({ card, from });
+      }
+      const result = await stopAlerts(card.routeId);
       if (result.error) return say(result.error);
       say(
-        on
-          ? `Tracking ${card.name}. Notifications are managed in Preferences.`
-          : `Stopped monitoring ${card.name}`,
+        `Alerts off for ${card.name}`,
+        ref
+          ? () =>
+              startAlerts(
+                card.routeId,
+                ref,
+                view?.state.triggers[card.routeId],
+              ).then(failed)
+          : undefined,
       );
+    },
+    // Saves the switches and turns alerts on. The first time, the browser asks to notify first;
+    // a page can't ask for the extension, so it opens the panel's Preferences after saving.
+    confirm: async (triggers: AlertTriggers) => {
+      const card = asking?.card;
+      const ref = card?.best?.recommendationRef;
+      if (!view || !card || !ref) return;
+      const moving = movingFrom(card);
+      const before = active;
+      close();
+      const { push, triggers: saved } = view.state;
+      const ask = asksPermission(push);
+      const panel = location.href.startsWith(browser.runtime.getURL('/'));
+      const allowed =
+        ask && panel && !import.meta.env.SAFARI
+          ? await browser.permissions
+              .request({ permissions: ['notifications'] })
+              .catch(() => false)
+          : null;
+      const result = await startAlerts(card.routeId, ref, triggers);
+      if (result.error) return say(result.error);
+      // Undo puts back the ride that had alerts, while its departure is still on screen.
+      const back = before
+        ? view.cards.find(
+            (c) =>
+              c.routeId === before.routeId &&
+              c.best?.departureAt === before.departureAt,
+          )?.best?.recommendationRef
+        : null;
+      const undo = before
+        ? back
+          ? () =>
+              startAlerts(before.routeId, back, saved[before.routeId]).then(
+                failed,
+              )
+          : undefined
+        : () => stopAlerts(card.routeId).then(failed);
+      if (allowed === false || push.status === 'blocked')
+        say('Notifications are blocked in your browser');
+      else
+        say(
+          moving
+            ? `Alerts moved from ${moving} to ${card.name}`
+            : `Alerts on for ${card.name}`,
+          undo,
+        );
+      if (!ask) return;
+      if (!panel) return send({ type: 'openPopup', tab: 'prefs' });
+      if (allowed === false) return;
+      const enabled = await send({ type: 'enablePush' });
+      if (!enabled.error && import.meta.env.SAFARI)
+        location.href = 'rideon-notifications://enable';
     },
     remove: (card: Card) => {
       const index = routeIds.indexOf(card.routeId);
@@ -455,10 +556,10 @@ export const Toast = ({ tracking }: { tracking: Tracking }) => {
 };
 
 // The handoff's bell (§1): outlined off, filled on.
-const BellIcon = () => (
+export const BellIcon = ({ size = 17 }: { size?: number }) => (
   <svg
-    width="17"
-    height="17"
+    width={size}
+    height={size}
     viewBox="0 0 16 16"
     stroke="currentColor"
     stroke-width="1.5"
@@ -517,16 +618,12 @@ const TileAction = (props: {
       aria-pressed={on}
       aria-label={
         on
-          ? `Tracking ${card.name}. Stop monitoring`
-          : `Track this departure for ${card.name}`
+          ? `Alerts on for ${card.name}. Turn off alerts`
+          : `Get alerts for ${card.name}`
       }
-      title={
-        on
-          ? 'Ride tracked. Click to stop monitoring'
-          : 'Track this ride and departure'
-      }
+      title={on ? 'Alerts on. Click to turn off' : 'Get alerts for this ride'}
       disabled={props.disabled || !tracking.ready}
-      onClick={() => tracking.bell(card)}
+      onClick={(event) => tracking.bell(card, event.currentTarget)}
     >
       <BellIcon />
     </button>

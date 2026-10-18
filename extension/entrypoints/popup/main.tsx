@@ -11,6 +11,7 @@ import {
   type Tab,
 } from '../../lib/state';
 import type { Climbing } from '../../lib/types';
+import { AlertsDialog } from '../../ui/alerts';
 import {
   AppleMark,
   Banners,
@@ -805,6 +806,7 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
       {(view.cards.length > 0 || tracking.said) && (
         <Toast tracking={tracking} />
       )}
+      <AlertsDialog view={view} tracking={tracking} />
     </>
   );
 };

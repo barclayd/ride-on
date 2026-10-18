@@ -2702,9 +2702,316 @@ a.ro-name:hover {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* The alerts dialog (v10, 29c): centred over the dimmed page, 12px in from the panel's sides, and on a
+   phone a card floating at the bottom. Its content scrolls when it doesn't fit. */
+.ro-alerts-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(29, 33, 22, 0.45);
+}
+.ro-alerts {
+  position: fixed;
+  z-index: 10001;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 440px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 16px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.25);
+  color: var(--ro-ink);
+  text-align: left;
+}
+.ro-panel .ro-alerts {
+  left: 12px;
+  right: 12px;
+  width: auto;
+  max-width: none;
+  transform: translateY(-50%);
+  padding: 16px 16px 12px;
+}
+/* Room for the dialog: the panel is only as tall as its rides. */
+.ro-panel:has(.ro-alerts) {
+  min-height: 600px;
+}
+.ro-alerts-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.ro-alerts-icon {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--ro-tint);
+  color: var(--ro-olive-900);
+}
+.ro-alerts svg .ro-bell-body {
+  fill: currentColor;
+}
+.ro-alerts-head > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ro-alerts-head > div > :first-child {
+  font: 700 18px / 1.2 var(--ro-sans);
+}
+.ro-alerts-head > div > :last-child,
+.ro-alerts > p {
+  margin: 0;
+  font: 400 12px / 1.45 var(--ro-serif);
+  color: var(--ro-muted);
+  text-wrap: pretty;
+}
+.ro-alerts-close {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+  font:
+    400 22px / 1 system-ui,
+    sans-serif;
+  color: var(--ro-muted-2);
+  cursor: pointer;
+}
+.ro-alerts-close:hover {
+  background: var(--ro-tint-2);
+  color: var(--ro-ink);
+}
+.ro-alerts-ride {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: var(--ro-page);
+}
+.ro-alerts-ride > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ro-alerts-ride > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.ro-alerts-ride > :first-child > :first-child {
+  font: 700 15px var(--ro-sans);
+  color: var(--ro-olive-900);
+}
+.ro-alerts-ride > :first-child > :last-child {
+  font: 500 12px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-alerts-ride > :last-child {
+  flex: none;
+  align-items: flex-end;
+  gap: 4px;
+  font: 400 12px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-alerts-ride strong {
+  font: 700 15px var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-alerts-bar {
+  display: block;
+  width: 48px;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--ro-border);
+}
+.ro-alerts-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--ro-lime);
+}
+.ro-alerts-move {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #eef4e2;
+  font: 500 12px / 1.45 var(--ro-serif);
+  color: var(--ro-olive-ink);
+}
+.ro-alerts-move svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--ro-olive-900);
+}
+.ro-alerts-when {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ro-alerts-when > span {
+  font: 600 12px var(--ro-sans);
+  color: var(--ro-olive-ink);
+}
+.ro-alerts-when ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ro-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.ro-alerts-when li {
+  border-top: 1px solid var(--ro-tint-2);
+  margin-top: -1px;
+}
+.ro-alerts-when li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: 600 13px var(--ro-sans);
+  color: var(--ro-muted-2);
+  cursor: pointer;
+}
+.ro-alerts-when li button[aria-checked="true"] {
+  color: var(--ro-ink);
+}
+.ro-alerts-when li svg {
+  flex: none;
+}
+.ro-alerts-when li button > span:first-of-type {
+  flex: 1;
+}
+.ro-switch {
+  flex: none;
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: 9px;
+  background: #d3d9ca;
+  transition: background 0.15s;
+}
+.ro-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: left 0.15s;
+}
+[aria-checked="true"] > .ro-switch {
+  background: var(--ro-olive-700);
+}
+[aria-checked="true"] > .ro-switch::after {
+  left: 14px;
+}
+.ro-alerts-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ro-alerts-actions button {
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ro-alerts-go {
+  min-height: 40px;
+  padding: 10px 14px;
+  background: var(--ro-lime);
+  font: 700 14px var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-alerts-go:hover:not([aria-disabled]) {
+  background: #7db51a;
+}
+.ro-alerts-go[aria-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+.ro-alerts-later {
+  min-height: 36px;
+  padding: 8px 14px;
+  background: transparent;
+  font: 600 14px var(--ro-sans);
+  color: var(--ro-olive-900);
+}
+.ro-alerts-later:hover {
+  background: var(--ro-tint-2);
+}
+/* A phone or a narrow window on the Journeys page (§4); the panel never takes this layout. */
+@media (pointer: coarse), (max-width: 599px) {
+  .ro-module .ro-alerts {
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: 10px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 70px);
+    transform: none;
+    padding: 18px 18px 12px;
+    border-radius: 20px;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18);
+  }
+  .ro-module .ro-alerts-close {
+    width: 44px;
+    height: 44px;
+    margin: -8px -10px 0 0;
+  }
+  .ro-module .ro-alerts-when li button {
+    padding: 12px;
+  }
+  .ro-module .ro-alerts-go {
+    min-height: 48px;
+    border-radius: 10px;
+    font-size: 16px;
+  }
+  .ro-module .ro-alerts-later {
+    min-height: 44px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ro-toast {
     transform: none;
+  }
+  .ro-switch,
+  .ro-switch::after {
+    transition: none;
   }
   .ro-checkin,
   .ro-checkin-track,

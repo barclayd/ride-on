@@ -18,6 +18,13 @@ export type MinimumStandards = {
   maximumPrecipitationProbability?: number;
   maximumPrecipitationRateMmH?: number;
 };
+// What a rider wants to hear about on the ride with alerts (handoff v10, 29c).
+export type AlertTriggers = {
+  rain: boolean;
+  wind: boolean;
+  cold: boolean;
+  betterTime: boolean;
+};
 export type RecentRides = {
   mode: 'neutral' | 'prefer-variety';
   lookbackDays: number;

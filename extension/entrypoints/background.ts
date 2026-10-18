@@ -688,6 +688,13 @@ const syncTracking = async () => {
               tracker.ride && !tracker.ride.refresh.closed
                 ? tracker.ride.routeId
                 : null,
+            // Choices made on another device.
+            ...(tracker.ride?.alerts && {
+              triggers: {
+                ...state.triggers,
+                [tracker.ride.routeId]: tracker.ride.alerts.triggers,
+              },
+            }),
           },
     );
   } catch (error) {
@@ -828,15 +835,20 @@ const handle = async (message: Message) => {
       if (message.routeId) {
         if (!message.recommendationRef)
           throw new Error('Refresh this ride before tracking it.');
+        const { routeId, triggers } = message;
         try {
           const tracker = await saveTrackedRide(
             message.recommendationRef,
             message.expectedTrackingVersion,
             message.replaceTrackedRideId,
+            triggers && (await readState()).tracker.triggers ? triggers : null,
           );
-          return update(() => ({
+          return update((state) => ({
             tracker,
             alertRouteId: tracker.ride?.routeId ?? null,
+            ...(triggers && {
+              triggers: { ...state.triggers, [routeId]: triggers },
+            }),
           }));
         } catch (error) {
           await syncTracking();

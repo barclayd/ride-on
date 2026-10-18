@@ -4,6 +4,7 @@ import type { PushStatus } from './push';
 import type { SurfaceInput } from './surface';
 import type { Tracker } from './tracking';
 import type {
+  AlertTriggers,
   Attribution,
   Climbing,
   Conditions,
@@ -137,6 +138,7 @@ export type State = {
   // Route highlight derived from the account’s pinned departure.
   alertRouteId: string | null;
   tracker: Tracker;
+  triggers: Record<string, AlertTriggers>; // each ride's last saved choices, by route ID
   push: PushStatus;
   // Account pause mirrored from the API.
   pause: Pause | null;
@@ -175,6 +177,7 @@ export const initialState: State = {
   pendingDeletes: [],
   alertRouteId: null,
   tracker: { ready: false, ride: null, version: 0, error: null },
+  triggers: {},
   push: {
     enabled: false,
     status: 'off',
@@ -235,6 +238,7 @@ export type Message =
       type: 'setAlert';
       routeId: string | null;
       recommendationRef?: string;
+      triggers?: AlertTriggers;
       expectedTrackingVersion: number;
       replaceTrackedRideId: string | null;
     }
