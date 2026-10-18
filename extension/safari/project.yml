@@ -52,6 +52,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: App/RideOn-iOS.entitlements
         CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: App/RideOn-iOS.entitlements
         CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: App/RideOn-macOS.entitlements
+        # The Safari script below runs pluginkit and lsregister on other builds.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
       configs:
         Debug:
           PUSH_ENVIRONMENT: sandbox
@@ -59,6 +61,16 @@ targets:
         Release:
           PUSH_ENVIRONMENT: production
           APS_ENVIRONMENT: production
+    postBuildScripts:
+      - name: Unregister other builds from Safari
+        basedOnDependencyAnalysis: false
+        # Safari runs every registered copy of the extension at once (see unregister-stale.sh), so
+        # a Mac build keeps only itself. Archives skip it: archive.sh tidies up after them.
+        script: |
+          if [ "$PLATFORM_NAME" = macosx ] && [ "$ACTION" = build ]; then
+            "$SRCROOT/unregister-stale.sh" "$TARGET_BUILD_DIR/$WRAPPER_NAME" ||
+              echo "warning: couldn't unregister older Ride On builds from Safari"
+          fi
 
   RideOnExtension:
     type: app-extension
