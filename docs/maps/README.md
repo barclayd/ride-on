@@ -248,7 +248,12 @@ town centre's from z16, a city's cafés never), so the overlay counts each icon'
 views ([POI icons](cycle-travel-style.md#poi-icons)). **Publish an overlay built with the counts:** from
 an older one the style shows only bike shops at z14 and no cafés from z15.
 
-**2.5 Gaps.** Work through the style spec's [known gaps](cycle-travel-style.md#known-gaps).
+**2.5 Gaps.** Work through the style spec's [known gaps](cycle-travel-style.md#known-gaps), in four
+batches. A, fills (**done**): parks, woods and the other greens re-sampled; buildings take the built-up
+fill; grass-like land is bare land; military land outlined; schools, hospitals and land cover unfilled.
+B, lines: railways, motorways zoomed out, lcn weight, NCN + EuroVelo as one line, route dot size in
+London. C, labels: landmarks, farms and hamlets, stations at z10–11. D, London: the rcn rule, paths from
+z11, minor streets at z11–13.
 
 **2.6 3× and device.** Every size was tuned at 2× in Chrome. Re-check dots, badges and labels on an
 iPhone 17 at 3×. MapLibre Native draws text slightly differently from GL JS.
@@ -471,17 +476,16 @@ fine for comparison.
 
 ## Comparison screenshots
 
-cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). Re-taken in WS2.2
-with the corrected colours, on the planetiler overlay; the notes below still hold. Putney was re-taken in
-WS2.4 with the sprite's badges; the others still show the lighter runtime-drawn ones.
+cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). All six re-taken in
+WS2.5 after the fills batch, on the planetiler overlay with the sprite's badges and POI icons.
 
 | View | What to look at |
 |---|---|
 | [London, z9](screenshots/cmp-london-z9.jpg) (51.45, −0.15) | National routes and EuroVelo match. cycle.travel hides regional routes here; we show blue rcn everywhere and clusters in central London. cycle.travel has hillshade and a dense grey minor-road net; our motorways are dark slate lines |
 | [London, z11](screenshots/cmp-london-z11.jpg) (51.48, −0.17) | cycle.travel shows a dense net of thin red cycleways and lanes; ours start at z12. Too many saturated blue London rcn dots and C badges vs its few thin lavender lines. It shows more minor streets |
 | [Putney, z13](screenshots/cmp-putney-z13.jpg) (51.462, −0.215) | Badges (4, 20, C34, CS8, AV) and lcn teal match in place. We draw blue rcn across Roehampton and Southfields that cycle.travel doesn't. It has POI icons, bolder railways and a beige Thames foreshore |
-| [Westminster, z14](screenshots/cmp-westminster-z14.jpg) (51.5005, −0.128) | Street labels, LONDON spacing, Charing Cross, Q and C3 dots match. We stack heavy dark red NCN 4 + AV dots along the Albert Embankment; we name extra landmarks; cycle.travel shows bike-parking and toilet icons and red-outlined pedestrian areas |
-| [Richmond Park, z13](screenshots/cmp-richmond-park-z13.jpg) (51.4455, −0.2665) | NCN 4 on red-and-white paths and brown unpaved dashes match. Our lcn is heavier; C30 is lavender there, blue here; extra rcn around Roehampton; it has toilet, café and parking icons; our built-up fill looks pinker and our park fill darker |
+| [Westminster, z14](screenshots/cmp-westminster-z14.jpg) (51.5005, −0.128) | Street labels, LONDON spacing, Charing Cross, Q and C3 dots match. We stack heavy dark red NCN 4 + AV dots along the Albert Embankment; we name extra landmarks; Military land (Horse Guards, Wellington Barracks) outlined as cycle.travel does. It shows more POI icons in the parks |
+| [Richmond Park, z13](screenshots/cmp-richmond-park-z13.jpg) (51.4455, −0.2665) | NCN 4 on red-and-white paths and brown unpaved dashes match. Our lcn is heavier; C30 is lavender there, blue here; extra rcn around Roehampton; built-up, park, wood and golf fills now match. It shows more toilet, café and parking icons |
 | [Surrey Hills, z12](screenshots/cmp-surrey-hills-z12.jpg) (51.245, −0.33) | NCN 22 matches. cycle.travel has hillshade and contours; draws rcn as thin lavender lines with small dots; shows POI icons and bold railways; doesn't label farms and hamlets. Our brown dashes are heavier |
 
 ## Links
