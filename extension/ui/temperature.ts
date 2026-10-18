@@ -21,15 +21,13 @@ export type TemperatureEnd = {
 export type TemperaturePanel = {
   warn: boolean; // feels outside the range for over half the ride: the amber chip
   label: string; // the chip's aria-label
+  headline: string; // when it feels outside the range
+  tone: 'warm' | 'cool' | 'even'; // feels outside the range the whole ride, or not
   usual: {
-    headline: string | null; // null when the API can't compare a gappy air trace
-    tone: 'warm' | 'cool' | 'even';
     sub: string;
     month: string;
     band: string; // SVG path
-    footnote: string;
   } | null;
-  sentence: string;
   air: string; // SVG paths in a 100×100 box
   feels: string | null;
   high: { y: number; label: string };
@@ -149,17 +147,17 @@ export const temperaturePanel = (
       : r.zone === 'cool'
         ? `cooler than your range (down to ${t(r.min)})`
         : `warmer than your range (up to ${t(r.max)})`;
-  const sentence =
+  const headline =
     runs.length === 1
       ? runs[0].zone === 'in'
-        ? 'Feels in your range the whole ride.'
-        : `Feels ${runs[0].zone === 'cool' ? 'cooler' : 'warmer'} than your range the whole ride, ${span(judged.map((p) => p.c))}.`
+        ? 'Feels in your range the whole ride'
+        : `Feels ${runs[0].zone === 'cool' ? 'cooler' : 'warmer'} than your range the whole ride, ${span(judged.map((p) => p.c))}`
       : `Feels ${runs
           .map(
             (r, i) =>
               `${phrase(r)}${i < runs.length - 1 ? ` until about ${time(r.end)}` : ' to the finish'}`,
           )
-          .join(', then ')}.`;
+          .join(', then ')}`;
   const inRange = runs
     .filter((r) => r.zone === 'in')
     .reduce((sum, r) => sum + r.end - r.start, 0);
@@ -184,21 +182,7 @@ export const temperaturePanel = (
   let usualPanel: TemperaturePanel['usual'] = null;
   if (usual && month && usualPoints.length) {
     const band = usual.bandHalfWidthC;
-    const diff = usual.differenceC;
-    const n = diff === null ? 0 : Math.round(diff);
-    const shown = Math.abs(
-      u.temperature === '°F' && diff !== null ? Math.round(diff * 1.8) : n,
-    );
     usualPanel = {
-      headline:
-        diff === null
-          ? null
-          : n > 1
-            ? `${shown}° warmer than usual`
-            : n < -1
-              ? `${shown}° colder than usual`
-              : `About usual for ${month}`,
-      tone: n > 1 ? 'warm' : n < -1 ? 'cool' : 'even',
       sub: `Usual for ${clock(b.departureAt, timeZone)}–${clock(b.finishAt, timeZone)} in ${month}: ${span(
         usualPoints.flatMap((p) => [p.c - band, p.c + band]),
       )}`,
@@ -209,7 +193,6 @@ export const temperaturePanel = (
         .toReversed()
         .map((p) => `L${x(p.m)} ${y(p.c - band)}`)
         .join(' ')} Z`,
-      footnote: `${month} average here: high ${degrees(usual.averageHighC, u)}°, low ${degrees(usual.averageLowC, u)}°. ${usual.source.attribution}`,
     };
   }
   return {
@@ -217,8 +200,9 @@ export const temperaturePanel = (
     label: `Temperature ${span(air.map((p) => p.c))}${
       feels.length ? `, feels like ${span(feels.map((p) => p.c))}` : ''
     }. Show temperature along the ride`,
+    headline,
+    tone: runs.length === 1 && runs[0].zone !== 'in' ? runs[0].zone : 'even',
     usual: usualPanel,
-    sentence,
     air: path(points, 1, x),
     feels: feels.length ? path(points, 2, x) : null,
     high: { y: y(hi), label: `${degrees(hi, u)}°` },

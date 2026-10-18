@@ -1810,19 +1810,19 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await wind.click();
   await expect(along).toBeHidden();
   await expect(module.locator('[aria-expanded="true"]')).toHaveCount(0);
-  // Temperature along the ride (24a): against usual, the chart, then when it feels outside the range.
+  // Temperature along the ride (24a): when it feels outside the range, then the chart against usual.
   await temp.click();
   const warmth = module.locator('.ro-temp');
   await expect(warmth.locator('b')).toHaveText('Temperature along the ride');
-  await expect(warmth.locator('.ro-temp-usual strong')).toHaveText(
-    '2° colder than usual',
+  await expect(warmth.locator('.ro-temp-head strong')).toHaveText(
+    /^Feels cooler than your range \(down to 6°C\) until about \d\d:\d0, then in your range to the finish$/,
   );
-  await expect(warmth.locator('.ro-temp-usual span')).toHaveText(
+  await expect(warmth.locator('.ro-temp-head span')).toHaveText(
     /^Usual for \d\d:\d\d–\d\d:\d\d in \w+: 7–16°C$/,
   );
-  await expect(warmth.locator('p')).toHaveText(
-    /^Feels cooler than your range \(down to 6°C\) until about \d\d:\d0, then in your range to the finish\.$/,
-  );
+  // No comparison with usual, averages or licence line: the chart shows how it compares.
+  await expect(warmth).not.toContainText('than usual');
+  await expect(warmth.locator('p, small')).toHaveCount(0);
   await expect(warmth.locator('.ro-temp-end')).toHaveText(['9°', '14°']);
   await expect(warmth.locator('.ro-temp-feels-label')).toHaveText('feels 6°');
   await expect(warmth.locator('.ro-temp-gutter span')).toHaveText([
@@ -1835,9 +1835,6 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     /^Usual in \w+$/,
     'Your range 10–22°C',
   ]);
-  await expect(warmth.locator('small')).toHaveText(
-    /^\w+ average here: high 15°, low 8°\. Contains Met Office data licensed under the Open Government Licence v3\.0\.$/,
-  );
   await module.screenshot({ path: test.info().outputPath('temperature.png') });
   // Rain along the ride (25b) replaces it: a card per hour with its chance and amount.
   await rain.click();
@@ -2059,7 +2056,9 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
   await module
     .getByRole('button', { name: /^Temperature 48–57°F, feels like 43–52°F\./ })
     .click();
-  await expect(module.locator('.ro-temp p')).toContainText('(down to 43°F)');
+  await expect(module.locator('.ro-temp-head strong')).toContainText(
+    '(down to 43°F)',
+  );
   await expect(module.locator('.ro-temp .ro-key li').last()).toHaveText(
     'Your range 50–72°F',
   );
