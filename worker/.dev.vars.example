@@ -7,3 +7,6 @@ AUTH_CONFIG_JSON=''
 
 # Optional APNs credentials; separate from WeatherKit. See docs/ride-monitoring.md.
 APNS_CONFIG_JSON=''
+
+# Optional Chrome VAPID credentials; publicKey/privateKey/subject. Never commit real keys.
+WEB_PUSH_CONFIG_JSON=''

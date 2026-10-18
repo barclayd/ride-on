@@ -12,6 +12,7 @@ export default defineConfig({
   }),
   manifest: ({ browser }) => ({
     name: 'Ride On',
+    minimum_chrome_version: browser === 'safari' ? undefined : '121',
     description:
       'Pick the best of your saved cycle.travel routes, and the best time to ride it.',
     // CI stamps release builds; otherwise WXT uses package.json's version.
@@ -25,7 +26,7 @@ export default defineConfig({
         ? undefined
         : 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2X7uyn3ju7ym9BcGtb6S63MFM3DmWHcZp7k80dk1/g2X0ehL3mo51+Tg+CshNrQxcuA0pUo/NFmPGEvTtNLNjZxBdc57F/qD3WuWa+4NGSXWu03JXnhC6pt6QTq643rRlg+FLNX5GFjs2NyDQs6QKTdOWHPoZiIARiKHasaU88bObdMmeVUwfLhWQaETdhYQYdR2LhDJWIjf2qV/z+LV1Jq4e4eSQlXsgR2jvY8f4UPdRB2RDmroGp8LyEcGbwjldRdxuwNk7+GCgCAfWv2/ys9JXew0NYGniI3Uh6WFlp+QjDZC7c2eHqMnVtH75EXpw2toozKzDu3qaP9t2Lup/wIDAQAB',
     permissions: [
-      ...(browser === 'safari' ? [] : ['identity']),
+      ...(browser === 'safari' ? ['nativeMessaging'] : ['identity']),
       'storage',
       // Safari counts its storage database's size on disk, which grows with every state write,
       // and refuses writes past ~5 MB long before the state itself (~120 KB) gets near it.
@@ -36,6 +37,7 @@ export default defineConfig({
       'alarms',
     ],
     // For scripting; Safari asks per site, so this also lists cycle.travel for the popup's request.
+    optional_permissions: browser === 'safari' ? [] : ['notifications'],
     host_permissions: [`${apiUrl}/*`, 'https://cycle.travel/*'],
     action: { default_title: 'Ride On' },
     web_accessible_resources: [

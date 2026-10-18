@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { digest } from '../tracking/model.ts';
 import type { Env } from '../types.ts';
 import { readBoundedJson } from '../weather/http.ts';
+import { sendWebPush } from './web-push.ts';
 
 export const PUSH_TOPIC = 'com.danbarclay.rideon';
 const credentialSchema = z.strictObject({
@@ -27,7 +28,9 @@ export type Device = {
   token: string;
   environment: 'sandbox' | 'production';
   topic: string;
-  platform: 'ios' | 'macos';
+  platform: 'ios' | 'macos' | 'chrome';
+  transport?: 'apns' | 'web_push';
+  subscription_json?: string | null;
   version: number;
   registered_at: string;
 };
@@ -80,6 +83,8 @@ export const sendPush = async (
   input: { id: string; planId: string; expiresAt: string; payload: string },
   at: Date,
 ): Promise<PushResult> => {
+  if (device.transport === 'web_push')
+    return sendWebPush(env, device, input, at);
   const credentials = pushConfig(env)[device.environment];
   if (!credentials) return { status: 'retry', reason: 'push_not_configured' };
   if (new TextEncoder().encode(input.payload).length > 4096)

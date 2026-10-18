@@ -39,7 +39,9 @@ export const deliverImportPush = async (
   const match = JSON.parse(activity.match_json) as MatchResult;
   if (match.status !== 'matched' && match.status !== 'suggested') return true;
   const devices = await db
-    .prepare('SELECT * FROM push_devices WHERE owner_id=? ORDER BY id LIMIT 20')
+    .prepare(
+      "SELECT * FROM push_devices WHERE owner_id=? AND transport='apns' AND scope='all' ORDER BY id LIMIT 20",
+    )
     .bind(job.owner_id)
     .all<Device>();
   if (!devices.results.length) return true;

@@ -1,6 +1,8 @@
 import { browser } from 'wxt/browser';
 import { METRIC, regionUnits, type Units } from '../ui/format';
+import type { PushStatus } from './push';
 import type { SurfaceInput } from './surface';
+import type { Tracker } from './tracking';
 import type {
   Attribution,
   Climbing,
@@ -132,9 +134,11 @@ export type State = {
   ridesCursor: string | null;
   summaries: Record<string, RideSummary>; // by route ID, for ride tags
   pendingDeletes: { id: string; at: number }[]; // removed in History, sent after the undo window
-  // ponytail: the one tracked ride with alerts (handoff v5), kept in this browser until the API stores it.
+  // Route highlight derived from the account’s pinned departure.
   alertRouteId: string | null;
-  // ponytail: kept in this browser until the API stores it on the profile (docs/extension-api-brief-v8.md).
+  tracker: Tracker;
+  push: PushStatus;
+  // Account pause mirrored from the API.
   pause: Pause | null;
 };
 
@@ -170,6 +174,12 @@ export const initialState: State = {
   summaries: {},
   pendingDeletes: [],
   alertRouteId: null,
+  tracker: { ready: false, ride: null, version: 0, error: null },
+  push: {
+    enabled: false,
+    status: 'off',
+    message: 'Notifications are off on this device.',
+  },
   pause: null,
 };
 
@@ -221,7 +231,14 @@ export type Message =
   | { type: 'untrack'; routeId: string }
   // Undoes an untrack: back in its place in the selection, with its alerts if it had them.
   | { type: 'track'; routeId: string; index: number; alert: boolean }
-  | { type: 'setAlert'; routeId: string | null }
+  | {
+      type: 'setAlert';
+      routeId: string | null;
+      recommendationRef?: string;
+      expectedTrackingVersion: number;
+      replaceTrackedRideId: string | null;
+    }
+  | { type: 'enablePush' | 'disablePush' | 'pushStatus' }
   | { type: 'pause'; until: string | null }
   | { type: 'resume' }
   | { type: 'openPopup'; tab: Tab }

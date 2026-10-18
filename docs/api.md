@@ -1,5 +1,7 @@
 # Ride On API MVP
 
+API v0.37.0 adds [Chrome Web Push and Safari companion delivery](ride-monitoring.md#chrome-and-safari-delivery-api-v0370), transport-specific readiness and an authenticated browser view for notification taps. Monitoring policy and scoring are unchanged.
+
 Implemented on 9 October, calibrated and first deployed on 10 October 2026. TypeScript, Hono and Cloudflare Workers;
 D1 stores route facts, source identities, shortlists, ride history and user profiles, KV caches forecasts, and a deterministic evaluator ranks
 route/departure combinations. This replaces the legacy classification and Strava

@@ -5,6 +5,11 @@ import SafariServices
 
 @main
 struct RideOnApp: App {
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(NotificationAppDelegate.self) private var delegate
+    #else
+    @NSApplicationDelegateAdaptor(NotificationAppDelegate.self) private var delegate
+    #endif
     var body: some Scene {
         WindowGroup { EnableGuide() }
         #if os(macOS)
@@ -15,10 +20,11 @@ struct RideOnApp: App {
 
 /// Safari extensions ship inside an app; this one explains how to turn Ride On on.
 struct EnableGuide: View {
+    @State private var notifications = PushNotifications.shared
+    @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
     private let extensionID = "com.danbarclay.rideon.Extension"
     @State private var isOn: Bool?
-    @Environment(\.scenePhase) private var scenePhase
     private let steps: [LocalizedStringKey] = [
         "Open **Safari Settings → Extensions** and tick **Ride On**.",
         "Click **Ride On** in Safari's toolbar and sign in with Google or Apple. Allow it on **cycle.travel** and **api.ride-on.cc** when Safari asks.",
@@ -65,11 +71,35 @@ struct EnableGuide: View {
                         }
                     }
                 }
+                Divider()
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Ride notifications").font(.headline)
+                    Text(notifications.message).foregroundStyle(.secondary)
+                    Button(notifications.ready ? "Turn off on this device" : "Enable notifications") {
+                        Task {
+                            if notifications.ready { await notifications.disable() }
+                            else { await notifications.enable() }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(notifications.busy)
+                    if notifications.optedIn && !notifications.ready {
+                        Button("Turn off on this device") { Task { await notifications.disable() } }
+                            .disabled(notifications.busy)
+                    }
+                    Text("Notification taps open your tracked ride in the browser.").font(.footnote).foregroundStyle(.secondary)
+                }
                 Link("Open cycle.travel", destination: URL(string: "https://cycle.travel/user/journeys")!)
             }
             .padding(32)
             .frame(maxWidth: 560, alignment: .leading)
         }
+        .onOpenURL { url in
+            if url.scheme == "rideon-notifications", url.host == "enable" {
+                Task { await notifications.refresh() }
+            }
+        }
+        .task(id: scenePhase) { if scenePhase == .active { await notifications.refresh() } }
         #if os(macOS)
         // Coming back from Safari Settings refreshes the status.
         .task(id: scenePhase) {

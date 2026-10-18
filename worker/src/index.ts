@@ -14,6 +14,7 @@ import { collectGroundEvidence } from './ground/service.ts';
 import { resolveAccess } from './identity/access.ts';
 import { authConfig } from './identity/config.ts';
 import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
+import { browserNotificationRoutes } from './monitoring/browser-page.ts';
 import { notificationRoutes } from './monitoring/routes.ts';
 import { consumeMonitoring, dispatchMonitoring } from './monitoring/service.ts';
 import { ALGORITHM_VERSION } from './recommendations/engine.ts';
@@ -177,7 +178,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.35.0',
+      version: '0.37.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -188,6 +189,7 @@ export const createApp = (
     c.json({ webcredentials: { apps: ['R2GGK3VN2C.com.danbarclay.rideon'] } }),
   );
   app.route('/', identityRoutes());
+  app.route('/', browserNotificationRoutes());
   app.route('/', stravaPublicRoutes());
   for (const path of [
     '/history/*',
