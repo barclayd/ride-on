@@ -27,7 +27,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
-| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | 🟡 Planned and specified; being built behind `--cycle-map` | #223, #225 |
+| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | 🟡 Planned and specified; being built behind `--cycle-map`. MapLibre Native spike on the Routes map done | #223, #225 |
 
 Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
@@ -552,6 +552,9 @@ Build:
 - The panel can't be grabbed mid-settle; a new drag starts from the detent.
 - The map uses flat `.imagery`/`.hybrid`/`.standard`; `elevation: .realistic` dropped the
   annotations and blurred the lines.
+- `--cycle-map` swaps the map for the MapLibre Native spike (`CycleMapSpike`, iOS only): the
+  cycle map's basemap with the shortlist drawn on it and tap-to-select, but no callout, start marker
+  or Map Style menu yet ([findings](../maps/README.md#ws3-app-integration-115-weeks)).
 
 ## Design language board
 
