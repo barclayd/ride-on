@@ -25,6 +25,8 @@ let package = Package(
         .package(path: "../Services"),
         .package(path: "../DesignSystem"),
         .package(path: "../Router"),
+        // iOS only: MapLibre Native has no macOS build (docs/maps/README.md, WS3).
+        .package(url: "https://github.com/maplibre/maplibre-gl-native-distribution", exact: "6.31.0"),
     ],
     targets: [
         .target(
@@ -35,7 +37,12 @@ let package = Package(
             dependencies: baseDeps + ["SharedUI"]),
         .target(
             name: "RoutesUI",
-            dependencies: baseDeps + ["SharedUI"]),
+            dependencies: baseDeps + [
+                "SharedUI",
+                .product(name: "MapLibre", package: "maplibre-gl-native-distribution",
+                         condition: .when(platforms: [.iOS])),
+            ],
+            resources: [.copy("CycleMapSpike")]),
         .target(
             name: "PreferencesUI",
             dependencies: baseDeps + ["SharedUI"]),

@@ -44,6 +44,22 @@ struct RoutesMap: View {
         // Resolved, and the selected route keyed on it: `Map` content keeps its first stroke and
         // drops back to system blue for `.accentColor` (see `RouteMap`).
         let accent = Color.accentColor.resolve(in: environment)
+        #if os(iOS)
+        if CycleMapSpike.isEnabled {
+            GeometryReader { geometry in
+                CycleMapSpike(routes: routes, selected: selected, accent: UIColor(Color(accent)), frame: camera.rect,
+                              insets: geometry.safeAreaInsets, select: select)
+                    .ignoresSafeArea()
+            }
+        } else {
+            mapKit(accent: accent)
+        }
+        #else
+        mapKit(accent: accent)
+        #endif
+    }
+
+    private func mapKit(accent: Color.Resolved) -> some View {
         MapReader { proxy in
             Map(position: $camera) {
                 ForEach(routes.filter { $0.id != selected?.id }) { route in

@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS1.1 next |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -224,18 +224,64 @@ Done when the six comparison views on device read as cycle.travel to Dan, and th
 
 ### WS3: App integration (1–1.5 weeks)
 
-**3.0 Spike first (1–2 days).** Prove MapLibre Native in this app before building on it: add the
-package, show the basemap with the prototype style (overlay sources removed) in a throwaway view behind
-`--cycle-map`, check memory, scroll performance, fonts, PMTiles over the Worker, and the macOS story
-([below](#macos)). If Native disappoints, the fallback is MapLibre GL JS in a `WKWebView` using the
-same style: one code path for iOS and macOS, at the cost of web-view weight and bridging taps.
+**3.0 Spike.** Done, 18 October 2026: **MapLibre Native is good enough; build on it** (no
+`WKWebView` fallback). `CycleMapSpike` (`RoutesUI/CycleMapSpike.swift`) stands in for the Routes map's
+MapKit view when the app is launched with `--cycle-map`; `RoutesMap.body` switches on it. It shows the
+prototype style's 73 basemap layers (overlay layers removed, built by
+`prototype/scripts/native-spike.sh`), the shortlist as route lines (others white, the selected one in
+the accent with a white casing) under the labels, tap-to-select and framing above the panel. Throwaway:
+3.2 replaces it.
+
+| | |
+|---|---|
+| Launch | `--fixture-world --cycle-map` opens on Routes with the cycle map. `-CycleMapBasemap <url>` swaps the basemap archive (e.g. `pmtiles://file:///…/basemap-gb-20261017.pmtiles` in the Simulator); `-CycleMapCamera 51.4455,-0.2665,13` pins the camera (latitude, longitude, zoom) for screenshots |
+| Screenshots | [Richmond Park z11](screenshots/native-spike-richmond-park-z11.jpg), [z15](screenshots/native-spike-richmond-park-z15.jpg) (iPhone 17 Simulator) |
+| Version | MapLibre Native iOS 6.31.0, `maplibre-gl-native-distribution` with `exact:`, RoutesUI only, `.when(platforms: [.iOS])` |
+| PMTiles | `pmtiles://https://…` (checked against `build.protomaps.com/20261017.pmtiles`, the build our extract came from) and `pmtiles://file://…` both render the same |
+| Fonts | Montserrat from glyph PBFs bundled in RoutesUI's resources, 7 faces × 6 ranges = 3.5 MB |
+| App size | Release, arm64: 35 MB app, of which `MapLibre.framework` 7.8 MB and the glyph bundle 3.5 MB (both uncompressed) |
+| Memory | 118–126 MB footprint on the Routes tab at z11–16.5 (Simulator: indicative only) |
+| macOS | Builds; MapLibre isn't linked, `RoutesMap` stays on MapKit. The glyph bundle still ships (SwiftPM resources can't be per-platform) |
+| Not checked | Frame rate, memory and battery **on a device** (Dan: run `--cycle-map` on the iPhone, pan and pinch between Richmond Park and central London at z11–15 with Xcode's memory gauge and Instruments' Animation Hitches). `raster-dem` from PMTiles (no DEM until 1.4) |
+
+What 3.2 has to carry over from the spike:
+- **No camera calls before layout.** `setVisibleCoordinateBounds` or `setCenter(_:zoomLevel:)` on a
+  zero-size view, or before `layoutSubviews`, lands at the wrong zoom (5.5 instead of 8.7 for the
+  fixture routes). Wait for non-empty bounds, call `layoutIfNeeded()` (the core map's size only updates
+  in `layoutSubviews`), then move the camera. The spike does it in `applyFrame`, from `updateUIView` and
+  the style/map-loaded delegates.
+- **Draw under the safe area, frame inside it.** A `UIViewRepresentable` is laid out inside the SwiftUI
+  safe area, so it stopped at the panel. Wrap it in a `GeometryReader` that respects the safe area, pass
+  `geometry.safeAreaInsets` in, put `.ignoresSafeArea()` on the representable, set
+  `automaticallyAdjustsContentInset = false` and `setContentInset(_:animated:completionHandler:)` from
+  the insets. A reader that itself ignores the safe area reads zero insets.
+- **Glyph URLs are absolute.** Native won't resolve a relative `glyphs` URL: the spike writes
+  `bundle://glyphs/{fontstack}/{range}.pbf` in the style, swaps `bundle://` for the resource bundle's
+  `file://` URL at runtime and writes the result to Caches. Font stack names must equal the glyph
+  directory names (`Montserrat-Regular`, not `Montserrat Regular`). A missing range logs
+  `Failed to load glyph range 1024-1279 for font stack Montserrat-Regular` and drops those labels;
+  nothing else breaks. Bundled: 0-255, 256-511, 512-767 (Latin and Latin Extended, Welsh ŵ ŷ),
+  7680-7935 (ẁ ẃ ỳ), 8192-8447 and 8448-8703 (punctuation, symbols). The Montserrat OFL ships beside
+  them.
+- **Location.** `showsUserLocation = true` makes `MLNMapView` request permission itself; turn it on only
+  once Ride On's priming sheet has it (the spike checks `CLLocationManager().authorizationStatus`). The
+  Routes tab's own location prompt comes from `LiveLocationProvider`, and
+  `xcrun simctl privacy … grant location` doesn't stop it on iOS 26: for unattended Simulator
+  screenshots, accept it once from a UI test (tap "Allow While Using App" on the springboard).
+- **Camera model.** `RoutesView`'s camera is `.userLocation(fallback: .automatic)` until a route is
+  picked, so `camera.rect` is nil; the spike frames every drawn route instead. `CycleMap` needs its own
+  camera type (a rect, a centre and zoom, or "fit these routes") rather than MapKit's
+  `MapCameraPosition`.
+- Zoom levels are GL JS's: cycle.travel zoom *n* is Native zoom *n* − 1, as in the prototype.
+- Hide `logoView` and the compass; keep the attribution button until 3.5 replaces it.
 
 **3.1 Dependency.** [maplibre-gl-native-distribution](https://github.com/maplibre/maplibre-gl-native-distribution)
-is iOS only. In `app/Packages/Features/Package.swift` (platforms iOS 26 + macOS 26), add it with
-`condition: .when(platforms: [.iOS])` and keep MapKit code paths under `#if os(macOS)` until macOS is
-decided. Regenerate the project (`cd app && xcodegen generate`) and update the module map in
-`CLAUDE.md`. [maplibre/swiftui-dsl](https://github.com/maplibre/swiftui-dsl) is iOS-only and
-experimental: prefer our own small `UIViewRepresentable`.
+is iOS only. The spike added it to `app/Packages/Features/Package.swift` (platforms iOS 26 + macOS 26)
+for RoutesUI only, with `condition: .when(platforms: [.iOS])`; move it to SharedUI with the component,
+and keep MapKit code paths under `#if os(macOS)` ([decision 2](#open-decisions)). Regenerate the
+project (`cd app && xcodegen generate`) and update the module map in `CLAUDE.md`.
+[maplibre/swiftui-dsl](https://github.com/maplibre/swiftui-dsl) is iOS-only and experimental: prefer
+our own small `UIViewRepresentable`.
 
 **3.2 Map component.** One wrapper in SharedUI (name it in DESIGN-SYSTEM.md §6 first, e.g. `CycleMap`)
 taking: the style URL, a camera (framing rect or position), interaction on/off, and overlays (route
@@ -302,9 +348,10 @@ row.**
 
 | Need | Status | Source |
 |---|---|---|
-| PMTiles (`pmtiles://`) on iOS | Supported since 6.10.0; fixes in 6.14.0 and 6.28.0 | [newsletter Jan 2025](https://maplibre.org/news/2025-02-03-maplibre-newsletter-january-2025/), [#3403](https://github.com/maplibre/maplibre-native/issues/3403), [#3404](https://github.com/maplibre/maplibre-native/issues/3404), [#4399](https://github.com/maplibre/maplibre-native/issues/4399) |
+| PMTiles (`pmtiles://`) on iOS | Supported since 6.10.0; fixes in 6.14.0 and 6.28.0. **Verified** in the WS3.0 spike on 6.31.0, over HTTPS and from a local file | [newsletter Jan 2025](https://maplibre.org/news/2025-02-03-maplibre-newsletter-january-2025/), [#3403](https://github.com/maplibre/maplibre-native/issues/3403), [#3404](https://github.com/maplibre/maplibre-native/issues/3404), [#4399](https://github.com/maplibre/maplibre-native/issues/4399) |
 | `raster-dem` + hillshade from PMTiles | Unverified | Check in the WS3 spike |
 | `font-faces` in the style | 6.18.0+ | Release notes |
+| Glyph PBFs from the app bundle | **Verified** (WS3.0) with an absolute `file://` `glyphs` URL | |
 | Style without `glyphs` | Not supported | [#165](https://github.com/maplibre/maplibre-native/issues/165) |
 | Zoom-dependent `line-dasharray` (our dots) | Supported | Style spec |
 | Data-driven `line-dasharray` (per feature) | Not supported; the style doesn't need it | [#744](https://github.com/maplibre/maplibre-native/issues/744) |
@@ -354,7 +401,7 @@ comparison. Fine for a design reference, but don't put them in the app or market
 | macOS left behind | Decision 2; the wrapper hides the implementation |
 | Light map breaks Liquid Glass legibility | WS4a design call before UI work |
 | Performance and battery with live maps | Snapshots for cards and thumbnails; live views only on the hero and Routes map |
-| App size | Measure in the spike (framework, glyph PBFs, sprite) |
+| App size | Measured in the spike: about 11 MB uncompressed (framework 7.8 MB, glyphs 3.5 MB); the sprite is still to come |
 | OSM data gaps (broken relations, missing surface tags) | Not a style bug; fix upstream in OSM when worth it |
 | Tile build breaks or R2 file goes missing | Dated keys, keep previous builds, style pinned in the app bundle |
 | Overpass used beyond the prototype | Never: production builds from Geofabrik extracts |

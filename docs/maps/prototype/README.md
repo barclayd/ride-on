@@ -21,6 +21,8 @@ which is fine in a desktop browser and impossible in the app. WS1 in the plan re
 | `tools/pois.mjs` | Overpass stations and hills → `data/pois.geojson` (`kind`: `station` / `peak`) |
 | `tools/paths.mjs` | Overpass paths → `data/paths.geojson` with `c` (`p` paved, `u` unpaved, `f` footpath-only bridleway), `k` (knockout), `bridge` |
 | `tools/serve.ts` | Bun static server on :8787, plus `/world.pmtiles`: a Range proxy to strava-stitch's Protomaps world file (below) |
+| `tools/native-spike.mjs` | WS3.0 spike: cuts `style.json` down to the basemap layers for MapLibre Native in the app (glyph PBFs instead of `font-faces`, Ride On's R2 basemap) |
+| `scripts/native-spike.sh` | WS3.0 spike: builds the Montserrat glyph PBFs (`cargo install build_pbf_glyphs`) and the spike style into `app/Packages/Features/Sources/RoutesUI/CycleMapSpike/` |
 | `scripts/setup-vendor.sh` | Copies the MapLibre and PMTiles browser builds out of `node_modules` into `vendor/` |
 | `scripts/fetch-osm.sh` | Downloads route relations, stations/hills and paths from Overpass into `raw/`, retrying while Overpass is at capacity |
 | `scripts/build-data.sh` | `raw/` → `data/*.geojson` |
