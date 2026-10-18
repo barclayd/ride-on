@@ -22,6 +22,7 @@
   --ro-warn-fg: #8a4b17;
   --ro-cool: #3d5f7d; /* feels cooler */
   --ro-range: #e7f0d6; /* your temperature range */
+  --ro-usual: #d9e4e6; /* the month's usual temperature */
   --ro-rain-ink: #2f5f8a;
   --ro-warn-bg: #fbefe2;
   color: var(--ro-ink);
@@ -987,7 +988,8 @@ a.ro-name:hover {
 }
 /* The chips open their dropdowns (handoff v4, wind board 7, v7). The sky is never amber and is dashed when
    part of the ride isn't forecast; the wind is amber when it costs points, the temperature when it feels
-   outside the rider's range for over half the ride, and the rain blue once an hour reaches 40%. */
+   outside the rider's range for over half the ride (blue-grey, the usual band's colour, when the air is
+   usual for the month), and the rain blue once an hour reaches 40%. */
 .ro-chips li.ro-temp-chip,
 .ro-chips li.ro-sky-chip,
 .ro-chips li.ro-wind-chip,
@@ -1033,6 +1035,13 @@ a.ro-name:hover {
 .ro-temp-chip button[data-warn="true"] svg,
 .ro-wind-chip button[data-warn="true"] svg {
   color: #b4692a;
+}
+.ro-temp-chip button[data-seasonal="true"] {
+  background: var(--ro-usual);
+  color: var(--ro-cool);
+}
+.ro-temp-chip button[data-seasonal="true"] svg {
+  color: var(--ro-cool);
 }
 .ro-rain-chip button[data-wet="true"] {
   background: #e3edf5;
@@ -1129,7 +1138,7 @@ a.ro-name:hover {
   vector-effect: non-scaling-stroke;
 }
 .ro-temp-plot .ro-temp-band {
-  fill: #d9e4e6;
+  fill: var(--ro-usual);
   fill-opacity: 0.85;
 }
 .ro-temp-feels {
@@ -1236,7 +1245,7 @@ a.ro-name:hover {
 .ro-key [data-key="usual"] {
   width: 12px;
   height: 10px;
-  background: #d9e4e6;
+  background: var(--ro-usual);
 }
 .ro-key [data-key="range"] {
   width: 12px;

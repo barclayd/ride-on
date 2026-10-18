@@ -1198,6 +1198,7 @@ export const RouteTile = (props: {
                 id={tempId}
                 class="ro-temp-chip"
                 chip={{ ...chips[0], label: temp.label, warn: temp.warn }}
+                seasonal={temp.seasonal}
               />
             ) : (
               <PlainChip key={chips[0].text} chip={chips[0]} />
@@ -1320,6 +1321,7 @@ const DropChip = (props: {
   toggle: (id: string) => void;
   partial?: boolean;
   wet?: boolean;
+  seasonal?: boolean;
 }) => (
   <li class={props.class}>
     <button
@@ -1330,6 +1332,7 @@ const DropChip = (props: {
       data-warn={props.chip.warn}
       data-partial={props.partial}
       data-wet={props.wet}
+      data-seasonal={props.seasonal}
       onClick={() => props.toggle(props.id)}
     >
       <Icon name={props.chip.icon} size={16} />
