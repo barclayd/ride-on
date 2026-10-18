@@ -901,22 +901,18 @@ const DropChip = (props: {
   </li>
 );
 
-// "Temperature along the ride" (24a): how it compares with usual, then air and feels like against
-// the rider's range on a fixed 0–25°C scale, and when it feels outside it.
+// "Temperature along the ride" (24a): when it feels outside the rider's range, then air and feels
+// like against that range on a fixed 0–25°C scale, with the usual band behind them.
 const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
   const t = props.panel;
   const at = (x: number, y: number) => ({ left: `${x}%`, top: `${y}%` });
   return (
     <div class="ro-temp" id={props.id}>
       <b>Temperature along the ride</b>
-      {t.usual && (
-        <div class="ro-temp-usual">
-          {t.usual.headline && (
-            <strong data-tone={t.usual.tone}>{t.usual.headline}</strong>
-          )}
-          <span>{t.usual.sub}</span>
-        </div>
-      )}
+      <div class="ro-temp-head">
+        <strong data-tone={t.tone}>{t.headline}</strong>
+        {t.usual && <span>{t.usual.sub}</span>}
+      </div>
       <div class="ro-temp-chart" aria-hidden="true">
         <div class="ro-temp-plot">
           <svg
@@ -982,7 +978,6 @@ const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
         <span>{t.from}</span>
         <span>{t.to}</span>
       </div>
-      <p>{t.sentence}</p>
       <ul class="ro-key">
         <li>
           <i data-key="air" />
@@ -1005,7 +1000,6 @@ const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
           {t.range}
         </li>
       </ul>
-      {t.usual && <small>{t.usual.footnote}</small>}
     </div>
   );
 };

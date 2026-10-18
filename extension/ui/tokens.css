@@ -20,7 +20,7 @@
   --ro-border-2: #dfe5d4;
   --ro-border-input: #d3dac6;
   --ro-warn-fg: #8a4b17;
-  --ro-cool: #3d5f7d; /* feels cooler, colder than usual */
+  --ro-cool: #3d5f7d; /* feels cooler */
   --ro-rain-ink: #2f5f8a;
   --ro-warn-bg: #fbefe2;
   color: var(--ro-ink);
@@ -983,30 +983,35 @@ a.ro-name:hover {
   font: 600 12px var(--ro-sans);
   color: var(--ro-olive-ink);
 }
-.ro-temp p,
 .ro-rain p {
   margin: 0;
   font: 500 13px / 1.45 var(--ro-serif);
   color: var(--ro-ink);
   text-wrap: pretty;
 }
-.ro-temp-usual {
+.ro-temp-head {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.ro-temp-usual strong,
+.ro-temp-head strong,
 .ro-rain > strong {
   font: 700 17px / 1.25 var(--ro-sans);
   color: var(--ro-ink);
 }
-.ro-temp-usual strong[data-tone="warm"] {
+/* Smaller than rain's: when it feels outside the range can take a few spells to say. */
+.ro-temp-head strong {
+  font-size: 15px;
+  line-height: 1.3;
+  text-wrap: pretty;
+}
+.ro-temp-head strong[data-tone="warm"] {
   color: var(--ro-warn-fg);
 }
-.ro-temp-usual strong[data-tone="cool"] {
+.ro-temp-head strong[data-tone="cool"] {
   color: var(--ro-cool);
 }
-.ro-temp-usual span {
+.ro-temp-head span {
   font: 500 12px var(--ro-serif);
   color: var(--ro-muted);
 }
@@ -1120,10 +1125,6 @@ a.ro-name:hover {
 }
 .ro-ends.ro-temp-ends {
   margin: -12px 30px 0 0;
-}
-.ro-temp small {
-  font: 400 11px / 1.45 var(--ro-serif);
-  color: var(--ro-muted);
 }
 .ro-key {
   display: flex;
