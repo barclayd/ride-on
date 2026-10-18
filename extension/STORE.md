@@ -82,6 +82,8 @@ check-in and next windows, History, Preferences and Rides.
 - **`identity`:** Sign-in to Ride On with Google or Apple via `chrome.identity.launchWebAuthFlow`
   (OAuth with PKCE).
 - **`storage`:** Keeps ride preferences, recent rides and the latest recommendations on the device.
+- **Optional `notifications` (Chrome):** Shows tracked-ride alerts after the rider enables them.
+- **`nativeMessaging` (Safari):** Links notification setup with the signed Ride On companion app.
 - **Host permission `https://api.ride-on.cc/*`:** The extension's own backend: imports tracked
   routes and returns weather-based ride recommendations.
 - **Content script on `https://cycle.travel/user/journeys*`:** Reads the user's saved journeys so
@@ -90,6 +92,7 @@ check-in and next windows, History, Preferences and Rides.
 - **Data usage, collected:**
   - Personally identifiable information (name and email from sign-in)
   - Authentication information (session token)
+  - Installation identifiers and push tokens/subscriptions (optional notification delivery)
   - Location (route coordinates, and which routes you rode on which dates)
   - Website content (cycle.travel journeys)
 - **Data usage, not collected:** health, financial, personal communications, web history, user
