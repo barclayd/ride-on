@@ -35,6 +35,14 @@ That check drew the same four swatches (DOM divs, plus a WebGL canvas for the fi
 cycle.travel and the prototype and screenshotted both: **the two pages capture identically**, so
 side-by-side comparisons are fair even though neither shows true colours.
 
+**Only on the same display, though.** The transform depends on the display the tab's window is on, and
+`shot()` was fitted on a P3 one (`matchMedia('(color-gamut: p3)').matches` is true). A tab on an sRGB
+display captures greys about 11/255 darker (`#ababab` → `#a1a1a1`, `#9a9a9a` → `#8f8f8f`) and shifts
+colours too (`#c0c8ae` → `#b9c1a4`, `#f3ca94` → `#f2c482`). In WS2.5 (batch D) the prototype's tab sat
+on the other display from cycle.travel's for an afternoon, so ours looked darker than it was. Before
+comparing, check `color-gamut: p3` gives the same answer in both tabs, or capture both in one tab;
+only sample new colours where it's true, or `shot()` won't undo them.
+
 So, since WS2.2:
 
 - **Map-key colours are drawn as they are.** The key's values (`#73bded`, `#dd4c18`…) are what
@@ -109,10 +117,15 @@ ones. "Draws" is what `style.ts` draws: the key value as it is, or `shot()` of t
 | military edge (WS2.5) | sampled | `#e44c43` | `#f4373e` |
 | military band (WS2.5) | solved | `#ebc5b6` over land | `#f01914` at 22% |
 | railway (white dashed core, `ct_rail_core`) | sampled | `#9a9a99` | `#9a9a99` |
+| railway and tertiary road, z9 (WS2.5) | sampled | `#ababab` | `#ababab` |
+| primary, z9 (WS2.5) | sampled | `#f1d0c0` | `#f7cebf` |
+| secondary, z9 (WS2.5) | sampled | `#f3ca94` | `#fac793` |
+| unclassified lane and tertiary road, z10 (WS2.5) | sampled | `#9a9a9a` | `#9a9a9a` |
+| lane and tertiary casing (WS2.5) | key | `#444444` | `#444444` |
 | minor road casing | sampled | `#a3a3a3` | `#a3a3a3` |
-| major road casing, z10 | sampled | `#b8aea8` | `#baada8` |
-| major road casing, z14 | sampled | `#7a7a7a` | `#7a7a7a` |
-| minor road, z11 (white from z13) | sampled | `#b9b9b9` | `#b9b9b9` |
+| major road casing, z9–10 | sampled | `#b8aea8` | `#baada8` |
+| major road casing, z11 up (WS2.5) | sampled | `#060606` | `#060606` |
+| minor road, z10 (white from z13) | sampled | `#b9b9b9` | `#b9b9b9` |
 | motorway (WS2.5: the map draws far paler than the key) | sampled, then matched in a same-session capture | `#bad1e3` | `#bed9e7` |
 | trunk | key | `#c0c8ae` | `#c0c8ae` |
 | primary | key | `#f7bda7` | `#f7bda7` |
@@ -175,28 +188,29 @@ object.
 
 | | Rule |
 |---|---|
-| Fill colour | By `kind_detail`: trunk, primary, secondary, tertiary from the key; everything else in the major layer gets tertiary |
-| Major width | Exponential 1.6: z7 0.4, z9 1, z10 2.2/1.6/1, z12 3.2/2.6/2, z15 6/5/4, z18 16/14/12 (trunk+primary / secondary / tertiary) |
-| Major casing | Width 0 at z9 → 0.5 at z9.5 → 0.8 at z12 → 1.2 at z16; colour `#b8aea8` at z10 → `#7a7a7a` at z14 |
-| Minor width | Exponential 1.6: z10 0.3, z12 0.7, z13 1.3, z15 2.5, z18 11 |
-| Minor colour | Grey (`#b9b9b9`) at z11 → white at z13, so the minor network reads as thin grey lines when zoomed out, as on cycle.travel |
-| Minor casing | From z12.5 (0 → 0.6 at z13 → 1 at z16) |
+| Fill colour | By `kind_detail`: trunk, primary, secondary, tertiary from the key; everything else in the major layer gets tertiary. At z9 cycle.travel draws A roads paler and B roads deeper than its key, and tertiary roads as grey lines (`#ababab`, then `#9a9a9a` at z10); they take the key's cream from z11 |
+| Major width | Exponential 1.6, `majorStops` [A/B, tertiary]: z7 0.4, z9 1/0.9, z10 2.5/0.9, z11 2.6/2.3, z12 3.9/2.9, z13 4/3.75, z16 4/4, z18 9/8. cycle.travel draws trunk, A and B roads at one width, a constant 4 px from its z13 to z17 (our 12–16), with tertiary roads closing in on it |
+| Major casing | A/B: a 0.5 px hairline from z9.5 (1 px from z18), faint `#b8aea8` until z10, near-black `#060606` from z11 (cycle.travel's casings are mid-grey at its z11, black from z12). Tertiary: the lanes' `#444444` casing, from z10 |
+| Minor width | Exponential 1.6, `minorStops` [unclassified lane, street]: z10 0.9/0.3, z11 2.3/0.45, z12 2.9/0.7, z13 3.75/1.3, z15 5/2.5, z18 12/11. None at z9: cycle.travel's z10 shows only tertiary roads |
+| Minor colour | Lanes: grey `#9a9a9a` at z10, white from z11, as cycle.travel's key draws them. Streets: grey `#b9b9b9` until z11 → white at z13 |
+| Minor casing | Lanes: `#444444`, 0.5 px from z11 → 0.6 at z13 → 1 at z16. Streets: from z12.5 (0 → 0.6 at z13 → 1 at z16), `#a3a3a3` |
+| Low zooms | The basemap tiles carry minor roads from z12 and railways from z11, so the overlay's `low_roads` fills in below (`ct_low_minor`, `ct_low_minor_casing` z10–11; `ct_low_rail`, `ct_low_rail_core` z8–10), painted the same way |
 | Motorway | Pale blue (`#bed9e7`: far paler than the key's swatch). Exponential 1.6: z6 0.6, z9 1.6, z11 3, z12 4.8, z15 7, z18 15 |
 | Motorway casing | Width 0 at z7 → 0.5 at z9 → 0.6 from z11; colour faint grey `#9aa0a4` at z9 → black at z11 → `#151719` from z12 |
-| Railway | `kind=rail` only, and not tunnels (`is_tunnel`), so most of the Underground isn't drawn, as on cycle.travel. Solid grey `#9a9a99` (Protomaps draws faint dashes): exponential 1.6, z6 0.4, z9 2.5, z10 2.9, z12 3.25, z14 4, z18 8. Sidings, yards, crossovers and spurs (any `service`) are half as wide |
-| Railway core (`ct_rail_core`) | White dashes along the middle of main lines (no `service`) from z9: width z9 0.5, z10 1, z12 2.25, z14 3, z18 6; dash `[5.5, 5.5]` below z11, `[4, 4]` from z11 |
+| Railway | `kind=rail` only, and not tunnels (`is_tunnel`), so most of the Underground isn't drawn, as on cycle.travel. Solid grey (Protomaps draws faint dashes): `#ababab` at z9, `#9a9a99` from z10; exponential 1.6, z6 0.4, z9 2.5, z10 2.9, z12 3.5, z14 3.5, z18 8. Sidings, yards, crossovers and spurs (any `service`) are half as wide |
+| Railway core (`ct_rail_core`) | White dashes along the middle of main lines (no `service`) from z9: width z9 1, z12 2.25, z14 2.25, z18 6; dash `[5.5, 5.5]` below z11, `[4, 4]` from z11 |
 
 The dots of a cycle route sit on whatever road or path carries it: **the line between the dots is the
 road or path underneath**, not part of the route style. So every road and path a route uses has to be
-visible from the zoom its dots appear. That's why minor roads start at z10 here and why cycle paths need
+visible from the zoom its dots appear. That's why lanes start at z10 here and why cycle paths need
 their own layer (next section).
 
 **Gaps:**
 - cycle.travel shows more minor streets than we do at z11–13 (Protomaps thins them).
-- Below z11 our basemap tiles have no railways or minor roads at all, so London z9 and Harwich z9–10 lack
-  the rail lines and lanes cycle.travel draws. WS1 data (basemap build), not style.
 - Station throats (Waterloo, Victoria) read heavier than cycle.travel's at z14: every platform track is
-  drawn, half-width but still dense.
+  drawn, half-width but still dense. Not addressed in WS2.5.
+- cycle.travel's hillshade greys its low zooms (the Downs at z9) where ours is flat land colour, so its
+  map reads darker even where the roads match. Hillshade is WS1.3.
 
 ## Cycle paths and footpaths
 
@@ -554,14 +568,17 @@ From the nine comparisons in `screenshots/`. Tick them off in WS2.
 - [ ] Icons at one spot stack (Box Hill's café, toilets, water and Ps); cycle.travel spreads them out
 - [ ] More bike parking in London than cycle.travel shows (Putney at our z15)
 - [ ] Purple cycle lanes on roads (WS1 data)
-- [ ] London rcn: far fewer lines, thinner and lavender; work out cycle.travel's rule
+- [x] London rcn: far fewer lines (WS2.5: TfL routes from z12 with a C/Q/CS number, z13 without, and no
+  proposed or under-construction routes)
 - [x] lcn dots lighter (WS2.5: also smaller and closer together, in their own layer)
 - [x] NCN + EuroVelo overlap drawn as one line, not stacked dots (WS2.5: one network per way, and the
   Avenue Verte dots as national)
 - [x] Route dots round at every zoom, with cycle.travel's sizes and spacing (WS2.5: symbol dots)
-- [ ] Paths from z11 in London (thin red)
-- [ ] More minor streets at z11–13
-- [ ] Railways and minor roads below z11 (missing from our basemap tiles, WS1 data)
+- [x] Paths from z11 in London (WS2.5: paved and unpaved paths from z11, thinner below z13)
+- [ ] More minor streets at z12–13 (WS2.5 covers z10–11 from the overlay's `low_roads`; the basemap still thins z12–13)
+- [x] Railways and minor roads below z11 (WS2.5: the overlay's `low_roads`)
+- [x] A/B roads a constant 4 px from z12 with a near-black hairline casing; lanes and tertiary roads as
+  cycle.travel's key draws them, grey below z11; only tertiary roads at z9 (WS2.5)
 - [ ] Station throats lighter at z14 (Waterloo, Victoria)
 - [x] Bolder railways; paler, thinner motorways when zoomed out (WS2.5)
 - [x] Railways: no tunnels (the Underground), thin sidings and yards with no white core (WS2.5)

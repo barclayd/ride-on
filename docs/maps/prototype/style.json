@@ -283,14 +283,18 @@
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.9, 0.3],
      11,
-     0,
-     12.5,
-     0.5,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.3, 0.45],
+     12,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.9, 0.7],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 3.75, 1.3],
      15,
-     2,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 5, 2.5],
      18,
-     11
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 12, 11]
     ],
     "line-width": [
      "interpolate",
@@ -350,10 +354,10 @@
      "interpolate",
      ["linear"],
      ["zoom"],
-     10,
-     "#baada8",
-     14,
-     "#7a7a7a"
+     9,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], "#444444", "#baada8"],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], "#444444", "#060606"]
     ],
     "line-dasharray": [3, 2],
     "line-gap-width": [
@@ -361,62 +365,42 @@
      ["exponential", 1.6],
      ["zoom"],
      7,
-     0.4,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.4, 0.4],
      9,
-     1,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 1],
      10,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      2.2,
-      "secondary",
-      1.6,
-      1
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 2.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.3, 2.6],
      12,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      3.2,
-      "secondary",
-      2.6,
-      2
-     ],
-     15,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      6,
-      "secondary",
-      5,
-      4
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.9, 3.9],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 3.75, 4],
+     16,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 4, 4],
      18,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      16,
-      "secondary",
-      14,
-      12
-     ]
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 8, 9]
     ],
     "line-width": [
      "interpolate",
      ["linear"],
      ["zoom"],
      9,
-     0,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0],
      9.5,
-     0.5,
-     12,
-     0.8,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0.5],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.5, 0.5],
+     12.5,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.57, 0.5],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.6, 0.5],
      16,
-     1.2
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 1, 0.5],
+     18,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 1, 1]
     ]
    }
   },
@@ -489,14 +473,18 @@
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.9, 0.3],
      11,
-     0,
-     12.5,
-     0.5,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.3, 0.45],
+     12,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.9, 0.7],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 3.75, 1.3],
      15,
-     2,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 5, 2.5],
      18,
-     11
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 12, 11]
     ]
    }
   },
@@ -529,66 +517,84 @@
    "filter": ["all", ["has", "is_tunnel"], ["==", "kind", "major_road"]],
    "paint": {
     "line-color": [
-     "match",
-     ["get", "kind_detail"],
-     "trunk",
-     "#c0c8ae",
-     "primary",
-     "#f7bda7",
-     "secondary",
-     "#fdd5a5",
-     "tertiary",
-     "#fff5d0",
-     "#fff5d0"
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     9,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "tertiary"],
+      "#ababab",
+      [
+       "match",
+       ["get", "kind_detail"],
+       "primary",
+       "#f7cebf",
+       "secondary",
+       "#fac793",
+       [
+        "match",
+        ["get", "kind_detail"],
+        "trunk",
+        "#c0c8ae",
+        "primary",
+        "#f7bda7",
+        "secondary",
+        "#fdd5a5",
+        "#fff5d0"
+       ]
+      ]
+     ],
+     10,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "tertiary"],
+      "#9a9a9a",
+      [
+       "match",
+       ["get", "kind_detail"],
+       "trunk",
+       "#c0c8ae",
+       "primary",
+       "#f7bda7",
+       "secondary",
+       "#fdd5a5",
+       "#fff5d0"
+      ]
+     ],
+     11,
+     [
+      "match",
+      ["get", "kind_detail"],
+      "trunk",
+      "#c0c8ae",
+      "primary",
+      "#f7bda7",
+      "secondary",
+      "#fdd5a5",
+      "#fff5d0"
+     ]
     ],
     "line-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
      7,
-     0.4,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.4, 0.4],
      9,
-     1,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 1],
      10,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      2.2,
-      "secondary",
-      1.6,
-      1
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 2.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.3, 2.6],
      12,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      3.2,
-      "secondary",
-      2.6,
-      2
-     ],
-     15,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      6,
-      "secondary",
-      5,
-      4
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.9, 3.9],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 3.75, 4],
+     16,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 4, 4],
      18,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      16,
-      "secondary",
-      14,
-      12
-     ]
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 8, 9]
     ]
    }
   },
@@ -737,23 +743,88 @@
     ["!=", "kind_detail", "service"]
    ],
    "paint": {
-    "line-color": "#a3a3a3",
+    "line-color": [
+     "case",
+     ["==", ["get", "kind_detail"], "unclassified"],
+     "#444444",
+     "#a3a3a3"
+    ],
     "line-gap-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
      10,
-     0.3,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.9, 0.3],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.3, 0.45],
      12,
-     0.7,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.9, 0.7],
      13,
-     1.3,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 3.75, 1.3],
      15,
-     2.5,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 5, 2.5],
      18,
-     11
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 12, 11]
     ],
-    "line-width": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 13, 0.6, 16, 1]
+    "line-width": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     10,
+     0,
+     11,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.5, 0],
+     12.5,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.57, 0],
+     13,
+     0.6,
+     16,
+     1
+    ]
+   }
+  },
+  {
+   "id": "ct_low_minor_casing",
+   "type": "line",
+   "source": "cycling",
+   "source-layer": "low_roads",
+   "minzoom": 10,
+   "maxzoom": 12,
+   "filter": ["==", ["get", "kind_detail"], "unclassified"],
+   "paint": {
+    "line-color": "#444444",
+    "line-gap-width": [
+     "interpolate",
+     ["exponential", 1.6],
+     ["zoom"],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.9, 0.3],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.3, 0.45],
+     12,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.9, 0.7],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 3.75, 1.3],
+     15,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 5, 2.5],
+     18,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 12, 11]
+    ],
+    "line-width": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     10,
+     0,
+     11,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.5, 0],
+     12.5,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.57, 0],
+     13,
+     0.6,
+     16,
+     1
+    ]
    }
   },
   {
@@ -804,72 +875,52 @@
      "interpolate",
      ["linear"],
      ["zoom"],
-     10,
-     "#baada8",
-     14,
-     "#7a7a7a"
+     9,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], "#444444", "#baada8"],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], "#444444", "#060606"]
     ],
     "line-gap-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
      7,
-     0.4,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.4, 0.4],
      9,
-     1,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 1],
      10,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      2.2,
-      "secondary",
-      1.6,
-      1
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 2.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.3, 2.6],
      12,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      3.2,
-      "secondary",
-      2.6,
-      2
-     ],
-     15,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      6,
-      "secondary",
-      5,
-      4
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.9, 3.9],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 3.75, 4],
+     16,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 4, 4],
      18,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      16,
-      "secondary",
-      14,
-      12
-     ]
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 8, 9]
     ],
     "line-width": [
      "interpolate",
      ["linear"],
      ["zoom"],
      9,
-     0,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0],
      9.5,
-     0.5,
-     12,
-     0.8,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0.5],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.5, 0.5],
+     12.5,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.57, 0.5],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.6, 0.5],
      16,
-     1.2
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 1, 0.5],
+     18,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 1, 1]
     ]
    }
   },
@@ -916,6 +967,31 @@
      15
     ],
     "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0, 9, 0.5, 11, 0.6]
+   }
+  },
+  {
+   "id": "ct_cycleways_halo",
+   "type": "line",
+   "source": "cycling",
+   "source-layer": "paths",
+   "minzoom": 11,
+   "filter": ["==", ["get", "class"], "p"],
+   "layout": {"line-cap": "round", "line-join": "round"},
+   "paint": {
+    "line-color": "#ffffff",
+    "line-width": [
+     "interpolate",
+     ["exponential", 1.5],
+     ["zoom"],
+     11,
+     4.9,
+     14,
+     5,
+     15,
+     6,
+     18,
+     12
+    ]
    }
   },
   {
@@ -998,8 +1074,20 @@
      "interpolate",
      ["linear"],
      ["zoom"],
+     10,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "unclassified"],
+      "#9a9a9a",
+      "#b9b9b9"
+     ],
      11,
-     "#b9b9b9",
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "unclassified"],
+      "#ffffff",
+      "#b9b9b9"
+     ],
      13,
      "#ffffff"
     ],
@@ -1008,15 +1096,66 @@
      ["exponential", 1.6],
      ["zoom"],
      10,
-     0.3,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.9, 0.3],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.3, 0.45],
      12,
-     0.7,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.9, 0.7],
      13,
-     1.3,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 3.75, 1.3],
      15,
-     2.5,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 5, 2.5],
      18,
-     11
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 12, 11]
+    ]
+   }
+  },
+  {
+   "id": "ct_low_minor",
+   "type": "line",
+   "source": "cycling",
+   "source-layer": "low_roads",
+   "minzoom": 10,
+   "maxzoom": 12,
+   "filter": ["==", ["get", "kind"], "minor"],
+   "paint": {
+    "line-color": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     10,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "unclassified"],
+      "#9a9a9a",
+      "#b9b9b9"
+     ],
+     11,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "unclassified"],
+      "#ffffff",
+      "#b9b9b9"
+     ],
+     13,
+     "#ffffff"
+    ],
+    "line-width": [
+     "interpolate",
+     ["exponential", 1.6],
+     ["zoom"],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.9, 0.3],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.3, 0.45],
+     12,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.9, 0.7],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 3.75, 1.3],
+     15,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 5, 2.5],
+     18,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 12, 11]
     ]
    }
   },
@@ -1037,72 +1176,52 @@
      "interpolate",
      ["linear"],
      ["zoom"],
-     10,
-     "#baada8",
-     14,
-     "#7a7a7a"
+     9,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], "#444444", "#baada8"],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], "#444444", "#060606"]
     ],
     "line-gap-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
      7,
-     0.4,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.4, 0.4],
      9,
-     1,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 1],
      10,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      2.2,
-      "secondary",
-      1.6,
-      1
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 2.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.3, 2.6],
      12,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      3.2,
-      "secondary",
-      2.6,
-      2
-     ],
-     15,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      6,
-      "secondary",
-      5,
-      4
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.9, 3.9],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 3.75, 4],
+     16,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 4, 4],
      18,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      16,
-      "secondary",
-      14,
-      12
-     ]
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 8, 9]
     ],
     "line-width": [
      "interpolate",
      ["linear"],
      ["zoom"],
      9,
-     0,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0],
      9.5,
-     0.5,
-     12,
-     0.8,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0.5],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.5, 0.5],
+     12.5,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.57, 0.5],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.6, 0.5],
      16,
-     1.2
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 1, 0.5],
+     18,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 1, 1]
     ]
    }
   },
@@ -1119,66 +1238,84 @@
    ],
    "paint": {
     "line-color": [
-     "match",
-     ["get", "kind_detail"],
-     "trunk",
-     "#c0c8ae",
-     "primary",
-     "#f7bda7",
-     "secondary",
-     "#fdd5a5",
-     "tertiary",
-     "#fff5d0",
-     "#fff5d0"
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     9,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "tertiary"],
+      "#ababab",
+      [
+       "match",
+       ["get", "kind_detail"],
+       "primary",
+       "#f7cebf",
+       "secondary",
+       "#fac793",
+       [
+        "match",
+        ["get", "kind_detail"],
+        "trunk",
+        "#c0c8ae",
+        "primary",
+        "#f7bda7",
+        "secondary",
+        "#fdd5a5",
+        "#fff5d0"
+       ]
+      ]
+     ],
+     10,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "tertiary"],
+      "#9a9a9a",
+      [
+       "match",
+       ["get", "kind_detail"],
+       "trunk",
+       "#c0c8ae",
+       "primary",
+       "#f7bda7",
+       "secondary",
+       "#fdd5a5",
+       "#fff5d0"
+      ]
+     ],
+     11,
+     [
+      "match",
+      ["get", "kind_detail"],
+      "trunk",
+      "#c0c8ae",
+      "primary",
+      "#f7bda7",
+      "secondary",
+      "#fdd5a5",
+      "#fff5d0"
+     ]
     ],
     "line-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
      7,
-     0.4,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.4, 0.4],
      9,
-     1,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 1],
      10,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      2.2,
-      "secondary",
-      1.6,
-      1
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 2.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.3, 2.6],
      12,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      3.2,
-      "secondary",
-      2.6,
-      2
-     ],
-     15,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      6,
-      "secondary",
-      5,
-      4
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.9, 3.9],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 3.75, 4],
+     16,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 4, 4],
      18,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      16,
-      "secondary",
-      14,
-      12
-     ]
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 8, 9]
     ]
    }
   },
@@ -1286,7 +1423,7 @@
    "type": "line",
    "source": "cycling",
    "source-layer": "paths",
-   "minzoom": 12,
+   "minzoom": 11,
    "filter": ["==", ["get", "class"], "u"],
    "paint": {
     "line-color": "#8b4513",
@@ -1294,8 +1431,10 @@
      "interpolate",
      ["exponential", 1.5],
      ["zoom"],
-     12,
-     0.95,
+     11,
+     0.6,
+     13,
+     0.65,
      15,
      1.1,
      18,
@@ -1309,7 +1448,7 @@
    "type": "line",
    "source": "cycling",
    "source-layer": "paths",
-   "minzoom": 12,
+   "minzoom": 11,
    "filter": ["==", ["get", "class"], "p"],
    "layout": {"line-cap": "round", "line-join": "round"},
    "paint": {
@@ -1318,8 +1457,10 @@
      "interpolate",
      ["exponential", 1.5],
      ["zoom"],
-     12,
-     2.2,
+     11,
+     3.4,
+     14,
+     3.5,
      15,
      4.5,
      18,
@@ -1332,7 +1473,7 @@
    "type": "line",
    "source": "cycling",
    "source-layer": "paths",
-   "minzoom": 12,
+   "minzoom": 11,
    "filter": ["==", ["get", "class"], "p"],
    "layout": {"line-cap": "round", "line-join": "round"},
    "paint": {
@@ -1341,12 +1482,50 @@
      "interpolate",
      ["exponential", 1.5],
      ["zoom"],
-     12,
-     0.9,
+     11,
+     1.5,
+     14,
+     1.6,
      15,
      2.2,
      18,
      6
+    ]
+   }
+  },
+  {
+   "id": "ct_low_rail",
+   "type": "line",
+   "source": "cycling",
+   "source-layer": "low_roads",
+   "maxzoom": 11,
+   "filter": ["==", ["get", "kind"], "rail"],
+   "paint": {
+    "line-color": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     9,
+     "#ababab",
+     10,
+     "#9a9a99"
+    ],
+    "line-width": [
+     "interpolate",
+     ["exponential", 1.6],
+     ["zoom"],
+     6,
+     ["case", ["has", "service"], 0.2, 0.4],
+     9,
+     ["case", ["has", "service"], 1.25, 2.5],
+     10,
+     ["case", ["has", "service"], 1.45, 2.9],
+     12,
+     ["case", ["has", "service"], 1.75, 3.5],
+     14,
+     ["case", ["has", "service"], 1.75, 3.5],
+     18,
+     ["case", ["has", "service"], 4, 8]
     ]
    }
   },
@@ -1362,7 +1541,15 @@
    ],
    "paint": {
     "line-opacity": 1,
-    "line-color": "#9a9a99",
+    "line-color": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     9,
+     "#ababab",
+     10,
+     "#9a9a99"
+    ],
     "line-width": [
      "interpolate",
      ["exponential", 1.6],
@@ -1374,9 +1561,9 @@
      10,
      ["case", ["has", "service"], 1.45, 2.9],
      12,
-     ["case", ["has", "service"], 1.625, 3.25],
+     ["case", ["has", "service"], 1.75, 3.5],
      14,
-     ["case", ["has", "service"], 2, 4],
+     ["case", ["has", "service"], 1.75, 3.5],
      18,
      ["case", ["has", "service"], 4, 8]
     ]
@@ -1400,13 +1587,43 @@
      ["exponential", 1.5],
      ["zoom"],
      9,
-     0.5,
-     10,
      1,
      12,
      2.25,
      14,
-     3,
+     2.25,
+     18,
+     6
+    ],
+    "line-dasharray": [
+     "step",
+     ["zoom"],
+     ["literal", [5.5, 5.5]],
+     11,
+     ["literal", [4, 4]]
+    ]
+   }
+  },
+  {
+   "id": "ct_low_rail_core",
+   "type": "line",
+   "source": "cycling",
+   "source-layer": "low_roads",
+   "minzoom": 9,
+   "maxzoom": 11,
+   "filter": ["==", ["get", "kind"], "rail"],
+   "paint": {
+    "line-color": "#ffffff",
+    "line-width": [
+     "interpolate",
+     ["exponential", 1.5],
+     ["zoom"],
+     9,
+     1,
+     12,
+     2.25,
+     14,
+     2.25,
      18,
      6
     ],
@@ -1519,21 +1736,27 @@
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.9, 0.3],
      11,
-     0,
-     12.5,
-     0.5,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.3, 0.45],
+     12,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.9, 0.7],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 3.75, 1.3],
      15,
-     2,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 5, 2.5],
      18,
-     11
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 12, 11]
     ],
     "line-width": [
      "interpolate",
-     ["exponential", 1.6],
+     ["linear"],
      ["zoom"],
+     12,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.57, 0],
      13,
-     0,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.6, 0],
      13.5,
      0.8
     ]
@@ -1551,72 +1774,52 @@
      "interpolate",
      ["linear"],
      ["zoom"],
-     10,
-     "#baada8",
-     14,
-     "#7a7a7a"
+     9,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], "#444444", "#baada8"],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], "#444444", "#060606"]
     ],
     "line-gap-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
      7,
-     0.4,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.4, 0.4],
      9,
-     1,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 1],
      10,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      2.2,
-      "secondary",
-      1.6,
-      1
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 2.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.3, 2.6],
      12,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      3.2,
-      "secondary",
-      2.6,
-      2
-     ],
-     15,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      6,
-      "secondary",
-      5,
-      4
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.9, 3.9],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 3.75, 4],
+     16,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 4, 4],
      18,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      16,
-      "secondary",
-      14,
-      12
-     ]
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 8, 9]
     ],
     "line-width": [
      "interpolate",
      ["linear"],
      ["zoom"],
      9,
-     0,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0],
      9.5,
-     0.5,
-     12,
-     0.8,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0.5],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0, 0.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.5, 0.5],
+     12.5,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.57, 0.5],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.6, 0.5],
      16,
-     1.2
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 1, 0.5],
+     18,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 1, 1]
     ]
    }
   },
@@ -1641,19 +1844,43 @@
    "minzoom": 12,
    "filter": ["all", ["has", "is_bridge"], ["==", "kind", "minor_road"]],
    "paint": {
-    "line-color": "#ffffff",
+    "line-color": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     10,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "unclassified"],
+      "#9a9a9a",
+      "#b9b9b9"
+     ],
+     11,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "unclassified"],
+      "#ffffff",
+      "#b9b9b9"
+     ],
+     13,
+     "#ffffff"
+    ],
     "line-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
+     10,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 0.9, 0.3],
      11,
-     0,
-     12.5,
-     0.5,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.3, 0.45],
+     12,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 2.9, 0.7],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 3.75, 1.3],
      15,
-     2,
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 5, 2.5],
      18,
-     11
+     ["case", ["==", ["get", "kind_detail"], "unclassified"], 12, 11]
     ]
    }
   },
@@ -1688,66 +1915,84 @@
    "filter": ["all", ["has", "is_bridge"], ["==", "kind", "major_road"]],
    "paint": {
     "line-color": [
-     "match",
-     ["get", "kind_detail"],
-     "trunk",
-     "#c0c8ae",
-     "primary",
-     "#f7bda7",
-     "secondary",
-     "#fdd5a5",
-     "tertiary",
-     "#fff5d0",
-     "#fff5d0"
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     9,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "tertiary"],
+      "#ababab",
+      [
+       "match",
+       ["get", "kind_detail"],
+       "primary",
+       "#f7cebf",
+       "secondary",
+       "#fac793",
+       [
+        "match",
+        ["get", "kind_detail"],
+        "trunk",
+        "#c0c8ae",
+        "primary",
+        "#f7bda7",
+        "secondary",
+        "#fdd5a5",
+        "#fff5d0"
+       ]
+      ]
+     ],
+     10,
+     [
+      "case",
+      ["==", ["get", "kind_detail"], "tertiary"],
+      "#9a9a9a",
+      [
+       "match",
+       ["get", "kind_detail"],
+       "trunk",
+       "#c0c8ae",
+       "primary",
+       "#f7bda7",
+       "secondary",
+       "#fdd5a5",
+       "#fff5d0"
+      ]
+     ],
+     11,
+     [
+      "match",
+      ["get", "kind_detail"],
+      "trunk",
+      "#c0c8ae",
+      "primary",
+      "#f7bda7",
+      "secondary",
+      "#fdd5a5",
+      "#fff5d0"
+     ]
     ],
     "line-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
      7,
-     0.4,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.4, 0.4],
      9,
-     1,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 1],
      10,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      2.2,
-      "secondary",
-      1.6,
-      1
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 0.9, 2.5],
+     11,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.3, 2.6],
      12,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      3.2,
-      "secondary",
-      2.6,
-      2
-     ],
-     15,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      6,
-      "secondary",
-      5,
-      4
-     ],
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 2.9, 3.9],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 3.75, 4],
+     16,
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 4, 4],
      18,
-     [
-      "match",
-      ["get", "kind_detail"],
-      ["trunk", "primary"],
-      16,
-      "secondary",
-      14,
-      12
-     ]
+     ["case", ["==", ["get", "kind_detail"], "tertiary"], 8, 9]
     ]
    }
   },

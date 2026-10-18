@@ -267,14 +267,19 @@ and other tourist sights, from z13 only big structures, from z15 all, with Maki 
 dwellings never named, hamlets from z13, small; stations at z10–11 as dots, thinned by how many others are
 within 5 km (`crowd_5km`, at most 11), placed after towns' names and before villages', so Surrey and rural
 Essex keep nearly all theirs and London only its edge. Both rules approximate cycle.travel's (style spec,
-Landmarks and Stations at z10–11); needs the rebuilt overlay. D, London and density: the London rcn
-rule (cycle.travel shows few regional routes, and smaller, closer blue dots at street level), paths from
-z11, minor streets at z11–13, railways and minor roads below z11 (missing from our basemap tiles, so a
-basemap build change), lighter station throats at z14.
+Landmarks and Stations at z10–11); needs the rebuilt overlay. D, London and density (**done**, except
+station throats): London's TfL routes from z12 with a C/Q/CS number and z13 without, proposed and
+under-construction routes left out; paved and unpaved paths from z11, plus private drives open to bikes;
+lanes, streets and main-line railways below the basemap's zooms from a new overlay layer, `low_roads`
+(lanes and streets z10–11, rail z8–10); A/B roads at cycle.travel's constant 4 px from z12 with a
+near-black hairline casing; unclassified lanes and tertiary roads white/cream with a dark casing from z11
+and grey below, and only tertiary roads at z9, as cycle.travel's z10. Station throats at z14 still draw
+every platform track. The overlay changes need the rebuilt overlay.
 
-Colours that must match closely are solved against swatches captured in the same Chrome session as
-cycle.travel: the WS2.5 lines session captured 3–12/255 darker than `shot()` predicts. Refit `shot()`
-before trusting it again ([style spec](cycle-travel-style.md#colour-sampling)).
+Screenshot colours depend on the display the tab is on ([style spec](cycle-travel-style.md#colour-sampling)):
+capture cycle.travel and the prototype on the same display, and sample new colours only on a P3 one,
+where `shot()` holds. The WS2.5 lines session's 3–12/255 offset matches the sRGB display's skew, so the
+motorway fill solved then (`motorwayPale`) may be a shade too pale; re-check it on a P3 display.
 
 **2.6 3× and device.** Every size was tuned at 2× in Chrome. Re-check dots, badges and labels on an
 iPhone 17 at 3×. MapLibre Native draws text slightly differently from GL JS.
