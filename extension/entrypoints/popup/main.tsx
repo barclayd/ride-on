@@ -1,5 +1,5 @@
 import { Fragment, render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { API_URL } from '../../lib/api';
 import {
@@ -155,6 +155,41 @@ const SignedOut = ({ view }: { view: View }) => {
           By continuing you agree to the <a href="#terms">Terms</a> and{' '}
           <a href="#privacy">Privacy Policy</a>.
         </p>
+      </div>
+    </>
+  );
+};
+
+// Set when a page's button opened this in a tab (background openPopup): the rider's tab id, or ''.
+const fromTab = new URLSearchParams(location.search).get('from');
+
+// Signed in from that tab: send the rider back to cycle.travel rather than run the panel full screen.
+const BackToPage = () => {
+  const back = async () => {
+    if (fromTab)
+      await browser.tabs
+        .update(Number(fromTab), { active: true })
+        .catch(() => {});
+    const self = await browser.tabs.getCurrent();
+    if (self?.id !== undefined) await browser.tabs.remove(self.id);
+  };
+  return (
+    <>
+      <div class="ro-signed-out-head">
+        <img src={iconUrl()} alt="" />
+        Ride On
+      </div>
+      <div class="ro-signed-out">
+        <img class="ro-hero" src={iconUrl()} alt="" />
+        <div class="ro-hero-text">
+          <span>You're signed in</span>
+          <span>
+            Close this page and go back to cycle.travel to use Ride On.
+          </span>
+        </div>
+        <button type="button" class="ro-primary" onClick={back}>
+          Back to cycle.travel
+        </button>
       </div>
     </>
   );
@@ -1614,6 +1649,7 @@ const SyncFooter = ({ view }: { view: View }) => {
 const App = () => {
   const view = useView();
   const [tab, setTab] = useState<Tab>('rides');
+  const signedOutHere = useRef(false);
   const requested = view?.state.popupTab;
   // The page asked for a tab (window button, sign-in strip): honour it once.
   useEffect(() => {
@@ -1625,10 +1661,18 @@ const App = () => {
     send({ type: 'refresh' });
   }, []);
   if (!view) return null;
-  if (view.state.auth !== 'signed-in')
+  if (view.state.auth !== 'signed-in') {
+    signedOutHere.current = true;
     return (
       <div class="ro-root ro-panel">
         <SignedOut view={view} />
+      </div>
+    );
+  }
+  if (fromTab !== null && signedOutHere.current)
+    return (
+      <div class="ro-root ro-panel">
+        <BackToPage />
       </div>
     );
   return (
