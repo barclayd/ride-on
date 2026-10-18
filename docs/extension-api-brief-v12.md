@@ -144,9 +144,13 @@ The Mac app redesign (branch `extension/safari-app-redesign`) already:
 
 Once the API ships, the app needs no further change.
 
-## Open questions
+## Resolved decisions
 
-1. **Combined messages** (§3): send when any reason is on, or gate on the leading
-   reason?
-2. **Outage notices:** should `unavailable` and `available_again` follow Ride
-   alerts (proposed), or always send?
+Dan confirmed on 18 October 2026:
+
+1. **Combined messages** (§3): send when any reason is enabled, retaining the full message.
+2. **Outage notices:** `unavailable` and `available_again` follow Ride alerts.
+
+Implemented in API v0.39.0 with migration `0020_device_alerts.sql`. See
+[the API contract](api.md#device-alerts-v0390) and
+[delivery behavior](ride-monitoring.md#per-device-alert-choices-v0390).

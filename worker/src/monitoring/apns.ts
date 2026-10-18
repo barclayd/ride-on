@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { digest } from '../tracking/model.ts';
 import type { Env } from '../types.ts';
 import { readBoundedJson } from '../weather/http.ts';
+import type { DeviceAlertColumns } from './device-alerts.ts';
 import { sendWebPush } from './web-push.ts';
 
 export const PUSH_TOPIC = 'com.danbarclay.rideon';
@@ -22,7 +23,7 @@ export const pushConfig = (env: Env) => {
     return {};
   }
 };
-export type Device = {
+export type Device = DeviceAlertColumns & {
   id: string;
   owner_id: string;
   token: string;

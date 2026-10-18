@@ -1,6 +1,8 @@
 # Ride On API MVP
 
-API v0.38.0 adds per-ride alert switches, a 50% rain warning, feels-like cold warnings, and an 18:00 local final forecast. ±5-point score alerts and maximum-temperature alerts remain independent of the switches. Scoring stays `comfort-v0.17`. See [the tracked-ride contract](#tracked-ride-alerts-v0380).
+API v0.39.0 adds [per-device notification switches](#device-alerts-v0390) for the Safari companion: ride updates, the evening forecast and sound. Combined messages send if any reason is enabled; outages and recovery follow Ride alerts. Scoring stays `comfort-v0.17`.
+
+API v0.38.0 adds per-ride alert switches, a 50% rain warning, feels-like cold warnings, and an 18:00 local final forecast. ±5-point score alerts and maximum-temperature alerts remain independent of the per-ride switches. Scoring stays `comfort-v0.17`. See [the tracked-ride contract](#tracked-ride-alerts-v0380).
 
 API v0.37.0 adds [Chrome Web Push and Safari companion delivery](ride-monitoring.md#chrome-and-safari-delivery-api-v0370), transport-specific readiness and an authenticated browser view for notification taps. Monitoring policy and scoring are unchanged.
 
@@ -1647,6 +1649,68 @@ weather locations or an invalid/out-of-range pause date (`PAUSE_DATE_OUT_OF_RANG
 represented in a successful assessment response with explicit unavailable data,
 not hidden behind a generic error or a fabricated best ride.
 
+
+## Device alerts (v0.39.0)
+
+The authenticated `GET /push-devices/config` includes `deviceAlerts: true`.
+This advertises native notification-switch support independently of APNs
+configuration and OS permission. Clients should check it before sending the new
+fields.
+
+`PUT /push-devices/{installationUUID}` accepts optional `alerts` on the native
+APNs registration body:
+
+```json
+{
+  "token": "<APNs hexadecimal token>",
+  "environment": "production",
+  "topic": "com.danbarclay.rideon",
+  "platform": "macos",
+  "scope": "tracked_rides",
+  "alerts": { "rideAlerts": true, "finalForecast": true, "sound": false }
+}
+```
+
+`PATCH /push-devices/{installationUUID}` updates an existing native device
+without a token:
+
+```json
+{ "alerts": { "rideAlerts": true, "finalForecast": true, "sound": false } }
+```
+
+Both objects are strict, all three booleans are required when `alerts` is
+supplied, and all false is valid. Invalid bodies return 400. PATCH returns
+`404 DEVICE_NOT_FOUND` for an unknown, foreign or Web Push installation.
+PATCH and PUT return `{device, deliveryConfigured}`; `device` contains
+`id`, `environment`, `topic`, `platform`, `transport`, `scope` and
+`alerts`. GET `/push-devices` includes the same public fields plus
+`registeredAt` for each device. Tokens and subscription keys remain private.
+
+New registrations with omitted `alerts` and pre-existing registrations have
+all three values true. A re-PUT that omits `alerts` preserves stored choices,
+including during token rotation. Changing only these switches does not bump the
+registration version or cancel pending deliveries in the settings request.
+The Safari app explicitly sends its local Sound-off default.
+
+| Setting | Tracked-ride delivery behavior |
+| --- | --- |
+| `rideAlerts` | Gates every reason except `evening_summary`, including score changes, breaches/recoveries, rain, cold, better options, outages and forecast recovery. |
+| `finalForecast` | Gates `evening_summary`, due at 18:00 in the ride's local time zone on the preceding day. |
+| `sound` | When false, omits `aps.sound` for this installation; message content and thread grouping stay unchanged. |
+
+A combined message sends if **any** reason is enabled and retains its full copy.
+The server reads each device's current choices before sending or retrying it.
+When every registered device is switched off for an event, monitoring advances
+its notification reference quietly as if accepted, so re-enabling does not replay
+that change. No transport acceptance is recorded. An enabled device that fails
+delivery retains the existing failure/retry behavior; having no devices
+registered does not count as opting out.
+
+These settings belong to an installation, not the account. Per-ride
+`alerts.triggers` still determine which reasons exist. Account pause still
+suppresses everything. Chrome's registration body and Web Push delivery are
+unchanged. Apply migration `0020_device_alerts.sql` before deployment.
+See [delivery details](ride-monitoring.md#per-device-alert-choices-v0390).
 
 ## Tracked-ride alerts (v0.38.0)
 
