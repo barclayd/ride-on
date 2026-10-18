@@ -2329,27 +2329,18 @@ a.ro-name:hover {
   border-color: var(--ro-lime);
   color: var(--ro-ink);
 }
-/* The Undo message (v5 §4), centred. On the Journeys page the dock takes no room: the message floats
-   over the page about 72px under the last tile, and sticks 18px above the bottom of the view while
-   the list runs past it. */
+/* The Undo message (v5 §4). On the Journeys page it sits in the window's bottom right corner, over
+   the page, and the dock takes no room in the list. */
 .ro-toast-dock {
-  position: sticky;
-  bottom: 72px;
-  z-index: 7;
-  height: 0;
-  margin-top: -12px; /* takes back the module's gap */
-}
-/* In the panel the dock keeps its room, so the last card scrolls clear of the message. */
-.ro-stack .ro-toast-dock {
-  bottom: 16px;
-  margin: 44px 0 2px; /* with the stack's gap and padding, 70px under the last card */
+  display: contents;
 }
 .ro-toast {
-  position: absolute;
-  left: 50%;
-  bottom: -54px;
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1000;
   width: max-content;
-  max-width: calc(100% - 28px);
+  max-width: min(420px, calc(100vw - 48px));
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -2362,19 +2353,34 @@ a.ro-name:hover {
   text-wrap: pretty;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   opacity: 0;
-  transform: translate(-50%, 8px);
+  transform: translateY(8px);
   pointer-events: none;
   transition:
     opacity 0.2s ease,
     transform 0.2s ease;
 }
-.ro-stack .ro-toast {
-  bottom: 0;
-}
 .ro-toast[data-show="true"] {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: none;
   pointer-events: auto;
+}
+/* In the panel the dock sits about 70px under the last card, so it scrolls clear of the message, and
+   sticks to the bottom of the view while the list runs past it; the message hangs above it, centred. */
+.ro-stack .ro-toast-dock {
+  display: block;
+  position: sticky;
+  bottom: 16px;
+  z-index: 7;
+  height: 0;
+  margin: 44px 0 2px; /* with the stack's gap and padding, 70px under the last card */
+}
+.ro-stack .ro-toast {
+  position: absolute;
+  right: auto;
+  bottom: 0;
+  left: 50%;
+  translate: -50% 0;
+  max-width: calc(100% - 28px);
 }
 .ro-toast button {
   flex: none;
@@ -2392,7 +2398,7 @@ a.ro-name:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .ro-toast {
-    transform: translate(-50%, 0);
+    transform: none;
   }
   .ro-checkin,
   .ro-checkin-track,
