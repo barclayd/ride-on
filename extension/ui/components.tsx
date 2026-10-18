@@ -521,6 +521,10 @@ export const useTracking = (view: View | null) => {
       const before = active;
       close();
       const { push, triggers: saved } = view.state;
+      // Notifications start alongside tracking, not after it: on Safari the app has to open and ask.
+      const enabling = asksPermission(push)
+        ? send({ type: 'enablePush' })
+        : null;
       const result = await startAlerts(card.routeId, ref, triggers);
       if (result.error) return say(result.error);
       // Undo puts back the ride that had alerts, while its departure is still on screen.
@@ -547,10 +551,9 @@ export const useTracking = (view: View | null) => {
           : `Alerts on for ${card.name}`,
         undo,
       );
-      if (!asksPermission(push)) return;
       // The ride is tracked either way; say if this device can't be told about it.
-      const enabled = await send({ type: 'enablePush' });
-      if (enabled.error) say(enabled.error);
+      const enabled = await enabling;
+      if (enabled?.error) say(enabled.error);
     },
     // Change alerts: the 29c dialog again, with this ride's switches; saving keeps the slot.
     change: (card: Card) => {
