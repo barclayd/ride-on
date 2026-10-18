@@ -870,13 +870,10 @@ const Tracked = (props: {
       }}
     >
       <div class="ro-tracked-head">
-        <div>
-          <span>
-            <BellIcon size={12} />
-            Alerts on
-          </span>
-          <span>What we're tracking</span>
-        </div>
+        <span>
+          <BellIcon size={12} />
+          Alerts on
+        </span>
         <button
           type="button"
           class="ro-tracked-close"
@@ -894,7 +891,7 @@ const Tracked = (props: {
         </span>
       </div>
       <div class="ro-tracked-part">
-        <span>Tell me if</span>
+        <span>Notifications sent if</span>
         <ul>
           {rows.map((row) => (
             <li key={row.key}>
@@ -917,7 +914,7 @@ const Tracked = (props: {
         </ul>
       </div>
       <div class="ro-tracked-part">
-        <span>When you'll hear from us</span>
+        <span>Scheduled notifications</span>
         <ol>
           {steps.map((step) => (
             <li key={step.text}>

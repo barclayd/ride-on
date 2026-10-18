@@ -3211,25 +3211,16 @@ a.ro-name:hover {
 }
 .ro-tracked-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
-.ro-tracked-head > div {
+.ro-tracked-head > span {
   flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.ro-tracked-head > div > :first-child {
   display: flex;
   align-items: center;
   gap: 5px;
   font: 600 12px var(--ro-sans);
   color: #6e8a3a;
-}
-.ro-tracked-head > div > :last-child {
-  font: 700 16px / 1.2 var(--ro-sans);
 }
 .ro-tracked-close {
   flex: none;
