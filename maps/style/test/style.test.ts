@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { readdirSync } from 'node:fs'
 import { format, validateStyleMin } from '@maplibre/maplibre-gl-style-spec'
+import { decode } from 'fast-png'
+import { buildSprite, formatIndex } from '../src/sprite.ts'
 import { archives, buildStyle, faces } from '../src/style.ts'
 import { appResources, native, web } from '../src/targets.ts'
 
@@ -61,4 +63,26 @@ describe('glyphs', () => {
 test('the app style is up to date (bun run build)', async () => {
   const committed = await Bun.file(new URL('style.json', appResources)).text()
   expect(committed).toBe(`${format(targets.native, 1)}\n`)
+})
+
+describe('sprite', () => {
+  const sprite = buildSprite()
+
+  test('has every image the style uses', () => {
+    const images = targets.native.layers.flatMap((layer) =>
+      layer.type === 'symbol' && typeof layer.layout?.['icon-image'] === 'string' ? [layer.layout['icon-image']] : [],
+    )
+    expect(images.length).toBeGreaterThan(0)
+    expect(images.filter((image) => !(image in sprite.index))).toEqual([])
+  })
+
+  test('the app sprite is up to date (bun run build)', async () => {
+    expect(await Bun.file(new URL('sprite@2x.json', appResources)).text()).toBe(formatIndex(sprite.index))
+    // resvg's anti-aliasing may differ by a level between CPUs, so compare pixels, not bytes.
+    const committed = decode(await Bun.file(new URL('sprite@2x.png', appResources)).bytes())
+    const fresh = decode(sprite.png)
+    expect([committed.width, committed.height]).toEqual([fresh.width, fresh.height])
+    const worst = Math.max(...Array.from(fresh.data, (value, i) => Math.abs(value - (committed.data[i] ?? 0))))
+    expect(worst).toBeLessThanOrEqual(2)
+  })
 })

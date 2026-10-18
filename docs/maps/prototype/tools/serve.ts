@@ -1,14 +1,20 @@
-// Static server for the prototype, with single byte ranges (for PMTiles archives in data/), plus /glyphs/: the
-// app's Montserrat glyph PBFs, which the style reads.
+// Static server for the prototype, with single byte ranges (for PMTiles archives in data/), plus the app's files
+// that the style reads: /glyphs/ (Montserrat glyph PBFs) and /sprite. The app's sprite is only `@2x`, drawn at 3×
+// with its pixelRatio in the index, so it's served for `/sprite` (1× screens) too.
 const root = process.argv[2]
-const glyphs = new URL('../../../../app/Packages/Features/Sources/RoutesUI/CycleMap/glyphs', import.meta.url).pathname
+const app = new URL('../../../../app/Packages/Features/Sources/RoutesUI/CycleMap', import.meta.url).pathname
+const sprite = /^\/sprite(@2x)?\.(json|png)$/
 Bun.serve({
   port: 8787,
   async fetch(req) {
     const url = new URL(req.url)
     const path = decodeURIComponent(url.pathname)
     const file = Bun.file(
-      path.startsWith('/glyphs/') ? glyphs + path.slice('/glyphs'.length) : root + (path === '/' ? '/index.html' : path),
+      path.startsWith('/glyphs/')
+        ? app + path
+        : sprite.test(path)
+          ? `${app}/sprite@2x.${path.endsWith('.png') ? 'png' : 'json'}`
+          : root + (path === '/' ? '/index.html' : path),
     )
     if (!(await file.exists())) return new Response('not found', { status: 404 })
     const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.get('range') ?? '')
