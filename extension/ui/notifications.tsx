@@ -38,7 +38,15 @@ export const Notifications = ({ state }: { state: State }) => {
       <section class="ro-card ro-col" aria-label="Notifications">
         <span class="ro-label">Notifications</span>
         <p>{state.push.message}</p>
-        <a href="rideon-notifications://notifications">Open Ride On</a>
+        <button
+          type="button"
+          class="ro-primary"
+          onClick={() => {
+            location.href = 'rideon-notifications://notifications';
+          }}
+        >
+          Open Ride On
+        </button>
         <button
           type="button"
           class="ro-edit"

@@ -37,6 +37,7 @@
       NavigationSplitView {
         Sidebar(setup: setup, pane: $pane)
           .navigationSplitViewColumnWidth(200)
+          .toolbar(removing: .sidebarToggle)
       } detail: {
         Group {
           switch pane {
@@ -47,7 +48,6 @@
         }
         .navigationTitle(pane.title)
       }
-      .toolbar(removing: .sidebarToggle)
       .frame(minWidth: 640, minHeight: 420)
       .task { await setup.refresh() }
       .onReceive(
