@@ -1108,9 +1108,10 @@ already held on a device cannot receive changes until that device requests again
 
 Migration `0017_recommendation_score_changes.sql` must precede the Worker deploy.
 No scoring, ordering, algorithm-version, `best.previous`, monitoring-baseline or
-notification-reference behaviour changes. Extension follow-up: show
-`best.scoreChange`, animate only when `changedAt` changes, remove the local `seen`
-/ `ro-seen` comparison, and include the new preset in the ranking cache key.
+notification-reference behaviour changes. The extension now shows
+`best.scoreChange`, fades it in only when `changedAt` changes, no longer compares
+scores locally (`seen` / `ro-seen` are gone), and sends `next-five-days` for
+“Next 5 days”, under ranking cache key `api-0.36`.
 
 ### Temperature and rain along the ride (v0.35.0)
 

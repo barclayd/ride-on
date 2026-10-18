@@ -39,11 +39,9 @@ import {
   DEFAULT_LEVELS,
   ended,
   instant,
-  localDate,
   logged,
   newest,
   planFor,
-  planningDates,
   searchPatch,
   shownOf,
   zoneOf,
@@ -201,11 +199,10 @@ const recRequest = (state: State) => {
   const preferences = state.search
     ? searchPatch(state.search, state.unit)
     : undefined;
-  // The API's "next" preset starts today; Next 5 days starts tomorrow, so it goes as dates.
-  const today = localDate(new Date(), user.settings.timeZone);
+  // The API's "next" preset starts today; Next 5 days starts tomorrow, which is its next-five-days.
   const days =
     planning.days.kind === 'preset' && planning.days.preset === 'next'
-      ? { kind: 'dates' as const, dates: planningDates(planning.days, today) }
+      ? { kind: 'preset' as const, preset: 'next-five-days' as const }
       : planning.days;
   const body = {
     routeIds: selection.routeIds,
@@ -216,10 +213,10 @@ const recRequest = (state: State) => {
   };
   return {
     body,
-    // Refresh persisted rankings that lack temperature traces and hourly rain amounts.
+    // Refresh persisted rankings that lack score changes.
     key: JSON.stringify([
       'comfort-v0.17',
-      'api-0.35',
+      'api-0.36',
       body,
       user.id,
       user.version,

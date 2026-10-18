@@ -309,9 +309,8 @@ const Page = ({ rows }: { rows: Row[] }) => {
       {cards.length > 0 && (
         <Ranked
           cards={cards}
-          window={JSON.stringify([view.range, view.state.planning.time])}
           class="ro-grid"
-          render={(card, i, _, change) => (
+          render={(card, i) => (
             <RouteTile
               key={card.routeId}
               view={view}
@@ -319,7 +318,6 @@ const Page = ({ rows }: { rows: Row[] }) => {
               href={href(routes[card.routeId])}
               blank={blank}
               index={i}
-              change={change}
               tracking={tracking}
             />
           )}
