@@ -272,11 +272,14 @@ const best = (date: string, i: number, score: number) => ({
     { sunny: 0, sunnyIntervals: 0.6, cloudy: 0.4 },
     { sunny: 0.4, sunnyIntervals: 0.4, cloudy: 0.2 },
   ].map((sky, h) => ({
-    start: `${date}T0${8 + i + h}:00:00Z`,
-    end: `${date}T0${9 + i + h}:00:00Z`,
+    start: `${date}T${String(8 + i + h).padStart(2, '0')}:00:00Z`,
+    end: `${date}T${String(9 + i + h).padStart(2, '0')}:00:00Z`,
     conditions: {
       ...CONDITIONS,
       distanceKm: 25,
+      // Dry, then drizzle possible (handoff v7, 25b).
+      maximumPrecipitationProbability: [0.05, 0.45][h],
+      maximumPrecipitationAmountMm: [0, 0.6][h],
       // The second hour crosses the forecast horizon.
       skyConditionDistanceFractions:
         sunshineUncertain && h === 1
@@ -284,6 +287,29 @@ const best = (date: string, i: number, score: number) => ({
           : { ...sky, overcast: 0, obscured: 0 },
     },
   })),
+  // Feels cooler than the 10° minimum until 2½ hours in, on a colder day than usual (24a).
+  temperatureAlongRide: {
+    points: [
+      [0, 9, 6, 9.5],
+      [60, 10, 7, 11],
+      [120, 12, 9, 12.5],
+      [180, 14, 11, 13],
+    ],
+    feelsLikeBasis: 'derived',
+    usual: {
+      month: Number(date.slice(5, 7)),
+      averageHighC: 15,
+      averageLowC: 8,
+      bandHalfWidthC: 2.5,
+      differenceC: -2.4,
+      method: 'monthly-diurnal-estimate',
+      coveredDistanceFraction: 1,
+      source: {
+        attribution:
+          'Contains Met Office data licensed under the Open Government Licence v3.0.',
+      },
+    },
+  },
   // Out with the south-westerly behind, then across it and home into it, where the gusts are.
   windStretches: (
     [
@@ -1613,15 +1639,23 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     '9–14°C',
     'Sun and sunny intervals',
     '15 km/h tailwind',
-    'Dry',
+    /^Drizzle possible \d\d:\d\d$/,
   ]);
-  await expect(chips.nth(0)).toHaveAttribute('data-warn', 'true');
+  // Feels under the range for most of the ride: amber.
+  const temp = module.getByRole('button', {
+    name: 'Temperature 9–14°C, feels like 6–11°C. Show temperature along the ride',
+  });
+  await expect(temp).toHaveAttribute('data-warn', 'true');
   // The wind pill never shows gusts; this rider prefers calm, so the tailwind costs points.
   const wind = module.getByRole('button', {
     name: 'Tailwind 15 km/h, costs points. Show wind along the ride',
   });
   await expect(wind).toHaveAttribute('data-warn', 'true');
-  await expect(chips.nth(3)).toHaveAttribute('data-warn', 'false');
+  // An hour at 40% or more turns the rain chip blue.
+  const rain = module.getByRole('button', {
+    name: /^Drizzle possible \d\d:\d\d\. Show rain along the ride$/,
+  });
+  await expect(rain).toHaveAttribute('data-wet', 'true');
   // The sky chip opens the expected conditions inside the tile, and closes it again.
   const sky = module.getByRole('button', {
     name: 'Sky: sun and sunny intervals. Show expected conditions',
@@ -1686,6 +1720,63 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(pointer).toHaveCount(0);
   await wind.click();
   await expect(along).toBeHidden();
+  await expect(module.locator('[aria-expanded="true"]')).toHaveCount(0);
+  // Temperature along the ride (24a): against usual, the chart, then when it feels outside the range.
+  await temp.click();
+  const warmth = module.locator('.ro-temp');
+  await expect(warmth.locator('b')).toHaveText('Temperature along the ride');
+  await expect(warmth.locator('.ro-temp-usual strong')).toHaveText(
+    '2° colder than usual',
+  );
+  await expect(warmth.locator('.ro-temp-usual span')).toHaveText(
+    /^Usual for \d\d:\d\d–\d\d:\d\d in \w+: 7–16°C$/,
+  );
+  await expect(warmth.locator('p')).toHaveText(
+    /^Feels cooler than your range \(down to 6°C\) until about \d\d:\d0, then in your range to the finish\.$/,
+  );
+  await expect(warmth.locator('.ro-temp-end')).toHaveText(['9°', '14°']);
+  await expect(warmth.locator('.ro-temp-feels-label')).toHaveText('feels 6°');
+  await expect(warmth.locator('.ro-temp-gutter span')).toHaveText([
+    '22°',
+    '10°',
+  ]);
+  await expect(warmth.locator('.ro-key li')).toHaveText([
+    'Temperature',
+    'Feels like',
+    /^Usual in \w+$/,
+    'Your range 10–22°C',
+  ]);
+  await expect(warmth.locator('small')).toHaveText(
+    /^\w+ average here: high 15°, low 8°\. Contains Met Office data licensed under the Open Government Licence v3\.0\.$/,
+  );
+  await module.screenshot({ path: test.info().outputPath('temperature.png') });
+  // Rain along the ride (25b) replaces it: a card per hour with its chance and amount.
+  await rain.click();
+  await expect(warmth).toBeHidden();
+  await expect(temp).toHaveAttribute('aria-expanded', 'false');
+  const wet = module.locator('.ro-rain');
+  await expect(wet.locator('b').first()).toHaveText('Rain along the ride');
+  await expect(wet.locator('strong')).toHaveText(
+    /^Drizzle possible from about \d\d:\d\d$/,
+  );
+  await expect(wet.locator('p')).toHaveText(
+    /^Drizzle possible from about (\d\d:\d\d) until the finish\. Heaviest around \1: light, 0\.6 mm in the hour, 45% chance\.$/,
+  );
+  const hours = wet.locator('.ro-rain-hours li');
+  await expect(hours).toHaveText([
+    /^\d\d:\d\d5%None0 mm$/,
+    /^\d\d:\d\d45%Light0\.6 mm$/,
+  ]);
+  await expect(hours.nth(1)).toHaveAttribute('data-wet', 'true');
+  await expect(wet.locator('.ro-key li')).toHaveText([
+    'Chance of rain',
+    'Light',
+    'Moderate',
+    'Heavy',
+  ]);
+  await module.screenshot({ path: test.info().outputPath('rain.png') });
+  await rain.click();
+  await expect(wet).toBeHidden();
   await expect(module.locator('[aria-expanded="true"]')).toHaveCount(0);
   // A tailwind opportunity orders the tiles but is never labelled, so every tile keeps one height.
   await expect(module.locator('.ro-ride')).not.toContainText(
@@ -1872,10 +1963,18 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
     '48–57°F',
     'Sun and sunny intervals',
     '9 mph tailwind',
-    'Dry',
+    /^Drizzle possible \d\d:\d\d$/,
   ]);
-  // The wind dropdown follows: the legend, the gusts and the sketch's speed.
+  // The temperature dropdown follows too; its scale stays in Celsius.
   const module = journeys.locator('ride-on-module');
+  await module
+    .getByRole('button', { name: /^Temperature 48–57°F, feels like 43–52°F\./ })
+    .click();
+  await expect(module.locator('.ro-temp p')).toContainText('(down to 43°F)');
+  await expect(module.locator('.ro-temp .ro-key li').last()).toHaveText(
+    'Your range 50–72°F',
+  );
+  // The wind dropdown follows: the legend, the gusts and the sketch's speed.
   await module
     .getByRole('button', { name: /^Tailwind 9 mph, costs points\. Show wind/ })
     .click();
