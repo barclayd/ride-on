@@ -7,11 +7,13 @@ import com.onthegomap.planetiler.Profile;
 import com.onthegomap.planetiler.VectorTile;
 import com.onthegomap.planetiler.config.Arguments;
 import com.onthegomap.planetiler.geo.GeoUtils;
+import com.onthegomap.planetiler.geo.GeometryException;
 import com.onthegomap.planetiler.geo.TileCoord;
 import com.onthegomap.planetiler.reader.SourceFeature;
 import com.onthegomap.planetiler.reader.WithTags;
 import com.onthegomap.planetiler.reader.osm.OsmElement;
 import com.onthegomap.planetiler.reader.osm.OsmRelationInfo;
+import com.onthegomap.planetiler.util.ZoomFunction;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.locationtech.jts.geom.CoordinateXY;
 
 /**
@@ -89,6 +92,12 @@ public class CyclingProfile implements Profile {
       "bicycle_parking", "bicycle_parking", "parking", "parking"),
     "shop", Map.of("bicycle", "bicycle_shop"),
     "tourism", Map.of("camp_site", "camp_site", "viewpoint", "viewpoint"));
+  /** The landmarks cycle.travel names, by OSM key and value. */
+  static final Map<String, Set<String>> LANDMARKS = Map.of(
+    "tourism", Set.of("attraction", "museum", "zoo", "aquarium", "theme_park"),
+    "historic", Set.of("castle", "palace"));
+  /** Keys that make a landmark something else: a church or theatre, a square, a street, a park, a shop. */
+  static final List<String> NOT_LANDMARKS = List.of("amenity", "place", "highway", "leisure", "shop");
   static final Pattern ELEVATION = Pattern.compile("^\\s*(-?\\d+(?:\\.\\d+)?)");
 
   @Override
@@ -234,8 +243,8 @@ public class CyclingProfile implements Profile {
   }
 
   /**
-   * Stations and hills, which Protomaps thins out below z14 and cycle.travel doesn't, and the kinds cycle.travel marks
-   * with an icon. Returns the kind, or null.
+   * Stations and hills, which Protomaps thins out below z14 and cycle.travel doesn't; landmarks, which Protomaps keys
+   * differently; and the kinds cycle.travel marks with an icon. Returns the kind, or null.
    */
   static String poiKind(WithTags tags, boolean isNode) {
     boolean named = tags.hasTag("name");
@@ -245,6 +254,11 @@ public class CyclingProfile implements Profile {
     if (named && tags.hasTag("railway", "station") && !NOT_RAIL.contains(tags.getString("station", "")) &&
       !tags.hasTag("usage", "tourism") && !tags.hasTag("railway:preserved") && !tags.hasTag("disused", "yes")) {
       return "station";
+    }
+    // Before the access check: palaces are private and still landmarks.
+    if (named && LANDMARKS.entrySet().stream().anyMatch(e -> e.getValue().contains(tags.getString(e.getKey(), ""))) &&
+      NOT_LANDMARKS.stream().noneMatch(tags::hasTag)) {
+      return "landmark";
     }
     if (tags.hasTag("access", "private", "no")) {
       return null;
@@ -266,15 +280,48 @@ public class CyclingProfile implements Profile {
     var poi = (feature.isPoint() ? features.point("pois") : features.pointOnSurface("pois"))
       .setAttr("kind", kind)
       .setAttr("name", feature.getString("name"))
-      .setMinZoom(kind.equals("peak") || kind.equals("station") ? 12 : 14);
+      .setMinZoom(switch (kind) {
+        // cycle.travel shows some stations from its z11 (our 10); the style thins them by crowd_5km.
+        case "station" -> 10;
+        case "peak" -> 12;
+        case "landmark" -> 13;
+        default -> 14;
+      });
     if (kind.equals("peak")) {
       Matcher ele = ELEVATION.matcher(feature.getString("ele", ""));
       poi.setAttr("ele", ele.find() ? (int) Math.round(Double.parseDouble(ele.group(1))) : null);
+    }
+    if (kind.equals("landmark")) {
+      poi.setAttr("icon", landmarkIcon(feature));
+      if (!feature.isPoint()) {
+        // Below its z16 (our 15) cycle.travel names buildings and bridges, not grounds and squares, so the style
+        // picks those out, biggest first.
+        try {
+          poi.setAttr("area", (int) Math.round(feature.areaMeters()));
+        } catch (GeometryException e) {
+          // Left without an area, so drawn after the others.
+        }
+        boolean structure = feature.hasTag("man_made", "bridge") ||
+          Stream.of("building", "bridge").anyMatch(k -> feature.hasTag(k) && !feature.hasTag(k, "no"));
+        poi.setAttr("structure", structure ? true : null);
+      }
     }
     if (ICONS.contains(kind)) {
       // Into the tiles around too, so its neighbours there count it (crowd).
       poi.setBufferPixels(CROWD_BUFFER);
     }
+    if (kind.equals("station")) {
+      // Into the tiles around too while the style thins them, so its neighbours there count it (crowdedStations).
+      poi.setBufferPixelOverrides(ZoomFunction.maxZoom(STATION_CROWD_MAXZOOM, STATION_BUFFER));
+    }
+  }
+
+  /** The icon cycle.travel marks a landmark with: a castle (castles and palaces), a museum, or a star (the rest). */
+  static String landmarkIcon(WithTags tags) {
+    if (tags.hasTag("historic", "castle", "palace")) {
+      return "castle";
+    }
+    return tags.hasTag("tourism", "museum") ? "museum" : "attraction";
   }
 
   /** The POI kinds the style draws as icons. Car parks aren't one: cycle.travel doesn't mark them. */
@@ -284,6 +331,10 @@ public class CyclingProfile implements Profile {
   static final double CROWD_BUFFER = 256;
   /** Planetiler's default point buffer, which icons keep once counted. */
   static final double POINT_BUFFER = 4;
+  /** The last zoom the style thins stations at, by how crowded they are. */
+  static final int STATION_CROWD_MAXZOOM = 11;
+  /** 5 km at z11 as far north as 61°. */
+  static final double STATION_BUFFER = 160;
 
   @Override
   public Map<String, List<VectorTile.Feature>> postProcessTileFeatures(TileCoord tile,
@@ -293,7 +344,9 @@ public class CyclingProfile implements Profile {
       return layers;
     }
     Map<String, List<VectorTile.Feature>> result = new HashMap<>(layers);
-    result.put("pois", crowd(pois, metresPerPixel(tile)));
+    double metresPerPixel = metresPerPixel(tile);
+    var counted = crowd(pois, metresPerPixel);
+    result.put("pois", tile.z() <= STATION_CROWD_MAXZOOM ? crowdedStations(counted, metresPerPixel) : counted);
     return result;
   }
 
@@ -308,13 +361,28 @@ public class CyclingProfile implements Profile {
    * than a village's and hides city cafés altogether; the style approximates that from these counts.
    */
   static List<VectorTile.Feature> crowd(List<VectorTile.Feature> items, double metresPerPixel) {
-    List<CoordinateXY> icons = items.stream()
-      .filter(item -> ICONS.contains(item.tags().get("kind")))
+    return neighbours(items, ICONS, metresPerPixel, Map.of("crowd_500m", 500.0, "crowd_1km", 1000.0));
+  }
+
+  /**
+   * How crowded each station is: the other stations within 5 km ({@code crowd_5km}), counting those just over the
+   * tile's edge, which are then dropped. At its z11–12 (our 10–11) cycle.travel shows the stations of the country and
+   * of a city's edge, not those in it; the style approximates that from this count.
+   */
+  static List<VectorTile.Feature> crowdedStations(List<VectorTile.Feature> items, double metresPerPixel) {
+    return neighbours(items, Set.of("station"), metresPerPixel, Map.of("crowd_5km", 5000.0));
+  }
+
+  /** Gives each item of the kinds a count of the others within each distance, under its attribute's name. */
+  private static List<VectorTile.Feature> neighbours(List<VectorTile.Feature> items, Set<String> kinds,
+    double metresPerPixel, Map<String, Double> within) {
+    List<CoordinateXY> counted = items.stream()
+      .filter(item -> kinds.contains(item.tags().get("kind")))
       .map(item -> item.geometry().firstCoordinate())
       .toList();
     List<VectorTile.Feature> result = new ArrayList<>();
     for (var item : items) {
-      if (!ICONS.contains(item.tags().get("kind"))) {
+      if (!kinds.contains(item.tags().get("kind"))) {
         result.add(item);
         continue;
       }
@@ -322,15 +390,11 @@ public class CyclingProfile implements Profile {
       if (at.x < -POINT_BUFFER || at.y < -POINT_BUFFER || at.x > 256 + POINT_BUFFER || at.y > 256 + POINT_BUFFER) {
         continue;
       }
-      // Itself included, at 0 m.
-      int near = -1;
-      int far = -1;
-      for (var other : icons) {
-        double metres = at.distance(other) * metresPerPixel;
-        near += metres <= 500 ? 1 : 0;
-        far += metres <= 1000 ? 1 : 0;
-      }
-      result.add(item.copyWithExtraAttrs(Map.of("crowd_500m", near, "crowd_1km", far)));
+      Map<String, Object> counts = new HashMap<>();
+      within.forEach((attr, metres) -> counts.put(attr,
+        // Itself included, at 0 m.
+        (int) counted.stream().filter(other -> at.distance(other) * metresPerPixel <= metres).count() - 1));
+      result.add(item.copyWithExtraAttrs(counts));
     }
     return result;
   }

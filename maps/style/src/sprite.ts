@@ -31,8 +31,8 @@ const stars = (size: number) =>
     return `<polygon points="${points.join(' ')}" fill="#f9ee59"/>`
   }).join('')
 
-// POI colours from cycle.travel's map key (/map/snippet_key), drawn as they are. Viewpoints aren't in the key, so
-// that brown, like the cream halo, is shot() of a Chrome screenshot.
+// POI colours from cycle.travel's map key (/map/snippet_key), drawn as they are. Viewpoints and landmarks aren't in
+// the key, so those browns, like the cream halo, are shot() of a Chrome screenshot.
 const poi = {
   food: '#cc8d7b',
   water: '#008b8b',
@@ -40,6 +40,7 @@ const poi = {
   parking: '#64bde1',
   camping: '#378b36',
   view: '#7a4433',
+  landmark: '#cb8c7c',
   halo: '#fdfdf4',
 }
 // cycle.travel rings every icon in 1.25px of cream. MapLibre can only halo SDF icons, so it's drawn in.
@@ -121,6 +122,16 @@ export const icons: Record<string, Icon> = {
   'poi-bicycle-shop': boxed(maki.bicycle, 12, 9.5, poi.bike),
   'poi-camp-site': bare(maki.campsite, 12, poi.camping),
   'poi-viewpoint': bare(maki.viewpoint, 12, poi.view),
+  // Landmarks, as cycle.travel marks them at its z14 (our 13): a castle for castles and palaces, a museum, a star.
+  'landmark-castle': bare(maki.castle, 13.5, poi.landmark),
+  'landmark-museum': bare(maki.museum, 12, poi.landmark),
+  'landmark-attraction': bare(maki.star, 11.5, poi.landmark),
+  // A station at cycle.travel's z11–12 (our 10–11): its orange dot, as the circles from our z12 draw it. Their stroke is
+  // outside circle-radius (2.2) and SVG's straddles r, hence r 2.65.
+  station: {
+    size: 7,
+    draw: () => '<circle cx="3.5" cy="3.5" r="2.65" fill="#dd4c18" stroke="#000000" stroke-width="0.9"/>',
+  },
   ...Object.fromEntries(
     networks.flatMap((network) =>
       dots[network].images.map(({ name, side, svg }): [string, Icon] => [name, { size: side, draw: () => svg }]),

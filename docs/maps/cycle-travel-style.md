@@ -356,7 +356,9 @@ no equivalent.
 | Letter spacing | 0 below z12; towns 0.08 from z12; the capital 0.55 from z14 ("L O N D O N") |
 | Halo | White, width 2, blur 0.5 |
 | Collision | `text-padding` 3 (Protomaps' wider padding knocks out neighbours and badges) |
-| Exclusions | OSM `place=locality` moves to its own layer (below); "City of Westminster" is dropped because cycle.travel only shows the Westminster neighbourhood |
+| Exclusions | OSM `place=locality` moves to its own layer (below); "City of Westminster" is dropped because cycle.travel only shows the Westminster neighbourhood; farms and isolated dwellings are never named, as on cycle.travel |
+| Hamlets | From z13 (cycle.travel's z14): Regular 10, wrapped at 5 ems, the village colour; from z15 like a village |
+| Layers | Below z12 villages and hamlets are a copy, `places_villages`, placed after the thinned stations (Stations at z10–11, below), and `places_locality` keeps towns and cities |
 
 **Neighbourhoods** (`places_subplace`): Medium, mixed case, no letter spacing, size 11 at z11 → 14 at z16,
 `#373836` for macrohoods and `#686966` for the rest, halo 1.5, padding 3.
@@ -371,20 +373,33 @@ z10, Italic 9 → 10.5 at z14, `#686766`, along the line every 350 px, padding 2
 **Water:** rivers from z12, Italic, letter spacing 0.25, `#65707a`, no halo. Lakes the same font and
 colour.
 
-**Points** (all from z14, white halo 1.5, max width 7 ems, line height 1.1, padding 4). Later layers win
+**Points** (from z14 unless given, white halo 1.5, max width 7 ems, line height 1.1, padding 4). Later layers win
 collisions:
 
 | Layer | What | Font | Colour |
 |---|---|---|---|
-| `ct_landmarks` | Protomaps POIs `attraction`, `museum`, `castle`, `palace`, `zoo`, `aquarium`, `theme_park` with no `kind_detail` (that excludes churches, whose `kind_detail` is the religion; cycle.travel leaves them unnamed) | SemiBold 11 | `#bb806d` |
+| `ct_landmarks` | The overlay's `landmark` POIs (tourism attractions, museums, zoos, aquariums, theme parks, castles, palaces; never churches, which cycle.travel leaves unnamed), each under a castle, museum or star icon, from z13 (rule below) | SemiBold 9.5 (z13) → 11 (z14) | `#bb806d` |
 | `ct_localities` | OSM `place=locality` (park gates, river reaches) | Medium 11 | `#686867` |
 | `ct_parks` | `park`, `garden`, `nature_reserve`, `wood`, `forest`, `golf_course` | Medium Italic 11.5 | `#3c6633` |
 
-POI labels only show where Protomaps' `min_zoom` ≤ zoom − 1: cycle.travel names far fewer than Protomaps
-carries, roughly one zoom later.
+`ct_localities` and `ct_parks` only show where Protomaps' `min_zoom` ≤ zoom − 1: cycle.travel names far
+fewer than Protomaps carries, roughly one zoom later.
 
-**Gaps:** we still name a few landmarks cycle.travel doesn't (Horse Guards, 10 Downing Street,
-Cleopatra's Needle, Victoria Memorial). We label farms and hamlets in the Surrey Hills that it omits.
+**Landmarks.** Until its z16 (our 15) cycle.travel marks only big buildings and bridges, never museums:
+Buckingham Palace, the Palace of Westminster, the Royal Mews, Westminster and London Bridges, but not the
+British Museum, Horse Guards or Horse Guards Parade. From its z16, every landmark. So the overlay gives each
+landmark an `icon` (`castle` for castles and palaces, `museum`, else `attraction`), its `area` in m² and
+whether it's a `structure` (a building or bridge), and `ct_landmarks` shows:
+
+- **z13–14:** structures that aren't museums, of at least 6000 m² (`bigLandmark`, about Westminster Bridge).
+- **z15+:** every landmark.
+
+The biggest place first (`symbol-sort-key`), and the label gives way before the icon does
+(`text-optional`). Icons are Maki `castle`, `museum` and `star` (sprite `landmark-*`).
+
+This is an approximation. **Gaps:** it misses the London Eye (not a building) and adds St James's Palace
+and Burlington House; the Westminster neighbourhood label and The Mound's peak label crowd out one or two
+landmarks cycle.travel shows.
 cycle.travel draws POI icons (cafés, pubs, toilets, bike parking, bike shops, campsites, water, parking,
 viewpoints, zoo animals at WWT Barnes); we draw none.
 
@@ -395,12 +410,34 @@ tile z14.
 
 - **Stations:** `railway=station` with a name, excluding `station` = subway, light_rail, miniature,
   monorail, funicular, tram, plus heritage (`usage=tourism`, `railway:preserved`) and disused.
-  `ct_stations`: circle from z12, `#cd562d`, radius 2.2 (z10) → 2.6 (z14), black stroke 0.9.
+  `ct_stations`: circle from z12, `#dd4c18` (the key's cycleway orange, captured as `#cd562d`), radius
+  2.2 (z10) → 2.6 (z14), black stroke 0.9.
   `ct_stations_label` from z14: SemiBold 11, same colour, `text-variable-anchor` top, bottom,
   bottom-right, bottom-left, top-right, top-left with radial offset 0.6 (so Charing Cross slides beside
   LONDON).
-  **Gap:** cycle.travel shows a handful of station dots at ct z11–12 with no rule we could find; ours
-  start at z12 with every station.
+  `ct_stations_thinned` at z10–11: the same dot as a sprite image (`station`, the same 2.2 fill radius
+  and stroke outside it), for a subset.
+- **Stations at z10–11.** At its z11–12 cycle.travel shows nearly every station in Surrey and rural
+  Essex, a few at London's edge (Hampton Court, Ewell East, Banstead, Hayes, Feltham) and none further
+  in. A town's name beats its station (Clacton, Walton, Felixstowe, Ipswich), but a station beats a
+  village's name: Mistley, Wrabness and Westerfield get the dot and no name. Counting the other stations
+  within 5 km:
+
+  | Where | Others within 5 km |
+  |---|---|
+  | Rural Essex | 0–3 |
+  | Surrey towns (Guildford, Woking, Dorking, Reigate, Crawley) | 2–6 |
+  | London's edge, shown by cycle.travel | 8–16 |
+  | London's edge, hidden (Surbiton, Thames Ditton, Kingston, Sutton) | 8–19 |
+  | Inner London | 20+ |
+
+  So the overlay counts them at z10–11 (`crowd_5km`, across tile edges) and `ct_stations_thinned` shows
+  those with at most 11 (`crowdedStation`). It's placed after towns' names and before villages'
+  (`places_villages`) and everything else, with collision, so a town's name or a neighbouring station
+  wins, as on cycle.travel. This is an approximation: at London's edge it keeps about two thirds of what
+  cycle.travel shows and hides about three quarters of what it hides; around Harwich (z10) it shows 11
+  where cycle.travel shows about 15, because Manningtree, Wivenhoe and Woodbridge are towns in OSM and
+  their bold names cover their stations, where cycle.travel names them like villages.
 - **Peaks:** `natural=peak` or `hill` with a name. `ct_peaks` from z12, Medium Italic 11, `#754634`.
 
 ## POI icons
@@ -473,8 +510,8 @@ Bottom to top, as `style.ts` splices them into Protomaps' `light` layers:
 3. `ct_routes_lcn`, `ct_routes_rcn`, `ct_routes`, `ct_routes_eurovelo`, `ct_stations` just before
    `roads_labels_minor`, so route dots sit above every line and below every label.
 4. `ct_road_refs` just after `roads_labels_major`.
-5. `ct_landmarks`, `ct_localities`, `ct_parks`, `ct_peaks`, `ct_stations_label`, `ct_pois`, then the
-   four badge layers, just before `places_subplace`.
+5. `ct_landmarks`, `ct_localities`, `ct_parks`, `ct_peaks`, `ct_stations_label`, `ct_pois`, the four
+   badge layers, `places_villages` (z10–11) and `ct_stations_thinned`, just before `places_subplace`.
 6. Protomaps place labels on top.
 
 ## Protomaps changes
@@ -531,9 +568,9 @@ From the nine comparisons in `screenshots/`. Tick them off in WS2.
 - [x] EuroVelo dots: opaque slate/lavender ring, red centre (WS2.5)
 - [x] Ferry crossings left out of routes; regional routes from cycle.travel's z11 (WS2.5)
 - [x] Brown unpaved dashes slightly lighter (WS2.2: the key's `#8b4513` captures as cycle.travel's `#834a21`)
-- [ ] Landmark selection: drop the extras
-- [ ] No farm or hamlet labels in rural areas at z12
-- [ ] Station subset at z10–11
+- [x] Landmark selection: drop the extras (WS2.5: big buildings and bridges until z15; an approximation)
+- [x] No farm or hamlet labels in rural areas at z12 (WS2.5: farms never, hamlets from z13)
+- [x] Station subset at z10–11 (WS2.5: by stations within 5 km; an approximation)
 - [ ] Knockout shade inside parks
 - [x] Pedestrian areas outlined in red at street level: these were military land (Horse Guards, Wellington
   Barracks), now outlined (WS2.5)
