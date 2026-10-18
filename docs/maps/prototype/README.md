@@ -68,6 +68,14 @@ The screenshots were taken with the Chrome DevTools MCP server. The method, so n
 4. `analysis/pair2.py ct.png ml.png out.jpg 350 1`. cycle.travel's map still lays out as if the sidebar
    were there, so its features sit 350 device px to the right of ours; the script crops that off.
 
+**Headless prototype captures.** `bun capture/ml-headless.mjs <outDir> [view ...]` captures the prototype
+for the ten comparison views in headless Chrome, with no MCP needed. Headless Chrome renders colours
+slightly differently from a display tab, and cycle.travel returns 403 to it, so cycle.travel's side still
+comes from a display Chrome (steps 1–2). Map the headless colours to that display's before pairing:
+`analysis/lut.py apply analysis/lut-srgb.json ml.png ml-disp.png`. `lut-srgb.json` was fitted
+(`lut.py fit`) on headless and display captures of the same views on the sRGB display; 94–98% of pixels
+land within 2/255, and geometry is identical. Refit it on any other display.
+
 **Zoom offset.** cycle.travel is Leaflet with 256 px tiles; MapLibre uses 512 px tiles. cycle.travel zoom
 *n* is MapLibre zoom *n − 1*. Every zoom in the style doc is given in MapLibre zooms unless it says "ct".
 
@@ -97,6 +105,7 @@ Run them with `-I` and paths as arguments. All measurements are in device pixels
 | `lanes.py`, `lanes2.py` | Line width and darkness, prototype vs cycle.travel, at a list of points; `lanes2.py` groups by road kind |
 | `abprof.py` | Profiles across Colchester's A133 and B1027 at several zooms: casing, fill and width against cycle.travel |
 | `dotsize.py` | Diameters of red route dots |
+| `lut.py` + `lut-srgb.json` | Fit and apply a per-channel colour curve from headless captures to a display's |
 | `runw.py` | Run lengths of A-road (pink) and B-road (orange) fill, i.e. road fill widths |
 
 The tools that compare two captures take `dx`, cycle.travel's horizontal offset in device px. It is 350

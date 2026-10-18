@@ -163,8 +163,11 @@ class CyclingProfileTest {
     "highway=cycleway, p",
     "highway=cycleway surface=asphalt, p",
     "highway=path bicycle=designated, p",
+    "highway=path bicycle=yes, p",
     "highway=footway bicycle=yes surface=paving_stones, p",
+    "highway=footway bicycle=permissive surface=asphalt, p",
     "highway=pedestrian bicycle=permissive, p",
+    "highway=bridleway tracktype=grade1, p",
     "highway=track bicycle=yes tracktype=grade1, p",
     "highway=footway footway=sidewalk bicycle=designated, p",
     // Private drives and estate roads open to bikes, as cycle.travel draws them around Wix and Domsey Chase.
@@ -179,6 +182,11 @@ class CyclingProfileTest {
     "highway=bridleway surface=asphalt, p",
     "highway=track bicycle=designated, u",
     "highway=path bicycle=designated surface=compacted, u",
+    // Permissive paths and footways, as cycle.travel draws Middlewick and High Woods in Colchester.
+    "highway=path bicycle=permissive, u",
+    "highway=footway bicycle=permissive, u",
+    "highway=path bicycle=yes tracktype=grade2, u",
+    "highway=cycleway tracktype=grade3, u",
     // Footpaths.
     "highway=footway, foot",
     "highway=path, foot",

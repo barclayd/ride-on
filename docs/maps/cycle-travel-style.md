@@ -230,8 +230,10 @@ classifies every path itself. cycle.travel's rule, worked out against its Richmo
 | `cycleway`, `bridleway`, or `path`/`footway`/`pedestrian`/`track` with `bicycle=yes`/`designated`/`permissive` | `p` or `u` | Cycle path |
 | … with a paved `surface` (asphalt, paved, concrete*, paving_stones, sett, chipseal, metal, wood, bricks) | `p` | Red casing, white centre |
 | … with any other `surface` | `u` | Brown dashes |
-| … with no `surface`: `cycleway` and urban path types | `p` | Red and white |
-| … with no `surface`: `bridleway`; `track` unless `tracktype=grade1` | `u` | Brown dashes |
+| … with no `surface` but a `tracktype`: `grade1` | `p` | Red and white |
+| … with no `surface` but a `tracktype`: any other grade | `u` | Brown dashes |
+| … with neither: `cycleway`, `pedestrian`, and `path`/`footway` with `bicycle=yes`/`designated` | `p` | Red and white |
+| … with neither: `bridleway`, `track`, and `path`/`footway` with `bicycle=permissive` | `u` | Brown dashes. Measured over Colchester at ct z13: 97–100% of untagged permissive paths draw brown, in woods, fields, parks and towns alike; untagged `bicycle=yes` ones mostly red |
 | Any other `footway`, `path`, `steps` or `track`, except pavements and crossings (`footway=sidewalk`/`crossing`) and `access=private`/`no` | `foot` | Footpath (green dots) |
 
 Tunnels and `area=yes` are skipped. Lines with the same class are merged end to end in each tile so
@@ -558,7 +560,7 @@ them is dropped. The tests check every stack has its glyphs and every glyph dire
 
 ## Known gaps
 
-From the nine comparisons in `screenshots/`. Tick them off in WS2.
+From the ten comparisons in `screenshots/`. Tick them off in WS2.
 
 - [ ] Hillshade and contours (needs a DEM, WS1)
 - [x] POI icons: café, pub, toilets, water, bike parking, bike shop, campsite, viewpoint (WS2.4b; no car
@@ -585,6 +587,18 @@ From the nine comparisons in `screenshots/`. Tick them off in WS2.
 - [x] A/B roads a constant 4 px from z12 with a near-black hairline casing, dark grey at z11; lanes and tertiary roads as
   cycle.travel's key draws them, grey below z11; only tertiary roads at z9 (WS2.5)
 - [ ] Station throats lighter at z14 (Waterloo, Victoria)
+- [x] Untagged permissive paths and graded tracks as brown dashes (WS2.5 batch D: `bicycle=permissive`
+  paths and footways with no `surface`, and `tracktype` grade2–5, are unpaved; Colchester's Middlewick and
+  High Woods)
+- [ ] Bare `highway=footway` + `bicycle=yes` stubs across fields draw red where cycle.travel draws nothing
+  (Surrey Hills near White Hill and Dunley Hill, OSM ways 525650801, 525650803, 525650805). It may leave
+  out ways that don't join its routable network
+- [ ] EuroVelo badges: cycle.travel badges EuroVelo beside a shared national route (Colchester z12: a
+  EuroVelo 2 badge beside the 51 shield, where we show only the 51) and from our z10
+- [ ] AV badges along the Albert Embankment at z14 that cycle.travel doesn't draw
+- [ ] TfL Q routes as thin lavender lines at z11 (ours start at z12)
+- [ ] Village names: cycle.travel names more at z10 (Whatfield, Lindsey, Flowton) and Wrabness and
+  Bradfield at z11; our town names are bolder
 - [x] Bolder railways; paler, thinner motorways when zoomed out (WS2.5)
 - [x] Railways: no tunnels (the Underground), thin sidings and yards with no white core (WS2.5)
 - [x] EuroVelo dots: opaque slate/lavender ring, red centre (WS2.5)

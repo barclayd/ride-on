@@ -180,8 +180,11 @@ public class CyclingProfile implements Profile {
   /**
    * cycle.travel's path rule, checked against its tiles over Richmond Park: paved paths you can ride draw red and white
    * ({@code p}), unpaved ones (gravel cycleways, bridleways) brown dashes ({@code u}), and other footpaths, including
-   * bridleways closed to bikes, green dashes ({@code foot}). With no surface tag, cycleways and urban path types count
-   * as paved, bridleways and tracks as unpaved. A bicycle tag overrides a private access tag, so private drives and
+   * bridleways closed to bikes, green dashes ({@code foot}). With no surface tag, a tracktype other than grade1 means
+   * unpaved; otherwise cycleways, urban path types and paths open to bikes by right or designation count as paved,
+   * bridleways, tracks and {@code bicycle=permissive} paths and footways as unpaved. Over Colchester (Middlewick, High
+   * Woods) cycle.travel draws 97–100% of untagged permissive paths brown, in woods, fields, parks and towns alike, and
+   * most untagged {@code bicycle=yes} paths red. A bicycle tag overrides a private access tag, so private drives and
    * estate roads open to bikes draw as paths too. Returns null for ways not drawn as paths.
    */
   static String pathClass(WithTags way) {
@@ -202,8 +205,19 @@ public class CyclingProfile implements Profile {
       return footpath ? "foot" : null;
     }
     String surface = way.getString("surface");
-    boolean paved = surface != null ? PAVED.contains(surface) :
-      highway.equals("track") ? way.hasTag("tracktype", "grade1") : !highway.equals("bridleway");
+    String tracktype = way.getString("tracktype");
+    boolean paved;
+    if (surface != null) {
+      paved = PAVED.contains(surface);
+    } else if (tracktype != null) {
+      paved = tracktype.equals("grade1");
+    } else {
+      paved = switch (highway) {
+        case "track", "bridleway" -> false;
+        case "path", "footway" -> !bicycle.equals("permissive");
+        default -> true;
+      };
+    }
     return paved ? "p" : "u";
   }
 

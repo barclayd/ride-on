@@ -53,9 +53,10 @@ Zooms 11–14, or 12–14 for London's, which show with their dots.
 | `bridge` | `true` on bridges |
 
 Rideable: `highway=cycleway` or `bridleway`, or a path, footway, pedestrian way or track with
-`bicycle=yes/designated/permissive`, unless `bicycle=no` or `access=private/no`. With no `surface`,
-cycleways and urban paths count as paved, bridleways and tracks (other than `tracktype=grade1`) as
-unpaved. `foot` is every other footway, path, steps or track, except pavements, crossings and private
+`bicycle=yes/designated/permissive`, unless `bicycle=no` or `access=private/no`. With no `surface`, a
+`tracktype` other than `grade1` means unpaved; otherwise cycleways, pedestrian ways and paths or footways
+with `bicycle=yes/designated` count as paved, bridleways, tracks and `bicycle=permissive` paths and
+footways as unpaved. `foot` is every other footway, path, steps or track, except pavements, crossings and private
 ways; bridleways with `bicycle=no/dismount` are `foot` too. No tunnels or areas.
 
 Zooms: `p` and `u` 11–14 (cycle.travel draws them from its z12), `foot` 14.
@@ -149,7 +150,7 @@ docker run --rm -v "$PWD/maps/tiles":/src -v ~/.m2:/root/.m2 -w /src \
   maven:3.9-eclipse-temurin-21 mvn -B -q test
 ```
 
-132 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
+139 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
 `CyclingProfileTest` when a rule changes.
 
 ## Publish
