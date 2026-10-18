@@ -91,3 +91,14 @@ Run them with `-I` and paths as arguments. All measurements are in device pixels
 | `ct-classify.py`, `overlay.py` | For each OSM way in an Overpass dump, which cycle.travel line style is drawn under it; draw ways over a screenshot. How the path rule was worked out |
 | `calib.py`, `calib2.py` + `cal.json` | Fit the screenshot colour transform behind `shot()` (`maps/style/src/shot.ts`) from a page of 80 known swatches |
 | `near.py`, `sample.py`, `topcols.py` | Colour sampling helpers |
+| `crop2.py` | The same box (in prototype device px) from a cycle.travel and a prototype capture, side by side |
+| `greyruns.py` | Modal colour and width of thin grey lines in a box: minor roads and streets |
+| `perp.py`, `prof.py` | A line's width, or its raw RGB, along perpendicular profiles at a given point and angle |
+| `lanes.py`, `lanes2.py` | Line width and darkness, prototype vs cycle.travel, at a list of points; `lanes2.py` groups by road kind |
+| `abprof.py` | Profiles across Colchester's A133 and B1027 at several zooms: casing, fill and width against cycle.travel |
+| `dotsize.py` | Diameters of red route dots |
+| `runw.py` | Run lengths of A-road (pink) and B-road (orange) fill, i.e. road fill widths |
+
+The tools that compare two captures take `dx`, cycle.travel's horizontal offset in device px. It is 350
+with the method above; the batch D Colchester captures needed 342. Check it with `crop2.py` before
+trusting a measurement.

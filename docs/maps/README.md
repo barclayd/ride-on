@@ -7,7 +7,8 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 (basemap on R2) uploading; WS2 in progress: 2.1, 2.2, 2.3 and 2.4's badges done, the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 (tiles on R2) blocked on an R2 API token, switching to the S3 upload; WS2 in progress: 2.1, 2.2, 2.3 and 2.4's badges done, the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite |
+| Handover | [`HANDOVER.md`](HANDOVER.md): open branches, the R2 upload by S3 and what blocks it, Chrome DevTools MCP, as of 18 October 2026. Read it first |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -178,7 +179,7 @@ in `maps/tiles/README.md`):
 | Time | 2 min 1 s on an M4 Max in Docker (8 GB VM, `-Xmx6g`) |
 | Largest tile | 47 KB (30 KB gzipped), z14 around Soho, mostly POIs; average 0.7 KB gzipped |
 | Tests | 85 (`CyclingProfileTest`): the path rule table, London's `minz`, badge refs, lanes, POIs and their crowd counts, merging, plus a Monaco end-to-end build |
-| On R2 | Not yet: published once WS1.1's upload finishes (`maps/hosting/publish.sh` runs one at a time) |
+| On R2 | Not yet: published after WS1.1 and batch D ([handover](HANDOVER.md#5-the-cycling-overlay)) |
 
 - Lines are merged per tile (`FeatureMerge.mergeLineStrings`) so dashes and dots don't restart at way
   joins. Routes merge by network and `minz`; badges by badge and label.
