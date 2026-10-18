@@ -19,8 +19,8 @@ export const ALL_TRIGGERS: AlertTriggers = {
   cold: true,
   betterTime: true,
 };
-// The API sends its final forecast at 19:00 until brief v11 moves it to 18:00 and says so.
-export const SUMMARY_TIME = '19:00';
+// The API (v0.38.0) says when it sends the final forecast; this is for an API that doesn't.
+export const SUMMARY_TIME = '18:00';
 
 export type TriggerRow = {
   key: keyof AlertTriggers;
