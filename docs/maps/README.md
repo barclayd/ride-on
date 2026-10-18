@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 in progress: 2.1–2.6 done (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; 2.7 next |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.2 next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -307,8 +307,26 @@ Agents use the iPhone 17 simulator `79662D65-4914-46BC-BA2A-510E3989498D`, never
 (`1F0874B6…`). Dan: the phone trios are the place to judge "reads as cycle.travel"; a run on the iPhone
 itself is still worth doing for frame rate (WS3.0's "Not checked").
 
-**2.7 Dark mode** ([decision 6](#open-decisions)). Either a dark variant built from the same script, or
-the map stays light in Dark Mode.
+**2.7 Dark mode** ([decision 6](#open-decisions)). Done, 19 October 2026: the map stays light in Dark
+Mode, decision 6's default, checked on the iPhone 17 Simulator ([before and after](screenshots/dark-mode.jpg)).
+The map itself needs nothing: it never reads the system appearance. The chrome over it did:
+- **Status bar.** Its glyphs went white over the light map. Fixed: `RoutesView` sets
+  `.toolbarColorScheme(.light, for: .navigationBar)` over the cycle map, which turns them dark even with
+  the navigation bar hidden.
+- **Map controls.** Clear glass with white glyphs all but vanished over the light map, in both modes.
+  Fixed: `MapControls(overLightMap:)` takes regular glass with `.primary` glyphs, as DESIGN-SYSTEM.md §2
+  already asked, and `.environment(\.colorScheme, .light)` so the capsule stays light in Dark Mode too.
+- **The status bar dimming** (34% black, for imagery) only greyed the cycle map: it's off over it.
+- **Tab bar, open.** In Dark Mode the system tab bar's glass turns light over the light map but keeps white
+  labels: 1.4:1 over Putney's streets, 1.5:1 over the sea at Harwich (4.5:1 needed). The selected tab's
+  green holds. `.toolbarColorScheme(.light, for: .tabBar)` gives dark labels but turns the selected tab
+  black instead of green, in Light Mode too, and an explicit `.tint` on the `TabView` doesn't bring it
+  back; a dark band behind the tab bar wouldn't sit under it from inside the tab's content. The fixes:
+  a dark variant ([decision 6](#open-decisions)), or that toolbar override in Dark Mode only, accepting
+  a black selected tab there. Until Dan picks, WS3 carries the first three and leaves the tab bar.
+
+The panel, cards and sheets follow the system as before: only what sits directly on the map is held light.
+All of it is behind `--cycle-map`; the satellite map is unchanged.
 
 Done when the six comparison views on device read as cycle.travel to Dan, and the style validates.
 
@@ -364,6 +382,9 @@ What 3.2 has to carry over from the spike:
   `MapCameraPosition`.
 - Zoom levels are GL JS's: cycle.travel zoom *n* is Native zoom *n* − 1, as in the prototype.
 - Hide `logoView` and the compass; keep the attribution button until 3.5 replaces it.
+- **Dark Mode** ([2.7](#ws2-style-for-maplibre-native-1-week)): over the cycle map, dark status bar glyphs
+  (`.toolbarColorScheme(.light, for: .navigationBar)`), controls in light regular glass
+  (`MapControls(overLightMap: true)`) and no status bar dimming. The tab bar's labels are still open.
 
 **3.1 Dependency.** [maplibre-gl-native-distribution](https://github.com/maplibre/maplibre-gl-native-distribution)
 is iOS only. The spike added it to `app/Packages/Features/Package.swift` (platforms iOS 26 + macOS 26)
@@ -510,7 +531,7 @@ dark mode, §6 `CycleMap`, `RideHero`, `WindRouteMap`).
 | 3 | Ride hero: satellite, or the cycle map | Default: stays satellite. Revisit once the Routes map has shipped | Satellite |
 | 4 | Coverage: GB only, or Europe (EuroVelo, Avenue Verte into France) | Default: Great Britain. Basemap bbox −8.7, 49.8 → 1.9, 60.9 (3.0 GB); overlay from Geofabrik's GB extract | GB |
 | 5 | Small labels: Montserrat, or Open Sans like cycle.travel | **Decided** (Dan): Montserrat throughout | Montserrat |
-| 6 | Dark mode: a dark variant, or the map stays light | Default: stays light in Dark Mode; a dark variant later | Light only |
+| 6 | Dark mode: a dark variant, or the map stays light | Default: stays light in Dark Mode; a dark variant later. Checked in [2.7](#ws2-style-for-maplibre-native-1-week): status bar and map controls held light; the system tab bar keeps white labels over the light map (1.4:1), which only a dark variant fixes cleanly | Light only |
 | 7 | Waymarked Trails' route tiles as a stopgap | Default: no (their terms don't allow heavy app use); build our own route layer (WS1.2) | Our own |
 
 ## Verifying against cycle.travel
@@ -570,6 +591,11 @@ placement here and colour in the 2× set above. The app's map controls sit top a
 | [Harwich, z10](screenshots/phone-harwich-z10.jpg) | Village names and sizes match (Holbrook, Stutton, Ramsey, Wix). cycle.travel draws Harwich Medium at this zoom only, and Dovercourt a little larger |
 | [Harwich, z11](screenshots/phone-harwich-z11.jpg) | EuroVelo 2 dots and badges, Ramsey, Little Oakley and Great Oakley match; cycle.travel names Wrabness |
 | [Colchester, z12](screenshots/phone-colchester-z12.jpg) | Greenstead in the suburbs' grey and size, the A133 and B roads, Routes 51 and EuroVelo 2 match; cycle.travel badges EuroVelo beside the 51 |
+
+### Dark Mode
+
+[Light Mode, Dark Mode before and after 2.7](screenshots/dark-mode.jpg) (Putney z13 and Harwich z10, iPhone
+17 Simulator): the status bar and map controls now read in both; the tab bar's labels still don't in Dark Mode.
 
 ## Links
 

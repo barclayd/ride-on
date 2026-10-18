@@ -169,10 +169,15 @@ private struct CalloutPointer: Shape {
     }
 }
 
-/// Map style and my location, stacked in clear glass at the map's top trailing corner.
+/// Map style and my location, stacked in glass at the map's top trailing corner: clear with white
+/// glyphs over imagery; over the light cycle map regular with `.primary` glyphs, kept light in Dark
+/// Mode as the map is (docs/maps/README.md, WS2.7).
 struct MapControls: View {
     @Binding var look: MapLook
+    var overLightMap = false
     var locate: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
@@ -187,7 +192,7 @@ struct MapControls: View {
             }
             .accessibilityLabel("Map style")
             Rectangle()
-                .fill(.white.opacity(0.4))
+                .fill(overLightMap ? Color.primary.opacity(0.2) : .white.opacity(0.4))
                 .frame(height: 0.5)
                 .padding(.horizontal, 9)
                 .accessibilityHidden(true)
@@ -205,9 +210,11 @@ struct MapControls: View {
         // shows the large content viewer instead.
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .accessibilityShowsLargeContentViewer()
-        .foregroundStyle(.white)
-        .tint(.white)
-        .accessibleGlass(.clear.interactive(), in: .capsule, fallback: .black)
+        .foregroundStyle(overLightMap ? Color.primary : .white)
+        .tint(overLightMap ? Color.primary : .white)
+        .accessibleGlass(overLightMap ? .regular.interactive() : .clear.interactive(), in: .capsule,
+                         fallback: overLightMap ? .white : .black)
+        .environment(\.colorScheme, overLightMap ? .light : colorScheme)
     }
 }
 
