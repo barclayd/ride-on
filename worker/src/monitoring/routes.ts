@@ -22,6 +22,8 @@ export const monitoringCapabilities = (env: Env) => ({
   },
   maximumActiveRides: 1,
   alertTriggers: true,
+  fixedDeparture: true,
+  alertEdits: true,
   finalForecastLocalTime: FINAL_FORECAST_LOCAL_TIME,
   manualRefresh: true,
   automaticChecks: env.RIDE_MONITORING === 'enabled',

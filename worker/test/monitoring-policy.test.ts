@@ -133,7 +133,7 @@ test('settings, route, history, algorithm and provider changes rebase quietly, u
     'score_worsened',
   );
 });
-test('fully assessed better route or time needs five points or resolves minimums; rankings alone stay quiet', async () => {
+test('better times need five points or resolve minimums; a different route winning stays quiet', async () => {
   const snapshot = await trackingSnapshot(),
     state = await initialState(snapshot, at);
   snapshot.context.best = {
@@ -146,21 +146,31 @@ test('fully assessed better route or time needs five points or resolves minimums
   };
   expect((await check(state, snapshot)).alert).toBeNull();
   snapshot.context.best.candidate.score = 85;
+  expect((await check(state, snapshot)).alert).toBeNull();
+  const ownBest = {
+    routeId: snapshot.pick.routeId,
+    candidate: {
+      ...structuredClone(snapshot.context.best.candidate),
+      departureAt: '2026-10-10T09:30:00.000Z',
+      score: 84,
+    },
+  };
+  snapshot.context.routeBests = [ownBest];
+  expect((await check(state, snapshot)).alert).toBeNull();
+  ownBest.candidate.score = 85;
   expect((await check(state, snapshot)).alert?.reasons).toEqual([
     'better_option',
   ]);
   snapshot.context.coverageComplete = false;
   expect(qualifyingAlternative(snapshot, at)).toBeNull();
   snapshot.context.coverageComplete = true;
-  snapshot.context.best.routeId = snapshot.pick.routeId;
-  snapshot.context.best.candidate.departureAt = '2026-10-10T09:30:00.000Z';
   expect((await check(state, snapshot)).alert?.alternative?.departureAt).toBe(
     '2026-10-10T09:30:00.000Z',
   );
-  snapshot.context.best.candidate.score = 70;
+  ownBest.candidate.score = 70;
   failure(snapshot, ['maximumGustKph']);
   expect(qualifyingAlternative(snapshot, at)).not.toBeNull();
-  snapshot.context.best.candidate.standards.status = 'unknown';
+  ownBest.candidate.standards.status = 'unknown';
   expect(qualifyingAlternative(snapshot, at)).toBeNull();
 });
 test('one outage after an hour within 24 hours, then one recovery; missing data never changes score', async () => {
@@ -448,9 +458,10 @@ test('betterTime gates alternatives and their copy but keeps independent score c
   const state = await initialState(snapshot, at);
   const triggers = { ...allAlertTriggers, betterTime: false };
   snapshot.context.best = {
-    routeId: 'other',
+    routeId: snapshot.pick.routeId,
     candidate: {
       ...snapshot.pick.candidate,
+      departureAt: '2026-10-10T09:30:00.000Z',
       score: 90,
       recommendationPriority: 90,
     },

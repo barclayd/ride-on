@@ -13,6 +13,8 @@ import {
   accountTracking,
   createTracking,
   createTrackingSchema,
+  editTracking,
+  editTrackingSchema,
   getTracking,
   publicTracking,
   stopTracking,
@@ -184,6 +186,21 @@ export const trackingRoutes = (
         c.get('ownerId'),
         now().toISOString(),
       )),
+    });
+  });
+  app.patch('/tracked-rides/:id', async (c) => {
+    const id = validateInput(z.uuid(), c.req.param('id'));
+    const input = validateInput(
+      editTrackingSchema,
+      await readJsonBody(c, z.unknown()),
+      'VALIDATION',
+    );
+    const owner = c.get('ownerId');
+    const at = now().toISOString();
+    const row = await editTracking(c.env.ROUTES_DB, owner, id, input, at);
+    return c.json({
+      ride: publicTracking(row, at, monitoringCapabilities(c.env)),
+      ...(await accountTracking(c.env.ROUTES_DB, owner, at)),
     });
   });
   app.post('/tracked-rides/:id/refresh', async (c) => {

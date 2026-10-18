@@ -54,9 +54,15 @@ const active = (row: TrackingRow | null, at: string): row is TrackingRow =>
 const weatherDueAt = (snapshot: Snapshot, at: string) => {
   const ttl =
     forecastRefreshSeconds(
-      snapshot.context.inputs.map((i) => i.date),
+      [
+        ...snapshot.context.inputs.map((i) => i.date),
+        ...(snapshot.context.pinnedInput
+          ? [snapshot.context.pinnedInput.date]
+          : []),
+      ],
       new Date(at),
-      snapshot.context.inputs[0]?.timeZone ?? 'UTC',
+      (snapshot.context.inputs[0] ?? snapshot.context.pinnedInput)?.timeZone ??
+        'UTC',
     ) * 1000;
   return Math.min(
     ...snapshot.context.weather.locations.flatMap((l) =>
@@ -82,7 +88,9 @@ const inputRevision = async (
   owner: string,
   baseline: Snapshot,
 ) => {
-  const ids = baseline.context.inputs[0]?.routeIds ?? [];
+  const ids =
+    (baseline.context.inputs[0] ?? baseline.context.pinnedInput)?.routeIds ??
+    [];
   const [user, history, routes] = await Promise.all([
     db
       .prepare('SELECT version FROM users WHERE id = ?')
@@ -401,7 +409,8 @@ export const monitorRide = async (
             departureAt: row.departure_at,
             timeZone: row.time_zone,
             temperatureUnit:
-              current?.context.inputs[0]?.units?.temperature ?? 'C',
+              (current?.context.inputs[0] ?? current?.context.pinnedInput)
+                ?.units?.temperature ?? 'C',
           },
           id,
         );
@@ -466,6 +475,7 @@ export const monitorRide = async (
         !(await held()) ||
         activePause(await readPause(db, owner), now()) ||
         !active(live, now().toISOString()) ||
+        live.alerts_json !== row.alerts_json ||
         event.expires_at <= now().toISOString() ||
         revision !== (await inputRevision(db, owner, baseline)) ||
         (event.assessment_id &&

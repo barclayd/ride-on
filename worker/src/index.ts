@@ -77,9 +77,11 @@ import {
   stravaPublicRoutes,
   stravaRoutes,
 } from './strava/routes.ts';
+import { exactDepartureInput, pinDeparture } from './tracking/departures.ts';
 import { contextFor } from './tracking/model.ts';
 import { issueReferences, withReference } from './tracking/references.ts';
 import { trackingRoutes } from './tracking/routes.ts';
+import { activeTracking } from './tracking/store.ts';
 import type { Bindings, Env } from './types.ts';
 import {
   createD1UserStore,
@@ -110,6 +112,7 @@ export const createApp = (
     providers?: Readonly<Record<string, ForecastProvider>>;
     scoreBaselines?: ScoreBaselineStore;
     scoreChanges?: ScoreChangeStore;
+    activeTracking?: typeof activeTracking;
     cache?: ForecastCache;
     now?: () => Date;
     log?: boolean;
@@ -184,7 +187,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.39.0',
+      version: '0.40.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -631,15 +634,24 @@ export const createApp = (
   });
   app.post('/recommendations', async (c) => {
     const raw = await readJsonBody(c, recommendationApiRequestSchema);
-    const [user, loaded] = await Promise.all([
+    const startedAt = now();
+    const [user, loaded, activePlan] = await Promise.all([
       users(c.env).get(c.get('ownerId')),
       Promise.all(
         raw.routeIds.map((id) => store(c.env).get(c.get('ownerId'), id)),
       ),
+      (dependencies.activeTracking ?? activeTracking)(
+        c.env.ROUTES_DB,
+        c.get('ownerId'),
+        startedAt.toISOString(),
+      ),
     ]);
     const records = loaded.filter((r) => r !== null);
     const routes = records.map((r) => r.route);
-    const startedAt = now();
+    const tracked =
+      activePlan && raw.routeIds.includes(activePlan.route_id)
+        ? activePlan
+        : null;
     const { window, ...riding } = raw.riding ?? {};
     const settings = validateInput(
       settingsSchema,
@@ -688,12 +700,19 @@ export const createApp = (
       );
     const inputs = dates.map((date) => makeInput(date));
     const input = inputs[0] ?? makeInput(today.toString(), false);
-    if (routes.length !== raw.routeIds.length)
+    if (
+      raw.routeIds.some(
+        (id) => id !== tracked?.route_id && !routes.some((r) => r.id === id),
+      )
+    )
       throw new AppError(
         404,
         'ROUTE_NOT_FOUND',
         'One or more routes were not found.',
       );
+    const pinnedInput = tracked
+      ? exactDepartureInput(input, tracked.departure_at)
+      : null;
     const comparison = await evaluateComparisons(routes, inputs, input, {
       env: c.env,
       ownerId: c.get('ownerId'),
@@ -701,6 +720,15 @@ export const createApp = (
       now,
       startedAt,
       refreshDates: selection.dates,
+      ...(tracked && pinnedInput
+        ? {
+            pinned: {
+              routeId: tracked.route_id,
+              departureAt: tracked.departure_at,
+              input: pinnedInput,
+            },
+          }
+        : {}),
       dependencies,
     });
     const daily = new Map(
@@ -731,9 +759,17 @@ export const createApp = (
       }),
       Object.keys(input.preferences.minimumStandards).length > 0,
     );
-    const evaluation = raw.date
+    const scopedEvaluation = raw.date
       ? (daily.get(raw.date) ?? evaluated)
       : evaluated;
+    const evaluation = pinDeparture(
+      scopedEvaluation,
+      comparison.pinned,
+      tracked,
+      routes.find((r) => r.id === tracked?.route_id),
+      input,
+      startedAt.toISOString(),
+    );
     const scoreChanges = await rememberScoreChanges(
       evaluation,
       routes,
@@ -748,6 +784,13 @@ export const createApp = (
       c.get('ownerId'),
       startedAt,
       dependencies.scoreChanges ?? createScoreChangeStore(c.env.ROUTES_DB),
+      tracked
+        ? {
+            routeId: tracked.route_id,
+            trackedRideId: tracked.id,
+            departureAt: tracked.departure_at,
+          }
+        : undefined,
     );
     const refs = await issueReferences(
       c.env.ROUTES_DB,
@@ -757,17 +800,39 @@ export const createApp = (
         inputs.filter((i) => selection.dates.includes(i.date)),
         records,
         startedAt.toISOString(),
-        evaluation,
+        scopedEvaluation,
       ),
-      evaluation.rankings.flatMap((r) =>
-        r.best
-          ? [r.best, ...r.alternatives].map((candidate) => ({
-              routeId: r.routeId,
-              candidate,
-            }))
-          : [],
+      [...evaluation.rankings, ...evaluation.unranked].flatMap((r) =>
+        [
+          ...(r.best && !r.trackedDeparture ? [r.best] : []),
+          ...r.alternatives,
+          ...(r.betterDeparture ? [r.betterDeparture] : []),
+        ].map((candidate) => ({
+          routeId: r.routeId,
+          candidate,
+        })),
       ),
     );
+    const fixedBest = evaluation.rankings.find((r) => r.trackedDeparture)?.best;
+    if (tracked && pinnedInput && fixedBest) {
+      const pinnedRefs = await issueReferences(
+        c.env.ROUTES_DB,
+        c.get('ownerId'),
+        {
+          ...contextFor(
+            comparison,
+            inputs.filter((i) => selection.dates.includes(i.date)),
+            records,
+            startedAt.toISOString(),
+            scopedEvaluation,
+          ),
+          pinnedInput,
+          assessmentFreshUntil: comparison.pinnedRefreshAt,
+        },
+        [{ routeId: tracked.route_id, candidate: fixedBest }],
+      );
+      for (const [key, value] of pinnedRefs) refs.set(key, value);
+    }
     const dayRefs = new Map<string, Map<string, string>>();
     for (const item of comparison.comparisons) {
       const best = item.result.rankings[0];
@@ -800,6 +865,13 @@ export const createApp = (
         alternatives: r.alternatives.map((a) =>
           withReference(a, r.routeId, refs),
         ),
+        ...(r.trackedDeparture
+          ? {
+              betterDeparture: r.betterDeparture
+                ? withReference(r.betterDeparture, r.routeId, refs)
+                : null,
+            }
+          : {}),
         rank: r.rank,
       })),
       unranked: evaluation.unranked.map((r) => ({
@@ -807,6 +879,16 @@ export const createApp = (
         best: r.best
           ? { ...r.best, scoreChange: scoreChanges.get(r.routeId) ?? null }
           : null,
+        alternatives: r.alternatives.map((a) =>
+          withReference(a, r.routeId, refs),
+        ),
+        ...(r.trackedDeparture
+          ? {
+              betterDeparture: r.betterDeparture
+                ? withReference(r.betterDeparture, r.routeId, refs)
+                : null,
+            }
+          : {}),
       })),
       recommendation: evaluation.recommendedRouteId
         ? {
@@ -851,7 +933,10 @@ export const createApp = (
       resolvedPreferences: input.preferences,
       preferenceLevels: preferenceLevels(input.preferences),
       resolvedMinimumTemperatures: Object.fromEntries(
-        inputs.map((i) => [i.date, resolveMinimumTemperature(i)]),
+        (pinnedInput ? [...inputs, pinnedInput] : inputs).map((i) => [
+          i.date,
+          resolveMinimumTemperature(i),
+        ]),
       ),
       resolvedMinimumTemperature: resolveMinimumTemperature(input),
       riding: input.riding,

@@ -14,6 +14,10 @@ export const createTrackingSchema = z.strictObject({
   replaceTrackedRideId: z.uuid().nullable().default(null),
   alerts: alertsSchema.optional(),
 });
+export const editTrackingSchema = z.strictObject({
+  expectedTrackingVersion: createTrackingSchema.shape.expectedTrackingVersion,
+  alerts: alertsSchema,
+});
 export type TrackingRow = {
   owner_id: string;
   id: string;
@@ -62,6 +66,12 @@ export const getTracking = (db: D1Database, owner: string, id: string) =>
   WHERE p.owner_id = ? AND p.id = ?`)
     .bind(owner, id)
     .first<TrackingRow>();
+export const activeTracking = (db: D1Database, owner: string, now: string) =>
+  db
+    .prepare(`SELECT *, NULL AS latest_json FROM tracked_rides
+      WHERE owner_id = ? AND state = 'active' AND departure_at > ? AND finish_at > ? LIMIT 1`)
+    .bind(owner, now, now)
+    .first<TrackingRow>();
 export const isActive = (row: TrackingRow, now: string) =>
   row.state === 'active' && row.finish_at > now;
 export const publicTracking = (
@@ -70,6 +80,8 @@ export const publicTracking = (
   features: {
     alertTriggers: boolean;
     finalForecastLocalTime: string;
+    fixedDeparture: boolean;
+    alertEdits: boolean;
     maximumActiveRides: number;
     manualRefresh: boolean;
     automaticChecks: boolean;
@@ -129,6 +141,61 @@ export const publicTracking = (
     },
     capabilities: features,
   };
+};
+export const editTracking = async (
+  db: D1Database,
+  owner: string,
+  id: string,
+  input: z.infer<typeof editTrackingSchema>,
+  now: string,
+) => {
+  const requireEditable = (row: TrackingRow | null): TrackingRow => {
+    if (!row) throw trackingNotFound();
+    if (!isActive(row, now) || row.departure_at <= now)
+      throw new AppError(
+        409,
+        'TRACKING_INACTIVE',
+        'This plan is no longer active.',
+      );
+    return row;
+  };
+  const row = requireEditable(await getTracking(db, owner, id));
+  const alerts = JSON.stringify(input.alerts);
+  if (JSON.stringify(readAlerts(row.alerts_json)) === alerts) return row;
+  const token = crypto.randomUUID();
+  const guard =
+    'EXISTS (SELECT 1 FROM tracking_accounts WHERE owner_id = ? AND active_id = ? AND mutation_token = ?)';
+  const result = await db.batch([
+    db
+      .prepare(`UPDATE tracking_accounts SET mutation_token = ?
+      WHERE owner_id = ? AND active_id = ? AND version = ?
+      AND EXISTS (SELECT 1 FROM tracked_rides WHERE owner_id = ? AND id = ? AND state = 'active' AND departure_at > ? AND finish_at > ?)`)
+      .bind(
+        token,
+        owner,
+        id,
+        input.expectedTrackingVersion,
+        owner,
+        id,
+        now,
+        now,
+      ),
+    db
+      .prepare(`UPDATE tracked_rides SET alerts_json = ?,version = version + 1
+      WHERE owner_id = ? AND id = ? AND ${guard}`)
+      .bind(alerts, owner, id, owner, id, token),
+    db
+      .prepare(`UPDATE tracking_accounts SET version = version + 1,mutation_token = NULL
+      WHERE owner_id = ? AND active_id = ? AND mutation_token = ?`)
+      .bind(owner, id, token),
+  ]);
+  const current = requireEditable(await getTracking(db, owner, id));
+  if (
+    !result[1]?.meta.changes &&
+    JSON.stringify(readAlerts(current.alerts_json)) !== alerts
+  )
+    throw conflict();
+  return current;
 };
 export const accountTracking = async (
   db: D1Database,
@@ -267,7 +334,8 @@ export const createTracking = async (
           baseline.pick.routeId,
           baseline.pick.candidate.departureAt,
           baseline.pick.candidate.finishAt,
-          baseline.context.inputs[0]?.timeZone ?? 'UTC',
+          (baseline.context.inputs[0] ?? baseline.context.pinnedInput)
+            ?.timeZone ?? 'UTC',
           now,
           boundedJson(baseline, 1_000_000),
           JSON.stringify(input.alerts ?? readAlerts(null)),

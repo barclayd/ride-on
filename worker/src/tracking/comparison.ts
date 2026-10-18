@@ -28,8 +28,8 @@ export const compareTracking = (baseline: Snapshot, latest: Snapshot) => {
   const originallyRecommendedRoute =
     original?.routeId === baseline.pick.routeId;
   const contextChanges: string[] = [];
-  const oldInput = baseline.context.inputs[0];
-  const newInput = latest.context.inputs[0];
+  const oldInput = baseline.context.inputs[0] ?? baseline.context.pinnedInput;
+  const newInput = latest.context.inputs[0] ?? latest.context.pinnedInput;
   if (
     !equal(oldInput?.preferences, newInput?.preferences) ||
     !equal(oldInput?.riding, newInput?.riding) ||

@@ -225,6 +225,7 @@ export const rememberScoreChanges = async (
   ownerId: string,
   now: Date,
   remember: ScoreChangeStore,
+  fixed?: { routeId: string; trackedRideId: string; departureAt: string },
 ): Promise<ReadonlyMap<string, ScoreChange | null>> => {
   try {
     const planKey = await scoreChangePlanKey(days, input.riding.window);
@@ -260,6 +261,8 @@ export const rememberScoreChanges = async (
               forecast: input.forecast,
               source,
               history,
+              fixedDeparture:
+                fixed?.routeId === ranked.routeId ? fixed : undefined,
               slots: [...ranked.assessedDepartures].sort((a, b) =>
                 a.departureAt.localeCompare(b.departureAt),
               ),

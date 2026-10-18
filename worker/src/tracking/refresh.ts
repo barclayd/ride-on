@@ -67,7 +67,7 @@ export const refreshTracking = async (
   let finishAt: string | undefined;
   try {
     const baseline = JSON.parse(row.baseline_json) as Snapshot;
-    const original = baseline.context.inputs[0];
+    const original = baseline.context.inputs[0] ?? baseline.context.pinnedInput;
     if (!original) throw new Error('Missing tracking context.');
     const [user, loaded, history] = await Promise.all([
       users.get(owner),
@@ -109,9 +109,18 @@ export const refreshTracking = async (
         riding: { ...settings.riding, window: input.riding.window },
       }),
     );
-    const pinnedInput = inputs.find(
-      (i) => i.date === baseline.pick.candidate.date,
-    );
+    const pinnedInput = baseline.context.pinnedInput
+      ? resolvedRecommendationSchema.parse({
+          ...settings,
+          routeIds: original.routeIds,
+          date: baseline.context.pinnedInput.date,
+          timeZone: row.time_zone,
+          riding: {
+            ...settings.riding,
+            window: baseline.context.pinnedInput.riding.window,
+          },
+        })
+      : inputs.find((i) => i.date === baseline.pick.candidate.date);
     if (!pinnedInput) throw new Error('Missing accepted date.');
     if (!records.some((r) => r.route.id === row.route_id)) {
       await publishRefresh(
@@ -145,6 +154,8 @@ export const refreshTracking = async (
         Object.keys(settings.preferences.minimumStandards).length > 0,
       );
       const currentContext = contextFor(shared, inputs, records, at, result);
+      if (baseline.context.pinnedInput)
+        currentContext.pinnedInput = pinnedInput;
       currentContext.assessmentFreshUntil = shared.pinnedRefreshAt;
       if (records.length !== original.routeIds.length)
         currentContext.coverageComplete = false;

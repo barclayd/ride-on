@@ -1,6 +1,6 @@
 # Ride tracking API
 
-API v0.38.0. Scoring remains `comfort-v0.17`. Tracking saves **one active plan per account**, preserves the recommendation the rider accepted, and supports explicit refreshes plus [scheduled monitoring and Apple push delivery](ride-monitoring.md). Tracking is separate from completed rides (`/rides`).
+API v0.40.0. Scoring remains `comfort-v0.17`. Tracking saves **one active plan per account**, preserves the recommendation the rider accepted, and supports explicit refreshes plus [scheduled monitoring and Apple push delivery](ride-monitoring.md). Tracking is separate from completed rides (`/rides`).
 
 ## Client flow
 
@@ -14,7 +14,7 @@ All endpoints require the existing owner-bound session. Dates/times are UTC ISO 
 
 ## Recommendation references
 
-References are attached to `/recommendations` ranking `best`, each `alternatives[]` candidate, and `days[].best`, and to `/recommendations/next-windows` `windows[].best`. Unranked partial assessments cannot be tracked.
+References are attached to `/recommendations` ranking `best`, each `alternatives[]` candidate, `betterDeparture`, and `days[].best`, and to `/recommendations/next-windows` `windows[].best`. Unranked partial assessments cannot be tracked.
 
 The server persists the actual assessment before exposing a reference. Clients cannot submit scores or conditions. Each reference binds the owner, route/version, exact departure, original resolved preferences (including request overrides), weather provenance and original comparison scope. Main rankings retain the original selected dates; day-strip picks use their own day; each next-window pick uses that search's dates and window. Preview dates never enlarge the main scope.
 
@@ -58,6 +58,37 @@ JSON responses contain `ride`, `outcome`, `replayed`, `replacedTrackedRideId`, `
 
 The baseline is committed before attempting the latest forecast check. Forecast failure does not undo tracking. A delayed retry after untracking returns the inactive record, not a new plan. Tracking again intentionally requires a new action key and creates a new baseline. When replaying a historical action, use `activeTrackedRideId` to identify the current plan; the returned `ride` need not be that plan.
 
+## Fixed tile, moving and editing alerts
+
+Since v0.40.0, recommendations keep the active tracked route's top-level `best`
+on its accepted departure, including outside the search's dates/window. The
+`trackedDeparture` marker always carries the slot; unavailable slots return
+`best: null` instead of silently choosing another time. Rankings and verdicts
+follow that fixed candidate. Previews and alternatives retain normal search
+results. [Full response contract](api.md#fixed-departures-v0400).
+
+The tile uses the current request's preferences and overrides. Its
+`betterDeparture` suggests the same route's best slot in the current search,
+meeting minimums and improving Conditions by at least five points or resolving
+the pin's failed minimums. Monitoring continues using saved preferences and the
+plan's original scope. Changing the search alone does not move alerts.
+
+Move alerts posts `betterDeparture.recommendationRef` with the current version,
+replacement ID and triggers. Undo posts the former pin's reference. Such a
+reference remains trackable outside the original search window; its snapshot
+retains that search's inputs plus a separate `pinnedInput` for the exact slot.
+Each move creates a new baseline.
+
+Change alerts uses `PATCH /tracked-rides/{id}` with
+`{expectedTrackingVersion, alerts: {triggers: {rain, wind, cold, betterTime}}}`.
+All four booleans are required and at least one must be true; the body is strict.
+It returns the GET detail shape, increments the account and ride versions, and
+preserves the slot, baseline, comparison, monitor state and notification reference.
+Matching retries return 200 without a version check or increment. Inactive or
+departed plans return `409 TRACKING_INACTIVE`, distinct stale edits return
+`409 TRACKING_VERSION_CONFLICT`, foreign/unknown IDs return
+`404 TRACKED_RIDE_NOT_FOUND`, and invalid bodies return `400 VALIDATION`.
+
 ## Read and history
 
 | Endpoint | Response |
@@ -85,7 +116,7 @@ Foreign or absent records return `404 TRACKED_RIDE_NOT_FOUND` on detail, refresh
 - `comparison`: current comparison, or `null` when the attempt failed, is in progress, or the pinned assessment has become stale.
 - `lastKnownComparison: { asOf, comparison } | null`, explicitly historical when current comparison is unavailable.
 - `refresh`: attempt/success timestamps and availability, described below.
-- `capabilities: { maximumActiveRides: 1, manualRefresh: true, automaticChecks: boolean, notifications: boolean, alertTriggers: true, finalForecastLocalTime: "18:00" }`. Automatic checks reflect the monitoring switch; notifications additionally require configured APNs credentials. Clients also need permission and a registered device. See [monitoring](ride-monitoring.md).
+- `capabilities: { maximumActiveRides: 1, manualRefresh: true, automaticChecks: boolean, notifications: boolean, alertTriggers: true, fixedDeparture: true, alertEdits: true, finalForecastLocalTime: "18:00" }`. Automatic checks reflect the monitoring switch; notifications additionally require configured APNs credentials. Clients also need permission and a registered device. The two v0.40 flags enable the fixed tile and in-place trigger editing independently of delivery. See [monitoring](ride-monitoring.md).
 
 Each snapshot context stores schema/algorithm versions, generation time, original comparison inputs, route facts and versions/source hashes/geometry references, history context, provider-neutral weather provenance and attribution, comparison coverage and best-known ranking evidence. `pick.candidate` retains Conditions, recommendation priority, factor scores, conditions, standards and encounter-time evidence, ride hours, and route-scoped forecast details. No raw provider body or entire forecast horizon is stored.
 

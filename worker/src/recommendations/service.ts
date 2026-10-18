@@ -76,7 +76,7 @@ export const evaluateComparisons = async (
   }: ComparisonContext,
 ) => {
   const refreshAfterSeconds = forecastRefreshSeconds(
-    refreshDates,
+    pinned ? [...refreshDates, pinned.input.date] : refreshDates,
     startedAt,
     input.timeZone,
   );

@@ -18,15 +18,27 @@ export const routeFacts = ({ route, version, source }: RouteRecord) => ({
   geometryRef: route.geometry ? route.sourceHash : null,
 });
 export type Pick = { routeId: string; candidate: Candidate };
+export type RouteBest = {
+  routeId: string;
+  candidate: {
+    departureAt: string;
+    score: number;
+    standards: { status: Candidate['standards']['status'] };
+  };
+};
 export type TrackingContext = {
   schemaVersion: 1;
   generatedAt: string;
   algorithmVersion: string;
   inputs: RecommendationInput[];
+  /** Exact-departure input when the accepted slot is independent of the search window. */
+  pinnedInput?: RecommendationInput;
   routes: RouteFacts[];
   history: Evaluation['history'];
   weather: Omit<Evaluation['weather'], 'cache' | 'attempts'>;
   best: Pick | null;
+  /** Compact per-route winners keep better-time references independent of the overall winner. */
+  routeBests?: RouteBest[];
   coverageComplete: boolean;
   eligibleDepartures: number;
   assessmentFreshUntil: string | null;
@@ -34,6 +46,8 @@ export type TrackingContext = {
 export type Snapshot = { context: TrackingContext; pick: Pick };
 export const capabilities = {
   alertTriggers: true,
+  fixedDeparture: true,
+  alertEdits: true,
   finalForecastLocalTime: FINAL_FORECAST_LOCAL_TIME,
   maximumActiveRides: 1,
   manualRefresh: true,
@@ -77,6 +91,20 @@ export const contextFor = (
     best: first?.best
       ? { routeId: first.routeId, candidate: { ...first.best, previous: null } }
       : null,
+    routeBests: result.rankings.flatMap((r) =>
+      r.best
+        ? [
+            {
+              routeId: r.routeId,
+              candidate: {
+                departureAt: r.best.departureAt,
+                score: r.best.score,
+                standards: { status: r.best.standards.status },
+              },
+            },
+          ]
+        : [],
+    ),
     eligibleDepartures: [...result.rankings, ...result.unranked].reduce(
       (n, r) => n + r.departuresTested,
       0,
