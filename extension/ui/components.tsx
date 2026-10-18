@@ -399,8 +399,8 @@ export const EditButton = ({ tracking }: { tracking: Tracking }) => (
   </button>
 );
 
-// The Undo message (§4), under the list. The dock sticks to the bottom of the view while the list
-// runs past it, so a removal near the top still shows its Undo.
+// The Undo message (§4): in the window's bottom right corner on the Journeys page; in the panel,
+// under the list, sticking to the bottom of the view so a removal near the top still shows its Undo.
 export const Toast = ({ tracking }: { tracking: Tracking }) => {
   const { said, shown, setHeld } = tracking;
   return (

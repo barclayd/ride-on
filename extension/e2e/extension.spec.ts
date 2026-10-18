@@ -1755,19 +1755,16 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   });
   expect(selection.routeIds).toEqual(['r101', 'r102']);
 
-  // The Undo message's dock leaves no room under the list; the message floats below it.
-  const dock = module.locator('.ro-toast-dock');
-  const under = (top: number) =>
-    dock.evaluate(
-      (element, top) =>
-        top -
-        (element.previousElementSibling?.getBoundingClientRect().bottom ?? 0),
-      top,
+  // The Undo message's dock takes no room under the list.
+  const listBottom = await module
+    .locator('.ro-toast-dock')
+    .evaluate(
+      (dock) => dock.previousElementSibling?.getBoundingClientRect().bottom,
     );
   const sectionBottom = await module
     .locator('.ro-module')
     .evaluate((el) => el.getBoundingClientRect().bottom);
-  expect(await under(sectionBottom)).toBeCloseTo(0, 0);
+  expect(sectionBottom).toBeCloseTo(listBottom ?? 0, 0);
 
   // Edit mode on the page: the × takes the tile away, the row's chip goes back to + Track, and
   // Undo puts both back.
@@ -1780,7 +1777,18 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(toast.locator('span')).toHaveText(
     'Stopped tracking Coast & Back',
   );
-  expect(await under((await toast.boundingBox())?.y ?? 0)).toBeGreaterThan(8);
+  // It sits in the window's bottom right corner, over the page.
+  await expect
+    .poll(() =>
+      toast.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const { clientWidth, clientHeight } = document.documentElement;
+        return [clientWidth - box.right, clientHeight - box.bottom].map(
+          Math.round,
+        );
+      }),
+    )
+    .toEqual([24, 24]);
   await expect(page.locator('#jr_102 .ro-chip')).toHaveText('+ Track');
   await expect.poll(() => selection.routeIds).toEqual(['r101']);
   await page.screenshot({ path: test.info().outputPath('edit.png') });
