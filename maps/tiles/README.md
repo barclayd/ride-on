@@ -77,8 +77,9 @@ Points, or a point inside the area for mapped buildings and car parks.
 
 | `kind` | From | Zooms |
 |---|---|---|
-| `station` | Named `railway=station`, not Underground, tram, light rail or heritage | 12–14 |
+| `station` | Named `railway=station`, not Underground, tram, light rail or heritage | 10–14 |
 | `peak` | Named `natural=peak` or `hill` nodes; `ele` in whole metres | 12–14 |
+| `landmark` | Named `tourism` = attraction, museum, zoo, aquarium, theme_park, or `historic` = castle, palace, unless also an `amenity`, `place`, `highway`, `leisure` or `shop` (churches, theatres, squares, parks). `icon`: `castle` (castles and palaces), `museum` or `attraction`. Areas also get `area` (m², rounded) and `structure` (`true` for a building or bridge) | 13–14 |
 | `cafe`, `pub`, `toilets`, `drinking_water`, `bicycle_parking`, `parking` | `amenity=*` | 14 |
 | `bicycle_shop` | `shop=bicycle` | 14 |
 | `camp_site`, `viewpoint` | `tourism=*` | 14 |
@@ -96,6 +97,10 @@ the style thins them by:
 `postProcessTileFeatures` counts them. Icons are buffered 256 px into the tiles around (1 km at z14 as
 far north as 66°), so the count includes neighbours over the tile's edge; those copies are then dropped,
 leaving the usual 4 px point buffer.
+
+Stations at z10–11 carry `crowd_5km`, the other stations within 5 km, which the style thins them by
+there. They're buffered 160 px at those zooms (5 km at z11 as far north as 61°), counted the same way,
+then dropped back to 4 px; from z12 they carry no count.
 
 ## Build
 
@@ -128,7 +133,7 @@ docker run --rm -v "$PWD/maps/tiles":/src -v ~/.m2:/root/.m2 -w /src \
   maven:3.9-eclipse-temurin-21 mvn -B -q test
 ```
 
-89 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
+107 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
 `CyclingProfileTest` when a rule changes.
 
 ## Publish

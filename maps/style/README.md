@@ -59,7 +59,10 @@ both honour, scaling down on 2× screens. The prototype's server answers `/sprit
 The badges are 8 px squares (EuroVelo 16.5) with a stretch band of `[2, 6]` both ways, so
 `icon-text-fit: both` grows them round the number; `icon-text-fit-padding` sets the margins, so they need
 no `content` box. Red and blue are `shot()` of cycle.travel's badges, checked against a new screenshot
-(style spec, "Repeater badges"). resvg runs without system fonts, so the PNG is the same on any machine
+(style spec, "Repeater badges"). The POI icons (`poi-*`) and landmark icons (`landmark-castle`, `-museum`,
+`-attraction`) are [Maki](https://github.com/mapbox/maki) glyphs (CC0, `src/maki.ts`: castle, museum, star);
+`station` is cycle.travel's orange station dot, for the thinned stations at z10–11 (the circles take over
+from z12). resvg runs without system fonts, so the PNG is the same on any machine
 to within a level of anti-aliasing, which is all the test allows.
 
 ## Check

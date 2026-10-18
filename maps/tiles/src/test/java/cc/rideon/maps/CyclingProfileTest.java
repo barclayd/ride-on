@@ -251,6 +251,16 @@ class CyclingProfileTest {
     "tourism=camp_site, false, camp_site",
     "tourism=viewpoint, true, viewpoint",
     "amenity=bench, true, null",
+    "tourism=attraction name=London_Eye, false, landmark",
+    "tourism=museum name=Science_Museum, true, landmark",
+    "historic=palace name=Lambeth_Palace access=private, false, landmark",
+    "tourism=attraction, false, null",
+    "tourism=gallery name=Tate_Modern, false, null",
+    "tourism=attraction name=Westminster_Abbey amenity=place_of_worship, false, null",
+    "tourism=attraction name=Trafalgar_Square place=square, false, null",
+    "tourism=attraction name=Piccadilly_Circus highway=pedestrian, false, null",
+    "tourism=attraction name=Hyde_Park leisure=park, false, null",
+    "tourism=attraction name=Harrods shop=department_store, false, null",
   })
   void poiKind(String pairs, boolean isNode, String expected) {
     assertEquals(expected, CyclingProfile.poiKind(WithTags.from(tags(pairs)), isNode));
@@ -263,6 +273,10 @@ class CyclingProfileTest {
     assertEquals(1, peak.size());
     assertEquals(Map.of("kind", "peak", "name", "Leith_Hill", "ele", 295), peak.getFirst().getAttrsAtZoom(14));
     assertEquals(12, peak.getFirst().getMinZoom());
+
+    var station = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newPoint(1.25, 51.94),
+      tags("railway=station name=Dovercourt"), "osm", null, 1, List.of()), profile);
+    assertEquals(10, station.getFirst().getMinZoom());
 
     var cafe = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(rectangle(0, 0.001),
       tags("amenity=cafe name=Pembroke_Lodge"), "osm", null, 1, List.of()), profile);
@@ -277,6 +291,51 @@ class CyclingProfileTest {
   }
 
   @Test
+  void landmarksCarryTheirIconAndAreasTheirSizeAndWhetherTheyAreAStructure() {
+    // 0.002° by 0.001° at 51.5° N: 138.6 m by 111.3 m.
+    var palace = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(
+      rectangle(-0.142, 51.501, -0.140, 51.502), tags("tourism=attraction historic=castle building=palace " +
+        "name=Buckingham_Palace"), "osm", null, 1, List.of()), profile);
+    assertEquals(1, palace.size());
+    assertTrue(palace.getFirst().getGeometry() instanceof Point);
+    assertEquals(13, palace.getFirst().getMinZoom());
+    var attrs = palace.getFirst().getAttrsAtZoom(13);
+    assertEquals("landmark", attrs.get("kind"));
+    assertEquals("castle", attrs.get("icon"));
+    assertEquals(true, attrs.get("structure"));
+    assertEquals(15_420, (int) attrs.get("area"), 100);
+
+    var bridge = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(
+      rectangle(-0.123, 51.500, -0.121, 51.501), tags("tourism=attraction man_made=bridge name=Westminster_Bridge"),
+      "osm", null, 1, List.of()), profile);
+    assertEquals(true, bridge.getFirst().getAttrsAtZoom(13).get("structure"));
+    assertEquals("attraction", bridge.getFirst().getAttrsAtZoom(13).get("icon"));
+
+    var parade = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(
+      rectangle(-0.129, 51.504, -0.127, 51.505), tags("tourism=attraction landuse=military name=Horse_Guards_Parade"),
+      "osm", null, 1, List.of()), profile);
+    assertNull(parade.getFirst().getAttrsAtZoom(13).get("structure"));
+
+    var eye = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newPoint(-0.1196, 51.5033),
+      tags("tourism=attraction name=London_Eye"), "osm", null, 1, List.of()), profile);
+    assertEquals(Map.of("kind", "landmark", "name", "London_Eye", "icon", "attraction"),
+      eye.getFirst().getAttrsAtZoom(13));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "tourism=attraction historic=castle, castle",
+    "historic=palace, castle",
+    "tourism=museum historic=castle, castle",
+    "tourism=museum man_made=windmill, museum",
+    "tourism=zoo, attraction",
+    "tourism=attraction attraction=big_wheel, attraction",
+  })
+  void landmarkIcons(String tagString, String icon) {
+    assertEquals(icon, CyclingProfile.landmarkIcon(WithTags.from(tags(tagString))));
+  }
+
+  @Test
   void iconsReachIntoTheTilesAroundSoTheirNeighboursThereCountThem() {
     var toilets = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newPoint(0, 0),
       tags("amenity=toilets"), "osm", null, 1, List.of()), profile);
@@ -287,6 +346,11 @@ class CyclingProfileTest {
     var station = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newPoint(0, 0),
       tags("railway=station name=Richmond"), "osm", null, 1, List.of()), profile);
     assertEquals(CyclingProfile.POINT_BUFFER, station.getFirst().getBufferPixelsAtZoom(14));
+    // While the style thins them, stations reach out to count theirs: 5 km in z11 pixels at Thurso, 58.6° N.
+    assertEquals(CyclingProfile.STATION_BUFFER, station.getFirst().getBufferPixelsAtZoom(11));
+    assertEquals(CyclingProfile.POINT_BUFFER, station.getFirst().getBufferPixelsAtZoom(12));
+    assertTrue(CyclingProfile.STATION_BUFFER > 5000 / CyclingProfile.metresPerPixel(TileCoord.aroundLngLat(-3.5, 58.6,
+      11)));
   }
 
   @Test
@@ -322,6 +386,26 @@ class CyclingProfileTest {
       Map.of("kind", "pub", "crowd_500m", 2, "crowd_1km", 3),
       Map.of("kind", "parking"),
       Map.of("kind", "viewpoint", "crowd_500m", 0, "crowd_1km", 2)
+    ), crowd.stream().map(VectorTile.Feature::tags).toList());
+  }
+
+  @Test
+  void countsEachStationsNeighboursWithin5kmThenDropsThoseOverTheEdge() {
+    // 25 m a pixel: 5 km is 200 px.
+    var crowd = CyclingProfile.crowdedStations(List.of(
+      poi("station", 128, 128),
+      // 4.5 km east, in the tile to the right.
+      poi("station", 308, 128),
+      // 5.5 km south, in the tile below.
+      poi("station", 128, 348),
+      // Cafés aren't stations, so don't count.
+      poi("cafe", 130, 130),
+      poi("station", 60, 60)
+    ), 25);
+    assertEquals(List.of(
+      Map.of("kind", "station", "crowd_5km", 2),
+      Map.of("kind", "cafe"),
+      Map.of("kind", "station", "crowd_5km", 1)
     ), crowd.stream().map(VectorTile.Feature::tags).toList());
   }
 

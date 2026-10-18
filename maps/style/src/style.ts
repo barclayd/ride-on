@@ -378,28 +378,49 @@ const basemap = (): Layer[] =>
       if (l.id === 'places_locality') {
         // OSM place=locality (park gates, river reaches) gets its own small grey layer at street level
         // (ct_localities). cycle.travel has no City of Westminster label; the Westminster quarter
-        // (places_subplace) covers it.
+        // (places_subplace) covers it. It never names farms or isolated dwellings, and hamlets only from its z14
+        // (our 13): small and plain until its z16 (our 15), then like villages.
         l.filter = [
           'all',
           ['==', ['get', 'kind'], 'locality'],
-          ['!=', ['get', 'kind_detail'], 'locality'],
+          ['!', ['in', kd, ['literal', ['locality', 'farm', 'isolated_dwelling']]]],
+          ['any', ['!=', kd, 'hamlet'], ['>=', ['zoom'], 13]],
           ['!=', ['get', 'name'], 'City of Westminster'],
         ]
         const capital = ['>=', ['get', 'population_rank'], 10]
-        const town = ['match', ['get', 'kind_detail'], ['town', 'city'], true, false]
-        layout['text-font'] = ['case', capital, montserrat('Medium'), town, montserrat('Bold'), montserrat('Medium')]
+        const town = ['match', kd, ['town', 'city'], true, false]
+        const hamlet = ['==', kd, 'hamlet']
+        layout['text-font'] = [
+          'step',
+          ['zoom'],
+          [
+            'case',
+            capital,
+            montserrat('Medium'),
+            town,
+            montserrat('Bold'),
+            hamlet,
+            montserrat('Regular'),
+            montserrat('Medium'),
+          ],
+          15,
+          ['case', capital, montserrat('Medium'), town, montserrat('Bold'), montserrat('Medium')],
+        ]
         paint['text-color'] = ['case', capital, '#000000', town, ct.town, ct.village]
         layout['text-size'] = [
           'interpolate',
           ['linear'],
           ['zoom'],
           6,
-          ['case', ['>=', ['get', 'population_rank'], 10], 13, 10],
+          ['case', capital, 13, 10],
           10,
-          ['case', ['>=', ['get', 'population_rank'], 10], 17, ['<=', ['get', 'min_zoom'], 9], 14, 12],
+          ['case', capital, 17, ['<=', ['get', 'min_zoom'], 9], 14, 12],
           14,
-          ['case', ['>=', ['get', 'population_rank'], 10], 16, 15],
+          ['case', capital, 16, hamlet, 10, 15],
+          15,
+          ['case', capital, 16, 15],
         ]
+        layout['text-max-width'] = ['step', ['zoom'], ['case', hamlet, 5, 10], 15, 10]
         // cycle.travel: mixed case to its z12 (our 11), then towns in letter-spaced capitals; LONDON spreads wide
         // at street level.
         layout['text-transform'] = ['step', ['zoom'], 'none', 12, ['case', town, 'uppercase', 'none']]
@@ -475,6 +496,10 @@ const roadRefs: Layer = {
   paint: { 'text-color': ct.roadRef, 'text-halo-color': '#ffffff', 'text-halo-width': 1 },
 }
 
+const kind = ['get', 'kind']
+const structure = ['==', ['get', 'structure'], true]
+const area = ['coalesce', ['get', 'area'], 0]
+const bigLandmark = 6000 // m², about the smallest landmark cycle.travel marks at its z14–15 (Westminster Bridge)
 // Point labels cycle.travel adds at street level (its z15, our 14), coloured by what they are.
 // cycle.travel names far fewer of these than Protomaps carries: roughly a zoom later than Protomaps' own min_zoom.
 const poiKind = (kinds: string[]) => [
@@ -493,19 +518,38 @@ const pointLabel = (size: number, face: Face, maxWidth = 7) => ({
 const halo = (colour: string) => ({ 'text-color': colour, 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 })
 const labels: Layer[] = [
   // Later entries win collisions: landmarks give way to localities, localities to parks (St James's Park beats
-  // Pelican Rock). Churches and abbeys (Protomaps sets kind_detail to the religion) stay unnamed, as on cycle.travel.
+  // Pelican Rock). Landmarks come from the cycling overlay (tourism attractions, museums, zoos, castles, palaces;
+  // never churches), each under a castle, museum or star, the biggest first. Until its z16 (our 15) cycle.travel
+  // marks only big buildings and bridges, no museums: Buckingham Palace, the Palace of Westminster, the Royal Mews,
+  // Westminster and London Bridges, not the British Museum, Horse Guards or Horse Guards Parade. The label gives way
+  // before the icon does.
   {
     id: 'ct_landmarks',
     type: 'symbol',
-    source: 'basemap',
-    'source-layer': 'pois',
-    minzoom: 14,
+    ...cycling('pois'),
+    minzoom: 13,
     filter: [
       'all',
-      poiKind(['attraction', 'museum', 'castle', 'palace', 'zoo', 'aquarium', 'theme_park']),
-      ['!', ['has', 'kind_detail']],
+      ['==', kind, 'landmark'],
+      ['step', ['zoom'], ['all', structure, ['!=', ['get', 'icon'], 'museum'], ['>=', area, bigLandmark]], 15, true],
     ],
-    layout: { ...pointLabel(11, 'SemiBold'), 'symbol-sort-key': ['get', 'min_zoom'] },
+    layout: {
+      ...pointLabel(11, 'SemiBold'),
+      'text-size': ['interpolate', ['linear'], ['zoom'], 13, 9.5, 14, 11],
+      'icon-image': [
+        'match',
+        ['get', 'icon'],
+        'castle',
+        'landmark-castle',
+        'museum',
+        'landmark-museum',
+        'landmark-attraction',
+      ],
+      'text-anchor': 'top',
+      'text-offset': [0, 0.7],
+      'text-optional': true,
+      'symbol-sort-key': ['-', area],
+    },
     paint: halo(ct.landmark),
   },
   {
@@ -553,8 +597,7 @@ const labels: Layer[] = [
     paint: halo(ct.station),
   },
 ]
-// National Rail stations as cycle.travel's orange dot. At its z11–12 it shows only a handful (no rule we can copy),
-// so ours start with the full set at its z13 (our 12).
+// National Rail stations as cycle.travel's orange dot, every one from its z13 (our 12).
 const stations: Layer = {
   id: 'ct_stations',
   type: 'circle',
@@ -567,6 +610,21 @@ const stations: Layer = {
     'circle-stroke-color': '#000000',
     'circle-stroke-width': 0.9,
   },
+}
+// At its z11–12 (our 10–11) cycle.travel shows the stations of the country and a few at a city's edge, none in it. A
+// town's name beats its station (Clacton, Felixstowe, Ipswich) but a station beats a village's name (Mistley, Wrabness
+// and Westerfield get the dot, not the name). Ours approximate that: only those with at most `crowdedStation` others
+// within 5 km (the overlay's crowd_5km), as the same dot drawn as a symbol, placed after town names and before villages'
+// (places_villages). Surrey's and Essex's have up to about 10; London's suburbs 8–19, its middle 20+.
+const crowdedStation = 11
+const stationsThinned: Layer = {
+  id: 'ct_stations_thinned',
+  type: 'symbol',
+  ...cycling('pois'),
+  minzoom: 10,
+  maxzoom: 12,
+  filter: ['all', ['==', ['get', 'kind'], 'station'], ['<=', ['get', 'crowd_5km'], crowdedStation]],
+  layout: { 'icon-image': 'station', 'icon-padding': 4 },
 }
 // cycle.travel's POI icons (sprite poi-*), from its z15 (our 14). Car parks stay off, as on cycle.travel. Where icons
 // overlap, the earlier kinds in this list draw on top: what a rider stops for first.
@@ -586,7 +644,6 @@ const poiKinds = [
 // calibrated on Shere, Box Hill, Dorking, Putney and Westminster (docs/maps/cycle-travel-style.md, "POI icons").
 const quiet = 10 // other icons within 500 m, to show at our z14
 const cityCafes = 80 // other icons within 1 km, above which a café never shows
-const kind = ['get', 'kind']
 const pois: Layer = {
   id: 'ct_pois',
   type: 'symbol',
@@ -849,6 +906,18 @@ export const buildStyle = (target: Target): StyleSpecification => {
   // Later layers win label collisions: badges beat POI icons, which beat point labels; EuroVelo beats national
   // beats regional.
   all.splice(at('places_subplace'), 0, ...labels, pois, ...badges)
+  // Below our z12, villages' and hamlets' names go in their own layer, placed after the thinned stations, which are
+  // placed after towns' names.
+  const locality = all[at('places_locality')] as Layer
+  const town = ['match', kd, ['town', 'city'], true, false]
+  const villages: Layer = {
+    ...locality,
+    id: 'places_villages',
+    maxzoom: 12,
+    filter: ['all', locality.filter, ['!', town]],
+  }
+  locality.filter = ['all', locality.filter, ['any', town, ['>=', ['zoom'], 12]]]
+  all.splice(at('places_subplace'), 0, villages, stationsThinned)
 
   return {
     version: 8,
