@@ -72,7 +72,9 @@ export const rainPanel = (b: Departure, timeZone: string): Rain | null => {
       wet: false,
       dry,
       headline: dry ? 'Dry ride' : 'Rain unlikely',
-      sentence: `Chance of rain stays under ${dry ? SMALL_CHANCE : WET_CHANCE}% for the whole ride.`,
+      sentence: most
+        ? `Chance of rain stays under ${dry ? SMALL_CHANCE : WET_CHANCE}% for the whole ride.`
+        : 'No rain expected for the ride.',
       hours,
     };
   }
