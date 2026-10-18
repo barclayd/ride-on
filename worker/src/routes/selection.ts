@@ -43,18 +43,19 @@ export const createD1RouteSelectionStore = (
       : { version: 0, routeIds: [], updatedAt: null };
   },
   update: async (ownerId, selection, expectedVersion) => {
-    // Routes cannot currently be deleted; ownership is checked by the API before this CAS.
+    // RETURNING counts the selection itself, independently of cleanup triggers.
+    // D1 meta.changes includes their deletes and is not a reliable CAS result.
     const result =
       expectedVersion === 0
         ? await db
             .prepare(
-              'INSERT INTO route_selections (owner_id, version, selection_json) VALUES (?, ?, ?) ON CONFLICT(owner_id) DO NOTHING',
+              'INSERT INTO route_selections (owner_id, version, selection_json) VALUES (?, ?, ?) ON CONFLICT(owner_id) DO NOTHING RETURNING owner_id',
             )
             .bind(ownerId, selection.version, JSON.stringify(selection))
-            .run()
+            .first<{ owner_id: string }>()
         : await db
             .prepare(
-              'UPDATE route_selections SET version = ?, selection_json = ? WHERE owner_id = ? AND version = ?',
+              'UPDATE route_selections SET version = ?, selection_json = ? WHERE owner_id = ? AND version = ? RETURNING owner_id',
             )
             .bind(
               selection.version,
@@ -62,7 +63,7 @@ export const createD1RouteSelectionStore = (
               ownerId,
               expectedVersion,
             )
-            .run();
-    return result.meta.changes === 1;
+            .first<{ owner_id: string }>();
+    return result !== null;
   },
 });
