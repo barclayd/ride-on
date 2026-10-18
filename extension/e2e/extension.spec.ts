@@ -3154,3 +3154,44 @@ test('notification browser view shows saved changes safely, handles ended rides 
   await page.goto('https://api.ride-on.cc/notifications/open#ride=invalid');
   await expect(page.getByRole('status')).toContainText('incomplete');
 });
+
+test('Journeys page: tiles side by side share row lines, a tracked time or not', async ({
+  context,
+  worker,
+}) => {
+  capabilities = FIXED;
+  rides = [ride('r101', day(-3))];
+  await signIn(worker);
+  await fakeCycleTravel(context);
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys');
+  const module = page.locator('ride-on-module');
+  await page.locator('#jr_102 .ro-chip').click();
+  const tiles = module.locator('.ro-ride');
+  await expect(tiles).toHaveCount(2);
+  await module
+    .getByRole('button', { name: 'Get alerts for Hilly Loop' })
+    .click();
+  await module
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Turn on alerts' })
+    .click();
+  // One tile has the tracked time's taller pill, the other a plain time.
+  await expect(tiles.nth(0).locator('.ro-fixed')).toBeVisible();
+  await expect(tiles.nth(1).locator('.ro-fixed')).toHaveCount(0);
+  await expect(tiles.nth(1).locator('.ro-when')).toBeVisible();
+  const middle = async (i: number, part: string) => {
+    const box = await tiles.nth(i).locator(part).first().boundingBox();
+    return box && Math.round(box.y + box.height / 2);
+  };
+  for (const [a, b] of [
+    ['.ro-name', '.ro-name'],
+    ['.ro-facts > span', '.ro-facts > span'],
+    ['.ro-fixed', '.ro-when'],
+    ['.ro-rule', '.ro-rule'],
+    ['.ro-chips', '.ro-chips'],
+    ['.ro-meter', '.ro-meter'],
+  ])
+    expect(await middle(1, b), b).toBe(await middle(0, a));
+  await module.screenshot({ path: test.info().outputPath('tile-rows.png') });
+});

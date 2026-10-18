@@ -804,6 +804,14 @@ a.ro-name:hover {
   font: 400 12px var(--ro-serif);
   color: var(--ro-muted);
 }
+.ro-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ro-notes:empty {
+  display: none;
+}
 /* Journeys tile (14a, chips from 11b) */
 .ro-module .ro-grid {
   gap: 24px 14px; /* the taller row gap leaves room for the flag tabs */
@@ -814,6 +822,76 @@ a.ro-name:hover {
   border-radius: 12px;
   padding: 16px 18px 18px;
   gap: 12px;
+}
+/* Tiles side by side share row lines (a subgrid), so names, distances, times, rules, chips and
+   Conditions bars line up whatever state each tile is in: a pill for a tracked time, a better time,
+   a name over two lines, an open dropdown. Each part's top margin spaces it, not a gap, so a row no
+   tile in the line uses takes no room. */
+.ro-module .ro-grid {
+  row-gap: 0;
+}
+.ro-module .ro-grid > .ro-ride {
+  display: grid;
+  grid-row: span 10;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  margin-bottom: 24px; /* the grid's row gap, with room for the flag tabs */
+}
+.ro-module .ro-grid :is(.ro-facts, .ro-fixed-row) {
+  display: contents;
+}
+.ro-module
+  .ro-grid
+  :is(
+    .ro-pills,
+    .ro-facts > :first-child,
+    .ro-rule,
+    .ro-conditions,
+    .ro-temp,
+    .ro-sky,
+    .ro-wind,
+    .ro-rain,
+    .ro-notes,
+    .ro-meter,
+    .ro-no-score
+  ) {
+  margin-top: 12px;
+}
+.ro-module .ro-grid :is(.ro-when, .ro-fixed-anchor, .ro-better) {
+  margin-top: 6px;
+}
+.ro-module .ro-grid .ro-ride-head {
+  grid-row: 1;
+}
+.ro-module .ro-grid .ro-pills {
+  grid-row: 2;
+}
+.ro-module .ro-grid .ro-facts > :first-child {
+  grid-row: 3;
+}
+/* A plain time sits on the middle of a neighbour's taller pill. */
+.ro-module .ro-grid :is(.ro-when, .ro-fixed-anchor) {
+  grid-row: 4;
+  align-self: center;
+}
+.ro-module .ro-grid .ro-better {
+  grid-row: 5;
+}
+.ro-module .ro-grid .ro-rule {
+  grid-row: 6;
+}
+.ro-module .ro-grid .ro-conditions {
+  grid-row: 7;
+}
+.ro-module .ro-grid :is(.ro-temp, .ro-sky, .ro-wind, .ro-rain) {
+  grid-row: 8;
+}
+.ro-module .ro-grid .ro-notes {
+  grid-row: 9;
+}
+.ro-module .ro-grid :is(.ro-meter, .ro-no-score) {
+  grid-row: 10;
+  align-self: end;
 }
 .ro-module .ro-ride.ro-flag-best {
   background: #f7faef;
