@@ -1,11 +1,11 @@
-// "Temperature along the ride": the temperature chip's panel (handoff v7, 24a). Pure, like format.ts.
-// Air and feels like over the ride against the rider's ideal range, on a fixed 0–25°C scale so
-// tiles compare, with the month's usual temperature behind them (docs/extension-api-brief-v9.md).
+// "Temperature along the ride": the temperature chip's panel (handoff v7, 24a; axis v8, 26b). Pure,
+// like format.ts. Air and feels like over the ride against the rider's ideal range, with the month's
+// usual temperature behind them (docs/extension-api-brief-v9.md), on a scale that fits all of them.
 import type { Departure, Preferences, TemperaturePoint } from '../lib/types';
 import { clock, degrees, METRIC, type Units } from './format';
 
-const SCALE_C = 25; // ponytail: values outside 0–25°C clamp to the edge until there's a rule for widening it
 const SHORT_MIN = 10; // crossings shorter than this are ignored
+const TICK_GAP = 13; // a gridline this close to a range edge, in % of the plot, would collide with its label
 type Zone = 'cool' | 'in' | 'warm';
 type Run = { zone: Zone; start: number; end: number; min: number; max: number };
 type Point = { m: number; c: number };
@@ -18,6 +18,8 @@ export type TemperatureEnd = {
   above: boolean;
   end: boolean;
 };
+// "Your range" sits in whichever third of the block leaves it furthest from the lines and tags.
+export type RangeSlot = 'left' | 'centre' | 'right';
 export type TemperaturePanel = {
   warn: boolean; // feels outside the range for over half the ride: the amber chip
   label: string; // the chip's aria-label
@@ -32,15 +34,15 @@ export type TemperaturePanel = {
   feels: string | null;
   high: { y: number; label: string };
   low: { y: number; label: string };
+  ticks: { y: number; label: string }[]; // gridlines, clear of the range edges
+  rangeLabel: { y: number; slot: RangeSlot } | null; // null when the block is too thin or crowded
   ends: TemperatureEnd[];
-  mark: { x: number; y: number; label: string; cool: boolean } | null;
+  mark: { x: number; y: number; cool: boolean } | null;
   from: string;
   to: string;
   range: string;
 };
 
-const y = (c: number) =>
-  +(100 - (Math.max(0, Math.min(SCALE_C, c)) / SCALE_C) * 100).toFixed(2);
 const series = (points: TemperaturePoint[], i: 1 | 2 | 3): Point[] =>
   points.flatMap((p) => (p[i] === null ? [] : [{ m: p[0], c: p[i] }]));
 // Linear between points, held flat beyond the ends.
@@ -52,7 +54,12 @@ const at = (s: Point[], m: number) => {
   return a.c + ((b.c - a.c) * (m - a.m)) / (b.m - a.m);
 };
 // A line that breaks where the API has no value.
-const path = (points: TemperaturePoint[], i: 1 | 2, x: (m: number) => number) =>
+const path = (
+  points: TemperaturePoint[],
+  i: 1 | 2,
+  x: (m: number) => number,
+  y: (c: number) => number,
+) =>
   points
     .map((p, k) =>
       p[i] === null
@@ -134,6 +141,31 @@ export const temperaturePanel = (
     return `${a === z ? z : `${a}–${z}`}${u.temperature}`;
   };
   const x = (m: number) => +((m / minutes) * 100).toFixed(2);
+  const usualPoints = series(points, 3);
+  const band = usual?.bandHalfWidthC ?? 0;
+  // Every value and both range edges, out to the next gridline with at least a degree to spare.
+  const fahrenheit = u.temperature === '°F';
+  const shown = (c: number) => (fahrenheit ? c * 1.8 + 32 : c);
+  const [step, pad] = fahrenheit ? [10, 2] : [5, 1];
+  const all = [
+    ...[...air, ...feels].map((p) => p.c),
+    ...(usual ? usualPoints.flatMap((p) => [p.c - band, p.c + band]) : []),
+    lo,
+    hi,
+  ].map(shown);
+  const bottom = Math.floor((Math.min(...all) - pad) / step) * step;
+  const top = Math.ceil((Math.max(...all) + pad) / step) * step;
+  const scale = (v: number) =>
+    +(
+      100 -
+      ((Math.max(bottom, Math.min(top, v)) - bottom) / (top - bottom)) * 100
+    ).toFixed(2);
+  const y = (c: number) => scale(shown(c));
+  const edges = [y(lo), y(hi)];
+  const ticks: TemperaturePanel['ticks'] = [];
+  for (let v = bottom; v <= top; v += step)
+    if (edges.every((e) => Math.abs(scale(v) - e) >= TICK_GAP))
+      ticks.push({ y: scale(v), label: `${v}°` });
   const departure = Date.parse(b.departureAt);
   // Crossings to the nearest 10 minutes of the clock.
   const time = (m: number) =>
@@ -161,11 +193,13 @@ export const temperaturePanel = (
   const inRange = runs
     .filter((r) => r.zone === 'in')
     .reduce((sum, r) => sum + r.end - r.start, 0);
-  // The coldest feels like when the ride feels cooler at all, else the warmest.
+  // The coldest feels like when the ride feels cooler at all, else the warmest; the middle of a plateau.
   const cool = runs.some((r) => r.zone === 'cool');
+  const peak = (cool ? Math.min : Math.max)(...feels.map((p) => p.c));
+  const plateau = feels.filter((p) => p.c === peak);
   const extreme =
     feels.length && (cool || runs.some((r) => r.zone === 'warm'))
-      ? feels.reduce((a, p) => ((cool ? p.c < a.c : p.c > a.c) ? p : a))
+      ? plateau[Math.floor((plateau.length - 1) / 2)]
       : null;
   const ends = [air[0], air[air.length - 1]].map((p, i) => {
     const f = feels.length ? at(feels, p.m) : null;
@@ -177,11 +211,10 @@ export const temperaturePanel = (
       end: i === 1,
     };
   });
-  const usualPoints = series(points, 3);
+  const mark = extreme && { x: x(extreme.m), y: y(extreme.c), cool };
   const month = usual && monthName(usual.month);
   let usualPanel: TemperaturePanel['usual'] = null;
   if (usual && month && usualPoints.length) {
-    const band = usual.bandHalfWidthC;
     usualPanel = {
       sub: `Usual for ${clock(b.departureAt, timeZone)}–${clock(b.finishAt, timeZone)} in ${month}: ${span(
         usualPoints.flatMap((p) => [p.c - band, p.c + band]),
@@ -195,6 +228,31 @@ export const temperaturePanel = (
         .join(' ')} Z`,
     };
   }
+  // "Your range": in the block's middle, in the third furthest from the lines, the tags and the marker.
+  const middle = (edges[0] + edges[1]) / 2;
+  const tags = ends.map((e) => ({
+    from: e.end ? 82 : 0,
+    to: e.end ? 100 : 18,
+    y: e.y + (e.above ? -7 : 7),
+  }));
+  if (mark) tags.push({ from: mark.x - 6, to: mark.x + 6, y: mark.y });
+  const slots = (
+    [
+      ['left', 2, 40],
+      ['centre', 30, 70],
+      ['right', 60, 98],
+    ] as const
+  ).map(([slot, from, to]) => {
+    let gap = Infinity;
+    for (let px = from; px <= to; px += 2)
+      for (const s of feels.length ? [air, feels] : [air])
+        gap = Math.min(gap, Math.abs(middle - y(at(s, (px / 100) * minutes))));
+    for (const tag of tags)
+      if (tag.to > from && tag.from < to)
+        gap = Math.min(gap, Math.abs(middle - tag.y));
+    return { slot, gap };
+  });
+  const roomiest = slots.reduce((a, b) => (b.gap > a.gap ? b : a));
   return {
     warn: inRange / minutes < 0.5,
     label: `Temperature ${span(air.map((p) => p.c))}${
@@ -203,17 +261,17 @@ export const temperaturePanel = (
     headline,
     tone: runs.length === 1 && runs[0].zone !== 'in' ? runs[0].zone : 'even',
     usual: usualPanel,
-    air: path(points, 1, x),
-    feels: feels.length ? path(points, 2, x) : null,
+    air: path(points, 1, x, y),
+    feels: feels.length ? path(points, 2, x, y) : null,
     high: { y: y(hi), label: `${degrees(hi, u)}°` },
     low: { y: y(lo), label: `${degrees(lo, u)}°` },
+    ticks,
+    rangeLabel:
+      edges[0] - edges[1] >= 14 && roomiest.gap >= 7
+        ? { y: +middle.toFixed(2), slot: roomiest.slot }
+        : null,
     ends,
-    mark: extreme && {
-      x: x(extreme.m),
-      y: y(extreme.c),
-      label: `feels ${degrees(extreme.c, u)}°`,
-      cool,
-    },
+    mark,
     from: clock(b.departureAt, timeZone),
     to: `~${clock(b.finishAt, timeZone)}`,
     range: `Your range ${degrees(lo, u)}–${degrees(hi, u)}${u.temperature}`,

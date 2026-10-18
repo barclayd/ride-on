@@ -64,7 +64,7 @@ const HORSHAM: TemperaturePoint[] = [
   [265, 18, 18, 15],
 ];
 
-test('a ride that starts cool says until when, and draws both lines on the 0–25°C scale', () => {
+test('a ride that starts cool says until when, and draws both lines on a 5° grid around them and the range', () => {
   const t = temperaturePanel(ride(HORSHAM), LONDON, undefined, range(10, 20));
   expect(t).toMatchObject({
     warn: false,
@@ -73,19 +73,28 @@ test('a ride that starts cool says until when, and draws both lines on the 0–2
     headline:
       'Feels cooler than your range (down to 6°C) until about 09:30, then in your range to the finish',
     tone: 'even',
-    high: { y: 20, label: '20°' },
-    low: { y: 60, label: '10°' },
+    // Feels like 6° and the range's 20° make it 5–25°.
+    high: { y: 25, label: '20°' },
+    low: { y: 75, label: '10°' },
+    // No gridlines at the range edges: their labels are there.
+    ticks: [
+      { y: 100, label: '5°' },
+      { y: 50, label: '15°' },
+      { y: 0, label: '25°' },
+    ],
+    // The lines cross the middle of the range on the right, so the label goes left.
+    rangeLabel: { y: 50, slot: 'left' },
     from: '08:30',
     to: '~12:55',
     range: 'Your range 10–20°C',
-    mark: { x: 0, y: 76, label: 'feels 6°', cool: true },
+    mark: { x: 0, y: 95, cool: true },
   });
-  expect(t?.air).toBe('M0 64 L22.64 52 L45.28 44 L67.92 36 L90.57 28 L100 28');
-  expect(t?.feels?.startsWith('M0 76 L22.64 60')).toBe(true);
-  // The start label sits above the line when feels like is below it; the finish is right-aligned.
+  expect(t?.air).toBe('M0 80 L22.64 65 L45.28 55 L67.92 45 L90.57 35 L100 35');
+  expect(t?.feels?.startsWith('M0 95 L22.64 75')).toBe(true);
+  // The start tag sits above the line when feels like is below it; the finish is right-aligned.
   expect(t?.ends).toEqual([
-    { x: 0, y: 64, label: '9°', above: true, end: false },
-    { x: 100, y: 28, label: '18°', above: false, end: true },
+    { x: 0, y: 80, label: '9°', above: true, end: false },
+    { x: 100, y: 35, label: '18°', above: false, end: true },
   ]);
 });
 
@@ -97,8 +106,44 @@ test('the usual temperature gives the band and the usual range, without the aver
     month: 'October',
     band: expect.any(String),
   });
-  expect(t?.usual?.band.startsWith('M0 50 L22.64 42')).toBe(true);
-  expect(t?.usual?.band.endsWith('L0 70 Z')).toBe(true);
+  expect(t?.usual?.band.startsWith('M0 62.5 L22.64 52.5')).toBe(true);
+  expect(t?.usual?.band.endsWith('L0 87.5 Z')).toBe(true);
+});
+
+// The build's case (26b): a cool afternoon well below a 16–32° range.
+test('the scale takes in the whole range, drops gridlines by its edges and rings the middle of a plateau', () => {
+  const t = temperaturePanel(
+    ride([
+      [0, 12, 10, 14.3],
+      [60, 12, 9, 14.8],
+      [120, 13, 9, 15],
+      [152, 13, 10, 14.9],
+    ]),
+    LONDON,
+    undefined,
+    range(16, 32),
+  );
+  // 9–17.5° and 16–32° give 5–35°; 15° and 30° would sit on 16° and 32°, and 35° too.
+  expect(t).toMatchObject({
+    high: { y: 10, label: '32°' },
+    low: { y: 63.33, label: '16°' },
+    ticks: [
+      { y: 100, label: '5°' },
+      { y: 83.33, label: '10°' },
+      { y: 50, label: '20°' },
+      { y: 33.33, label: '25°' },
+    ],
+    mark: { x: 39.47, y: 86.67, cool: true },
+    rangeLabel: { slot: 'centre' },
+  });
+});
+
+test('a range block too thin for its label goes without', () => {
+  const t = temperaturePanel(ride(HORSHAM), LONDON, undefined, range(14, 15));
+  // 5–20°: the 14–15° block is under 7% of the plot.
+  expect(t?.high.y).toBe(33.33);
+  expect(t?.low.y).toBe(40);
+  expect(t?.rangeLabel).toBeNull();
 });
 
 test('fractional offsets from the API, as at the finish and the extremes, are fine', () => {
@@ -155,7 +200,8 @@ test('feeling warm the whole ride is amber, with the warmest point marked', () =
     warn: true,
     headline: 'Feels warmer than your range the whole ride, 15–22°C',
     tone: 'warm',
-    mark: { x: 94.74, label: 'feels 22°', cool: false },
+    mark: { x: 94.74, y: 12, cool: false },
+    rangeLabel: { y: 60, slot: 'right' },
   });
 });
 
@@ -243,10 +289,10 @@ test('a gap in the air temperature breaks the line', () => {
     undefined,
     range(10, 20),
   );
-  expect(t?.air).toBe('M0 60 M66.67 56 L100 52');
+  expect(t?.air).toBe('M0 75 M66.67 70 L100 65');
 });
 
-test('Fahrenheit labels, on the same Celsius scale', () => {
+test('Fahrenheit on a 10° grid', () => {
   const t = temperaturePanel(
     ride(HORSHAM),
     LONDON,
@@ -256,7 +302,13 @@ test('Fahrenheit labels, on the same Celsius scale', () => {
   expect(t).toMatchObject({
     headline:
       'Feels cooler than your range (down to 43°F) until about 09:30, then in your range to the finish',
-    high: { y: 20, label: '68°' },
+    high: { y: 6.67, label: '68°' },
+    low: { y: 66.67, label: '50°' },
+    // 43–68°F gives 40–70°F; 50° and 70° give way to the range edges.
+    ticks: [
+      { y: 100, label: '40°' },
+      { y: 33.33, label: '60°' },
+    ],
     range: 'Your range 50–68°F',
     usual: { sub: 'Usual for 08:30–12:55 in October: 46–64°F' },
   });

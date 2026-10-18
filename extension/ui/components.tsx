@@ -895,8 +895,8 @@ const DropChip = (props: {
   </li>
 );
 
-// "Temperature along the ride" (24a): when it feels outside the rider's range, then air and feels
-// like against that range on a fixed 0–25°C scale, with the usual band behind them.
+// "Temperature along the ride" (24a, axis 26b): when it feels outside the rider's range, then air and
+// feels like against that range, shaded, on a 5° grid that fits them, with the usual band behind them.
 const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
   const t = props.panel;
   const at = (x: number, y: number) => ({ left: `${x}%`, top: `${y}%` });
@@ -909,23 +909,36 @@ const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
       </div>
       <div class="ro-temp-chart" aria-hidden="true">
         <div class="ro-temp-plot">
+          <i
+            class="ro-temp-block"
+            style={{ top: `${t.high.y}%`, height: `${t.low.y - t.high.y}%` }}
+          />
+          {t.ticks.map((g) => (
+            <i key={g.label} class="ro-temp-grid" style={{ top: `${g.y}%` }} />
+          ))}
+          {t.usual && (
+            <svg
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path d={t.usual.band} class="ro-temp-band" />
+            </svg>
+          )}
+          {t.rangeLabel && (
+            <span
+              class="ro-temp-zone"
+              data-slot={t.rangeLabel.slot}
+              style={{ top: `${t.rangeLabel.y}%` }}
+            >
+              Your range
+            </span>
+          )}
           <svg
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            {t.usual && <path d={t.usual.band} class="ro-temp-band" />}
-            {[t.high.y, t.low.y].map((y) => (
-              <line
-                key={y}
-                x1="0"
-                y1={y}
-                x2="100"
-                y2={y}
-                class="ro-temp-range"
-              />
-            ))}
-            <line x1="0" y1="100" x2="100" y2="100" class="ro-temp-base" />
             {t.feels && <path d={t.feels} class="ro-temp-feels" />}
             <path d={t.air} class="ro-temp-air" />
           </svg>
@@ -944,28 +957,24 @@ const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
             </span>
           ))}
           {t.mark && (
-            <>
-              <i
-                class="ro-temp-mark"
-                data-cool={t.mark.cool}
-                style={at(t.mark.x, t.mark.y)}
-              />
-              <span
-                class="ro-temp-feels-label"
-                data-cool={t.mark.cool}
-                data-side={
-                  t.mark.x > 70 ? 'end' : t.mark.x < 10 ? 'start' : 'middle'
-                }
-                style={at(t.mark.x, t.mark.y)}
-              >
-                {t.mark.label}
-              </span>
-            </>
+            <i
+              class="ro-temp-mark"
+              data-cool={t.mark.cool}
+              style={at(t.mark.x, t.mark.y)}
+            />
           )}
         </div>
         <div class="ro-temp-gutter">
-          <span style={{ top: `${t.high.y}%` }}>{t.high.label}</span>
-          <span style={{ top: `${t.low.y}%` }}>{t.low.label}</span>
+          {t.ticks.map((g) => (
+            <span key={g.label} style={{ top: `${g.y}%` }}>
+              {g.label}
+            </span>
+          ))}
+          {[t.high, t.low].map((e) => (
+            <span key={e.y} data-edge style={{ top: `${e.y}%` }}>
+              {e.label}
+            </span>
+          ))}
         </div>
       </div>
       <div class="ro-ends ro-temp-ends" aria-hidden="true">

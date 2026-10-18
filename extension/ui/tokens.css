@@ -21,6 +21,7 @@
   --ro-border-input: #d3dac6;
   --ro-warn-fg: #8a4b17;
   --ro-cool: #3d5f7d; /* feels cooler */
+  --ro-range: #e7f0d6; /* your temperature range */
   --ro-rain-ink: #2f5f8a;
   --ro-warn-bg: #fbefe2;
   color: var(--ro-ink);
@@ -1017,14 +1018,44 @@ a.ro-name:hover {
 }
 .ro-temp-chart {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 1fr) 28px;
   gap: 6px;
 }
 .ro-temp-plot,
 .ro-temp-gutter {
   position: relative;
-  height: 112px;
-  margin: 14px 0;
+  height: 128px;
+  margin: 12px 0;
+}
+/* Bottom to top: your range, the grid, the usual band, "Your range", the lines, then tags and the marker. */
+.ro-temp-block,
+.ro-temp-grid {
+  position: absolute;
+  inset-inline: 0;
+}
+.ro-temp-block {
+  background: var(--ro-range);
+}
+.ro-temp-grid {
+  border-top: 1px solid var(--ro-border);
+}
+.ro-temp-zone {
+  position: absolute;
+  left: 6px;
+  transform: translateY(-50%);
+  font: 700 10px var(--ro-sans);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ro-olive-900);
+  white-space: nowrap;
+}
+.ro-temp-zone[data-slot="centre"] {
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.ro-temp-zone[data-slot="right"] {
+  left: auto;
+  right: 6px;
 }
 .ro-temp-plot svg {
   position: absolute;
@@ -1039,14 +1070,7 @@ a.ro-name:hover {
 }
 .ro-temp-plot .ro-temp-band {
   fill: #d9e4e6;
-}
-.ro-temp-range {
-  stroke: var(--ro-olive-700);
-  stroke-width: 1.5px;
-}
-.ro-temp-base {
-  stroke: #d3d9ca;
-  stroke-width: 1px;
+  fill-opacity: 0.85;
 }
 .ro-temp-feels {
   stroke: var(--ro-muted);
@@ -1083,48 +1107,41 @@ a.ro-name:hover {
 .ro-temp-mark[data-cool="true"] {
   border-color: var(--ro-cool);
 }
-/* Labels hang off their point: below it unless said otherwise, the finish's right-aligned. */
-.ro-temp-end,
-.ro-temp-feels-label {
+/* Start and finish tags hang off their point: below it unless said otherwise, the finish's right-aligned. */
+.ro-temp-end {
   --ro-tx: 0;
   --ro-ty: 35%;
   position: absolute;
   transform: translate(var(--ro-tx), var(--ro-ty));
-  white-space: nowrap;
-}
-.ro-temp-end {
-  font: 700 12px var(--ro-sans);
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--ro-border);
+  font: 700 12px / 1 var(--ro-sans);
   color: var(--ro-ink);
+  white-space: nowrap;
 }
 .ro-temp-end[data-above="true"] {
   --ro-ty: -135%;
 }
-.ro-temp-end[data-end="true"],
-.ro-temp-feels-label[data-side="end"] {
+.ro-temp-end[data-end="true"] {
   --ro-tx: -100%;
-}
-.ro-temp-feels-label {
-  --ro-tx: -50%;
-  --ro-ty: -145%;
-  font: 700 11px var(--ro-sans);
-  color: var(--ro-warn-fg);
-}
-.ro-temp-feels-label[data-side="start"] {
-  --ro-tx: 0;
-}
-.ro-temp-feels-label[data-cool="true"] {
-  --ro-ty: 45%;
-  color: var(--ro-cool);
 }
 .ro-temp-gutter span {
   position: absolute;
   left: 0;
   transform: translateY(-50%);
-  font: 600 11px var(--ro-serif);
+  font: 500 11px var(--ro-serif);
+  color: var(--ro-muted-2);
+}
+/* The range edges sit over any gridline. */
+.ro-temp-gutter [data-edge] {
+  font-weight: 700;
   color: var(--ro-olive-900);
+  background: #f5f7f1;
 }
 .ro-ends.ro-temp-ends {
-  margin: -12px 30px 0 0;
+  margin: -10px 34px 0 0;
 }
 .ro-key {
   display: flex;
@@ -1162,10 +1179,9 @@ a.ro-name:hover {
   background: #d9e4e6;
 }
 .ro-key [data-key="range"] {
-  width: 14px;
+  width: 12px;
   height: 10px;
-  border-block: 1.5px solid var(--ro-olive-700);
-  border-radius: 0;
+  background: var(--ro-range);
 }
 .ro-key [data-key="chance"] {
   width: 16px;
