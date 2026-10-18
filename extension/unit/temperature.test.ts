@@ -135,6 +135,47 @@ test('the scale takes in the whole range, drops gridlines by its edges and rings
   });
 });
 
+// Mid-October at lunchtime: well below a 16–32° range, but about what October brings.
+const OCTOBER: TemperaturePoint[] = [
+  [0, 13, 11, 14],
+  [60, 13.5, 11, 15],
+  [120, 14, 12, 15.5],
+  [150, 14, 12, 15],
+];
+test('feeling outside the range on a day usual for the month is blue-grey, not amber', () => {
+  expect(
+    temperaturePanel(ride(OCTOBER), LONDON, undefined, range(16, 32)),
+  ).toMatchObject({
+    warn: false,
+    seasonal: true,
+    label:
+      'Temperature 13–14°C, feels like 11–12°C, usual for October. Show temperature along the ride',
+  });
+  // Colder than the usual band too: amber.
+  const cold = OCTOBER.map(
+    ([m, a, f, c]) => [m, a, f, (c ?? 0) + 4] as TemperaturePoint,
+  );
+  expect(
+    temperaturePanel(ride(cold), LONDON, undefined, range(16, 32)),
+  ).toMatchObject({ warn: true, seasonal: false });
+  // No usual outside the climate grid: amber.
+  const ungridded = OCTOBER.map(
+    ([m, a, f]) => [m, a, f, null] as TemperaturePoint,
+  );
+  expect(
+    temperaturePanel(
+      ride(ungridded, { usual: null }),
+      LONDON,
+      undefined,
+      range(16, 32),
+    ),
+  ).toMatchObject({ warn: true, seasonal: false });
+  // In the range: the plain chip.
+  expect(
+    temperaturePanel(ride(OCTOBER), LONDON, undefined, range(5, 20)),
+  ).toMatchObject({ warn: false, seasonal: false });
+});
+
 test('fractional offsets from the API, as at the finish and the extremes, are fine', () => {
   const t = temperaturePanel(
     ride([

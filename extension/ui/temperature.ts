@@ -20,6 +20,7 @@ export type TemperatureEnd = {
 };
 export type TemperaturePanel = {
   warn: boolean; // feels outside the range for over half the ride: the amber chip
+  seasonal: boolean; // feels outside the range, but the air is usual for the month: the blue-grey chip
   label: string; // the chip's aria-label
   headline: string; // when it feels outside the range
   tone: 'warm' | 'cool' | 'even'; // feels outside the range the whole ride, or not
@@ -210,6 +211,15 @@ export const temperaturePanel = (
   });
   // No label: the gridlines give its value.
   const mark = extreme && { x: x(extreme.m), y: y(extreme.c), cool };
+  // Air inside the usual band for at least half the ride: outside the rider's range, but what the time
+  // of year brings.
+  let usualMinutes = 0;
+  const [first, last] = [usualPoints[0]?.m, usualPoints.at(-1)?.m];
+  if (usual && first !== undefined && last !== undefined)
+    for (let m = Math.ceil(first); m < Math.min(minutes, last); m++)
+      if (Math.abs(at(air, m) - at(usualPoints, m)) <= band) usualMinutes++;
+  const outside = inRange / minutes < 0.5;
+  const seasonal = outside && usualMinutes / minutes >= 0.5;
   const month = usual && monthName(usual.month);
   let usualPanel: TemperaturePanel['usual'] = null;
   if (usual && month && usualPoints.length) {
@@ -227,10 +237,11 @@ export const temperaturePanel = (
     };
   }
   return {
-    warn: inRange / minutes < 0.5,
+    warn: outside && !seasonal,
+    seasonal,
     label: `Temperature ${span(air.map((p) => p.c))}${
       feels.length ? `, feels like ${span(feels.map((p) => p.c))}` : ''
-    }. Show temperature along the ride`,
+    }${seasonal ? `, usual for ${month}` : ''}. Show temperature along the ride`,
     headline,
     tone: runs.length === 1 && runs[0].zone !== 'in' ? runs[0].zone : 'even',
     usual: usualPanel,

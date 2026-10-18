@@ -339,7 +339,7 @@ const best = (date: string, i: number, score: number) => ({
       },
     },
   })),
-  // Feels cooler than the 10° minimum until 2½ hours in, on a colder day than usual (24a).
+  // Feels cooler than the 10° minimum until 2½ hours in, on a day about usual for the month (24a).
   temperatureAlongRide: {
     points: [
       [0, 9, 6, 9.5],
@@ -353,7 +353,7 @@ const best = (date: string, i: number, score: number) => ({
       averageHighC: 15,
       averageLowC: 8,
       bandHalfWidthC: 2.5,
-      differenceC: -2.4,
+      differenceC: -0.4,
       method: 'monthly-diurnal-estimate',
       coveredDistanceFraction: 1,
       source: {
@@ -2437,11 +2437,13 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     '15 km/h tailwind',
     /^Drizzle possible \d\d:\d\d$/,
   ]);
-  // Feels under the range for most of the ride: amber.
+  // Feels under the range for most of the ride, but the air is usual for the month: blue-grey, not amber.
   const temp = module.getByRole('button', {
-    name: 'Temperature 9–14°C, feels like 6–11°C. Show temperature along the ride',
+    name: /^Temperature 9–14°C, feels like 6–11°C, usual for \w+\. Show temperature along the ride$/,
   });
-  await expect(temp).toHaveAttribute('data-warn', 'true');
+  await expect(temp).toHaveAttribute('data-seasonal', 'true');
+  await expect(temp).not.toHaveAttribute('data-warn', 'true');
+  await expect(temp).toHaveCSS('background-color', 'rgb(217, 228, 230)');
   // The wind pill never shows gusts; this rider prefers calm, so the tailwind costs points.
   const wind = module.getByRole('button', {
     name: 'Tailwind 15 km/h, costs points. Show wind along the ride',
@@ -2819,7 +2821,9 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
   // The temperature dropdown follows too; its scale stays in Celsius.
   const module = journeys.locator('ride-on-module');
   await module
-    .getByRole('button', { name: /^Temperature 48–57°F, feels like 43–52°F\./ })
+    .getByRole('button', {
+      name: /^Temperature 48–57°F, feels like 43–52°F, usual for \w+\./,
+    })
     .click();
   await expect(module.locator('.ro-temp-head strong')).toContainText(
     '(down to 43°F)',
