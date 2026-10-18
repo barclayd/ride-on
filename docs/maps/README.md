@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 next |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 (basemap on R2) uploading; WS2 next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -58,7 +58,8 @@ on an iPhone, by Dan.
 ### What the prototype proved
 
 [`prototype/`](prototype/) is option B in a browser: MapLibre GL JS 6.11.2, the Protomaps world basemap,
-and cycle routes, paths and POIs from Overpass as GeoJSON for south-east England. Dan reviewed it and
+and cycle routes, paths and POIs from Overpass as GeoJSON for south-east England (since WS1.2, from the
+GB cycling overlay instead). Dan reviewed it and
 was "really happy with this". It matches cycle.travel closely on route dots (size, spacing, colours,
 the road or path visible underneath), badges, road colours and widths, path styling by surface, place
 and street labels, and the zoom each thing appears at. The [style spec](cycle-travel-style.md) records
@@ -66,7 +67,7 @@ how, and lists what still differs.
 
 What the prototype does that **can't ship**:
 
-- Data from Overpass as 33 MB of GeoJSON for one region (WS1 replaces it with vector tiles).
+- Data from Overpass as 33 MB of GeoJSON for one region. Fixed in WS1.2: it reads the overlay's PMTiles.
 - Basemap streamed from strava-stitch's file (Ride On needs its own).
 - Fonts as woff2 via `font-faces`, badges drawn at runtime in JavaScript (WS2).
 - Tuned at 2× in desktop Chrome (WS2 re-tunes at 3× on iPhone).
@@ -113,9 +114,9 @@ What the prototype does that **can't ship**:
   overlays, so it sits under the labels.
 - **Directions and ETAs** stay on MapKit (`LiveETAProvider`): only the map display changes.
 
-Suggested home for the pipeline: a top-level `maps/` directory next to `worker/` and `extension/`
-(`maps/tiles/` for the planetiler profile, `maps/style/` for the style builder, fonts and sprite
-sources). The prototype stays in `docs/maps/prototype/` as the reference.
+The pipeline lives in a top-level `maps/` directory next to `worker/` and `extension/`: `maps/tiles/`
+holds the planetiler profile (WS1.2); `maps/style/` will hold the style builder, fonts and sprite
+sources (WS2). The prototype stays in `docs/maps/prototype/` as the reference.
 
 ## Workstreams
 
@@ -156,23 +157,34 @@ merge with `gh pr merge --merge` when ready.
 - Done when `curl -r 0-16383 https://api.ride-on.cc/maps/<file>` returns 206 starting with the
   `PMTiles` magic bytes and the prototype renders with `serve.ts` pointed at it.
 
-**1.2 Cycling overlay (planetiler).** Port the prototype's rules from `prototype/tools/*.mjs`; the style
-spec explains each one. Layers:
+**1.2 Cycling overlay (planetiler).** Done, 18 October 2026. [`maps/tiles/`](../../maps/tiles/README.md)
+is a planetiler 0.10.2 profile (`CyclingProfile.java`) with the prototype's Overpass rules ported to it;
+the prototype now reads its output and the Overpass pipeline is gone. Layers (MapLibre zooms; full schema
+in `maps/tiles/README.md`):
 
-| Layer | Geometry | Attributes | Zooms | From |
+| Layer | Geometry | Attributes | Zooms | Rule |
 |---|---|---|---|---|
-| `routes` | line | `network` (icn/ncn/rcn/lcn), `rank`, `minz`, `ref` (≤ 2 refs) | 5–14 | `routes.mjs`: highest network per way, lowest `minz`, London rule |
-| `route_badges` | line | `badge` (red/blue/eu), `label`, `ev` | 10–14 | `shields.mjs`: one merged line per signed relation, ref regex |
-| `paths` | line | `class` (p/u/f), `bridge`, plus plain footpaths as `class=foot` | 11–14 | `paths.mjs`: the path rule. Include footpaths so the style stops using the basemap's paths and the knockout layer goes |
-| `cycle_lanes` | line | `side` (left/right/both) | 12–14 | New: `cycleway=lane`, `cycleway:left/right/both=lane` (and `share_busway`?) on roads. Check against cycle.travel's purple lanes |
-| `pois` | point | `kind`, `name` | 10–14 | `pois.mjs` (stations, peaks) plus new kinds: cafe, pub, toilets, drinking_water, bicycle_parking, shop=bicycle, camp_site, parking, viewpoint |
+| `routes` | line | `network` (icn/ncn/rcn/lcn), `rank`, `minz` | 6–14 | Highest network per way, lowest `minz` of its routes: lcn 13, rcn 8.5, London rcn 11 with a C/Q ref and 13 without |
+| `route_badges` | line | `badge` (red/blue/eu), `label`, `ev` | 11–14 | One line per signed route; refs of up to two letters and three digits, no lcn |
+| `paths` | line | `class` (`p`/`u`/`foot`), `bridge` | 12–14, `foot` from 14 | The path rule in the style spec; `foot` is every other footway, path, steps or track except pavements, crossings and private ways |
+| `cycle_lanes` | line | `side` (left/right/both), `bus` | 12–14 | `cycleway`, `cycleway:both/left/right` = `lane` or `share_busway` on roads. Not styled yet (1.3) |
+| `pois` | point | `kind`, `name`, `ele` (peaks) | 12–14, new kinds from 14 | Stations and named peaks as before, plus cafe, pub, toilets, drinking_water, bicycle_parking, parking, bicycle_shop, camp_site, viewpoint. New kinds not styled yet (1.3) |
 
-- Merge lines per feature group (`FeatureMerge.mergeLineStrings`) so dashes and dots don't restart at
-  every way join; simplify per zoom; keep z14 as max and let MapLibre overzoom.
-- Test the profile with planetiler's test utilities against small OSM fixtures: the path rule table,
-  London's `minz`, badge refs.
-- Done when the prototype, switched from GeoJSON to the overlay, looks the same at the six comparison
-  views (re-take the screenshots), and the GB file size and build time are recorded here.
+| GB build, 17 October 2026 extract | |
+|---|---|
+| Output | `cycling-gb-20261017.pmtiles`, 102 MB, 153,185 tiles, z0–14 (empty below z6) |
+| Time | 1 min 54 s on an M4 Max in Docker (8 GB VM, `-Xmx6g`) |
+| Largest tile | 39 KB (24 KB gzipped), z14 around Covent Garden, mostly POIs; average 6.4 KB |
+| Tests | 82 (`CyclingProfileTest`): the path rule table, London's `minz`, badge refs, lanes, POIs, merging, plus a Monaco end-to-end build |
+| On R2 | Not yet: published once WS1.1's upload finishes (`maps/hosting/publish.sh` runs one at a time) |
+
+- Lines are merged per tile (`FeatureMerge.mergeLineStrings`) so dashes and dots don't restart at way
+  joins. Routes merge by network and `minz`; badges by badge and label.
+- The six comparison views look the same as with the GeoJSON ([re-taken](#comparison-screenshots)).
+- Relations count only for their direct member ways: EuroVelo routes made of super-relations (relations of
+  relations) lose those parts. Follow-up if a GB EuroVelo is missing.
+- The style draws `ct_footpaths` from the overlay's `foot` class instead of the basemap's paths, so the
+  unpaved knockout layer has gone.
 
 **1.3 Cycle lanes and POIs.** Data from 1.2's new layers; styling in WS2.
 
@@ -192,10 +204,10 @@ quarterly, like strava-stitch.
 
 ### WS2: Style for MapLibre Native (~1 week)
 
-**2.1 Production style builder.** Move `build-style.mjs` into `maps/style/`. Sources become the PMTiles
-URLs; GeoJSON sources go. Point path layers at the overlay's `paths` (drop `ct_footpaths` on the basemap
-and `ct_unpaved_knockout`). Validate the output with `@maplibre/maplibre-gl-style-spec`'s validator in
-CI.
+**2.1 Production style builder.** Move `build-style.mjs` into `maps/style/`. The prototype's style already
+reads the overlay (sources `basemap` and `cycling`; WS1.2): point both at the dated
+`https://maps.ride-on.cc/` keys. Validate the output with `@maplibre/maplibre-gl-style-spec`'s validator
+in CI.
 
 **2.2 Colours.** Use map-key values as they are and fix the screenshot inverse; values are in the
 style spec's [palette](cycle-travel-style.md#palette). Re-take the comparisons.
@@ -434,7 +446,8 @@ fine for comparison.
 
 ## Comparison screenshots
 
-cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1).
+cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). Re-taken in WS1.2
+with the prototype on the planetiler overlay; the notes below still hold.
 
 | View | What to look at |
 |---|---|

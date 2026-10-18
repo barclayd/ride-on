@@ -1,7 +1,0 @@
-[out:json][timeout:180];
-way["highway"="cycleway"](50.70,-1.40,52.10,1.00)->.cyc;
-.cyc out count;
-way.cyc["surface"~"^(gravel|fine_gravel|compacted|dirt|ground|grass|unpaved|earth|mud|sand|pebblestone|woodchips|rock|grass_paver|gravel;grass)$"]->.cu;
-.cu out count;
-way["highway"~"^(path|footway|pedestrian|bridleway|track)$"]["bicycle"~"^(yes|designated|permissive)$"](50.70,-1.40,52.10,1.00)->.bp;
-.bp out count;

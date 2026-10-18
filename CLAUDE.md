@@ -30,6 +30,7 @@ app/
 ├─ RideOnTests/                app-layer XCTest integration tests (import pipeline, live-classify smoke check, AppServices wiring)
 └─ RideOnUITests/              XCUITest E2E tests (launch with --fixture-world)
 extension/                    Browser extension (WXT + Preact) for cycle.travel: Chrome MV3, and Safari (macOS + iOS) via the XcodeGen container in extension/safari/ — see extension/README.md
+maps/                         Cycle map data (docs/maps/README.md is the plan): tiles/ is the planetiler profile for the GB cycling overlay (Java, built and tested in Docker) — see maps/tiles/README.md
 worker/                       Cloudflare Worker (Hono): GPX upload, route storage and weather-aligned ride recommendations — see worker/CLAUDE.md and docs/api.md
 ```
 

@@ -1,5 +1,0 @@
-[out:json][timeout:300][maxsize:1073741824];
-relation["route"="bicycle"]["network"~"^(rcn)$"](50.70,-1.40,52.10,1.00)->.r;
-.r out body;
-way(r.r);
-out geom;

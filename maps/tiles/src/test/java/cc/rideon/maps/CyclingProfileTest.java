@@ -1,0 +1,296 @@
+package cc.rideon.maps;
+
+import static com.onthegomap.planetiler.TestUtils.newLineString;
+import static com.onthegomap.planetiler.TestUtils.newPoint;
+import static com.onthegomap.planetiler.TestUtils.rectangle;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.onthegomap.planetiler.FeatureCollector;
+import com.onthegomap.planetiler.TestUtils;
+import com.onthegomap.planetiler.VectorTile;
+import com.onthegomap.planetiler.config.Arguments;
+import com.onthegomap.planetiler.geo.GeoUtils;
+import com.onthegomap.planetiler.mbtiles.Mbtiles;
+import com.onthegomap.planetiler.reader.SimpleFeature;
+import com.onthegomap.planetiler.reader.WithTags;
+import com.onthegomap.planetiler.reader.osm.OsmElement;
+import com.onthegomap.planetiler.reader.osm.OsmReader;
+import com.onthegomap.planetiler.reader.osm.OsmRelationInfo;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.locationtech.jts.geom.LineString;
+import org.locationtech.jts.geom.Point;
+
+class CyclingProfileTest {
+
+  private final CyclingProfile profile = new CyclingProfile();
+
+  /** Tags from "k=v k=v" pairs. */
+  private static Map<String, Object> tags(String pairs) {
+    Map<String, Object> tags = new HashMap<>();
+    for (String pair : pairs.isBlank() ? new String[0] : pairs.trim().split("\\s+")) {
+      String[] kv = pair.split("=", 2);
+      tags.put(kv[0], kv[1]);
+    }
+    return tags;
+  }
+
+  private CyclingProfile.Route relation(String pairs) {
+    var result = profile.preprocessOsmRelation(new OsmElement.Relation(1, tags("type=route route=bicycle " + pairs),
+      List.of(new OsmElement.Relation.Member(OsmElement.Type.WAY, 2, ""))));
+    return result == null ? null : (CyclingProfile.Route) result.getFirst();
+  }
+
+  private List<FeatureCollector.Feature> way(String pairs, CyclingProfile.Route... routes) {
+    List<OsmReader.RelationMember<OsmRelationInfo>> members = new java.util.ArrayList<>();
+    for (var route : routes) {
+      members.add(new OsmReader.RelationMember<>("", route));
+    }
+    return TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newLineString(0, 51, 0.01, 51.01),
+      tags(pairs), "osm", null, 2, members), profile);
+  }
+
+  private static List<FeatureCollector.Feature> layer(List<FeatureCollector.Feature> features, String layer) {
+    return features.stream().filter(f -> f.getLayer().equals(layer)).toList();
+  }
+
+  @Test
+  void keepsBicycleRoutesOnTheFourNetworks() {
+    assertEquals(new CyclingProfile.Route(1, "ncn", "4", false), relation("network=ncn ref=4"));
+    assertEquals(new CyclingProfile.Route(1, "rcn", "C9", true),
+      relation("network=rcn ref=C9 cycle_network=GB:London:Cycleways"));
+    assertNull(relation("network=mtb ref=4"));
+    assertNull(relation(""));
+    assertNull(profile.preprocessOsmRelation(new OsmElement.Relation(1, tags("type=route route=hiking network=ncn"),
+      List.of())));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "network=icn ref=EV2, 6",
+    "network=ncn ref=4, 6",
+    "network=rcn ref=7, 8.5",
+    "network=rcn ref=C9 cycle_network=GB:London:Cycleways, 11",
+    "network=rcn cycle_network=GB:London, 13",
+    "network=lcn ref=LCN, 13",
+  })
+  void routesShowFromTheirNetworksZoom(String pairs, double minzoom) {
+    var routes = layer(way("highway=residential", relation(pairs)), "routes");
+    assertEquals(1, routes.size());
+    assertEquals(minzoom, routes.getFirst().getAttrsAtZoom(14).get("minz"));
+    assertEquals((int) Math.floor(minzoom), routes.getFirst().getMinZoom());
+  }
+
+  @Test
+  void aWayOnSeveralRoutesTakesTheHighestNetworkAndLowestZoom() {
+    var routes = layer(way("highway=residential", relation("network=lcn"), relation("network=ncn ref=4"),
+      relation("network=rcn ref=C9 cycle_network=GB:London")), "routes");
+    assertEquals(1, routes.size());
+    assertEquals(Map.of("network", "ncn", "rank", 3, "minz", 6.0), routes.getFirst().getAttrsAtZoom(14));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "network=icn ref=EV2, eu, 2, true",
+    "network=icn ref=12, eu, 12, false",
+    "network=ncn ref=4, red, 4, false",
+    "network=rcn ref=CS7, blue, CS7, false",
+    "network=rcn ref=Q1, blue, Q1, false",
+  })
+  void signedRoutesGetABadge(String pairs, String badge, String label, boolean ev) {
+    var badges = layer(way("highway=residential", relation(pairs)), "route_badges");
+    assertEquals(1, badges.size());
+    assertEquals(Map.of("badge", badge, "label", label, "ev", ev), badges.getFirst().getAttrsAtZoom(14));
+    assertEquals(11, badges.getFirst().getMinZoom());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "network=lcn ref=7",
+    "network=ncn",
+    "network=rcn ref=C",
+    "network=ncn ref=(16)",
+    "network=rcn ref=Avon_Cycleway",
+    "network=ncn ref=ABC1",
+  })
+  void unsignedRoutesGetNoBadge(String pairs) {
+    assertEquals(List.of(), layer(way("highway=residential", relation(pairs)), "route_badges"));
+  }
+
+  @Test
+  void aRouteSplitIntoPartsGetsOneBadgePerWay() {
+    var badges = layer(way("highway=residential", relation("network=ncn ref=4"), relation("network=ncn ref=4"),
+      relation("network=icn ref=EV2")), "route_badges");
+    assertEquals(List.of("4", "2"), badges.stream().map(f -> f.getAttrsAtZoom(14).get("label")).toList());
+  }
+
+  @ParameterizedTest
+  @CsvSource(nullValues = "null", value = {
+    // Paved and rideable.
+    "highway=cycleway, p",
+    "highway=cycleway surface=asphalt, p",
+    "highway=path bicycle=designated, p",
+    "highway=footway bicycle=yes surface=paving_stones, p",
+    "highway=pedestrian bicycle=permissive, p",
+    "highway=track bicycle=yes tracktype=grade1, p",
+    "highway=footway footway=sidewalk bicycle=designated, p",
+    // Unpaved and rideable.
+    "highway=cycleway surface=gravel, u",
+    "highway=bridleway, u",
+    "highway=bridleway surface=asphalt, p",
+    "highway=track bicycle=designated, u",
+    "highway=path bicycle=designated surface=compacted, u",
+    // Footpaths.
+    "highway=footway, foot",
+    "highway=path, foot",
+    "highway=steps, foot",
+    "highway=track, foot",
+    "highway=bridleway bicycle=no, foot",
+    "highway=bridleway bicycle=dismount, foot",
+    "highway=path bicycle=no, foot",
+    // Not drawn: pavements, crossings, private paths, roads, closed cycleways.
+    "highway=footway footway=sidewalk, null",
+    "highway=footway footway=crossing, null",
+    "highway=footway access=private, null",
+    "highway=cycleway access=no, null",
+    "highway=cycleway bicycle=no, null",
+    "highway=pedestrian, null",
+    "highway=residential, null",
+    "building=yes, null",
+  })
+  void pathClass(String pairs, String expected) {
+    assertEquals(expected, CyclingProfile.pathClass(WithTags.from(tags(pairs))));
+  }
+
+  @Test
+  void pathsCarryBridgesAndSkipTunnelsAndAreas() {
+    var bridge = layer(way("highway=cycleway bridge=yes"), "paths").getFirst();
+    assertEquals(Map.of("class", "p", "bridge", true), bridge.getAttrsAtZoom(14));
+    assertEquals(12, bridge.getMinZoom());
+    assertEquals(Map.of("class", "foot"), layer(way("highway=footway bridge=no"), "paths").getFirst()
+      .getAttrsAtZoom(14));
+    assertEquals(14, layer(way("highway=footway"), "paths").getFirst().getMinZoom());
+    assertEquals(List.of(), layer(way("highway=cycleway tunnel=yes"), "paths"));
+    assertEquals(1, layer(way("highway=cycleway tunnel=no"), "paths").size());
+    assertEquals(List.of(), layer(way("highway=pedestrian bicycle=yes area=yes"), "paths"));
+  }
+
+  @ParameterizedTest
+  @CsvSource(nullValues = "null", value = {
+    "highway=primary cycleway=lane, both, false",
+    "highway=primary cycleway:both=lane, both, false",
+    "highway=primary cycleway:left=lane, left, false",
+    "highway=residential cycleway:right=opposite_lane, right, false",
+    "highway=primary cycleway:left=lane cycleway:right=share_busway, both, false",
+    "highway=primary cycleway=share_busway, both, true",
+    "highway=primary cycleway=track, null, null",
+    "highway=primary cycleway=no, null, null",
+    "highway=cycleway cycleway=lane, null, null",
+    "highway=primary cycleway=lane cycleway:right=no, left, false",
+  })
+  void cycleLanes(String pairs, String side, Boolean bus) {
+    var lane = CyclingProfile.cycleLane(WithTags.from(tags(pairs)));
+    assertEquals(side == null ? null : Map.of("side", side, "bus", bus), lane);
+  }
+
+  @Test
+  void cycleLanesShowFromZoom12() {
+    var lanes = layer(way("highway=primary cycleway:left=lane"), "cycle_lanes");
+    assertEquals(Map.of("side", "left", "bus", false), lanes.getFirst().getAttrsAtZoom(14));
+    assertEquals(12, lanes.getFirst().getMinZoom());
+  }
+
+  @ParameterizedTest
+  @CsvSource(nullValues = "null", value = {
+    "railway=station name=Richmond, true, station",
+    "railway=station name=Richmond, false, station",
+    "railway=station, true, null",
+    "railway=station name=Bank station=subway, true, null",
+    "railway=station name=Kew usage=tourism, true, null",
+    "railway=station name=Kew railway:preserved=yes, true, null",
+    "natural=peak name=Leith_Hill, true, peak",
+    "natural=hill name=Box_Hill, true, peak",
+    "natural=peak name=Leith_Hill, false, null",
+    "natural=peak, true, null",
+    "amenity=cafe, true, cafe",
+    "amenity=pub name=The_Ship, false, pub",
+    "amenity=toilets access=private, true, null",
+    "amenity=drinking_water, true, drinking_water",
+    "amenity=bicycle_parking, true, bicycle_parking",
+    "amenity=parking, false, parking",
+    "shop=bicycle, true, bicycle_shop",
+    "tourism=camp_site, false, camp_site",
+    "tourism=viewpoint, true, viewpoint",
+    "amenity=bench, true, null",
+  })
+  void poiKind(String pairs, boolean isNode, String expected) {
+    assertEquals(expected, CyclingProfile.poiKind(WithTags.from(tags(pairs)), isNode));
+  }
+
+  @Test
+  void poisArePointsWithKindNameAndPeakHeights() {
+    var peak = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newPoint(-0.37, 51.17),
+      tags("natural=peak name=Leith_Hill ele=294.5m"), "osm", null, 1, List.of()), profile);
+    assertEquals(1, peak.size());
+    assertEquals(Map.of("kind", "peak", "name", "Leith_Hill", "ele", 295), peak.getFirst().getAttrsAtZoom(14));
+    assertEquals(12, peak.getFirst().getMinZoom());
+
+    var cafe = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(rectangle(0, 0.001),
+      tags("amenity=cafe name=Pembroke_Lodge"), "osm", null, 1, List.of()), profile);
+    assertEquals(1, cafe.size());
+    assertEquals("pois", cafe.getFirst().getLayer());
+    assertTrue(cafe.getFirst().getGeometry() instanceof Point);
+    assertEquals(14, cafe.getFirst().getMinZoom());
+
+    var unnamed = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newPoint(0, 0),
+      tags("amenity=toilets"), "osm", null, 1, List.of()), profile);
+    assertEquals(Map.of("kind", "toilets"), unnamed.getFirst().getAttrsAtZoom(14));
+  }
+
+  @Test
+  void mergesConnectedLinesSoDotsDontRestartAtEveryWay() throws Exception {
+    Map<String, Object> attrs = Map.of("network", "ncn", "rank", 3, "minz", 6.0);
+    var first = new VectorTile.Feature("routes", 1, VectorTile.encodeGeometry(newLineString(0, 0, 10, 0)), attrs);
+    var second = new VectorTile.Feature("routes", 2, VectorTile.encodeGeometry(newLineString(10, 0, 20, 0)), attrs);
+    var merged = new VectorTile.Feature("routes", 0, VectorTile.encodeGeometry(newLineString(0, 0, 20, 0)), attrs);
+    assertEquals(List.of(merged), profile.postProcessLayerFeatures("routes", 14, List.of(first, second)));
+  }
+
+  @Test
+  void monaco(@TempDir Path tmpDir) throws Exception {
+    Path output = tmpDir.resolve("cycling.mbtiles");
+    CyclingProfile.run(Arguments.of(
+      "osm_path", TestUtils.extractPathToResource(tmpDir, "monaco-latest.osm.pbf"),
+      // Not tmpDir itself: planetiler empties its tmpdir first.
+      "tmpdir", tmpDir.resolve("planetiler").toString(),
+      "output", output.toString()
+    ));
+    try (Mbtiles mbtiles = Mbtiles.newReadOnlyDatabase(output)) {
+      var metadata = mbtiles.metadataTable().getAll();
+      assertEquals("Ride On cycling", metadata.get("name"));
+      TestUtils.assertContains("openstreetmap.org/copyright", metadata.get("attribution"));
+      // EuroVelo 8 runs along the coast: an icn line from z6, and a starred EV badge from z11.
+      TestUtils.assertMinFeatureCount(mbtiles, "routes", 14, Map.of("network", "icn"),
+        GeoUtils.WORLD_LAT_LON_BOUNDS, 0, LineString.class);
+      TestUtils.assertMinFeatureCount(mbtiles, "routes", 6, Map.of("network", "icn"),
+        GeoUtils.WORLD_LAT_LON_BOUNDS, 0, LineString.class);
+      TestUtils.assertMinFeatureCount(mbtiles, "route_badges", 14, Map.of("badge", "eu", "label", "8", "ev", true),
+        GeoUtils.WORLD_LAT_LON_BOUNDS, 0, LineString.class);
+      TestUtils.assertNumFeatures(mbtiles, "route_badges", 10, Map.of(), GeoUtils.WORLD_LAT_LON_BOUNDS, 0,
+        LineString.class);
+      TestUtils.assertMinFeatureCount(mbtiles, "paths", 14, Map.of(), GeoUtils.WORLD_LAT_LON_BOUNDS, 0,
+        LineString.class);
+      TestUtils.assertMinFeatureCount(mbtiles, "pois", 14, Map.of("kind", "station"),
+        GeoUtils.WORLD_LAT_LON_BOUNDS, 0, Point.class);
+      TestUtils.assertTileDuplicates(mbtiles, 0);
+    }
+  }
+}

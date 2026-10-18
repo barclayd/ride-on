@@ -164,45 +164,45 @@ and pale when zoomed out; ours are dark slate lines at z9.
 ## Cycle paths and footpaths
 
 Protomaps' `roads` layer has no `surface` or `bicycle` tags, so it can't tell a paved cycleway from a
-gravel one, or see that a pedestrian path is open to bikes. The prototype builds its own path layer from
-OSM (`tools/paths.mjs`). cycle.travel's rule, worked out against its Richmond Park tiles
+gravel one, or see that a pedestrian path is open to bikes. The cycling overlay's `paths` layer
+(`pathClass` in [`CyclingProfile.java`](../../maps/tiles/src/main/java/cc/rideon/maps/CyclingProfile.java))
+classifies every path itself. cycle.travel's rule, worked out against its Richmond Park tiles
 (`analysis/ct-classify.py`):
 
 | OSM | Class | Drawn as |
 |---|---|---|
-| `bridleway` with `bicycle=no` or `dismount` | `f` | Footpath (green dots) |
+| `bridleway` with `bicycle=no` or `dismount` | `foot` | Footpath (green dots) |
 | `bicycle=no`, `access=private` or `access=no` | – | Not a cycle path |
 | `cycleway`, `bridleway`, or `path`/`footway`/`pedestrian`/`track` with `bicycle=yes`/`designated`/`permissive` | `p` or `u` | Cycle path |
 | … with a paved `surface` (asphalt, paved, concrete*, paving_stones, sett, chipseal, metal, wood, bricks) | `p` | Red casing, white centre |
 | … with any other `surface` | `u` | Brown dashes |
 | … with no `surface`: `cycleway` and urban path types | `p` | Red and white |
 | … with no `surface`: `bridleway`; `track` unless `tracktype=grade1` | `u` | Brown dashes |
+| Any other `footway`, `path`, `steps` or `track`, except pavements and crossings (`footway=sidewalk`/`crossing`) and `access=private`/`no` | `foot` | Footpath (green dots) |
 
-Tunnels and `area=yes` are skipped. Ways are chained end to end (same class) so dashes don't restart at
-every OSM way join.
+Tunnels and `area=yes` are skipped. Lines with the same class are merged end to end in each tile so
+dashes don't restart at every OSM way join. A way is in exactly one class, so the brown dashes no longer
+need a knockout over a basemap footpath, which the prototype used to draw as a pale strip in parks.
 
 | Layer | Rule |
 |---|---|
 | `ct_cycleways_casing` | `p`, from z12, round caps and joins, exponential 1.5 width: z12 2.2, z15 4.5, z18 10 |
 | `ct_cycleways` | `p`, white, z12 0.9, z15 2.2, z18 6 |
 | `ct_unpaved` | `u`, from z12, dash `[5.5, 2.5]`, width z12 0.95, z15 1.1, z18 2. Measured: ~1 px wide, ~5 px dashes every ~8 px at ct z13–15 |
-| `ct_unpaved_knockout` | Under `u` ways that are also basemap footpaths (`k` = 1): a land-coloured line (z14 1.6, z18 3) that hides the green dots below the brown dashes |
-| `ct_footpaths` | Basemap `path` kinds `footway`, `path`, `steps`, `track`, from z14, dash `[1.7, 4.4]`, width z14 1.2, z18 2.4. Measured: ~1.2 px wide, 2 px dashes every 7.3 px at ct z15 |
-| `ct_footpaths_bridleway` | Class `f`, same paint |
+| `ct_footpaths` | `foot`, from z14, dash `[1.7, 4.4]`, width z14 1.2, z18 2.4. Measured: ~1.2 px wide, 2 px dashes every 7.3 px at ct z15 |
 
 **Gaps:**
-- **Cycle lanes** (purple, `cycleway=lane`/`cycleway:left|right|both=lane` on roads) aren't drawn at all.
+- **Cycle lanes** (purple, `cycleway=lane`/`cycleway:left|right|both=lane` on roads) aren't drawn yet.
+  The overlay has them (`cycle_lanes`); WS2 styles them.
 - cycle.travel shows paths from ct z12 (our 11) in London as thin red lines; ours start at z12.
-- The knockout is land-coloured, so inside parks it shows as a pale strip. With our own path data in
-  tiles (WS1), drop the basemap footpath under `u` ways and lose the knockout.
 - cycle.travel also outlines some pedestrian areas and cycle-permitted squares in red at street level.
 
 ## Cycle routes (dots)
 
 Source: OSM route relations with `route=bicycle`, by `network` (`icn`, `ncn`, `rcn`, `lcn`). Each way
-takes the highest network of any relation it's in, and the lowest visibility zoom. Ways with the same
-network, zoom and refs are chained into long lines (`tools/routes.mjs`), because MapLibre restarts a
-dash pattern at the start of every feature, which bunches dots at joins.
+takes the highest network of any relation it's in, and the lowest visibility zoom (the overlay's
+`routes` layer). Ways with the same network and zoom are merged into long lines in each tile, because
+MapLibre restarts a dash pattern at the start of every feature, which bunches dots at joins.
 
 **When each network appears** (`minz` on the feature, `['>=', ['zoom'], ['get', 'minz']]` in the style):
 
@@ -243,8 +243,8 @@ A zero-length dash with round caps draws a dot; the gap is in multiples of the l
 
 ## Repeater badges
 
-Route numbers repeated along the line, upright, from z11. Source: one chained line per signed relation
-(`tools/shields.mjs`), because the routes layer merges relations per way and loses which number to
+Route numbers repeated along the line, upright, from z11. Source: the overlay's `route_badges`, one
+merged line per badge, because the routes layer merges relations per way and loses which number to
 repeat. Only short signed refs (`^[A-Z]{0,2}\d{0,3}$`, not empty, not a bare `C`) get badges.
 
 | Badge | Networks | Look |
@@ -321,7 +321,8 @@ viewpoints, zoo animals at WWT Barnes); we draw none.
 
 ## Stations and peaks
 
-From our own OSM extract (`tools/pois.mjs`), because Protomaps thins both out below tile z14.
+From the overlay's `pois` layer (`kind` `station` or `peak`), because Protomaps thins both out below
+tile z14.
 
 - **Stations:** `railway=station` with a name, excluding `station` = subway, light_rail, miniature,
   monorail, funicular, tram, plus heritage (`usage=tourism`, `railway:preserved`) and disused.
@@ -339,8 +340,8 @@ Bottom to top, as `build-style.mjs` splices them into Protomaps' `light` layers:
 
 1. Protomaps background, earth, water, land use… with `ct_urban` and `ct_greens` inserted just before
    `landuse_park`.
-2. Protomaps roads, with `ct_footpaths`, `ct_footpaths_bridleway`, `ct_unpaved_knockout`, `ct_unpaved`,
-   `ct_cycleways_casing`, `ct_cycleways` just before `roads_rail`.
+2. Protomaps roads, with `ct_footpaths`, `ct_unpaved`, `ct_cycleways_casing`, `ct_cycleways` just
+   before `roads_rail`.
 3. `ct_routes_eurovelo_ring`, `ct_routes`, `ct_stations` just before `roads_labels_minor`, so route dots
    sit above every line and below every label.
 4. `ct_road_refs` just after `roads_labels_major`.

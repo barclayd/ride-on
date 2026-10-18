@@ -1,7 +1,0 @@
-[out:json][timeout:600][maxsize:2000000000];
-(
-  way["highway"="cycleway"](50.70,-1.40,52.10,1.00);
-  way["highway"="bridleway"](50.70,-1.40,52.10,1.00);
-  way["highway"~"^(path|footway|pedestrian|track)$"]["bicycle"~"^(yes|designated|permissive)$"](50.70,-1.40,52.10,1.00);
-);
-out tags geom;

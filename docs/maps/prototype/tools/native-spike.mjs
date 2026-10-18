@@ -1,5 +1,5 @@
 // WS3.0 spike: the prototype's style cut down for MapLibre Native in the app, written to the
-// RoutesUI resources. Basemap layers only (the cycling overlay is GeoJSON until WS1.2), glyph PBFs
+// RoutesUI resources. Basemap layers only (WS3.2 adds the cycling overlay), glyph PBFs
 // instead of `font-faces`, and the basemap from Ride On's own R2 copy. WS2 replaces this with the
 // production style builder.
 import { readFileSync, writeFileSync } from 'node:fs'
