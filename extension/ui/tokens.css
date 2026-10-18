@@ -1987,34 +1987,34 @@ a.ro-name:hover {
 .ro-pause[data-paused="true"] {
   border-color: #c9d4b2;
 }
-.ro-pause-top {
+.ro-setting {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.ro-pause-text {
+.ro-setting-text {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.ro-pause-text > span:first-child {
+.ro-setting-text > span:first-child {
   font: 700 14px var(--ro-sans);
   color: var(--ro-ink);
 }
-.ro-pause-text > span:last-child {
+.ro-setting-text > span:last-child {
   font: 400 12px / 1.4 var(--ro-serif);
   color: var(--ro-muted);
   text-wrap: pretty;
 }
-.ro-pause .ro-switch {
+.ro-setting .ro-switch {
   width: 40px;
   height: 24px;
   padding: 3px;
   transition: background-color 0.15s;
 }
-.ro-pause .ro-switch span {
+.ro-setting .ro-switch span {
   width: 18px;
   height: 18px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
@@ -2031,6 +2031,13 @@ a.ro-name:hover {
   color: var(--ro-olive-ink);
 }
 .ro-pause-when {
+  font: 500 12px / 1.45 var(--ro-serif);
+  color: var(--ro-olive-900);
+}
+.ro-notify {
+  gap: 8px;
+}
+.ro-setting-note {
   font: 500 12px / 1.45 var(--ro-serif);
   color: var(--ro-olive-900);
 }

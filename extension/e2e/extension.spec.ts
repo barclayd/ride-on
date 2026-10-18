@@ -2306,9 +2306,18 @@ test('the popup page a Journeys button opens in a tab manages notifications like
   await expect(page.getByRole('tab', { name: 'Preferences' })).toBeVisible();
   await page.goto(`chrome-extension://${extensionId}/popup.html?from=1`);
   await page.getByRole('tab', { name: 'Preferences' }).click();
-  const card = page.getByRole('region', { name: 'Notifications' });
-  await expect(card).toContainText('Notifications are off on this device.');
-  await expect(card.getByRole('button')).toHaveText(['Enable notifications']);
+  // Its own card under Pause Ride On: a switch, off until turned on here.
+  const card = page.locator('.ro-pause + .ro-notify');
+  await expect(card).toHaveAccessibleName('Notifications');
+  const toggle = card.getByRole('switch', { name: 'Notifications' });
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  // Delivery isn't configured here, so turning it on says why and the switch goes back.
+  await toggle.click();
+  await expect(card.getByRole('alert')).toHaveText(
+    'Notification delivery is not available yet. Your ride can still be tracked.',
+  );
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(toggle).toBeEnabled();
   expect(
     await page.evaluate("chrome.runtime.sendMessage({ type: 'disablePush' })"),
   ).toEqual({});
