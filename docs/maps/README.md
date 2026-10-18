@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | Planned. Browser prototype done ([`prototype/`](prototype/)); no app code yet |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS1.1 next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -361,18 +361,19 @@ comparison. Fine for a design reference, but don't put them in the app or market
 
 ## Open decisions
 
-For Dan. Record answers here (and in DESIGN-SYSTEM.md where relevant) in WS4a.
+Dan's to make. So work could start, each has a default (recorded 18 October 2026, WS4a): it's what
+is being built until Dan says otherwise. To change one, edit this table and DESIGN-SYSTEM.md (§3
+dark mode, §6 `CycleMap`, `RideHero`, `WindRouteMap`).
 
-1. **cycle.travel's permission.** Ask Richard Fairhurst before shipping a look this close? Recommended:
-   yes, with a short email explaining Ride On links to cycle.travel.
-2. **macOS:** MapKit fallback, WKWebView + GL JS, or Catalyst/source build.
-3. **Ride hero:** stays satellite imagery, or moves to the cycle map.
-4. **Coverage:** GB only, or Europe (EuroVelo, Avenue Verte into France). Drives build size and time.
-5. **Small labels:** Montserrat throughout (current, Dan's choice) or Open Sans to match cycle.travel
-   exactly.
-6. **Dark mode:** a dark variant, or the map stays light.
-7. **Waymarked Trails:** their route overlay tiles could stand in for our `routes` layer early on, but
-   their terms don't allow heavy app use. Recommended: build our own (WS1.2) and don't depend on them.
+| # | Decision | Status | Building with |
+|---|---|---|---|
+| 1 | Ask Richard Fairhurst (cycle.travel) before shipping a look this close? | **Open.** Recommended: yes, a short email explaining Ride On links to cycle.travel. Blocks release, not development | — |
+| 2 | macOS: MapKit fallback, WKWebView + GL JS, or Catalyst/source build | Default: MapKit on macOS behind `CycleMap` for the first release; WKWebView + GL JS if Dan wants parity | MapKit on macOS |
+| 3 | Ride hero: satellite, or the cycle map | Default: stays satellite. Revisit once the Routes map has shipped | Satellite |
+| 4 | Coverage: GB only, or Europe (EuroVelo, Avenue Verte into France) | Default: Great Britain. Basemap bbox −8.7, 49.8 → 1.9, 60.9 (3.0 GB); overlay from Geofabrik's GB extract | GB |
+| 5 | Small labels: Montserrat, or Open Sans like cycle.travel | **Decided** (Dan): Montserrat throughout | Montserrat |
+| 6 | Dark mode: a dark variant, or the map stays light | Default: stays light in Dark Mode; a dark variant later | Light only |
+| 7 | Waymarked Trails' route tiles as a stopgap | Default: no (their terms don't allow heavy app use); build our own route layer (WS1.2) | Our own |
 
 ## Verifying against cycle.travel
 

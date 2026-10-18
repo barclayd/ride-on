@@ -448,6 +448,16 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [x] Performance: snapshot caching, glass container audit, cold-launch time
 - [x] App icon + launch screen (launch ≈ first real screen, per HIG)
 
+### Phase 7.5 — Cycle map (planned 2026-10-18)
+A cycle.travel-style map in place of Apple Maps. [`docs/maps/README.md`](docs/maps/README.md) has
+the plan, the four workstreams and the PR order.
+- [x] Plan, style reference, browser prototype and comparison screenshots (#223)
+- [x] Design-system entries (`CycleMap`, §2–§4) and default answers to the open decisions (WS4a)
+- [ ] Map data: GB basemap on R2, cycling overlay, terrain, scheduled rebuilds (WS1)
+- [ ] Style for MapLibre Native: glyphs, sprite, colour fix, known gaps, 3× tuning (WS2)
+- [ ] App: MapLibre spike, `CycleMap`, Routes map Cycle look, snapshots, attribution, macOS (WS3)
+- [ ] Docs pass and `--cycle-map` flag removed (WS4b)
+
 ### Phase 8 — Release
 - [ ] Privacy policy + App Privacy nutrition labels (location, health, fitness data)
 - [ ] Strava production review submission (screenshots of every Strava-data surface, branding compliance)

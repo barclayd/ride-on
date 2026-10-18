@@ -51,7 +51,7 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 | Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
 | Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero track bell `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while tracked |
 | Routes panel | **Regular** glass floating over the map, 8pt from the screen edges and 14pt above the tab bar; grabber, search and "+" pinned, everything else scrolling beneath and fading into the bottom edge | `FloatingPanel` (§6): `.glassEffect(.regular, in: .rect(cornerRadius: 34))`, `.safeAreaBar(edge: .top)` |
-| Controls over the Routes map (map style, my location) | **Clear** glass capsule, white glyphs, held at a fixed size like MapKit's own | `.glassEffect(.clear.interactive(), in: .capsule)`, `.dynamicTypeSize(...xLarge)` + `.accessibilityShowsLargeContentViewer()` |
+| Controls over the Routes map (map style, my location) | **Clear** glass capsule, white glyphs, held at a fixed size like MapKit's own. Over the light cycle map (`CycleMap`, §6), **regular** glass with `.primary` glyphs instead | `.glassEffect(.clear.interactive(), in: .capsule)` (`.regular.interactive()` over the cycle map), `.dynamicTypeSize(...xLarge)` + `.accessibilityShowsLargeContentViewer()` |
 | Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
 | Partial-height sheets (Track) | System glass, floating inset over the dimmed screen; Close leading, actions as full-width capsules at the bottom | `.presentationDetents([.height(content)])`, `Button(role: .close)`, `.glassProminent` / `.glass` capsules |
 | Pushed screens' back button | 44pt glass circle, chevron only | stock `NavigationStack` back button |
@@ -60,7 +60,8 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 Rules:
 - **Regular glass by default.** Clear glass only over rich media (the hero map, the Routes
   map), with a ~35% dark gradient behind it on the hero so white glyphs stay legible (the
-  Routes map is satellite imagery, dark enough on its own).
+  Routes map is satellite imagery, dark enough on its own). The cycle map is light, so controls
+  over it use regular glass.
 - **Scroll edge effects, not dividers.** No hairlines under toolbars or between sections; the
   system edge effect separates scrolling content from chrome.
 - **Group glass that can touch or morph** in one `GlassEffectContainer` (glass can't sample glass).
@@ -69,8 +70,10 @@ Rules:
 - **Accessibility fallbacks** (§8): Reduce Transparency → opaque; Increase Contrast → solid
   with a border. Custom glass must branch on `accessibilityReduceTransparency` itself; Routes
   does it through `accessibleGlass(_:in:fallback:)`.
-- **Map attribution stays visible.** Anywhere a map shows, "Apple Maps" and the Legal link
-  sit at least 10pt from custom content. Using a live `Map` gets this for free.
+- **Map attribution stays visible.** Anywhere a map shows, its attribution sits at least 10pt
+  from custom content: "Apple Maps" and the Legal link for MapKit (a live `Map` gets this for
+  free); "© OpenStreetMap", linking to https://www.openstreetmap.org/copyright, and "Protomaps"
+  for the cycle map (`CycleMap` draws it). Snapshots shown larger than a thumbnail carry it too.
 
 ## 3. Colour
 
@@ -101,10 +104,20 @@ Rules:
   Temperature range control and the temperature range bars.
 - **`AmbianceStyle`** gradients are for the onboarding dial screens only. The Rides hero is
   the route's map, not a gradient.
+- **Cycle map palette**: the cycle map's colours (land, roads, cycle routes, paths, labels) copy
+  cycle.travel's map and live in its map style, not in SwiftUI or the asset catalog. Values and
+  the rules behind them: [`docs/maps/cycle-travel-style.md`](docs/maps/cycle-travel-style.md).
+  The map stays light in Dark Mode for now; a dark variant is an open decision
+  ([`docs/maps/README.md`](docs/maps/README.md#open-decisions), 6).
 
 ## 4. Typography
 
 SF Pro, system text styles only, Dynamic Type always on. No fixed point sizes in code.
+
+One exception: **labels drawn inside the cycle map** (place, street and route names, the
+route-number badges) are Montserrat at the map style's own sizes, to match cycle.travel. They're
+part of the map image, like Apple Maps' labels, so they don't follow Dynamic Type. Anything
+SwiftUI draws over a map (callouts, the hero title, pills) stays SF Pro.
 
 | Role | Style | Example |
 |---|---|---|
@@ -194,6 +207,7 @@ before adding a custom component in code.
     one in the accent with a white casing and start marker, and a callout over its northernmost
     point ("Hilly Loop 51 km", or the ride's date from History). Tapping within 22pt of a line
     selects that route. `MapControls` (style menu, my location) sit at its top trailing corner.
+    The style menu offers Satellite, Hybrid and Standard, plus Cycle (`CycleMap`) once it ships.
 13. **Panel rows** (`LibraryRow`, `HistoryRow`) — a 48pt route thumbnail, name, "42 km · 180 m ·
     46% unpaved", then the source and last ride (Library) or the forecast saved when the ride
     was planned (History; never the weather on the day). Selected, the row fills with
@@ -216,6 +230,16 @@ before adding a custom component in code.
     its card. Where the road is ridden twice the return is drawn 3pt to the right of the way out, as
     on a transit map, so both colours show. Shown only when the API placed the wind stretches along
     the route. VoiceOver reads the journey: "Heads north-east with the wind behind, then …".
+17. **`CycleMap`** — a map that looks like cycle.travel's: OpenStreetMap data in our own style,
+    cycle routes as dots over the road beneath them, route-number badges, cycle paths by surface,
+    labels in Montserrat (§4). MapLibre Native on iOS, drawing Ride On's own vector tiles with a
+    style bundled in the app; MapKit stands in on macOS for now. Routes are drawn as map layers
+    below the labels, in the same colours and white casing as on MapKit. Live and interactive as
+    `RoutesMap`'s Cycle look; cards and thumbnails get static snapshots of it, never live maps.
+    Its attribution is always visible (§2). Being built behind the `--cycle-map` launch
+    argument; plan, rollout and open decisions in [`docs/maps/README.md`](docs/maps/README.md).
+    `RideHero` stays on satellite imagery and `WindRouteMap` on the muted standard map until
+    those decisions say otherwise.
 
 Kept until onboarding is redesigned: **`DialScreen`** (with `AmbianceStyle`).
 
