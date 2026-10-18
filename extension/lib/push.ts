@@ -303,7 +303,12 @@ export const installPushHandlers = () => {
             [401, 403, 404].includes(error.status)
           )
             return;
-          if (state.pause && (!state.pause.resumesAt || Date.parse(state.pause.resumesAt) > Date.now())) return;
+          if (
+            state.pause &&
+            (!state.pause.resumesAt ||
+              Date.parse(state.pause.resumesAt) > Date.now())
+          )
+            return;
           // An authenticated, unexpired push remains useful during a temporary API outage.
         }
         const stillEnabled = await getSecret<Registration>('push-registration');

@@ -59,8 +59,11 @@ export const Notifications = ({ state }: { state: State }) => {
         </button>
       )}
       {import.meta.env.SAFARI && (
-        <p>Finish setup in the Ride On app, then return here.{' '}
-          {state.push.status !== 'off' && <a href="rideon-notifications://enable">Open Ride On app</a>}
+        <p>
+          Finish setup in the Ride On app, then return here.{' '}
+          {state.push.status !== 'off' && (
+            <a href="rideon-notifications://enable">Open Ride On app</a>
+          )}
         </p>
       )}
       <button
