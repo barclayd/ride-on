@@ -251,9 +251,21 @@ an older one the style shows only bike shops at z14 and no cafés from z15.
 **2.5 Gaps.** Work through the style spec's [known gaps](cycle-travel-style.md#known-gaps), in four
 batches. A, fills (**done**): parks, woods and the other greens re-sampled; buildings take the built-up
 fill; grass-like land is bare land; military land outlined; schools, hospitals and land cover unfilled.
-B, lines: railways, motorways zoomed out, lcn weight, NCN + EuroVelo as one line, route dot size in
-London. C, labels: landmarks, farms and hamlets, stations at z10–11. D, London: the rcn rule, paths from
-z11, minor streets at z11–13.
+B, lines (**done**): route dots are dot icons placed along each route (`maps/style/src/dots.ts`), round
+at every zoom, with cycle.travel's sizes, spacing and opacity per network; EuroVelo dots an opaque
+slate/lavender ring with a red centre; the Avenue Verte and other non-EuroVelo `icn` routes dot as
+national, so the Albert Embankment is one red line; lcn smaller and closer; ferry crossings left out
+(EuroVelo 2 crossed the North Sea); regional routes from our z10. Railways are solid grey with a white
+dashed core, without tunnels (the Underground) and with thin sidings and yards; motorways pale blue with
+a thin casing that darkens as you zoom in. The overlay changes need a rebuilt overlay (WS1.1 publishes
+it). C, labels: landmarks, farms and hamlets, stations at z10–11. D, London and density: the London rcn
+rule (cycle.travel shows few regional routes, and smaller, closer blue dots at street level), paths from
+z11, minor streets at z11–13, railways and minor roads below z11 (missing from our basemap tiles, so a
+basemap build change), lighter station throats at z14.
+
+Colours that must match closely are solved against swatches captured in the same Chrome session as
+cycle.travel: the WS2.5 lines session captured 3–12/255 darker than `shot()` predicts. Refit `shot()`
+before trusting it again ([style spec](cycle-travel-style.md#colour-sampling)).
 
 **2.6 3× and device.** Every size was tuned at 2× in Chrome. Re-check dots, badges and labels on an
 iPhone 17 at 3×. MapLibre Native draws text slightly differently from GL JS.
@@ -476,17 +488,20 @@ fine for comparison.
 
 ## Comparison screenshots
 
-cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). All six re-taken in
-WS2.5 after the fills batch, on the planetiler overlay with the sprite's badges and POI icons.
+cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). All nine re-taken in
+WS2.5 after the lines batch, on the planetiler overlay with the sprite's badges and POI icons.
 
 | View | What to look at |
 |---|---|
-| [London, z9](screenshots/cmp-london-z9.jpg) (51.45, −0.15) | National routes and EuroVelo match. cycle.travel hides regional routes here; we show blue rcn everywhere and clusters in central London. cycle.travel has hillshade and a dense grey minor-road net; our motorways are dark slate lines |
-| [London, z11](screenshots/cmp-london-z11.jpg) (51.48, −0.17) | cycle.travel shows a dense net of thin red cycleways and lanes; ours start at z12. Too many saturated blue London rcn dots and C badges vs its few thin lavender lines. It shows more minor streets |
-| [Putney, z13](screenshots/cmp-putney-z13.jpg) (51.462, −0.215) | Badges (4, 20, C34, CS8, AV) and lcn teal match in place. We draw blue rcn across Roehampton and Southfields that cycle.travel doesn't. It has POI icons, bolder railways and a beige Thames foreshore |
-| [Westminster, z14](screenshots/cmp-westminster-z14.jpg) (51.5005, −0.128) | Street labels, LONDON spacing, Charing Cross, Q and C3 dots match. We stack heavy dark red NCN 4 + AV dots along the Albert Embankment; we name extra landmarks; Military land (Horse Guards, Wellington Barracks) outlined as cycle.travel does. It shows more POI icons in the parks |
-| [Richmond Park, z13](screenshots/cmp-richmond-park-z13.jpg) (51.4455, −0.2665) | NCN 4 on red-and-white paths and brown unpaved dashes match. Our lcn is heavier; C30 is lavender there, blue here; extra rcn around Roehampton; built-up, park, wood and golf fills now match. It shows more toilet, café and parking icons |
-| [Surrey Hills, z12](screenshots/cmp-surrey-hills-z12.jpg) (51.245, −0.33) | NCN 22 matches. cycle.travel has hillshade and contours; draws rcn as thin lavender lines with small dots; shows POI icons and bold railways; doesn't label farms and hamlets. Our brown dashes are heavier |
+| [London, z9](screenshots/cmp-london-z9.jpg) (51.45, −0.15) | National routes and EuroVelo match. cycle.travel hides regional routes here; we show blue rcn everywhere and clusters in central London. cycle.travel has hillshade, railways and a dense grey minor-road net; our basemap has neither below z11 |
+| [London, z11](screenshots/cmp-london-z11.jpg) (51.48, −0.17) | Route dots, railways and motorways match in weight. cycle.travel shows a dense net of thin red cycleways and lanes; ours start at z12. Too many saturated blue London rcn dots and C badges vs its few thin lavender lines. It shows more minor streets |
+| [Putney, z13](screenshots/cmp-putney-z13.jpg) (51.462, −0.215) | Badges (4, 20, C34, CS8, AV), dots and lcn teal match in place. We draw blue rcn across Roehampton and Southfields that cycle.travel doesn't. It has more POI icons and a beige Thames foreshore |
+| [Westminster, z14](screenshots/cmp-westminster-z14.jpg) (51.5005, −0.128) | Street labels, LONDON spacing, Charing Cross, Q and C3 dots match; NCN 4 and the Avenue Verte are one red dotted line along the Albert Embankment, as on cycle.travel. Waterloo and Victoria's platform tracks read heavier than cycle.travel's; we name extra landmarks; cycle.travel's London rcn dots are smaller and closer. It shows more POI icons in the parks |
+| [Richmond Park, z13](screenshots/cmp-richmond-park-z13.jpg) (51.4455, −0.2665) | NCN 4 on red-and-white paths and brown unpaved dashes match; built-up, park, wood and golf fills match. C30 is lavender there, blue here; extra rcn around Roehampton. It shows more toilet, café and parking icons |
+| [Surrey Hills, z12](screenshots/cmp-surrey-hills-z12.jpg) (51.245, −0.33) | NCN 22 and the railways match. cycle.travel has hillshade and contours; draws rcn as thin lavender lines with small dots; shows POI icons; doesn't label farms and hamlets. Our brown dashes are heavier |
+| [Harwich, z9](screenshots/cmp-harwich-z9.jpg) (51.93, 1.2) | EuroVelo and national dots: size, colours and spacing match; no ferry dots across the North Sea. cycle.travel has railways, station dots and minor roads our basemap lacks below z11 |
+| [Harwich, z10](screenshots/cmp-harwich-z10.jpg) | As z9; regional routes appear on both. cycle.travel draws them as dots on a thin blue line, ours as dots alone; it shows a EuroVelo badge at Colchester (ours start at z11) and station dots |
+| [Harwich, z11](screenshots/cmp-harwich-z11.jpg) | EuroVelo ring and centre colours, sizes and spacing match. Railways appear on both |
 
 ## Links
 

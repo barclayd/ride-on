@@ -24,9 +24,9 @@ Every way on a `route=bicycle` relation with `network` `icn`, `ncn`, `rcn` or `l
 
 | Attribute | |
 |---|---|
-| `network` | The highest network the way is on: `icn` > `ncn` > `rcn` > `lcn` |
+| `network` | The highest network the way is on: `icn` > `ncn` > `rcn` > `lcn`. Only EuroVelo (`ref` starting `EV`, or `cycle_network=EuroVelo`) counts as `icn`; other `icn` routes, like the Avenue Verte, count as `ncn`, as cycle.travel dots them |
 | `rank` | That network as a number: 4 icn, 3 ncn, 2 rcn, 1 lcn |
-| `minz` | The lowest zoom any of the way's routes shows from: icn and ncn 6, rcn 8.5, lcn 13. London's TfL routes (`cycle_network=GB:London…`, tagged rcn) 11 with a ref, 13 without |
+| `minz` | The lowest zoom any of the way's routes shows from: icn and ncn 6, rcn 10, lcn 13. London's TfL routes (`cycle_network=GB:London…`, tagged rcn) 11 with a ref, 13 without |
 
 Zooms: from `floor(minz)` to 14. The style filters on `minz` for the half zoom.
 
@@ -128,7 +128,7 @@ docker run --rm -v "$PWD/maps/tiles":/src -v ~/.m2:/root/.m2 -w /src \
   maven:3.9-eclipse-temurin-21 mvn -B -q test
 ```
 
-85 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
+89 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
 `CyclingProfileTest` when a rule changes.
 
 ## Publish

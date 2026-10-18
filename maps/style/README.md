@@ -9,7 +9,8 @@ cycling overlay from [`maps/tiles/`](../tiles/README.md), set in Montserrat. The
 |---|---|
 | `src/style.ts` | The style: every layer and rule. **Start here** |
 | `src/targets.ts` | Where its URLs point: `native` (the app) and `web` (the prototype) |
-| `src/sprite.ts` | The badge images, drawn as SVG and rasterised with resvg into the sprite sheet |
+| `src/dots.ts` | Each cycle network's route dots: size, spacing and colours per zoom, as dot images and `step` stops |
+| `src/sprite.ts` | The badge, POI and route-dot images, drawn as SVG and rasterised with resvg into the sprite sheet |
 | `src/shot.ts` | `shot(hex)`: undoes Chrome's screenshot colour shift on sampled colours (style spec, "Colour sampling") |
 | `src/cli.ts` | Writes a style to disk |
 | `scripts/glyphs.sh` | Builds the Montserrat glyph PBFs into the app |

@@ -36,20 +36,22 @@ public class CyclingProfile implements Profile {
   static final List<String> NETWORKS = List.of("", "lcn", "rcn", "ncn", "icn");
 
   /** A bicycle route relation on one of the four networks. Held in memory for the whole build, so it stays small. */
-  record Route(@Override long id, String network, String ref, boolean london) implements OsmRelationInfo {
+  record Route(@Override long id, String network, String ref, boolean london, boolean euroVelo)
+    implements OsmRelationInfo {
 
+    /** cycle.travel dots only EuroVelo as international: other icn routes (the Avenue Verte) get national dots. */
     int rank() {
-      return NETWORKS.indexOf(network);
+      return NETWORKS.indexOf(network.equals("icn") && !euroVelo ? "ncn" : network);
     }
 
     /**
-     * cycle.travel holds back London's TfL network (tagged rcn) until you zoom into the city, and its unsigned parts
-     * (no C/Q number) plus local routes until street level.
+     * cycle.travel shows regional routes from its z11 (our 10). It holds back London's TfL network (tagged rcn) until
+     * you zoom into the city, and its unsigned parts (no C/Q number) plus local routes until street level.
      */
     double minzoom() {
       return switch (network) {
         case "lcn" -> 13;
-        case "rcn" -> london ? (ref.isEmpty() ? 13 : 11) : 8.5;
+        case "rcn" -> london ? (ref.isEmpty() ? 13 : 11) : 10;
         default -> 6;
       };
     }
@@ -93,8 +95,10 @@ public class CyclingProfile implements Profile {
   public List<OsmRelationInfo> preprocessOsmRelation(OsmElement.Relation relation) {
     String network = relation.getString("network", "");
     if (relation.hasTag("route", "bicycle") && NETWORKS.indexOf(network) > 0) {
-      return List.of(new Route(relation.id(), network, relation.getString("ref", "").trim(),
-        relation.getString("cycle_network", "").startsWith("GB:London")));
+      String ref = relation.getString("ref", "").trim();
+      return List.of(new Route(relation.id(), network, ref,
+        relation.getString("cycle_network", "").startsWith("GB:London"),
+        relation.hasTag("cycle_network", "EuroVelo") || ref.startsWith("EV")));
     }
     return null;
   }
@@ -112,11 +116,12 @@ public class CyclingProfile implements Profile {
   /**
    * One line per way on a route relation, with the highest network it's on and the lowest zoom any of its routes shows
    * from; then one line per signed route for the badges. Ways are merged per tile in
-   * {@link #postProcessLayerFeatures} so dots don't restart at every OSM way join.
+   * {@link #postProcessLayerFeatures} so dots don't restart at every OSM way join. Ferry crossings are left out, as on
+   * cycle.travel: EuroVelo 2 would otherwise dot its way across the North Sea.
    */
   private void routes(SourceFeature way, FeatureCollector features) {
     var memberships = way.relationInfo(Route.class);
-    if (memberships.isEmpty()) {
+    if (memberships.isEmpty() || way.hasTag("route", "ferry")) {
       return;
     }
     int rank = 0;
