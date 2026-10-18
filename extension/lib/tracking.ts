@@ -63,6 +63,15 @@ export const loadTracker = async (): Promise<Tracker> => {
     edits: list.capabilities?.alertEdits === true,
   };
 };
+// The API's tracking errors in the rider's words; its own are for developers.
+export const TRACKING_ERRORS: Record<string, string> = {
+  TRACKING_VERSION_CONFLICT:
+    'Your tracked ride changed on another device. Check it and try again.',
+  TRACKING_INACTIVE: 'Alerts have already ended for this ride.',
+  RECOMMENDATION_UNAVAILABLE:
+    "That time can't take alerts any more. Pick another and try again.",
+};
+
 // Persist the action key before sending, so a service-worker restart cannot duplicate it.
 // The API rejects fields it doesn't know, so triggers go only once it says it takes them.
 export const saveTrackedRide = async (

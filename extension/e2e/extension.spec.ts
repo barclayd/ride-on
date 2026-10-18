@@ -577,7 +577,8 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
         {
           error: {
             code: 'TRACKING_VERSION_CONFLICT',
-            message: 'Your tracked ride changed. Review it and try again.',
+            message:
+              'Reload the current tracked ride and tracking version before retrying.',
           },
         },
       ];
@@ -622,7 +623,8 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
         {
           error: {
             code: 'TRACKING_VERSION_CONFLICT',
-            message: 'Your tracked ride changed. Review it and try again.',
+            message:
+              'Reload the current tracked ride and tracking version before retrying.',
           },
         },
       ];
@@ -1096,8 +1098,9 @@ test('a stale account tracking version reloads instead of silently replacing ano
   trackingVersion++;
   await bell.click();
   await turnOn.click();
+  // The API's developer message becomes the rider's.
   await expect(message).toHaveText(
-    'Your tracked ride changed. Review it and try again.',
+    'Your tracked ride changed on another device. Check it and try again.',
   );
   expect(trackedRide).toBeNull();
   await bell.click();
