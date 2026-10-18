@@ -40,6 +40,12 @@ const conditions = z.object({
     .nullable(),
   maximumPrecipitationProbability: z.number().min(0).max(1),
   maximumPrecipitationRateMmH: z.number(),
+  maximumPrecipitationAmountMm: z.number().nonnegative(),
+  precipitationAmountBasis: z.enum([
+    'hourly-accumulation',
+    'rate-estimate',
+    'mixed',
+  ]),
   assistedDistanceFraction: z.number().min(0).max(1),
 });
 const statistic = z.discriminatedUnion('kind', [
@@ -69,6 +75,38 @@ const forecastDetails = z.object({
     )
     .min(1),
 });
+export const temperatureAlongRideSchema = z.object({
+  points: z
+    .array(
+      z.tuple([
+        z.number().nonnegative(),
+        z.number().nullable(),
+        z.number().nullable(),
+        z.number().nullable(),
+      ]),
+    )
+    .min(2),
+  feelsLikeBasis: z.enum(['provider', 'derived', 'mixed']).nullable(),
+  usual: z
+    .object({
+      month: z.number().int().min(1).max(12),
+      averageHighC: z.number(),
+      averageLowC: z.number(),
+      bandHalfWidthC: z.literal(2.5),
+      differenceC: z.number().nullable(),
+      method: z.literal('monthly-diurnal-estimate'),
+      coveredDistanceFraction: z.number().min(0).max(1),
+      source: z.object({
+        version: z.string(),
+        referencePeriod: z.string(),
+        statistics: z.tuple([z.literal('maximum'), z.literal('minimum')]),
+        attribution: z.string(),
+        source: z.url(),
+        licence: z.url(),
+      }),
+    })
+    .nullable(),
+});
 const candidate = z.object({
   departureAt: z.iso.datetime(),
   finishAt: z.iso.datetime(),
@@ -96,6 +134,7 @@ const candidate = z.object({
   }),
   conditions,
   forecastDetails,
+  temperatureAlongRide: temperatureAlongRideSchema,
   standards: z.object({
     status: z.enum(['meets', 'below', 'unknown', 'not_configured']),
     failures: z.array(

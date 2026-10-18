@@ -97,6 +97,11 @@ integration(
   async (h) => {
     const { route, plan } = await fixture(h);
     assert.equal(plan.conditions.precipitationSummary, 'dry');
+    assert.equal(plan.conditions.maximumPrecipitationAmountMm, 0);
+    assert.equal(
+      plan.conditions.precipitationAmountBasis,
+      'hourly-accumulation',
+    );
     assert.ok(plan.conditions.windDistanceFractions);
     assert.ok(plan.windStretches.length > 0);
     const key = crypto.randomUUID();
@@ -138,6 +143,8 @@ integration(
     const {
       windDistanceFractions: _wind,
       precipitationSummary: _rain,
+      maximumPrecipitationAmountMm: _amount,
+      precipitationAmountBasis: _amountBasis,
       ...conditions
     } = plan.conditions;
     const { windStretches: _stretches, ...oldPlan } = plan;

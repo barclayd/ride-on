@@ -104,8 +104,8 @@ const richmondCase = async () => {
 test('ride range and minimum standards include departure and finish, with gusts unchanged', async () => {
   const { best, forecasts } = await richmondCase();
   expect(best.conditions.temperatureC).toEqual({
-    minimum: 11.25,
-    maximum: 15.69,
+    minimum: 11.3,
+    maximum: 15.7,
   });
   expect(
     best.standards.failures.map((f) => ({

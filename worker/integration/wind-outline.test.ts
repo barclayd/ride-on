@@ -91,6 +91,16 @@ test('1,000 real wind sections survive recommendation, tracking and logged-plan 
       ranked.alternatives.every((c) => c.windStretches.length === 1000),
     );
     assert.ok(rec.days.some((d) => d.best?.windStretches.length === 1000));
+    for (const candidate of [
+      ranked.best,
+      ...ranked.alternatives,
+      ...rec.days.flatMap((d) => (d.best ? [d.best] : [])),
+    ]) {
+      const trace = candidate.temperatureAlongRide;
+      assert.equal(trace.feelsLikeBasis, 'provider');
+      assert.ok(trace.points.length <= 40);
+      assert.ok(trace.usual);
+    }
     const calls = h.requests.length;
     const tracked = await h.send('/tracked-rides', {
       headers: { 'Idempotency-Key': crypto.randomUUID() },

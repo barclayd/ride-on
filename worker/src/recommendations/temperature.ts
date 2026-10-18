@@ -66,5 +66,5 @@ export const compileTemperature = (samples: readonly ForecastSample[]) => {
       maximum: available.reduce((a, b) => (b.value > a.value ? b : a), first),
     };
   };
-  return { at: valueAt, range };
+  return { at: valueAt, range, sampleTimes: points.map((point) => point.at) };
 };

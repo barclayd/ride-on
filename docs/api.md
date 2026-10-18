@@ -28,6 +28,8 @@ no extra weather requests, scoring changes or forecast-cache invalidation.
 The reviewed [extension brief v7](extension-api-brief-v7.md) records the contract
 and the decision to preserve short wind sections. Scoring remains `comfort-v0.17`.
 
+API v0.35.0 adds display-only temperature traces, feels-like values, hourly precipitation amounts and a UK monthly climate comparison. Scoring remains `comfort-v0.17`; see [temperature and rain along the ride](#temperature-and-rain-along-the-ride-v0350).
+
 API v0.34.0 adds [account-wide pauses](#pause), including automatic return dates and quiet resumption of scheduled monitoring. Scoring remains `comfort-v0.17`.
 
 API v0.33.0 separates [Strava route suggestions from grouped date-only history](strava.md#automatic-ride-matching-and-history-api-v0330). Clear matches at 90%+ coverage are logged automatically; 50–89% and ambiguous or incomplete matches require confirmation. Confirmed dates and corrections survive temporary evidence expiry.
@@ -911,7 +913,8 @@ The response includes:
 | `best.score`, `best.weatherScore`, `best.factors` | Combined ride score, original weather-only score and temperature/wind/dryness/clear-sky/sunshine/climbing/distance factors. These are not probabilities. |
 | `best.recommendationPriority`, `best.tailwindOpportunity` | v0.27 ordering value (0–105) and separate opportunity explanation/points. Keep showing `score` for Conditions; see [contract](tailwind-opportunity.md). |
 | `best.windStretches` | Contiguous wind sections with route bounds, ride times, wind effect/direction/speed and estimated maximum adverse gust. Also on alternatives, partial assessments, day winners and next-window winners. See below. |
-| `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate, categorical sky-condition distance fractions, assisted-distance fraction and the v0.15 wind/precipitation summaries below. |
+| `best.temperatureAlongRide` | Ten-minute air/feels-like/usual temperature tuples, provenance and nullable monthly climate comparison. Also on alternatives, partial assessments, day winners and next-window winners. |
+| `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate and maximum hourly amount/basis, categorical sky-condition distance fractions, assisted-distance fraction and the v0.15 wind/precipitation summaries below. |
 | `best.standards` | `meets`, `below`, `unknown`, or `not_configured`, with structured failures. |
 | `minimumStandardsStatus` | Collection-level `match_found`, `none_meet`, `unknown`, `not_configured`, or `no_feasible_departure`. |
 | `message`, `best.drawbacks` | Readable conclusion and trade-offs. |
@@ -1024,6 +1027,99 @@ Chip colours are a client presentation rule. They do not establish whether or
 how much a condition lowered the score: rider weights, gusts, thresholds and
 rounded display values can differ from a chip's rule. Use the returned factor
 breakdown and standards failures for an accurate scoring explanation.
+
+### Temperature and rain along the ride (v0.35.0)
+
+Every returned departure carrying `rideHours` also includes `temperatureAlongRide`,
+including alternatives, partial assessments, day winners and next-window winners:
+
+```json
+{
+  "temperatureAlongRide": {
+    "points": [[0, 7.4, 5.1, 10.1], [10, 7.8, 5.6, 10.4], [20.5, 8.2, 6, 10.6]],
+    "feelsLikeBasis": "provider",
+    "usual": {
+      "month": 10,
+      "averageHighC": 15.1,
+      "averageLowC": 8.2,
+      "bandHalfWidthC": 2.5,
+      "differenceC": -2.6,
+      "method": "monthly-diurnal-estimate",
+      "coveredDistanceFraction": 1,
+      "source": {
+        "version": "haduk-grid-1.1.0.0-1991-2020-12km-tmax-tmin",
+        "referencePeriod": "1991–2020",
+        "statistics": ["maximum", "minimum"],
+        "attribution": "Contains Met Office data licensed under the Open Government Licence v3.0.",
+        "source": "https://catalogue.ceda.ac.uk/uuid/652cea3b8b4446f7bff73be0ce99ba0f",
+        "licence": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+      }
+    }
+  }
+}
+```
+
+Each point is `[minutesFromDeparture, airC, feelsLikeC, usualC]`. Points are strictly
+increasing, with no duplicate offsets: zero, each ten minutes, the finish, and
+any additional air/feels-like extrema or missing-data breaks. **Offsets may be
+fractional**, as agreed for this implementation; clients must not round or index
+them as whole minutes. At a section boundary the entering section supplies the
+value; an outgoing extreme at that same boundary is represented immediately
+before it (at most 1 ms earlier) to preserve both sides of the discontinuity.
+The final point uses the last section's exit.
+
+Temperatures are rounded to 0.1°C. The trace's air extrema match
+`conditions.temperatureC`, which now also uses 0.1°C display precision. Scoring
+and hard-standard checks continue using unrounded evidence. Air and feels-like
+values interpolate between adjacent instantaneous hourly readings, using the
+same route timing as v0.23. Missing brackets or gaps over an hour stay `null`;
+clients break that line. A completely unassessable ride still has no departure
+or trace; display enrichment does not change eligibility.
+
+Apple `temperatureApparent` and Global Spot `feelsLikeTemperature` are retained
+as optional evidence. A missing provider value stays `null`. For Met Office BPF,
+we derive hourly feels-like values from air temperature and 10 m mean wind speed
+using JAG/TI wind chill at air ≤10°C and wind >4.8 km/h, otherwise air temperature,
+then interpolate those values. There is no humidity correction or rider-speed
+adjustment. `feelsLikeBasis` is `provider`, `derived`, `mixed`, or `null` when none
+is available. These values never enter scoring.
+
+`usual` uses distance-weighted **raw calendar-month** high and low values for the
+departure's local date, even when seasonal tolerance is off. The API computes the
+[monthly daily curve](seasonal-temperature.md#display-only-monthly-comparison-v0350)
+in the resolved time zone. `differenceC` is the duration-weighted mean air
+minus mean usual temperature, rounded to 0.1°C. Air is integrated over each
+section's hourly linear segments; usual uses time-weighted ten-minute trapezoids
+before display rounding. An incomplete air trace has `differenceC: null`.
+`coveredDistanceFraction` describes the route share within the UK grid. No covered
+section means `usual: null` and all `usualC: null`; no nearest-cell extrapolation.
+Clients must display the source attribution whenever they display the comparison.
+
+All newly computed conditions objects also include:
+
+```json
+{
+  "maximumPrecipitationAmountMm": 2.4,
+  "precipitationAmountBasis": "hourly-accumulation"
+}
+```
+
+This is the maximum hourly amount at the same observed section midpoints used
+for rate and probability. Native hourly accumulation periods are respected:
+Apple labels their start; Global Spot labels their end. Where an hourly amount
+is unavailable, use rate × 1 hour. Basis is `hourly-accumulation`, `rate-estimate`
+(BPF, or missing optional accumulation), or `mixed`. Amount is rounded to 0.1 mm.
+Overall conditions describe the heaviest observed hour anywhere along the ride;
+ride-hour conditions describe their own observations. This is not total rainfall
+experienced by the rider. Probability remains separate. A ride hour without
+observations still has `conditions: null`.
+
+Both amount fields are optional in saved-plan validation: old plans remain
+readable and new fields round-trip. Old responses can omit the entire trace and
+new conditions fields. Forecast snapshots use a new cache namespace and the
+extension's persisted ranking key is bumped, so refreshed rankings include the
+new evidence. No extra provider calls are made beyond ordinary cache refreshes;
+missing optional series do not trigger fallback or prevent caching.
 
 ### Route outline and wind sections (v0.29.0)
 

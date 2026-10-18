@@ -148,3 +148,10 @@ export const ensembleDescriptors = {
     },
   },
 } as const satisfies Record<string, ForecastDescriptor>;
+
+/** These enrich recommendations without becoming eligibility requirements. */
+export const optionalDisplayDescriptors = [
+  precipitationTypeDescriptor,
+  weatherDescriptors.feelsLikeTemperature,
+  weatherDescriptors.precipitationAmount,
+] as const;

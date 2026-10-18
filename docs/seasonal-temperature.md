@@ -39,7 +39,7 @@ these fields when editing the ideal range or monthly minimum standards.
 ## Climate source and coverage
 
 The bundled source is Met Office **HadUK-Grid v1.1.0.0**, **1991–2020** monthly
-means of daily maximum air temperature, on its **12 km UK grid**. It is obtained
+means of daily maximum and minimum air temperature, on its **12 km UK grid**. It is obtained
 from the Met Office's public [Climate Data Portal dataset](https://www.arcgis.com/home/item.html?id=30bbaca9dbbd4f849252043788f37f41)
 ([source catalogue](https://catalogue.ceda.ac.uk/uuid/652cea3b8b4446f7bff73be0ce99ba0f)).
 
@@ -64,9 +64,13 @@ seasonal tolerance, not to apply a second weather-anomaly penalty.
 No extra weather requests, climate service dependency, or forecast-cache expiry
 are required. `worker/scripts/import-seasonal-climate.ts` is an explicit
 maintenance command, not a build/CI step. It validates the source's 1,707 cells,
-records the downloaded response hash, and rounds coordinates to six decimals
-and temperatures to three. Review data updates and increment the algorithm/data
-version before release. The climate version participates in score-baseline keys.
+records hashes of the downloaded maximum and minimum responses, and rounds coordinates to six decimals
+and temperatures to three. It matches minimums by grid ID and verifies identical
+geometry, complete months and minimum ≤ maximum. It refuses changes to the
+existing maximums or geometry: those require a separate scoring/data review.
+The maximum-only scoring version remains stable when adding display minimums;
+a separate display version identifies the combined bundle. The scoring climate
+version participates in score-baseline keys.
 
 ## Calculation
 
@@ -165,3 +169,41 @@ the earlier cached legacy replay retains all 31 departure results. A local
 synthetic 12-route, five-day benchmark evaluated 720 candidates in 2.25s cold /
 1.70s warm, with zero upstream requests when warm. These are end-to-end local
 wall times, not production CPU measurements.
+
+## Display-only monthly comparison (v0.35.0)
+
+The bundle also contains `tasmin_hadukgrid_uk_12km_mon-30y_199101-202012.nc`
+from **the same HadUK-Grid v1.1.0.0 dataset**, reference period and 1,707 cells.
+The Met Office [minimum-temperature portal dataset](https://www.arcgis.com/home/item.html?id=8a5264910a71485593e5e8e1e8edfb87)
+([query source](https://services.arcgis.com/Lq3V5RFuTBC9I7kv/arcgis/rest/services/Monthly_Min_Temperature_Observations_1991_2020/FeatureServer/6))
+is bundled alongside the maximums, adding twelve values to each cell. Attribution
+and licence are the same as above. No runtime network lookup is needed.
+
+Every returned recommendation looks up its sections for display, independently
+of `seasonalTolerance`. For the departure's local month, the covered sections'
+raw monthly high and low values are distance-weighted and rounded to 0.1°C.
+Unlike scoring, this comparison does not interpolate between mid-month anchors.
+Outside grid coverage there is no usual-temperature comparison. Partial routes
+use only covered sections and report their covered distance fraction.
+
+For local time `h` in hours, define:
+
+```text
+d(h) = 0                             when h < 5 or h > 21
+       (1 − cos(π (h − 5) / 10)) / 2 when 5 ≤ h ≤ 15
+       (1 + cos(π (h − 15) / 6)) / 2 when 15 < h ≤ 21
+usualC = averageLowC + (averageHighC − averageLowC) × d(h)
+```
+
+This is a **monthly diurnal estimate**, not measured hourly normals. The returned
+`method: monthly-diurnal-estimate` and fixed ±2.5°C display band make that explicit.
+The resolved time zone determines local hours, including the repeated hour on
+25 October 2026 in Europe/London. Clients use the API curve and display its source
+attribution; they do not independently estimate it or apply an anomaly penalty.
+
+`differenceC` compares duration-weighted air and usual temperatures. Air uses the
+underlying section-by-section linear forecast; usual uses ten-minute trapezoids
+before rounding. Unknown air evidence makes the difference unavailable. See the
+[temperature/rain response contract](api.md#temperature-and-rain-along-the-ride-v0350).
+The display lookup, minimum series, feels-like values and rain amounts do not
+change `comfort-v0.17`, ranking, or minimum-standard calculations.

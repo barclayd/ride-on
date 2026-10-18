@@ -4,7 +4,7 @@ import type {
   ForecastRequest,
   LocationForecastResult,
 } from './contracts.ts';
-import { descriptorKey } from './descriptors.ts';
+import { descriptorKey, optionalDisplayDescriptors } from './descriptors.ts';
 import {
   coordinateSchema,
   forecastDescriptorSchema,
@@ -139,6 +139,9 @@ export const cachedForecastSchema = forecastSnapshotSchema.refine(
       result.series.every(
         ({ descriptor, samples }) =>
           descriptor.kind === 'category' ||
+          optionalDisplayDescriptors.some(
+            (d) => descriptorKey(d) === descriptorKey(descriptor),
+          ) ||
           (samples.length > 0 &&
             samples.every(
               (sample, index) =>
@@ -238,7 +241,7 @@ export const withForecastCache = (
         const hash = new Uint8Array(
           await crypto.subtle.digest('SHA-256', encoded),
         );
-        return `weather:v2:${Array.from(hash, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+        return `weather:v3:${Array.from(hash, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
       }),
     );
     const found = await Promise.all(

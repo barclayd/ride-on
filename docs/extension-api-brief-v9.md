@@ -1,6 +1,10 @@
 # Extension API brief v9: temperature and rain along the ride
 
-Proposed against API **0.34.0**, algorithm **comfort-v0.17**.
+Implemented in API **0.35.0**, algorithm **comfort-v0.17**, against API 0.34.0.
+The five recommended decisions below are adopted. Dan approved fractional-minute
+finish/extreme offsets so exact timing and extrema survive; the regular grid stays
+at ten minutes. See [the shipped contract](api.md#temperature-and-rain-along-the-ride-v0350)
+for section-boundary discontinuities, missing-value behavior and precision.
 
 Design handoff v7 turns the temperature chip and the rain chip on Journeys tiles into
 buttons that open a detail panel, like the sky panel (17a):
@@ -57,7 +61,7 @@ Each point is `[minutesFromDeparture, airC, feelsLikeC, usualC]`, a fixed tuple 
 
 | Element | Meaning |
 | --- | --- |
-| `minutesFromDeparture` | Whole minutes after `departureAt`. The first point is `0`, the last is the finish (`finishAt`) |
+| `minutesFromDeparture` | Minutes after `departureAt` (fractional at finish/extrema). The first point is `0`, the last is the finish (`finishAt`) |
 | `airC` | Air temperature where the rider is at that time, to 0.1°C, using the v0.23 timing: linear interpolation between hourly readings for the route section the rider is on. At a section boundary, use the section being entered; at the finish, the last section's exit |
 | `feelsLikeC` | Feels like, interpolated the same way (§2), or `null` when it isn't known for that point. Never fall back to air temperature silently |
 | `usualC` | The estimated usual temperature at that local time of day (§4), or `null` when `usual` is `null` |
@@ -67,7 +71,7 @@ Each point is `[minutesFromDeparture, airC, feelsLikeC, usualC]`, a fixed tuple 
 - one every 10 minutes from departure (`0, 10, 20, …`), plus the finish;
 - plus the time of the lowest and highest `airC`, and of the lowest and highest
   `feelsLikeC`, so the chart's extreme marker and the chip's range are exact;
-- sorted by time, with one point per minute.
+- sorted by time, with one point per distinct offset.
 
 The client finds crossing times by interpolating between points and rounds them to
 10 minutes, so it doesn't need anything finer.

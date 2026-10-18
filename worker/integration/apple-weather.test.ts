@@ -98,6 +98,12 @@ for (const [code, expected] of [
       const initial = await recommend(h, [route.id]);
       const best = first(initial.rankings).best;
       assert.equal(best.conditions.precipitationSummary, expected);
+      assert.equal(
+        best.conditions.precipitationAmountBasis,
+        'hourly-accumulation',
+      );
+      assert.equal(best.temperatureAlongRide.feelsLikeBasis, 'provider');
+      assert.ok(best.temperatureAlongRide.points.every((p) => p[2] === 17));
       assert.equal(best.conditions.skyConditionDistanceFractions, null);
       assert.ok(
         best.rideHours.every(
