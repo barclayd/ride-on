@@ -83,7 +83,19 @@ Points, or a point inside the area for mapped buildings and car parks.
 | `bicycle_shop` | `shop=bicycle` | 14 |
 | `camp_site`, `viewpoint` | `tourism=*` | 14 |
 
-`name` when tagged. Private POIs are skipped. Only stations and peaks are styled so far.
+`name` when tagged. Private POIs are skipped. Car parks aren't styled; the rest are.
+
+The kinds the style draws as icons (every new kind but `parking`) also carry how crowded they are, which
+the style thins them by:
+
+| Attribute | |
+|---|---|
+| `crowd_500m` | Other icons within 500 m |
+| `crowd_1km` | Other icons within 1 km |
+
+`postProcessTileFeatures` counts them. Icons are buffered 256 px into the tiles around (1 km at z14 as
+far north as 66°), so the count includes neighbours over the tile's edge; those copies are then dropped,
+leaving the usual 4 px point buffer.
 
 ## Build
 
@@ -104,8 +116,8 @@ Name the file `cycling-gb-<YYYYMMDD>.pmtiles` with the extract's date: Geofabrik
 planetiler records it in the file's metadata (`pmtiles show <file>`, `planetiler:osm:osmosisreplicationtime`). Keys on R2 are immutable, so a new extract is a new
 name.
 
-The 17 October 2026 UK extract (2.3 GB) builds in 1 min 54 s on an M4 Max to 102 MB: 153,185 tiles, the
-largest 39 KB (24 KB gzipped). Planetiler skips two POIs whose multipolygons are broken in OSM.
+The 17 October 2026 UK extract (2.3 GB) builds in 2 min 1 s on an M4 Max to 104 MB: 153,185 tiles, the
+largest 47 KB (30 KB gzipped). Planetiler skips two POIs whose multipolygons are broken in OSM.
 
 ## Test
 
@@ -116,7 +128,7 @@ docker run --rm -v "$PWD/maps/tiles":/src -v ~/.m2:/root/.m2 -w /src \
   maven:3.9-eclipse-temurin-21 mvn -B -q test
 ```
 
-82 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
+85 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
 `CyclingProfileTest` when a rule changes.
 
 ## Publish

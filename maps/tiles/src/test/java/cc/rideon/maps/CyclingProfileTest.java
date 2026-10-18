@@ -12,6 +12,7 @@ import com.onthegomap.planetiler.TestUtils;
 import com.onthegomap.planetiler.VectorTile;
 import com.onthegomap.planetiler.config.Arguments;
 import com.onthegomap.planetiler.geo.GeoUtils;
+import com.onthegomap.planetiler.geo.TileCoord;
 import com.onthegomap.planetiler.mbtiles.Mbtiles;
 import com.onthegomap.planetiler.reader.SimpleFeature;
 import com.onthegomap.planetiler.reader.WithTags;
@@ -253,6 +254,55 @@ class CyclingProfileTest {
     var unnamed = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newPoint(0, 0),
       tags("amenity=toilets"), "osm", null, 1, List.of()), profile);
     assertEquals(Map.of("kind", "toilets"), unnamed.getFirst().getAttrsAtZoom(14));
+  }
+
+  @Test
+  void iconsReachIntoTheTilesAroundSoTheirNeighboursThereCountThem() {
+    var toilets = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newPoint(0, 0),
+      tags("amenity=toilets"), "osm", null, 1, List.of()), profile);
+    assertEquals(CyclingProfile.CROWD_BUFFER, toilets.getFirst().getBufferPixelsAtZoom(14));
+    // 1 km in z14 pixels at Lerwick, 60.2° N.
+    assertTrue(CyclingProfile.CROWD_BUFFER > 1000 / CyclingProfile.metresPerPixel(TileCoord.aroundLngLat(-1.1, 60.2,
+      14)));
+    var station = TestUtils.processSourceFeature(SimpleFeature.createFakeOsmFeature(newPoint(0, 0),
+      tags("railway=station name=Richmond"), "osm", null, 1, List.of()), profile);
+    assertEquals(CyclingProfile.POINT_BUFFER, station.getFirst().getBufferPixelsAtZoom(14));
+  }
+
+  @Test
+  void metresPerPixelShrinkWithLatitude() {
+    assertEquals(5.95, CyclingProfile.metresPerPixel(TileCoord.aroundLngLat(-0.13, 51.5, 14)), 0.01);
+    assertEquals(4.75, CyclingProfile.metresPerPixel(TileCoord.aroundLngLat(-1.1, 60.2, 14)), 0.01);
+  }
+
+  private static VectorTile.Feature poi(String kind, double x, double y) {
+    return new VectorTile.Feature("pois", 1, VectorTile.encodeGeometry(newPoint(x, y)), Map.of("kind", kind));
+  }
+
+  @Test
+  void countsEachIconsNeighboursWithin500mAnd1kmThenDropsThoseOverTheEdge() {
+    // 5 m a pixel: 500 m is 100 px, 1 km 200 px.
+    var crowd = CyclingProfile.crowd(List.of(
+      poi("cafe", 128, 128),
+      poi("station", 130, 130),
+      // 400 m south of the café.
+      poi("pub", 128, 208),
+      // 800 m south of the café, in the tile below.
+      poi("toilets", 128, 288),
+      // 1.39 km west of the café, in the tile to the left.
+      poi("bicycle_parking", -150, 128),
+      // Car parks aren't icons, so don't count.
+      poi("parking", 120, 128),
+      // Just over the edge, inside planetiler's usual point buffer.
+      poi("viewpoint", 258, 128)
+    ), 5);
+    assertEquals(List.of(
+      Map.of("kind", "cafe", "crowd_500m", 1, "crowd_1km", 3),
+      Map.of("kind", "station"),
+      Map.of("kind", "pub", "crowd_500m", 2, "crowd_1km", 3),
+      Map.of("kind", "parking"),
+      Map.of("kind", "viewpoint", "crowd_500m", 0, "crowd_1km", 2)
+    ), crowd.stream().map(VectorTile.Feature::tags).toList());
   }
 
   @Test

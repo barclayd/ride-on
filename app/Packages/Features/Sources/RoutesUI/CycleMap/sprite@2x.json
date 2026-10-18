@@ -1,5 +1,13 @@
 {
   "badge-red": {"x":0,"y":0,"width":24,"height":24,"pixelRatio":3,"stretchX":[[6,18]],"stretchY":[[6,18]]},
   "badge-blue": {"x":26,"y":0,"width":24,"height":24,"pixelRatio":3,"stretchX":[[6,18]],"stretchY":[[6,18]]},
-  "badge-eu": {"x":52,"y":0,"width":50,"height":50,"pixelRatio":3}
+  "badge-eu": {"x":52,"y":0,"width":50,"height":50,"pixelRatio":3},
+  "poi-cafe": {"x":104,"y":0,"width":42,"height":42,"pixelRatio":3},
+  "poi-pub": {"x":148,"y":0,"width":45,"height":45,"pixelRatio":3},
+  "poi-toilets": {"x":195,"y":0,"width":42,"height":42,"pixelRatio":3},
+  "poi-drinking-water": {"x":239,"y":0,"width":41,"height":41,"pixelRatio":3},
+  "poi-bicycle-parking": {"x":282,"y":0,"width":35,"height":35,"pixelRatio":3},
+  "poi-bicycle-shop": {"x":319,"y":0,"width":44,"height":44,"pixelRatio":3},
+  "poi-camp-site": {"x":365,"y":0,"width":45,"height":45,"pixelRatio":3},
+  "poi-viewpoint": {"x":412,"y":0,"width":45,"height":45,"pixelRatio":3}
 }

@@ -1,7 +1,8 @@
 // The style's images, drawn as SVG and rasterised with resvg into one sprite sheet: cycle.travel's repeater
-// badges. Red and blue are shot() of its badges in a Chrome screenshot, checked against a new one; EuroVelo is by
-// eye. See docs/maps/cycle-travel-style.md, "Repeater badges".
+// badges and its POI icons. Badge red and blue are shot() of its badges in a Chrome screenshot, checked against a
+// new one; EuroVelo is by eye. See docs/maps/cycle-travel-style.md, "Repeater badges" and "POI icons".
 import { Resvg } from '@resvg/resvg-js'
+import { type Glyph, maki } from './maki.ts'
 
 interface Icon {
   /** Width and height, in CSS pixels. */
@@ -28,6 +29,58 @@ const stars = (size: number) =>
     })
     return `<polygon points="${points.join(' ')}" fill="#f9ee59"/>`
   }).join('')
+
+// POI colours from cycle.travel's map key (/map/snippet_key), drawn as they are. Viewpoints aren't in the key, so
+// that brown, like the cream halo, is shot() of a Chrome screenshot.
+const poi = {
+  food: '#cc8d7b',
+  water: '#008b8b',
+  bike: '#938ec4',
+  parking: '#64bde1',
+  camping: '#378b36',
+  view: '#7a4433',
+  halo: '#fdfdf4',
+}
+// cycle.travel rings every icon in 1.25px of cream. MapLibre can only halo SDF icons, so it's drawn in.
+const halo = 1.25
+
+// A Maki glyph, `length` CSS px along its longer side, centred in a square with room for the halo.
+const bare = (glyph: Glyph, length: number, colour: string): Icon => {
+  const [x, y, w, h] = glyph.box
+  const scale = length / Math.max(w, h)
+  const size = Math.ceil(length + 2 * halo)
+  const at = `translate(${(size - w * scale) / 2 - x * scale} ${(size - h * scale) / 2 - y * scale}) scale(${scale})`
+  const ring = `stroke="${poi.halo}" stroke-width="${(2 * halo) / scale}" stroke-linejoin="round"`
+  return {
+    size,
+    draw: () =>
+      `<g transform="${at}"><path d="${glyph.outline ?? glyph.d}" fill="${poi.halo}" ${ring}/><path d="${glyph.d}" fill="${colour}"/></g>`,
+  }
+}
+
+// A white glyph `length` CSS px along its longer side, on a rounded square `side` CSS px across.
+const boxed = (glyph: Glyph, side: number, length: number, colour: string): Icon => {
+  const [x, y, w, h] = glyph.box
+  const scale = length / Math.max(w, h)
+  const size = side + 2 * halo
+  const at = `translate(${(size - w * scale) / 2 - x * scale} ${(size - h * scale) / 2 - y * scale}) scale(${scale})`
+  const r = side * 0.15
+  return {
+    size,
+    draw: () =>
+      [
+        `<rect width="${size}" height="${size}" rx="${r + halo}" fill="${poi.halo}"/>`,
+        `<rect x="${halo}" y="${halo}" width="${side}" height="${side}" rx="${r}" fill="${colour}"/>`,
+        `<path transform="${at}" d="${glyph.d}" fill="#ffffff"/>`,
+      ].join(''),
+  }
+}
+
+// Our own water drop, on Maki's grid: a point at the top, round at the bottom.
+const drop: Glyph = {
+  d: 'M7.5 1C9 4 11.5 6.6 11.5 9.5a4 4 0 0 1-8 0C3.5 6.6 6 4 7.5 1Z',
+  box: [3.5, 1, 8, 12.5],
+}
 
 export const icons: Record<string, Icon> = {
   // National: flat brick red, barely rounded. Stretched around the number by icon-text-fit.
@@ -57,6 +110,16 @@ export const icons: Record<string, Icon> = {
     size: 16.5,
     draw: () => `<rect width="16.5" height="16.5" rx="0.6" fill="#0061a2"/>${stars(16.5)}`,
   },
+  // POIs, sized as cycle.travel draws them at its z15 (our 14): bare glyphs for food, toilets, camping and views;
+  // white glyphs on rounded squares for water and bikes. Maki's glyphs, not cycle.travel's (docs/maps/README.md).
+  'poi-cafe': bare(maki.cafe, 11, poi.food),
+  'poi-pub': bare(maki.beer, 12.5, poi.food),
+  'poi-toilets': bare(maki.toilet, 11.5, poi.water),
+  'poi-drinking-water': boxed(drop, 11, 7.5, poi.water),
+  'poi-bicycle-parking': boxed(maki.parking, 9, 6.5, poi.parking),
+  'poi-bicycle-shop': boxed(maki.bicycle, 12, 9.5, poi.bike),
+  'poi-camp-site': bare(maki.campsite, 12, poi.camping),
+  'poi-viewpoint': bare(maki.viewpoint, 12, poi.view),
 }
 
 /**

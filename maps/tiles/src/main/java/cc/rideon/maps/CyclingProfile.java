@@ -6,17 +6,22 @@ import com.onthegomap.planetiler.Planetiler;
 import com.onthegomap.planetiler.Profile;
 import com.onthegomap.planetiler.VectorTile;
 import com.onthegomap.planetiler.config.Arguments;
+import com.onthegomap.planetiler.geo.GeoUtils;
+import com.onthegomap.planetiler.geo.TileCoord;
 import com.onthegomap.planetiler.reader.SourceFeature;
 import com.onthegomap.planetiler.reader.WithTags;
 import com.onthegomap.planetiler.reader.osm.OsmElement;
 import com.onthegomap.planetiler.reader.osm.OsmRelationInfo;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.locationtech.jts.geom.CoordinateXY;
 
 /**
  * Ride On's cycling overlay: what cycle.travel draws over an OpenStreetMap basemap that the Protomaps basemap doesn't
@@ -261,11 +266,74 @@ public class CyclingProfile implements Profile {
       Matcher ele = ELEVATION.matcher(feature.getString("ele", ""));
       poi.setAttr("ele", ele.find() ? (int) Math.round(Double.parseDouble(ele.group(1))) : null);
     }
+    if (ICONS.contains(kind)) {
+      // Into the tiles around too, so its neighbours there count it (crowd).
+      poi.setBufferPixels(CROWD_BUFFER);
+    }
+  }
+
+  /** The POI kinds the style draws as icons. Car parks aren't one: cycle.travel doesn't mark them. */
+  static final Set<String> ICONS = Set.of("cafe", "pub", "toilets", "drinking_water", "bicycle_parking",
+    "bicycle_shop", "camp_site", "viewpoint");
+  /** 1 km at z14 as far north as 66°. */
+  static final double CROWD_BUFFER = 256;
+  /** Planetiler's default point buffer, which icons keep once counted. */
+  static final double POINT_BUFFER = 4;
+
+  @Override
+  public Map<String, List<VectorTile.Feature>> postProcessTileFeatures(TileCoord tile,
+    Map<String, List<VectorTile.Feature>> layers) {
+    var pois = layers.get("pois");
+    if (pois == null) {
+      return layers;
+    }
+    Map<String, List<VectorTile.Feature>> result = new HashMap<>(layers);
+    result.put("pois", crowd(pois, metresPerPixel(tile)));
+    return result;
+  }
+
+  /** The ground size of one of the tile's 256 pixels, at its middle. */
+  static double metresPerPixel(TileCoord tile) {
+    return GeoUtils.metersPerPixelAtEquator(tile.z()) * Math.cos(Math.toRadians(tile.getEnvelope().centre().y));
+  }
+
+  /**
+   * How crowded each icon is: the other icons within 500 m ({@code crowd_500m}) and 1 km ({@code crowd_1km}),
+   * counting those just over the tile's edge, which are then dropped. cycle.travel shows a town's POIs a zoom later
+   * than a village's and hides city cafés altogether; the style approximates that from these counts.
+   */
+  static List<VectorTile.Feature> crowd(List<VectorTile.Feature> items, double metresPerPixel) {
+    List<CoordinateXY> icons = items.stream()
+      .filter(item -> ICONS.contains(item.tags().get("kind")))
+      .map(item -> item.geometry().firstCoordinate())
+      .toList();
+    List<VectorTile.Feature> result = new ArrayList<>();
+    for (var item : items) {
+      if (!ICONS.contains(item.tags().get("kind"))) {
+        result.add(item);
+        continue;
+      }
+      var at = item.geometry().firstCoordinate();
+      if (at.x < -POINT_BUFFER || at.y < -POINT_BUFFER || at.x > 256 + POINT_BUFFER || at.y > 256 + POINT_BUFFER) {
+        continue;
+      }
+      // Itself included, at 0 m.
+      int near = -1;
+      int far = -1;
+      for (var other : icons) {
+        double metres = at.distance(other) * metresPerPixel;
+        near += metres <= 500 ? 1 : 0;
+        far += metres <= 1000 ? 1 : 0;
+      }
+      result.add(item.copyWithExtraAttrs(Map.of("crowd_500m", near, "crowd_1km", far)));
+    }
+    return result;
   }
 
   @Override
   public List<VectorTile.Feature> postProcessLayerFeatures(String layer, int zoom, List<VectorTile.Feature> items) {
     if (layer.equals("pois")) {
+      // Points, with nothing to merge; their crowd counts come from postProcessTileFeatures.
       return items;
     }
     // Planetiler's own tolerances: 0.1px, and 0.0625px at z14 because MapLibre overzooms it.
