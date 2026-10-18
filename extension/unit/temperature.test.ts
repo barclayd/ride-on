@@ -70,8 +70,9 @@ test('a ride that starts cool says until when, and draws both lines on the 0–2
     warn: false,
     label:
       'Temperature 9–18°C, feels like 6–18°C. Show temperature along the ride',
-    sentence:
-      'Feels cooler than your range (down to 6°C) until about 09:30, then in your range to the finish.',
+    headline:
+      'Feels cooler than your range (down to 6°C) until about 09:30, then in your range to the finish',
+    tone: 'even',
     high: { y: 20, label: '20°' },
     low: { y: 60, label: '10°' },
     from: '08:30',
@@ -88,46 +89,16 @@ test('a ride that starts cool says until when, and draws both lines on the 0–2
   ]);
 });
 
-test('the usual temperature gives the headline, the band and the footnote with its attribution', () => {
+test('the usual temperature gives the band and the usual range, without the averages', () => {
   const t = temperaturePanel(ride(HORSHAM), LONDON, undefined, range(10, 20));
-  expect(t?.usual).toMatchObject({
-    headline: '2° warmer than usual',
-    tone: 'warm',
+  // The chart shows how it compares with usual, so there's no headline or footnote for it.
+  expect(t?.usual).toEqual({
     sub: 'Usual for 08:30–12:55 in October: 8–18°C',
     month: 'October',
-    footnote:
-      'October average here: high 15°, low 8°. Contains Met Office data licensed under the Open Government Licence v3.0.',
+    band: expect.any(String),
   });
   expect(t?.usual?.band.startsWith('M0 50 L22.64 42')).toBe(true);
   expect(t?.usual?.band.endsWith('L0 70 Z')).toBe(true);
-  const about = temperaturePanel(
-    ride(HORSHAM, { usual: { ...USUAL, differenceC: -1.4 } }),
-    LONDON,
-    undefined,
-    range(10, 20),
-  );
-  expect(about?.usual).toMatchObject({
-    headline: 'About usual for October',
-    tone: 'even',
-  });
-  const cold = temperaturePanel(
-    ride(HORSHAM, { usual: { ...USUAL, differenceC: -2.6 } }),
-    LONDON,
-    undefined,
-    range(10, 20),
-  );
-  expect(cold?.usual?.headline).toBe('3° colder than usual');
-  // A gap in the air trace: no comparison, but the band and the usual range stay.
-  const gappy = temperaturePanel(
-    ride(HORSHAM, { usual: { ...USUAL, differenceC: null } }),
-    LONDON,
-    undefined,
-    range(10, 20),
-  );
-  expect(gappy?.usual).toMatchObject({
-    headline: null,
-    sub: 'Usual for 08:30–12:55 in October: 8–18°C',
-  });
 });
 
 test('fractional offsets from the API, as at the finish and the extremes, are fine', () => {
@@ -144,7 +115,8 @@ test('fractional offsets from the API, as at the finish and the extremes, are fi
     range(5, 20),
   );
   expect(t).toMatchObject({
-    sentence: 'Feels in your range the whole ride.',
+    headline: 'Feels in your range the whole ride',
+    tone: 'even',
     label:
       'Temperature 9–10°C, feels like 6–7°C. Show temperature along the ride',
     to: '~08:54',
@@ -181,8 +153,26 @@ test('feeling warm the whole ride is amber, with the warmest point marked', () =
   );
   expect(t).toMatchObject({
     warn: true,
-    sentence: 'Feels warmer than your range the whole ride, 15–22°C.',
+    headline: 'Feels warmer than your range the whole ride, 15–22°C',
+    tone: 'warm',
     mark: { x: 94.74, label: 'feels 22°', cool: false },
+  });
+});
+
+test('feeling cool the whole ride is the headline, in the cool tone', () => {
+  const t = temperaturePanel(
+    ride([
+      [0, 11, 9, 12],
+      [60, 12, 10, 13],
+      [90, 12, 10, 13],
+    ]),
+    LONDON,
+    undefined,
+    range(12, 20),
+  );
+  expect(t).toMatchObject({
+    headline: 'Feels cooler than your range the whole ride, 9–10°C',
+    tone: 'cool',
   });
 });
 
@@ -199,7 +189,7 @@ test('crossings under 10 minutes are ignored', () => {
     undefined,
     range(10, 20),
   );
-  expect(t?.sentence).toBe('Feels in your range the whole ride.');
+  expect(t?.headline).toBe('Feels in your range the whole ride');
   expect(t?.mark).toBeNull();
 });
 
@@ -216,8 +206,8 @@ test('three spells name each, with times to the nearest 10 minutes', () => {
     undefined,
     range(10, 20),
   );
-  expect(t?.sentence).toBe(
-    'Feels cooler than your range (down to 6°C) until about 09:00, then in your range until about 10:50, then warmer than your range (up to 24°C) to the finish.',
+  expect(t?.headline).toBe(
+    'Feels cooler than your range (down to 6°C) until about 09:00, then in your range until about 10:50, then warmer than your range (up to 24°C) to the finish',
   );
 });
 
@@ -237,7 +227,7 @@ test('without feels like it judges on air and drops the dashed line and the mark
     label: 'Temperature 9–18°C. Show temperature along the ride',
   });
   expect(
-    t?.sentence.startsWith('Feels cooler than your range (down to 9°C)'),
+    t?.headline.startsWith('Feels cooler than your range (down to 9°C)'),
   ).toBe(true);
 });
 
@@ -264,11 +254,11 @@ test('Fahrenheit labels, on the same Celsius scale', () => {
     range(10, 20),
   );
   expect(t).toMatchObject({
-    sentence:
-      'Feels cooler than your range (down to 43°F) until about 09:30, then in your range to the finish.',
+    headline:
+      'Feels cooler than your range (down to 43°F) until about 09:30, then in your range to the finish',
     high: { y: 20, label: '68°' },
     range: 'Your range 50–68°F',
-    usual: { headline: '3° warmer than usual' },
+    usual: { sub: 'Usual for 08:30–12:55 in October: 46–64°F' },
   });
 });
 

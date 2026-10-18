@@ -40,6 +40,11 @@ import {
 } from './recommendations/planning.ts';
 import { presentRoute } from './recommendations/presentation.ts';
 import type { ScoreBaselineStore } from './recommendations/score-baselines.ts';
+import {
+  createScoreChangeStore,
+  rememberScoreChanges,
+  type ScoreChangeStore,
+} from './recommendations/score-changes.ts';
 import { evaluateComparisons } from './recommendations/service.ts';
 import { readJsonBody, validateInput } from './request.ts';
 import { rideRoutes } from './rides/routes.ts';
@@ -104,6 +109,7 @@ export const createApp = (
     userStore?: UserStore;
     providers?: Readonly<Record<string, ForecastProvider>>;
     scoreBaselines?: ScoreBaselineStore;
+    scoreChanges?: ScoreChangeStore;
     cache?: ForecastCache;
     now?: () => Date;
     log?: boolean;
@@ -728,6 +734,21 @@ export const createApp = (
     const evaluation = raw.date
       ? (daily.get(raw.date) ?? evaluated)
       : evaluated;
+    const scoreChanges = await rememberScoreChanges(
+      evaluation,
+      routes,
+      raw.days ?? { kind: 'dates', dates: [input.date] },
+      input,
+      comparison.weather.selectedSource,
+      {
+        ...comparison.history,
+        affectedRouteIds: [...comparison.history.affectedRouteIds].sort(),
+        affectedRideIds: [...comparison.history.affectedRideIds].sort(),
+      },
+      c.get('ownerId'),
+      startedAt,
+      dependencies.scoreChanges ?? createScoreChangeStore(c.env.ROUTES_DB),
+    );
     const refs = await issueReferences(
       c.env.ROUTES_DB,
       c.get('ownerId'),
@@ -770,15 +791,23 @@ export const createApp = (
       ...evaluation,
       rankings: evaluation.rankings.map((r) => ({
         ...presentRoute(r, input.riding.departureStepMinutes),
-        best: r.best ? withReference(r.best, r.routeId, refs) : null,
+        best: r.best
+          ? {
+              ...withReference(r.best, r.routeId, refs),
+              scoreChange: scoreChanges.get(r.routeId) ?? null,
+            }
+          : null,
         alternatives: r.alternatives.map((a) =>
           withReference(a, r.routeId, refs),
         ),
         rank: r.rank,
       })),
-      unranked: evaluation.unranked.map((r) =>
-        presentRoute(r, input.riding.departureStepMinutes),
-      ),
+      unranked: evaluation.unranked.map((r) => ({
+        ...presentRoute(r, input.riding.departureStepMinutes),
+        best: r.best
+          ? { ...r.best, scoreChange: scoreChanges.get(r.routeId) ?? null }
+          : null,
+      })),
       recommendation: evaluation.recommendedRouteId
         ? {
             routeId: evaluation.recommendedRouteId,

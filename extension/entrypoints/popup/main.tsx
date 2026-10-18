@@ -358,7 +358,6 @@ const WhenTab = ({ view }: { view: View }) => {
   const dim = { 'data-dim': !!view.paused, inert: !!view.paused };
   return (
     <>
-      <PauseCard view={view} />
       <section {...dim} class="ro-card ro-dims">
         <Days view={view} set={set} />
         {view.banners.includes('provider') && (
@@ -787,10 +786,8 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
       {view.cards.length > 0 && (
         <Ranked
           cards={view.cards}
-          window={JSON.stringify([view.range, view.state.planning.time])}
           class="ro-rides"
-          remember
-          render={(card, _, medal, change) => (
+          render={(card, _, medal) => (
             <RouteTile
               key={card.routeId}
               view={view}
@@ -799,7 +796,6 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
               blank={false}
               index={0}
               medal={medal}
-              change={change}
               tracking={tracking}
             />
           )}
@@ -1474,6 +1470,7 @@ const PrefsTab = ({ view }: { view: View }) => {
           options={['km/h', 'mph']}
         />
       </section>
+      <PauseCard view={view} />
       <button
         type="button"
         class="ro-sign-out"

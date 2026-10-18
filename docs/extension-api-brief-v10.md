@@ -1,5 +1,12 @@
 # Extension API brief v10: keep score changes
 
+**Accepted decisions (18 October 2026):** Dan chose to keep the last badge after
+preference changes, retain separate state per plan, and use a **one-point**
+threshold. This overrides the proposed two-point threshold below. The implemented
+API v0.36.0 contract, including the `next-five-days` preset and the historical
+meaning of `to` after a quiet rebase, is documented in
+[persistent score changes](api.md#persistent-score-changes-v0360).
+
 Against API **0.35.0**, algorithm **comfort-v0.17**. Additive and display-only: no
 scoring, ranking or algorithm-version change.
 
@@ -137,7 +144,7 @@ you). When its days roll, that's a quiet rebase (§2).
 6. A route removed from the shortlist and added again starts at null.
 7. Two devices asking at the same moment get the same change, recorded once.
 
-## 7. Extension follow-up (after this ships)
+## 7. Extension follow-up (done)
 
 - Show `best.scoreChange` on the meter, and remove the local comparison in
   `Ranked` (`seen`, `ro-seen`). The reorder animation stays.

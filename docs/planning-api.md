@@ -9,7 +9,7 @@ scoring weights and standards-first ordering remain supported. No D1 migration.
 ## Search dates and optional preview
 
 `POST /recommendations` accepts exactly one of `date` or `days`. Both/neither is
-400. `days` accepts a preset (`today`, `tomorrow`, `weekend`, `next`), an inclusive
+400. `days` accepts a preset (`today`, `tomorrow`, `weekend`, `next`, `next-five-days`), an inclusive
 `{kind: "range", start, end}` of one to seven consecutive dates, or
 `{kind: "dates", dates: ["2026-10-13", "2026-10-17"]}` for separate days.
 An explicit list must contain one to seven valid dates in strictly ascending
@@ -27,7 +27,11 @@ effective IANA timezone.
 }
 ```
 
-`next` considers today through today+4 at most. `weekend` means the upcoming
+`next` considers today through today+4 at most. From API v0.36.0,
+`next-five-days` considers tomorrow through today+5 and is also accepted in saved
+planning settings. Its name provides a stable plan identity for
+[persistent score changes](api.md#persistent-score-changes-v0360) as dates roll.
+`weekend` means the upcoming
 Saturday–Sunday, current Saturday–Sunday on Saturday, or Sunday alone on Sunday.
 These resolve calendar intent first; dates demonstrably beyond returned forecast
 coverage are excluded from a multi-date selection, not replaced with other dates.

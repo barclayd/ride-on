@@ -32,6 +32,8 @@ and the decision to preserve short wind sections. Scoring remains `comfort-v0.17
 
 API v0.35.0 adds display-only temperature traces, feels-like values, hourly precipitation amounts and a UK monthly climate comparison. Scoring remains `comfort-v0.17`; see [temperature and rain along the ride](#temperature-and-rain-along-the-ride-v0350).
 
+API v0.36.0 adds [persistent score changes](#persistent-score-changes-v0360) and the `next-five-days` planning preset. Dan chose a **one-point** threshold, keeping the last badge after input changes and separate state for each plan. Scoring remains `comfort-v0.17`.
+
 API v0.34.0 adds [account-wide pauses](#pause), including automatic return dates and quiet resumption of scheduled monitoring. Scoring remains `comfort-v0.17`.
 
 API v0.33.0 separates [Strava route suggestions from grouped date-only history](strava.md#automatic-ride-matching-and-history-api-v0330). Clear matches at 90%+ coverage are logged automatically; 50–89% and ambiguous or incomplete matches require confirmation. Confirmed dates and corrections survive temporary evidence expiry.
@@ -914,6 +916,7 @@ The response includes:
 | `distanceFit` | `null` with no distance preference; otherwise `status` (`within_range`, `below_range`, `above_range`) and nonnegative `deviationKm`. Outside-range routes stay eligible. |
 | `best.departureAt`, `best.finishAt` | Suggested start and estimated finish. |
 | `best.score`, `best.weatherScore`, `best.factors` | Combined ride score, original weather-only score and temperature/wind/dryness/clear-sky/sunshine/climbing/distance factors. These are not probabilities. |
+| `best.scoreChange` | v0.36 persistent last change in the rounded Conditions score for this owner, shortlisted route and plan; null until a change is observed. See below. |
 | `best.recommendationPriority`, `best.tailwindOpportunity` | v0.27 ordering value (0–105) and separate opportunity explanation/points. Keep showing `score` for Conditions; see [contract](tailwind-opportunity.md). |
 | `best.windStretches` | Contiguous wind sections with route bounds, ride times, wind effect/direction/speed and estimated maximum adverse gust. Also on alternatives, partial assessments, day winners and next-window winners. See below. |
 | `best.temperatureAlongRide` | Ten-minute air/feels-like/usual temperature tuples, provenance and nullable monthly climate comparison. Also on alternatives, partial assessments, day winners and next-window winners. |
@@ -1030,6 +1033,87 @@ Chip colours are a client presentation rule. They do not establish whether or
 how much a condition lowered the score: rider weights, gusts, thresholds and
 rounded display values can differ from a chip's rule. Use the returned factor
 breakdown and standards failures for an accurate scoring explanation.
+
+### Persistent score changes (v0.36.0)
+
+`POST /recommendations` adds `scoreChange` to each top-level `rankings[].best`
+and `unranked[].best` when a best candidate exists:
+
+```json
+{
+  "scoreChange": {
+    "by": -1,
+    "from": 84,
+    "to": 83,
+    "changedAt": "2026-10-18T07:12:04.000Z"
+  }
+}
+```
+
+`from` and `to` are rounded integer Conditions scores, `by` is `to - from`
+(never zero), and `changedAt` is the UTC evaluation time when the server first
+recorded that change. Dan selected a **one-point threshold** on 18 October 2026,
+overriding the two-point proposal in [brief v10](extension-api-brief-v10.md).
+Compare `best.score`, not `recommendationPriority` or `weatherScore`.
+
+The first assessment establishes a reference and returns null. An unchanged
+rounded score keeps the reference, badge and timestamp. Every later change of
+at least one rounded point replaces the badge and reference. A reversal such as
+84 → 70 → 84 therefore ends with `{from: 70, to: 84, by: 14, ...}`. Each route is
+independent, and its overall best is compared even when the winner moves to
+another departure or day. Daily previews and alternatives do not receive this
+field or create additional plans.
+
+Changes to effective preferences, speed, departure step, timezone, algorithm,
+scoring route facts, applicable climate version, ride-history context, provider,
+product/source policy, forecast representation or the assessed departure set
+quietly replace the reference. They **keep the last badge and its timestamp**.
+This includes slots passing and days rolling. Local midnight alone does not reset
+anything. Display units and route names do not rebase the reference.
+
+Because a quiet rebase retains a historical badge, its `to` may differ from the
+current rounded score by more than one point. The brief's proposed one-point
+closeness guarantee cannot hold across such a rebase; `to` describes the last
+recorded forecast change, not the current reference. The next forecast change is
+measured from the rebased reference.
+
+A plan is the **requested** `days` and effective `riding.window`, before clipping
+past dates or forecast coverage. Presets compare by name; explicit ranges, date
+lists and legacy `date` requests compare by their original dates, so equivalent
+explicit selections share state. A different plan starts at null; returning to an
+earlier plan restores its badge. Requests for “Next 5 days” should now send:
+
+```json
+{ "days": { "kind": "preset", "preset": "next-five-days" } }
+```
+
+This selects tomorrow through today + 5 in the effective timezone, including
+across DST. It is also accepted in saved `settings.planning.days`. Existing `next`
+continues to select today through today + 4. The new preset has stable plan
+identity while its dates roll; changing the assessed slots quietly rebases it.
+
+State is stored in D1 per owner, route and plan, only for saved-shortlist routes.
+Unshortlisted routes return null. Removing a route from the shortlist deletes all
+its plans atomically; adding it again starts fresh. Route deletion cascades.
+Evaluations lazily expire states untouched for 30 days and cap each owner at
+1,000 rows, evicting the least recently evaluated first. Idle paused accounts do
+no automatic evaluations or cleanup, so their stored state remains until they
+evaluate again; the 30-day rule then applies. Existing manual API access while
+paused is unchanged.
+
+Writes use compare-and-set on the reference and a unique revision, with bounded
+retries. Slower older evaluations cannot overwrite newer references. Shortlist
+versions guard in-flight writes against removal/re-add. Missing storage or failed
+writes return null without failing recommendations. Forecast-cache hits still
+read/update this state; response bodies are not cached server-side. A response
+already held on a device cannot receive changes until that device requests again.
+
+Migration `0017_recommendation_score_changes.sql` must precede the Worker deploy.
+No scoring, ordering, algorithm-version, `best.previous`, monitoring-baseline or
+notification-reference behaviour changes. The extension now shows
+`best.scoreChange`, fades it in only when `changedAt` changes, no longer compares
+scores locally (`seen` / `ro-seen` are gone), and sends `next-five-days` for
+“Next 5 days”, under ranking cache key `api-0.36`.
 
 ### Temperature and rain along the ride (v0.35.0)
 

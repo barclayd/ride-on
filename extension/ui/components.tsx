@@ -9,7 +9,7 @@ import {
 } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { onStateChange, readState, type State, send } from '../lib/state';
-import type { Departure, NextWindow, Outline } from '../lib/types';
+import type { Departure, NextWindow, Outline, ScoreChange } from '../lib/types';
 import {
   type Banner,
   type Card,
@@ -562,37 +562,28 @@ const useCount = (to: number | null) => {
   return value;
 };
 
-// How far a score moved since the rider last looked (15a). It stays until newer scores replace it
-// or the popup closes: a timer could hide it before it's read (WCAG 2.2.1).
-export type Change = { by: number; at: number };
-
-// The scores last on screen, so a return to the Rides tab, or a reopened popup (`remember`), badges what
-// changed meanwhile. ±1 is forecast noise: no badge.
-type Seen = {
-  window: string;
-  cards: Pick<Card, 'routeId' | 'score'>[];
-  changes: Record<string, Change>;
-};
-let seen: Seen | undefined;
-const recall = (): Seen | undefined => {
-  try {
-    // A closed popup's badges were seen.
-    return {
-      ...JSON.parse(localStorage.getItem('ro-seen') ?? ''),
-      changes: {},
-    };
-  } catch {
-    return undefined;
-  }
-};
-
+// How far the score last moved for this plan (15a; docs/api.md, persistent score changes). The API
+// keeps it until the score moves again, so refreshes and reopenings keep it too: a timer could hide it
+// before it's read (WCAG 2.2.1). It fades in only when a new change arrives while the score is on screen.
 const Meter = (props: {
   score: number | null;
   blank: boolean;
-  change?: Change;
+  change?: ScoreChange | null;
 }) => {
   const shown = useCount(props.score);
-  const { change } = props;
+  const change = props.blank ? null : props.change;
+  const at = change?.changedAt ?? null;
+  const badge = useRef<HTMLSpanElement>(null);
+  const was = useRef<string | null>(); // the change on screen; undefined until there's a score
+  useLayoutEffect(() => {
+    if (props.blank) return;
+    if (was.current !== undefined && at !== was.current && !reducedMotion())
+      badge.current?.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: 400,
+        easing: 'ease-out',
+      });
+    was.current = at;
+  }, [at, props.blank]);
   return (
     // biome-ignore lint/a11y/useSemanticElements: the design's label row and bar; a native <meter> can't hold or style them.
     <div
@@ -607,7 +598,7 @@ const Meter = (props: {
       <span>
         <span>Conditions</span>
         {change && (
-          <span key={change.at} class="ro-delta" data-down={change.by < 0}>
+          <span ref={badge} class="ro-delta" data-down={change.by < 0}>
             {change.by < 0 ? `▼ ${-change.by}` : `▲ ${change.by}`}
           </span>
         )}
@@ -632,7 +623,6 @@ export const RouteTile = (props: {
   blank: boolean;
   index: number; // staggers the fade-in
   medal?: number | null; // the Rides tab: its place among the scored rides
-  change?: Change;
   tracking: Tracking;
 }) => {
   const { card, blank, view, medal, tracking } = props;
@@ -876,7 +866,11 @@ export const RouteTile = (props: {
       {open === rainId && rain && <RainPanel id={rainId} rain={rain} />}
       {!blank && <Notes card={card} />}
       {blank || card.score !== null ? (
-        <Meter score={card.score} blank={blank} change={props.change} />
+        <Meter
+          score={card.score}
+          blank={blank}
+          change={card.best?.scoreChange}
+        />
       ) : (
         card.state === 'incomplete' && <span class="ro-no-score">No score</span>
       )}
@@ -919,22 +913,18 @@ const DropChip = (props: {
   </li>
 );
 
-// "Temperature along the ride" (24a): how it compares with usual, then air and feels like against
-// the rider's range on a fixed 0–25°C scale, and when it feels outside it.
+// "Temperature along the ride" (24a): when it feels outside the rider's range, then air and feels
+// like against that range on a fixed 0–25°C scale, with the usual band behind them.
 const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
   const t = props.panel;
   const at = (x: number, y: number) => ({ left: `${x}%`, top: `${y}%` });
   return (
     <div class="ro-temp" id={props.id}>
       <b>Temperature along the ride</b>
-      {t.usual && (
-        <div class="ro-temp-usual">
-          {t.usual.headline && (
-            <strong data-tone={t.usual.tone}>{t.usual.headline}</strong>
-          )}
-          <span>{t.usual.sub}</span>
-        </div>
-      )}
+      <div class="ro-temp-head">
+        <strong data-tone={t.tone}>{t.headline}</strong>
+        {t.usual && <span>{t.usual.sub}</span>}
+      </div>
       <div class="ro-temp-chart" aria-hidden="true">
         <div class="ro-temp-plot">
           <svg
@@ -1000,7 +990,6 @@ const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
         <span>{t.from}</span>
         <span>{t.to}</span>
       </div>
-      <p>{t.sentence}</p>
       <ul class="ro-key">
         <li>
           <i data-key="air" />
@@ -1023,7 +1012,6 @@ const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
           {t.range}
         </li>
       </ul>
-      {t.usual && <small>{t.usual.footnote}</small>}
     </div>
   );
 };
@@ -1302,42 +1290,24 @@ const Sketch = (props: { sketch: WindSketch; along: number | null }) => {
   );
 };
 
-// A forecast update (15a): scores, bars and chips change in place, then 700ms later the cards slide to
+// A forecast update (15a): scores, bars, chips and badges change in place, then 700ms later the cards slide to
 // their new order (FLIP). The new DOM order is committed, so tab order and screen readers follow the screen.
 // Without motion (reduced, or a hidden tab) it all changes at once.
 export const Ranked = (props: {
   cards: Card[];
-  window: string; // change badges compare forecasts for the same window only
   class: string;
-  remember?: boolean; // keep what was seen across popup reopenings
   render: (
     card: Card,
     index: number,
     medal: number | null,
-    change?: Change,
   ) => ComponentChildren;
 }) => {
   const { cards } = props;
   const list = useRef<HTMLDivElement>(null);
-  const [prior] = useState(() => {
-    seen ??= props.remember ? recall() : undefined;
-    return seen?.window === props.window ? seen : undefined;
-  });
-  // First paint shows the old order and scores, so returning animates the change like a refresh.
-  const [order, setOrder] = useState(() => {
-    const ids = cards.map((c) => c.routeId);
-    const was = prior?.cards.map((c) => c.routeId) ?? [];
-    return was.length === ids.length && ids.every((id) => was.includes(id))
-      ? was
-      : ids;
-  });
-  const [settled, setSettled] = useState(!prior);
-  const [changes, setChanges] = useState(prior?.changes ?? {});
+  const [order, setOrder] = useState(() => cards.map((c) => c.routeId));
   const [said, setSaid] = useState('');
   const open = useState<string | null>(null);
-  const last = useRef<Omit<Seen, 'changes'>>(
-    prior ?? { window: props.window, cards },
-  );
+  const last = useRef(cards);
   const before = useRef(new Map<string, DOMRect>());
   const tiles = () =>
     list.current?.querySelectorAll<HTMLElement>(':scope > [data-route]') ?? [];
@@ -1358,8 +1328,7 @@ export const Ranked = (props: {
 
   useEffect(() => {
     const was = last.current;
-    last.current = { window: props.window, cards };
-    setSettled(true);
+    last.current = cards;
     const ids = cards.map((c) => c.routeId);
     // A route tracked or dropped: no motion.
     if (ids.length !== order.length || ids.some((id) => !order.includes(id))) {
@@ -1368,30 +1337,15 @@ export const Ranked = (props: {
     }
     const still = reducedMotion() || document.hidden;
     const moved = ids.some((id, i) => id !== order[i]);
-    const old = new Map(was.cards.map((c) => [c.routeId, c.score]));
-    const at = Date.now();
-    const changed = Object.fromEntries(
-      cards.flatMap((c) => {
-        const from = old.get(c.routeId);
-        return from != null && c.score !== null && Math.abs(c.score - from) > 1
-          ? [[c.routeId, { by: c.score - from, at }]]
-          : [];
-      }),
+    const old = new Map(
+      was.map((c) => [c.routeId, c.best?.scoreChange?.changedAt]),
     );
-    const any = Object.keys(changed).length > 0;
-    // New dates or times aren't a forecast change; a refresh that changed nothing keeps the badges.
-    const next = was.window !== props.window ? {} : any ? changed : changes;
-    setChanges(next);
-    const scores = cards.map(({ routeId, score }) => ({ routeId, score }));
-    seen = { window: props.window, cards: scores, changes: next };
-    if (props.remember)
-      try {
-        localStorage.setItem(
-          'ro-seen',
-          JSON.stringify({ window: props.window, cards: scores }),
-        );
-      } catch {}
-    if (still && (moved || any) && !document.hidden)
+    const changed = cards.some(
+      (c) =>
+        c.best?.scoreChange &&
+        c.best.scoreChange.changedAt !== old.get(c.routeId),
+    );
+    if (still && (moved || changed) && !document.hidden)
       list.current?.animate([{ opacity: 0.4 }, { opacity: 1 }], 150);
     const timers = moved
       ? [
@@ -1421,7 +1375,11 @@ export const Ranked = (props: {
     return () => {
       for (const timer of timers) clearTimeout(timer);
     };
-  }, [cards.map((c) => `${c.routeId}:${c.score}`).join()]);
+  }, [
+    cards
+      .map((c) => `${c.routeId}:${c.score}:${c.best?.scoreChange?.changedAt}`)
+      .join(),
+  ]);
 
   // FLIP: each card slides from where it was; those moving up pass over the rest.
   useLayoutEffect(() => {
@@ -1447,7 +1405,6 @@ export const Ranked = (props: {
   }, [order]);
 
   const byId = new Map(cards.map((c) => [c.routeId, c]));
-  const old = new Map(prior?.cards.map((c) => [c.routeId, c.score]));
   const shown = [
     ...order.filter((id) => byId.has(id)),
     ...cards.map((c) => c.routeId).filter((id) => !order.includes(id)),
@@ -1484,16 +1441,8 @@ export const Ranked = (props: {
       >
         <div ref={list} class={props.class}>
           {shown.map((id, i) => {
-            const now = byId.get(id) as Card;
-            const card = settled
-              ? now
-              : { ...now, score: old.get(id) ?? now.score };
-            return props.render(
-              card,
-              i,
-              card.score !== null ? scored++ : null,
-              changes[id],
-            );
+            const card = byId.get(id) as Card;
+            return props.render(card, i, card.score !== null ? scored++ : null);
           })}
           <span class="ro-sr" aria-live="polite">
             {said}

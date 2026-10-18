@@ -10,7 +10,13 @@ import {
   type Worker,
 } from '@playwright/test';
 import { encodePolyline } from '../lib/cycletravel';
-import type { Ride, RidePlan, RouteSummary, User } from '../lib/types';
+import type {
+  Ride,
+  RidePlan,
+  RouteSummary,
+  ScoreChange,
+  User,
+} from '../lib/types';
 import {
   addDays,
   applyPatch,
@@ -76,6 +82,7 @@ let providerDown: boolean; // every forecast failed, as with a mis-chosen provid
 let sunshineUncertain: boolean;
 let replays: Map<string, Ride>;
 let scores: Record<string, number>; // a route's score, in place of 84 then 44
+let changes: Record<string, ScoreChange>; // the API's last recorded score change for a route
 let freshFor: number; // hours until the forecast behind the scores goes stale
 let trackedRide: any;
 let trackingVersion: number;
@@ -89,6 +96,7 @@ const reset = () => {
   sunshineUncertain = false;
   replays = new Map();
   scores = {};
+  changes = {};
   freshFor = 3;
   pauseDown = false;
   user = {
@@ -419,7 +427,13 @@ const daySummary = (i: number, selected: boolean) => {
 
 // One ranking across the planned days; ridden roads cost a little with Prefer variety.
 const recommendations = (body: any) => {
-  const planned = planningDates(body.days, day(0));
+  // next-five-days is the extension's Next 5 days: tomorrow through today + 5.
+  const planned = planningDates(
+    body.days.preset === 'next-five-days'
+      ? { kind: 'preset', preset: 'next' }
+      : body.days,
+    day(0),
+  );
   const days = Array.from({ length: 7 }, (_, i) =>
     daySummary(i, !!planned?.includes(day(i))),
   );
@@ -454,6 +468,7 @@ const recommendations = (body: any) => {
           best: {
             recommendationRef: `${routeId}:${date}`,
             ...best(date, i, scores[routeId] ?? 84 - i * 40), // a second route scores 44: Not recommended
+            scoreChange: changes[routeId] ?? null,
             recentRides: recent(routeId)
               ? { status: 'assessed', penaltyPoints: 3 }
               : {
@@ -827,8 +842,8 @@ test('Rides tab opens first with one request for the planned days', async ({
   expect(recCalls()).toHaveLength(1);
   expect(recCalls()[0].body).toEqual({
     routeIds: ['r101'],
-    // Next 5 days starts tomorrow
-    days: { kind: 'dates', dates: [day(1), day(2), day(3), day(4), day(5)] },
+    // Next 5 days starts tomorrow: the API's next-five-days, not its next
+    days: { kind: 'preset', preset: 'next-five-days' },
     previewDays: 7,
     riding: { window: 'daylight' },
   });
@@ -939,8 +954,11 @@ test('a refresh shows how scores changed, then moves the rides into order', asyn
   await expect(cards.first()).toContainText('Hilly Loop');
   await expect(page.locator('.ro-heading')).toContainText('Updated just now');
   scores = { r102: 90 };
+  changes = {
+    r102: { by: 46, from: 44, to: 90, changedAt: new Date().toISOString() },
+  };
   await page.getByRole('button', { name: 'Refresh forecast' }).click();
-  // Step 1, in place: the score changes on the second card.
+  // Step 1, in place: the score and its change badge update on the second card.
   await expect(cards.nth(1).locator('.ro-delta')).toHaveText('▲ 46');
   await expect(cards.nth(1)).toContainText('Coast & Back');
   // Step 2: it moves to the top and takes the gold medal.
@@ -955,46 +973,61 @@ test('a refresh shows how scores changed, then moves the rides into order', asyn
     'Forecast updated. Coast & Back is now top, then Hilly Loop.',
   );
   await expect(cards.first().locator('.ro-meter strong')).toHaveText('90');
+  await expect(cards.first().locator('.ro-delta')).toHaveText('▲ 46');
   await expect(
     page.getByRole('button', { name: 'Refresh forecast' }),
   ).toBeEnabled();
   await page.screenshot({ path: test.info().outputPath('reordered.png') });
 });
 
-test('badges show what changed since the rides were last on screen', async ({
+test("badges are the API's last score change, kept until it records another", async ({
   context,
   worker,
   extensionId,
 }) => {
+  const changedAt = '2026-10-18T07:12:04.000Z';
+  scores = { r101: 70 };
+  changes = { r101: { by: -14, from: 84, to: 70, changedAt } };
   await signIn(worker);
   const page = await openPopup(context, extensionId);
   const meter = page.locator('.ro-ride').first().locator('.ro-meter');
-  await expect(meter).toHaveText('Conditions84/100');
-  const rescore = async (score: number, mode: string) => {
-    await page.getByRole('tab', { name: 'Preferences' }).click();
-    scores = { r101: score };
+  await expect(meter.locator('strong')).toHaveText('70');
+  await expect(meter.locator('.ro-delta')).toHaveText('▼ 14');
+  await expect(meter.locator('.ro-delta')).toHaveAttribute('data-down', 'true');
+  const refresh = async (on = page) => {
     const before = recCalls().length;
-    await page.getByRole('button', { name: mode }).click();
+    await on.getByRole('button', { name: 'Refresh forecast' }).click();
     await expect.poll(() => recCalls().length).toBe(before + 1);
   };
 
-  // Rescored while Preferences was open: back on Rides, the badge says how far.
-  await rescore(70, 'Prefer variety');
-  await page.getByRole('tab', { name: 'Rides' }).click();
+  // A quiet rebase moves the score but keeps the API's badge: nothing is compared here.
+  scores = { r101: 66 };
+  await refresh();
+  await expect(meter.locator('strong')).toHaveText('66');
   await expect(meter.locator('.ro-delta')).toHaveText('▼ 14');
-  await expect(meter.locator('strong')).toHaveText('70');
 
-  // Rescored, then the popup closed: reopening still shows the change.
-  await rescore(80, 'Happy to repeat');
+  // Reopening keeps it, without fading it in again.
   await page.close();
   const again = await openPopup(context, extensionId);
   const badge = again.locator('.ro-ride .ro-delta');
-  await expect(badge).toHaveText('▲ 10');
-  await again.close();
-  // Seen, so the next visit is clear.
-  const third = await openPopup(context, extensionId);
-  await expect(third.locator('.ro-ride .ro-meter strong')).toHaveText('80');
-  await expect(third.locator('.ro-delta')).toHaveCount(0);
+  await expect(badge).toHaveText('▼ 14');
+  expect(await badge.evaluate((el) => el.getAnimations().length)).toBe(0);
+
+  // The next recorded change replaces it.
+  scores = { r101: 80 };
+  changes = {
+    r101: { by: 14, from: 66, to: 80, changedAt: '2026-10-18T09:00:00.000Z' },
+  };
+  await refresh(again);
+  await expect(badge).toHaveText('▲ 14');
+  await expect(badge).toHaveAttribute('data-down', 'false');
+
+  // No change recorded for this plan: no badge, though the score moved.
+  scores = { r101: 50 };
+  changes = {};
+  await refresh(again);
+  await expect(again.locator('.ro-ride .ro-meter strong')).toHaveText('50');
+  await expect(badge).toHaveCount(0);
 });
 
 test('reopening reuses fresh scores; a stale forecast or the refresh button ranks again', async ({
@@ -1534,7 +1567,7 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   await expect(page.locator('.ro-ride').first()).toContainText('Hilly Loop');
   expect(recCalls()).toHaveLength(1);
 
-  await page.getByRole('tab', { name: 'When' }).click();
+  await page.getByRole('tab', { name: 'Preferences' }).click();
   const card = page.locator('.ro-pause');
   const toggle = card.getByRole('switch', { name: 'Pause Ride On' });
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -1550,10 +1583,6 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   await expect(pill).toHaveText(
     `Paused until ${weekday(day(7))} ${dayOfMonth(day(7))}`,
   );
-  const dims = page.locator('.ro-dims');
-  await expect(dims).toHaveCount(3);
-  for (const dim of await dims.all())
-    await expect(dim).toHaveCSS('opacity', '0.45');
   await card.getByRole('button', { name: 'After 3 days' }).click();
   await expect(card).toContainText(`Back on ${shortDate(day(3))}.`);
   await expect(pill).toHaveText(
@@ -1583,6 +1612,15 @@ test('pausing hides forecasts until Ride On turns back on', async ({
     .poll(() => worker.evaluate("chrome.alarms.get('resume')"))
     .toBeUndefined();
   await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('prefs-paused.png') });
+
+  // The When tab keeps the rider's days and times, greyed out.
+  await page.getByRole('tab', { name: 'When' }).click();
+  await expect(card).toHaveCount(0);
+  const dims = page.locator('.ro-dims');
+  await expect(dims).toHaveCount(3);
+  for (const dim of await dims.all())
+    await expect(dim).toHaveCSS('opacity', '0.45');
   await page.screenshot({ path: test.info().outputPath('when-paused.png') });
 
   // The Rides tab has the status line and no cards; reopening asks for no forecasts.
@@ -1607,8 +1645,9 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   expect(recCalls()).toHaveLength(2);
   await expect.poll(pauseCalls).toEqual([day(7), day(3), null, 'DELETE']);
   await page.getByRole('tab', { name: 'When' }).click();
-  await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await expect(dims.first()).toHaveCSS('opacity', '1');
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
 
   // A write that fails puts the switch back and says so.
   pauseDown = true;
@@ -1645,7 +1684,8 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   const back = await openPopup(context, extensionId);
   await expect(back.locator('.ro-ride').first()).toContainText('Hilly Loop');
   await expect(back.locator('.ro-paused')).toHaveCount(0);
-  expect(recCalls()).toHaveLength(rides + 1);
+  // The kept rides can show before the fresh ranking lands.
+  await expect.poll(() => recCalls().length).toBe(rides + 1);
   // A daily read catches changes with the panel closed.
   expect(
     await worker.evaluate(
@@ -1880,19 +1920,19 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await wind.click();
   await expect(along).toBeHidden();
   await expect(module.locator('[aria-expanded="true"]')).toHaveCount(0);
-  // Temperature along the ride (24a): against usual, the chart, then when it feels outside the range.
+  // Temperature along the ride (24a): when it feels outside the range, then the chart against usual.
   await temp.click();
   const warmth = module.locator('.ro-temp');
   await expect(warmth.locator('b')).toHaveText('Temperature along the ride');
-  await expect(warmth.locator('.ro-temp-usual strong')).toHaveText(
-    '2° colder than usual',
+  await expect(warmth.locator('.ro-temp-head strong')).toHaveText(
+    /^Feels cooler than your range \(down to 6°C\) until about \d\d:\d0, then in your range to the finish$/,
   );
-  await expect(warmth.locator('.ro-temp-usual span')).toHaveText(
+  await expect(warmth.locator('.ro-temp-head span')).toHaveText(
     /^Usual for \d\d:\d\d–\d\d:\d\d in \w+: 7–16°C$/,
   );
-  await expect(warmth.locator('p')).toHaveText(
-    /^Feels cooler than your range \(down to 6°C\) until about \d\d:\d0, then in your range to the finish\.$/,
-  );
+  // No comparison with usual, averages or licence line: the chart shows how it compares.
+  await expect(warmth).not.toContainText('than usual');
+  await expect(warmth.locator('p, small')).toHaveCount(0);
   await expect(warmth.locator('.ro-temp-end')).toHaveText(['9°', '14°']);
   await expect(warmth.locator('.ro-temp-feels-label')).toHaveText('feels 6°');
   await expect(warmth.locator('.ro-temp-gutter span')).toHaveText([
@@ -1905,9 +1945,6 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     /^Usual in \w+$/,
     'Your range 10–22°C',
   ]);
-  await expect(warmth.locator('small')).toHaveText(
-    /^\w+ average here: high 15°, low 8°\. Contains Met Office data licensed under the Open Government Licence v3\.0\.$/,
-  );
   await module.screenshot({ path: test.info().outputPath('temperature.png') });
   // Rain along the ride (25b) replaces it: a card per hour with its chance and amount.
   await rain.click();
@@ -2025,7 +2062,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     .click();
   await expect(tiles).toHaveCount(1);
   await expect(toast.locator('span')).toHaveText(
-    'Stopped tracking Coast & Back',
+    'Removed Coast & Back from your shortlist',
   );
   // It sits in the window's bottom right corner, over the page.
   await expect
@@ -2129,7 +2166,9 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
   await module
     .getByRole('button', { name: /^Temperature 48–57°F, feels like 43–52°F\./ })
     .click();
-  await expect(module.locator('.ro-temp p')).toContainText('(down to 43°F)');
+  await expect(module.locator('.ro-temp-head strong')).toContainText(
+    '(down to 43°F)',
+  );
   await expect(module.locator('.ro-temp .ro-key li').last()).toHaveText(
     'Your range 50–72°F',
   );

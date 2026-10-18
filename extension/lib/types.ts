@@ -214,6 +214,9 @@ export type Departure = {
   temperatureAlongRide?: TemperatureAlongRide;
   // docs/tailwind-opportunity.md: ordering only, never shown as a number. Null when unranked.
   tailwindOpportunity?: { priorityPoints: number } | null;
+  // docs/api.md, persistent score changes (v0.36.0): the last change of the overall best's score
+  // for this plan. Null on the first assessment and for routes off the shortlist.
+  scoreChange?: ScoreChange | null;
   date: string;
   departureAt: string;
   finishAt: string;
@@ -227,6 +230,12 @@ export type Departure = {
     status: 'disabled' | 'no_recent_history' | 'assessed' | 'unavailable';
     penaltyPoints: number;
   };
+};
+export type ScoreChange = {
+  by: number; // to - from, never zero
+  from: number;
+  to: number; // may differ from the current score after a quiet rebase
+  changedAt: string;
 };
 // [minutesFromDeparture, airC, feelsLikeC, usualC]: every 10 minutes, the finish and the extremes.
 export type TemperaturePoint = [
