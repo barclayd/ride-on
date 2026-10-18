@@ -20,6 +20,8 @@
   --ro-border-2: #dfe5d4;
   --ro-border-input: #d3dac6;
   --ro-warn-fg: #8a4b17;
+  --ro-cool: #3d5f7d; /* feels cooler, colder than usual */
+  --ro-rain-ink: #2f5f8a;
   --ro-warn-bg: #fbefe2;
   color: var(--ro-ink);
   font-family: var(--ro-sans);
@@ -904,15 +906,20 @@ a.ro-name:hover {
 .ro-chips li[data-warn="true"] svg {
   color: #b4692a;
 }
-/* The sky and wind chips open their dropdowns (handoff v4, wind board 7). The sky is never amber and is
-   dashed when part of the ride isn't forecast; the wind is amber when it costs points. */
+/* The chips open their dropdowns (handoff v4, wind board 7, v7). The sky is never amber and is dashed when
+   part of the ride isn't forecast; the wind is amber when it costs points, the temperature when it feels
+   outside the rider's range for over half the ride, and the rain blue once an hour reaches 40%. */
+.ro-chips li.ro-temp-chip,
 .ro-chips li.ro-sky-chip,
-.ro-chips li.ro-wind-chip {
+.ro-chips li.ro-wind-chip,
+.ro-chips li.ro-rain-chip {
   padding: 0;
   background: none;
 }
+.ro-temp-chip button,
 .ro-sky-chip button,
-.ro-wind-chip button {
+.ro-wind-chip button,
+.ro-rain-chip button {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -924,8 +931,10 @@ a.ro-name:hover {
   font: inherit;
   cursor: pointer;
 }
+.ro-temp-chip button:hover,
 .ro-sky-chip button:hover,
-.ro-wind-chip button:hover {
+.ro-wind-chip button:hover,
+.ro-rain-chip button:hover {
   filter: brightness(0.97);
 }
 .ro-sky-chip button[data-partial="true"] {
@@ -937,18 +946,318 @@ a.ro-name:hover {
 .ro-sky-chip button[data-partial="true"] svg {
   color: var(--ro-muted);
 }
+.ro-temp-chip button[data-warn="true"],
 .ro-wind-chip button[data-warn="true"] {
   background: var(--ro-warn-bg);
   color: var(--ro-warn-fg);
 }
+.ro-temp-chip button[data-warn="true"] svg,
 .ro-wind-chip button[data-warn="true"] svg {
   color: #b4692a;
+}
+.ro-rain-chip button[data-wet="true"] {
+  background: #e3edf5;
+  color: var(--ro-rain-ink);
+}
+.ro-rain-chip button[data-wet="true"] svg {
+  color: var(--ro-rain-ink);
 }
 .ro-chevron {
   transition: transform 0.2s;
 }
 [aria-expanded="true"] > .ro-chevron {
   transform: rotate(180deg);
+}
+/* "Temperature along the ride" (24a) and "Rain along the ride" (25b). */
+.ro-temp,
+.ro-rain {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: #f5f7f1;
+  border-radius: 8px;
+  padding: 10px 12px 12px;
+}
+.ro-temp > b,
+.ro-rain > b {
+  font: 600 12px var(--ro-sans);
+  color: var(--ro-olive-ink);
+}
+.ro-temp p,
+.ro-rain p {
+  margin: 0;
+  font: 500 13px / 1.45 var(--ro-serif);
+  color: var(--ro-ink);
+  text-wrap: pretty;
+}
+.ro-temp-usual {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ro-temp-usual strong,
+.ro-rain > strong {
+  font: 700 17px / 1.25 var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-temp-usual strong[data-tone="warm"] {
+  color: var(--ro-warn-fg);
+}
+.ro-temp-usual strong[data-tone="cool"] {
+  color: var(--ro-cool);
+}
+.ro-temp-usual span {
+  font: 500 12px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-temp-chart {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 6px;
+}
+.ro-temp-plot,
+.ro-temp-gutter {
+  position: relative;
+  height: 112px;
+  margin: 14px 0;
+}
+.ro-temp-plot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.ro-temp-plot svg * {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.ro-temp-plot .ro-temp-band {
+  fill: #d9e4e6;
+}
+.ro-temp-range {
+  stroke: var(--ro-olive-700);
+  stroke-width: 1.5px;
+}
+.ro-temp-base {
+  stroke: #d3d9ca;
+  stroke-width: 1px;
+}
+.ro-temp-feels {
+  stroke: var(--ro-muted);
+  stroke-width: 1.75px;
+  stroke-dasharray: 4 3;
+  stroke-linecap: round;
+}
+.ro-temp-air {
+  stroke: var(--ro-olive-900);
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ro-temp-dot,
+.ro-temp-mark {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.ro-temp-dot {
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  background: var(--ro-olive-900);
+  box-shadow: 0 0 0 2px #f5f7f1;
+}
+.ro-temp-mark {
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border: 2px solid var(--ro-warn-fg);
+  background: #fff;
+}
+.ro-temp-mark[data-cool="true"] {
+  border-color: var(--ro-cool);
+}
+/* Labels hang off their point: below it unless said otherwise, the finish's right-aligned. */
+.ro-temp-end,
+.ro-temp-feels-label {
+  --ro-tx: 0;
+  --ro-ty: 35%;
+  position: absolute;
+  transform: translate(var(--ro-tx), var(--ro-ty));
+  white-space: nowrap;
+}
+.ro-temp-end {
+  font: 700 12px var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-temp-end[data-above="true"] {
+  --ro-ty: -135%;
+}
+.ro-temp-end[data-end="true"],
+.ro-temp-feels-label[data-side="end"] {
+  --ro-tx: -100%;
+}
+.ro-temp-feels-label {
+  --ro-tx: -50%;
+  --ro-ty: -145%;
+  font: 700 11px var(--ro-sans);
+  color: var(--ro-warn-fg);
+}
+.ro-temp-feels-label[data-side="start"] {
+  --ro-tx: 0;
+}
+.ro-temp-feels-label[data-cool="true"] {
+  --ro-ty: 45%;
+  color: var(--ro-cool);
+}
+.ro-temp-gutter span {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  font: 600 11px var(--ro-serif);
+  color: var(--ro-olive-900);
+}
+.ro-ends.ro-temp-ends {
+  margin: -12px 30px 0 0;
+}
+.ro-temp small {
+  font: 400 11px / 1.45 var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 600 12px var(--ro-sans);
+  color: var(--ro-ink);
+}
+.ro-key li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ro-key i {
+  flex: none;
+  box-sizing: border-box;
+  border-radius: 2px;
+}
+.ro-key [data-key="air"] {
+  width: 16px;
+  height: 2.5px;
+  background: var(--ro-olive-900);
+}
+.ro-key [data-key="feels"] {
+  width: 16px;
+  border-top: 2px dashed var(--ro-muted);
+  border-radius: 0;
+}
+.ro-key [data-key="usual"] {
+  width: 12px;
+  height: 10px;
+  background: #d9e4e6;
+}
+.ro-key [data-key="range"] {
+  width: 14px;
+  height: 10px;
+  border-block: 1.5px solid var(--ro-olive-700);
+  border-radius: 0;
+}
+.ro-key [data-key="chance"] {
+  width: 16px;
+  height: 4px;
+  background: #5f8fb8;
+}
+.ro-key [data-level] {
+  width: 10px;
+  height: 10px;
+  background: var(--ro-level);
+}
+/* Rain intensity in mm in the hour: light, moderate, heavy; none has no colour. */
+.ro-rain [data-level="1"] {
+  --ro-level: #a9c4dc;
+}
+.ro-rain [data-level="2"] {
+  --ro-level: #5f8fb8;
+}
+.ro-rain [data-level="3"] {
+  --ro-level: #2f5f8a;
+}
+.ro-rain > strong[data-wet="false"] {
+  color: var(--ro-olive-ink);
+}
+.ro-rain > strong[data-wet="true"] {
+  color: var(--ro-rain-ink);
+}
+/* About six cards fit; a longer ride's row scrolls sideways. */
+.ro-rain-hours {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.ro-rain-hours li {
+  flex: 1 0 44px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 2px 8px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #e3e7dc;
+}
+.ro-rain-hours li[data-wet="true"] {
+  background: #e8f0f7;
+}
+.ro-rain-hours span {
+  font: 500 11px var(--ro-serif);
+  color: var(--ro-muted);
+}
+.ro-rain-hours b {
+  font: 500 16px var(--ro-sans);
+  color: var(--ro-muted);
+}
+.ro-rain-hours li[data-wet="true"] b {
+  font-weight: 700;
+  color: var(--ro-rain-ink);
+}
+.ro-rain-hours li > i {
+  width: 70%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(29 33 22 / 0.08);
+  overflow: hidden;
+}
+.ro-rain-hours li > i > i {
+  display: block;
+  height: 100%;
+  background: #5f8fb8;
+}
+.ro-rain-hours svg {
+  fill: var(--ro-level, none);
+  stroke: var(--ro-level, #a9b0a0);
+}
+.ro-rain-hours em {
+  font: 600 11px var(--ro-sans);
+  font-style: normal;
+  color: var(--ro-cool);
+  white-space: nowrap;
+}
+.ro-rain-hours em[data-level="0"] {
+  color: var(--ro-muted-2);
+}
+.ro-rain-hours small {
+  margin-top: -4px;
+  font: 500 10px var(--ro-serif);
+  color: var(--ro-muted);
+  white-space: nowrap;
 }
 .ro-sky,
 .ro-wind {

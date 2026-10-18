@@ -141,6 +141,10 @@ export type Conditions = {
   averageTailwindKph: number;
   averageCrosswindKph: number;
   maximumPrecipitationProbability: number;
+  maximumPrecipitationRateMmH?: number;
+  // docs/extension-api-brief-v9.md: the wettest hour where the rider is, in mm; absent before it ships.
+  maximumPrecipitationAmountMm?: number;
+  precipitationAmountBasis?: 'hourly-accumulation' | 'rate-estimate' | 'mixed';
   maximumGustKph?: number;
   gustExposure?: {
     directionBasis: 'prevailing-wind-estimate';
@@ -195,6 +199,8 @@ export type Departure = {
   rideHours?: { start: string; end: string; conditions: Conditions | null }[];
   // docs/extension-api-brief-v7.md: contiguous stretches covering the route; absent before it ships.
   windStretches?: WindStretch[];
+  // docs/extension-api-brief-v9.md: air and feels like through the ride; absent before it ships.
+  temperatureAlongRide?: TemperatureAlongRide;
   // docs/tailwind-opportunity.md: ordering only, never shown as a number. Null when unranked.
   tailwindOpportunity?: { priorityPoints: number } | null;
   date: string;
@@ -210,6 +216,28 @@ export type Departure = {
     status: 'disabled' | 'no_recent_history' | 'assessed' | 'unavailable';
     penaltyPoints: number;
   };
+};
+// [minutesFromDeparture, airC, feelsLikeC, usualC]: every 10 minutes, the finish and the extremes.
+export type TemperaturePoint = [
+  number,
+  number | null,
+  number | null,
+  number | null,
+];
+export type TemperatureAlongRide = {
+  points: TemperaturePoint[];
+  feelsLikeBasis: 'provider' | 'derived' | 'mixed' | null;
+  // The month's usual temperature here; null outside the climate grid (the UK for now).
+  usual: {
+    month: number;
+    averageHighC: number;
+    averageLowC: number;
+    bandHalfWidthC: number;
+    differenceC: number | null; // null when the air trace has a gap
+    method: string;
+    coveredDistanceFraction: number;
+    source: { attribution: string };
+  } | null;
 };
 export type WindEffect = 'tailwind' | 'crosswind' | 'headwind' | 'light';
 export type WindStretch = {

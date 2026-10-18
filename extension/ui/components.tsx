@@ -23,6 +23,8 @@ import {
   skyChip,
   viewOf,
 } from './format';
+import { type Rain, rainPanel } from './rain';
+import { type TemperaturePanel, temperaturePanel } from './temperature';
 import { DIAL, SKETCH, type WindSketch, windPanel } from './wind';
 
 export const iconUrl = () => browser.runtime.getURL('/ride-on-icon.png');
@@ -155,7 +157,7 @@ const STATES: Record<Exclude<CardState, 'meets'>, string> = {
 const MEDALS = ['Gold', 'Silver', 'Bronze'];
 // Called just before a tile is removed, so Ranked can slide the rest into place (21a).
 const Leaving = createContext(() => {});
-// The open sky or wind dropdown, by element id: opening one closes the rest.
+// The open temperature, sky, wind or rain dropdown, by element id: opening one closes the rest.
 const OpenPanel = createContext<
   [string | null, (id: string | null) => void] | null
 >(null);
@@ -170,7 +172,7 @@ const Slot = (props: { class: string; children: ComponentChildren }) => (
 
 // 16-unit stroke icons from the design (11b).
 const ICONS: Record<
-  Chip['icon'] | 'clock' | 'route' | 'star' | 'chevron' | 'arrow',
+  Chip['icon'] | 'clock' | 'route' | 'star' | 'chevron' | 'arrow' | 'drop',
   ComponentChildren
 > = {
   route: (
@@ -213,6 +215,7 @@ const ICONS: Record<
       <path d="M2.5 2.5l11 11" />
     </>
   ),
+  drop: <path d="M8 2.2C8 2.2 4 6.6 4 9.6a4 4 0 0 0 8 0C12 6.6 8 2.2 8 2.2z" />,
   wet: (
     <>
       <path d="M4.5 9.5a3 3 0 0 1 .4-6 4 4 0 0 1 7.4 1.2A2.5 2.5 0 0 1 12 9.5z" />
@@ -627,8 +630,20 @@ export const RouteTile = (props: {
         view.state.user?.preferenceLevels,
       )
     : [];
+  const temp =
+    card.best &&
+    temperaturePanel(
+      card.best,
+      view.timeZone,
+      view.state.units,
+      view.state.user?.settings.preferences,
+    );
+  const rain = card.best && rainPanel(card.best, view.timeZone);
+  const tempId = `ro-temp-${card.routeId}`;
   const skyId = `ro-sky-${card.routeId}`;
   const windId = `ro-wind-${card.routeId}`;
+  const rainId = `ro-rain-${card.routeId}`;
+  const drop = { open, toggle };
   // Paused (handoff v6 §4): name and distance in the plain style; Edit still removes it.
   if (view.paused)
     return (
@@ -736,65 +751,71 @@ export const RouteTile = (props: {
       <Slot class="ro-conditions">
         {card.best ? (
           <ul class="ro-chips">
-            {/* Temperature, sky, wind, rain (handoff v4); sky and wind open their dropdowns. */}
-            {[chips[0], ...(sky ? [sky] : []), ...chips.slice(1)].map((chip) =>
-              // Keyed by text: a changed chip fades in afresh.
-              chip === sky && sky.segments ? (
-                <li key={chip.text} class="ro-sky-chip">
-                  <button
-                    type="button"
-                    aria-expanded={open === skyId}
-                    aria-controls={skyId}
-                    aria-label={`${sky.label}. Show expected conditions`}
-                    data-partial={sky.partial}
-                    onClick={() => toggle(skyId)}
-                  >
-                    <Icon name={chip.icon} size={16} />
-                    {chip.text}
-                    <Icon
-                      name="chevron"
-                      size={12}
-                      weight={1.6}
-                      class="ro-chevron"
-                    />
-                  </button>
-                </li>
-              ) : chip === chips[1] ? (
-                <li key={chip.text} class="ro-wind-chip">
-                  <button
-                    type="button"
-                    aria-expanded={open === windId}
-                    aria-controls={windId}
-                    aria-label={`${chip.label}${chip.warn ? ', costs points' : ''}. Show wind along the ride`}
-                    data-warn={chip.warn}
-                    onClick={() => toggle(windId)}
-                  >
-                    <Icon name={chip.icon} size={16} />
-                    {chip.text}
-                    <Icon
-                      name="chevron"
-                      size={12}
-                      weight={1.6}
-                      class="ro-chevron"
-                    />
-                  </button>
-                </li>
+            {/* Temperature, sky, wind, rain (handoff v4); each opens its dropdown once there's data for it
+                (v7). Keyed by text: a changed chip fades in afresh. */}
+            {temp ? (
+              <DropChip
+                key={chips[0].text}
+                {...drop}
+                id={tempId}
+                class="ro-temp-chip"
+                chip={{ ...chips[0], label: temp.label, warn: temp.warn }}
+              />
+            ) : (
+              <PlainChip key={chips[0].text} chip={chips[0]} />
+            )}
+            {sky &&
+              (sky.segments ? (
+                <DropChip
+                  key={sky.text}
+                  {...drop}
+                  id={skyId}
+                  class="ro-sky-chip"
+                  chip={{
+                    ...sky,
+                    label: `${sky.label}. Show expected conditions`,
+                    warn: false,
+                  }}
+                  partial={sky.partial}
+                />
               ) : (
-                <li
-                  key={chip.text}
-                  aria-label={chip.label}
-                  data-warn={chip.warn}
-                >
-                  <Icon name={chip.icon} size={16} />
-                  {chip.text}
-                </li>
-              ),
+                <PlainChip key={sky.text} chip={sky} />
+              ))}
+            <DropChip
+              key={chips[1].text}
+              {...drop}
+              id={windId}
+              class="ro-wind-chip"
+              chip={{
+                ...chips[1],
+                label: `${chips[1].label}${chips[1].warn ? ', costs points' : ''}. Show wind along the ride`,
+              }}
+            />
+            {rain ? (
+              <DropChip
+                key={rain.text}
+                {...drop}
+                id={rainId}
+                class="ro-rain-chip"
+                chip={{
+                  icon: rain.dry ? 'dry' : 'drop',
+                  text: rain.text,
+                  label: rain.label,
+                  warn: false,
+                }}
+                wet={rain.wet}
+              />
+            ) : (
+              <PlainChip key={chips[2].text} chip={chips[2]} />
             )}
           </ul>
         ) : (
           <span>{card.reason}</span>
         )}
       </Slot>
+      {open === tempId && card.best && temp && (
+        <TemperatureChart id={tempId} panel={temp} />
+      )}
       {open === skyId && card.best && sky?.segments && sky.legend && (
         <div class="ro-sky" id={skyId}>
           <b>Expected conditions along the ride</b>
@@ -826,12 +847,211 @@ export const RouteTile = (props: {
           view={view}
         />
       )}
+      {open === rainId && rain && <RainPanel id={rainId} rain={rain} />}
       {!blank && <Notes card={card} />}
       {blank || card.score !== null ? (
         <Meter score={card.score} blank={blank} change={props.change} />
       ) : (
         card.state === 'incomplete' && <span class="ro-no-score">No score</span>
       )}
+    </div>
+  );
+};
+
+const PlainChip = (props: { chip: Chip }) => (
+  <li aria-label={props.chip.label} data-warn={props.chip.warn}>
+    <Icon name={props.chip.icon} size={16} />
+    {props.chip.text}
+  </li>
+);
+
+// A chip that opens its dropdown under the row, with a chevron that turns (handoff v4, v7).
+const DropChip = (props: {
+  id: string;
+  class: string;
+  chip: Omit<Chip, 'icon'> & { icon: keyof typeof ICONS };
+  open: string | null;
+  toggle: (id: string) => void;
+  partial?: boolean;
+  wet?: boolean;
+}) => (
+  <li class={props.class}>
+    <button
+      type="button"
+      aria-expanded={props.open === props.id}
+      aria-controls={props.id}
+      aria-label={props.chip.label}
+      data-warn={props.chip.warn}
+      data-partial={props.partial}
+      data-wet={props.wet}
+      onClick={() => props.toggle(props.id)}
+    >
+      <Icon name={props.chip.icon} size={16} />
+      {props.chip.text}
+      <Icon name="chevron" size={12} weight={1.6} class="ro-chevron" />
+    </button>
+  </li>
+);
+
+// "Temperature along the ride" (24a): how it compares with usual, then air and feels like against
+// the rider's range on a fixed 0–25°C scale, and when it feels outside it.
+const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
+  const t = props.panel;
+  const at = (x: number, y: number) => ({ left: `${x}%`, top: `${y}%` });
+  return (
+    <div class="ro-temp" id={props.id}>
+      <b>Temperature along the ride</b>
+      {t.usual && (
+        <div class="ro-temp-usual">
+          {t.usual.headline && (
+            <strong data-tone={t.usual.tone}>{t.usual.headline}</strong>
+          )}
+          <span>{t.usual.sub}</span>
+        </div>
+      )}
+      <div class="ro-temp-chart" aria-hidden="true">
+        <div class="ro-temp-plot">
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            {t.usual && <path d={t.usual.band} class="ro-temp-band" />}
+            {[t.high.y, t.low.y].map((y) => (
+              <line
+                key={y}
+                x1="0"
+                y1={y}
+                x2="100"
+                y2={y}
+                class="ro-temp-range"
+              />
+            ))}
+            <line x1="0" y1="100" x2="100" y2="100" class="ro-temp-base" />
+            {t.feels && <path d={t.feels} class="ro-temp-feels" />}
+            <path d={t.air} class="ro-temp-air" />
+          </svg>
+          {t.ends.map((e) => (
+            <i key={`${e.end}`} class="ro-temp-dot" style={at(e.x, e.y)} />
+          ))}
+          {t.ends.map((e) => (
+            <span
+              key={`${e.end}`}
+              class="ro-temp-end"
+              data-above={e.above}
+              data-end={e.end}
+              style={at(e.x, e.y)}
+            >
+              {e.label}
+            </span>
+          ))}
+          {t.mark && (
+            <>
+              <i
+                class="ro-temp-mark"
+                data-cool={t.mark.cool}
+                style={at(t.mark.x, t.mark.y)}
+              />
+              <span
+                class="ro-temp-feels-label"
+                data-cool={t.mark.cool}
+                data-side={
+                  t.mark.x > 70 ? 'end' : t.mark.x < 10 ? 'start' : 'middle'
+                }
+                style={at(t.mark.x, t.mark.y)}
+              >
+                {t.mark.label}
+              </span>
+            </>
+          )}
+        </div>
+        <div class="ro-temp-gutter">
+          <span style={{ top: `${t.high.y}%` }}>{t.high.label}</span>
+          <span style={{ top: `${t.low.y}%` }}>{t.low.label}</span>
+        </div>
+      </div>
+      <div class="ro-ends ro-temp-ends" aria-hidden="true">
+        <span>{t.from}</span>
+        <span>{t.to}</span>
+      </div>
+      <p>{t.sentence}</p>
+      <ul class="ro-key">
+        <li>
+          <i data-key="air" />
+          Temperature
+        </li>
+        {t.feels && (
+          <li>
+            <i data-key="feels" />
+            Feels like
+          </li>
+        )}
+        {t.usual && (
+          <li>
+            <i data-key="usual" />
+            Usual in {t.usual.month}
+          </li>
+        )}
+        <li>
+          <i data-key="range" />
+          {t.range}
+        </li>
+      </ul>
+      {t.usual && <small>{t.usual.footnote}</small>}
+    </div>
+  );
+};
+
+// "Rain along the ride" (25b): one card per ride hour with its chance and amount side by side.
+const RainPanel = (props: { id: string; rain: Rain }) => {
+  const { rain } = props;
+  return (
+    <div class="ro-rain" id={props.id}>
+      <b>Rain along the ride</b>
+      <strong data-wet={rain.wet}>{rain.headline}</strong>
+      <p>{rain.sentence}</p>
+      <ol class="ro-rain-hours">
+        {rain.hours.map((h) => (
+          <li key={h.time} data-wet={h.chance >= 40}>
+            <span>{h.time}</span>
+            <b>{h.chance}%</b>
+            <i>
+              <i style={{ width: `${h.chance}%` }} />
+            </i>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 16 16"
+              stroke-width="1.4"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              data-level={h.level}
+            >
+              <path d="M8 2.2C8 2.2 4 6.6 4 9.6a4 4 0 0 0 8 0C12 6.6 8 2.2 8 2.2z" />
+            </svg>
+            <em data-level={h.level}>{h.word}</em>
+            <small>{h.mm} mm</small>
+          </li>
+        ))}
+      </ol>
+      <ul class="ro-key">
+        <li>
+          <i data-key="chance" />
+          Chance of rain
+        </li>
+        <li>
+          <i data-level="1" />
+          Light
+        </li>
+        <li>
+          <i data-level="2" />
+          Moderate
+        </li>
+        <li>
+          <i data-level="3" />
+          Heavy
+        </li>
+      </ul>
     </div>
   );
 };
