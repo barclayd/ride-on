@@ -86,12 +86,14 @@ let changes: Record<string, ScoreChange>; // the API's last recorded score chang
 let freshFor: number; // hours until the forecast behind the scores goes stale
 let trackedRide: any;
 let trackingVersion: number;
+let capabilities: Record<string, unknown> | undefined; // GET /tracked-rides' capabilities
 let pauseDown: boolean; // pause writes fail
 
 const reset = () => {
   calls = [];
   trackedRide = null;
   trackingVersion = 0;
+  capabilities = undefined;
   providerDown = false;
   sunshineUncertain = false;
   replays = new Map();
@@ -510,7 +512,11 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
   if (key === 'GET /tracked-rides')
     return [
       200,
-      { activeTrackedRideId: trackedRide?.id ?? null, trackingVersion },
+      {
+        activeTrackedRideId: trackedRide?.id ?? null,
+        trackingVersion,
+        ...(capabilities && { capabilities }),
+      },
     ];
   if (key === 'POST /tracked-rides') {
     if (
@@ -526,6 +532,9 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
           },
         },
       ];
+    // Like the API, it rejects fields it doesn't advertise.
+    if (body.alerts && !capabilities?.alertTriggers)
+      return [400, { error: { code: 'VALIDATION', message: 'Unknown field' } }];
     const [routeId, date] = body.recommendationRef.split(':');
     const candidate = best(date, 0, scores[routeId] ?? 84);
     trackedRide = {
@@ -541,6 +550,7 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
       },
       latestAssessment: null,
       latestAssessmentKind: null,
+      alerts: body.alerts ?? null,
       refresh: {
         closed: false,
         refreshAt: null,
@@ -850,7 +860,13 @@ test('Rides tab opens first with one request for the planned days', async ({
   await page.screenshot({ path: test.info().outputPath('rides.png') });
 });
 
-test('tracking pins a shared departure; replacements are explicit and shortlist edits preserve it', async ({
+const tracks = () =>
+  calls.filter((c) => c.path === '/tracked-rides' && c.method === 'POST');
+// The browser's own notification prompt can't be answered in a test.
+const answerPrompt = (page: Page, allow: boolean) =>
+  page.evaluate(`chrome.permissions.request = async () => ${allow}`);
+
+test('the bell asks which alerts first; moving them is explicit, undoable and survives shortlist edits', async ({
   context,
   worker,
   extensionId,
@@ -859,35 +875,112 @@ test('tracking pins a shared departure; replacements are explicit and shortlist 
   selection.routeIds = ['r101', 'r102'];
   await signIn(worker);
   const page = await openPopup(context, extensionId);
+  await answerPrompt(page, true);
   const cards = page.locator('.ro-ride');
   await expect(cards).toHaveCount(2);
   const message = page.locator('.ro-toast span');
-  await page
-    .getByRole('button', { name: 'Track this departure for Hilly Loop' })
-    .click();
-  await expect(message).toHaveText(
-    'Tracking Hilly Loop. Notifications are managed in Preferences.',
+  const undo = page.locator('.ro-toast').getByRole('button', { name: 'Undo' });
+  const dialog = page.getByRole('dialog', { name: 'Get alerts for this ride' });
+  const switches = dialog.getByRole('switch');
+  const hilly = page.getByRole('button', { name: 'Get alerts for Hilly Loop' });
+  const coastBell = page.getByRole('button', {
+    name: 'Get alerts for Coast & Back',
+  });
+  await hilly.click();
+  await expect(dialog).toContainText('Hilly Loop');
+  await expect(
+    dialog.getByRole('button', { name: 'Turn on alerts' }),
+  ).toBeFocused();
+  // No gust limit in Preferences, so no wind switch; everything starts on.
+  await expect(switches).toHaveText([
+    'Rain becomes likely',
+    'It feels colder than your 10° minimum',
+    'A better time or day opens up',
+  ]);
+  for (const toggle of await switches.all())
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(dialog).toContainText('when you leave.');
+  await expect(dialog).toContainText(
+    'Your browser will ask you to allow notifications from Ride On.',
   );
+  await expect(dialog.locator('.ro-alerts-move')).toHaveCount(0);
+  await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('alerts.png') });
+  // Escape, the backdrop and Not now leave things as they were, and the bell gets focus back.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(hilly).toBeFocused();
+  await hilly.click();
+  await page.locator('.ro-alerts-dim').click({ position: { x: 5, y: 5 } });
+  await expect(dialog).toBeHidden();
+  await hilly.click();
+  await dialog.getByRole('button', { name: 'Not now' }).click();
+  await expect(dialog).toBeHidden();
+  expect(tracks()).toHaveLength(0);
+  // Focus stays in the dialog.
+  await hilly.click();
+  await expect(
+    dialog.getByRole('button', { name: 'Turn on alerts' }),
+  ).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Not now' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Close' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Not now' })).toBeFocused();
+  // With every switch off there is nothing to save.
+  for (const toggle of await switches.all()) await toggle.click();
+  const pick = dialog.getByRole('button', { name: 'Pick at least one' });
+  await expect(pick).toHaveAttribute('aria-disabled', 'true');
+  await pick.click({ force: true });
+  await expect(dialog).toBeVisible();
+  await switches.first().click();
+  await dialog.getByRole('button', { name: 'Turn on alerts' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(message).toHaveText('Alerts on for Hilly Loop');
+  await expect.poll(() => trackedRide?.routeId).toBe('r101');
+  // The API doesn't take triggers yet, so they stay on this device.
+  expect(tracks().at(-1)?.body.alerts).toBeUndefined();
+  await expect(page.locator('.ro-ride.ro-alert')).toContainText('Hilly Loop');
+  await undo.click();
+  await expect.poll(() => trackedRide).toBeNull();
+  await expect(page.locator('.ro-ride.ro-alert')).toHaveCount(0);
+  // The choices are remembered for the ride.
+  await hilly.click();
+  await expect(switches).toHaveCount(3);
+  expect(
+    await switches.evaluateAll((all) =>
+      all.map((el) => el.getAttribute('aria-checked')),
+    ),
+  ).toEqual(['true', 'false', 'false']);
+  await dialog.getByRole('button', { name: 'Turn on alerts' }).click();
+  await expect(message).toHaveText('Alerts on for Hilly Loop');
+  await expect.poll(() => trackedRide?.routeId).toBe('r101');
   const original = trackedRide.id;
-  expect(trackedRide.routeId).toBe('r101');
   await expect(
     page.getByRole('region', { name: 'Tracked ride', exact: true }),
   ).toContainText('Hilly Loop');
-  page.once('dialog', (dialog) => dialog.dismiss());
-  await page
-    .getByRole('button', { name: 'Track this departure for Coast & Back' })
-    .click();
+  // Only one ride has alerts: the dialog says they'll move.
+  await coastBell.click();
+  await expect(dialog.locator('.ro-alerts-move')).toHaveText(
+    'Hilly Loop has alerts now. Only one ride can have alerts, so they move to Coast & Back.',
+  );
+  await dialog.getByRole('button', { name: 'Close' }).click();
   expect(trackedRide.id).toBe(original);
-  page.once('dialog', (dialog) => dialog.accept());
-  await page
-    .getByRole('button', { name: 'Track this departure for Coast & Back' })
-    .click();
+  await coastBell.click();
+  await dialog.getByRole('button', { name: 'Move alerts here' }).click();
+  await expect(message).toHaveText(
+    'Alerts moved from Hilly Loop to Coast & Back',
+  );
   await expect.poll(() => trackedRide.routeId).toBe('r102');
-  expect(
-    calls
-      .filter((c) => c.path === '/tracked-rides' && c.method === 'POST')
-      .at(-1)?.body.replaceTrackedRideId,
-  ).toBe(original);
+  expect(tracks().at(-1)?.body.replaceTrackedRideId).toBe(original);
+  // Undo moves them back.
+  await undo.click();
+  await expect.poll(() => trackedRide.routeId).toBe('r101');
+  await expect(page.locator('.ro-ride.ro-alert')).toContainText('Hilly Loop');
+  await coastBell.click();
+  await dialog.getByRole('button', { name: 'Move alerts here' }).click();
+  await expect.poll(() => trackedRide.routeId).toBe('r102');
   // Taking a route off the shortlist does not silently stop an account-wide plan.
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page
@@ -898,15 +991,14 @@ test('tracking pins a shared departure; replacements are explicit and shortlist 
   await expect(
     page.getByRole('region', { name: 'Tracked ride', exact: true }),
   ).toContainText('Coast & Back');
-  await page.locator('.ro-toast').getByRole('button', { name: 'Undo' }).click();
+  await undo.click();
   await expect(cards).toHaveCount(2);
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   // A newly recommended departure for the same route can replace the pinned one.
-  page.once('dialog', (dialog) => dialog.accept());
-  await page
-    .getByRole('button', { name: 'Track this departure for Coast & Back' })
-    .click();
-  await expect.poll(() => trackingVersion).toBe(3);
+  const version = trackingVersion;
+  await coastBell.click();
+  await dialog.getByRole('button', { name: 'Turn on alerts' }).click();
+  await expect.poll(() => trackingVersion).toBe(version + 1);
   await expectPanelFits(page);
 });
 
@@ -917,28 +1009,61 @@ test('a stale account tracking version reloads instead of silently replacing ano
 }) => {
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  await expect(
-    page.getByRole('button', { name: 'Track this departure for Hilly Loop' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Track this departure for Hilly Loop' }),
-  ).toBeEnabled();
+  await answerPrompt(page, false);
+  const bell = page.getByRole('button', { name: 'Get alerts for Hilly Loop' });
+  const turnOn = page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Turn on alerts' });
+  const message = page.locator('.ro-toast span');
+  await expect(bell).toBeEnabled();
   trackingVersion++;
-  await page
-    .getByRole('button', { name: 'Track this departure for Hilly Loop' })
-    .click();
-  await expect(page.locator('.ro-toast span')).toHaveText(
+  await bell.click();
+  await turnOn.click();
+  await expect(message).toHaveText(
     'Your tracked ride changed. Review it and try again.',
   );
   expect(trackedRide).toBeNull();
-  await page
-    .getByRole('button', { name: 'Track this departure for Hilly Loop' })
-    .click();
+  await bell.click();
+  await turnOn.click();
+  // Saved, but the browser said no to notifications.
   await expect.poll(() => trackedRide?.routeId).toBe('r101');
+  await expect(message).toHaveText('Notifications are blocked in your browser');
+  // An on bell turns alerts off without asking, with Undo.
   await page
-    .getByRole('button', { name: 'Tracking Hilly Loop. Stop monitoring' })
+    .getByRole('button', { name: 'Alerts on for Hilly Loop. Turn off alerts' })
     .click();
+  await expect(message).toHaveText('Alerts off for Hilly Loop');
   await expect.poll(() => trackedRide).toBeNull();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.locator('.ro-toast').getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(() => trackedRide?.routeId).toBe('r101');
+});
+
+test('once the API advertises triggers, the choices go with the ride', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  capabilities = { alertTriggers: true, finalForecastLocalTime: '18:00' };
+  user.settings.preferences.minimumStandards = { maximumGustKph: 40 };
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  await answerPrompt(page, true);
+  await page.getByRole('button', { name: 'Get alerts for Hilly Loop' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Get alerts for this ride' });
+  await expect(dialog.getByRole('switch')).toHaveText([
+    'Rain becomes likely',
+    'Gusts pass your 40 km/h limit',
+    'It feels colder than your 10° minimum',
+    'A better time or day opens up',
+  ]);
+  await expect(dialog).not.toContainText('19:00');
+  await dialog.getByRole('switch', { name: 'Rain becomes likely' }).click();
+  await dialog.getByRole('button', { name: 'Turn on alerts' }).click();
+  await expect.poll(() => trackedRide?.routeId).toBe('r101');
+  expect(tracks().at(-1)?.body.alerts).toEqual({
+    triggers: { rain: false, wind: true, cold: true, betterTime: true },
+  });
 });
 
 test('a refresh shows how scores changed, then moves the rides into order', async ({
@@ -1990,7 +2115,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     'tailwind opportunity',
   );
   await expect(
-    module.getByRole('button', { name: 'Track this departure for Hilly Loop' }),
+    module.getByRole('button', { name: 'Get alerts for Hilly Loop' }),
   ).toHaveAttribute('aria-pressed', 'false');
   const chip = page.locator('#jr_101 .ro-chip');
   await expect(chip).toHaveText(/^\w{3} \d{1,2} · \d\d:\d\d$/);
@@ -2014,6 +2139,30 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     path: test.info().outputPath('journeys.png'),
     fullPage: true,
   });
+  // The bell asks first here too: centred on a wide page, a bottom card on a narrow one.
+  const bell = module.getByRole('button', {
+    name: 'Get alerts for Hilly Loop',
+  });
+  await bell.click();
+  const dialog = module.getByRole('dialog', {
+    name: 'Get alerts for this ride',
+  });
+  await expect(dialog).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('journeys-alerts.png'),
+  });
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const card = await dialog.boundingBox();
+  expect(card?.x).toBe(10);
+  expect((card?.y ?? 0) + (card?.height ?? 0)).toBe(834);
+  await page.screenshot({
+    path: test.info().outputPath('journeys-alerts-narrow.png'),
+  });
+  if (size) await page.setViewportSize(size);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(bell).toBeFocused();
 
   await page.locator('#jr_102 .ro-chip').click();
   await expect(page.locator('#jr_102 .ro-chip')).toHaveText(/ · /);

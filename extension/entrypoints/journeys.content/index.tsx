@@ -7,6 +7,7 @@ import { fetchJourney, fetchJourneyGpx } from '../../lib/cycletravel';
 import { send } from '../../lib/state';
 import { surfaceSeenKey } from '../../lib/surface';
 import { MAX_TRACKED, type RouteSummary } from '../../lib/types';
+import { AlertsDialog } from '../../ui/alerts';
 import {
   Banners,
   CoverageWarn,
@@ -327,6 +328,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
       )}
       <CoverageWarn view={view} />
       {(cards.length > 0 || tracking.said) && <Toast tracking={tracking} />}
+      <AlertsDialog view={view} tracking={tracking} />
       {rows.map((row) => {
         const routeId = ridden(row.id);
         return (
