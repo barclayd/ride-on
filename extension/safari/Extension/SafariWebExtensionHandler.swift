@@ -7,7 +7,8 @@ import UserNotifications
 
 /// The extension checks in with `{type: "account", owner, token, email, apiURL}` while signed in,
 /// and with `{type: "account"}` once signed out. The app shows the account and owns notifications.
-/// Preferences' Enable notifications adds `notifications: "on"`, and Turn off adds `"off"`.
+/// Enable notifications (Preferences, or turning on a ride's alerts) adds `notifications: "on"`,
+/// and Turn off adds `"off"`.
 final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
   // NSExtensionContext lives for this one async response and is never mutated elsewhere.
   private struct Reply: @unchecked Sendable { let context: NSExtensionContext }
@@ -78,7 +79,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     link.enabled = previous?.owner == owner && previous?.enabled == true
     try PushStore.write("link", link)
     switch notifications {
-    case "on": try turnOn()
+    case "on": try await turnOn()
     case "off": try await turnOff()
     default: break
     }
@@ -94,9 +95,11 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
   }
 
   /// Only the app can ask macOS and register with Apple, so this opens it (`rideon-notifications://enable`)
-  /// with at least one Mac switch on. An app extension on iOS can't open its app.
+  /// with at least one Mac switch on. It opens in the background, hidden if it wasn't running, so
+  /// the rider stays in Safari and sees only macOS's Allow prompt. An app extension on iOS can't
+  /// open its app.
   @MainActor
-  private static func turnOn() throws {
+  private static func turnOn() async throws {
     #if os(macOS)
       var alerts: PushStore.Alerts = try PushStore.read("alerts") ?? PushStore.Alerts()
       if !alerts.any {
@@ -104,7 +107,15 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         alerts.finalForecast = true
         try PushStore.write("alerts", alerts)
       }
-      guard NSWorkspace.shared.open(URL(string: "rideon-notifications://enable")!) else {
+      let configuration = NSWorkspace.OpenConfiguration()
+      configuration.activates = false
+      configuration.hides = NSRunningApplication.runningApplications(
+        withBundleIdentifier: "com.danbarclay.rideon"
+      ).isEmpty
+      do {
+        _ = try await NSWorkspace.shared.open(
+          URL(string: "rideon-notifications://enable")!, configuration: configuration)
+      } catch {
         throw PushStore.Failure("Open the Ride On app to turn on notifications.")
       }
     #else

@@ -87,10 +87,7 @@ export const pushStatus = async (): Promise<PushStatus> => {
   if (import.meta.env.SAFARI) return checkIn();
   const saved = await getSecret<Registration>('push-registration');
   if (!saved?.enabled) return PUSH_OFF;
-  if (
-    !(await browser.permissions.contains({ permissions: ['notifications'] })) ||
-    (await browser.notifications.getPermissionLevel()) !== 'granted'
-  )
+  if ((await browser.notifications.getPermissionLevel()) !== 'granted')
     return {
       enabled: false,
       status: 'blocked',
@@ -129,8 +126,10 @@ const enable = async (): Promise<PushStatus> => {
   if (!state.user || !(await getToken()))
     throw new Error('Sign in before enabling notifications.');
   if (import.meta.env.SAFARI) return checkIn('on');
-  if (!(await browser.permissions.contains({ permissions: ['notifications'] })))
-    throw new Error('Allow notifications to continue.');
+  if ((await browser.notifications.getPermissionLevel()) !== 'granted')
+    throw new Error(
+      'Notifications are blocked in your browser or system settings.',
+    );
   const config = await api<{
     automaticChecks: boolean;
     webPush: { publicKey: string | null; configured: boolean };
@@ -339,18 +338,12 @@ export const installPushHandlers = () => {
       })().catch(() => {}),
     );
   });
-  let listening = false;
-  const listenForClicks = () => {
-    if (listening || !browser.notifications) return;
-    browser.notifications.onClicked.addListener((id) => {
-      if (!id.startsWith('ride-on:')) return;
-      const ride = id.slice(8);
-      if (!UUID.test(ride)) return;
-      void browser.tabs.create({ url: notificationURL(ride) });
-    });
-    listening = true;
-  };
-  listenForClicks();
+  browser.notifications.onClicked.addListener((id) => {
+    if (!id.startsWith('ride-on:')) return;
+    const ride = id.slice(8);
+    if (!UUID.test(ride)) return;
+    void browser.tabs.create({ url: notificationURL(ride) });
+  });
   self.addEventListener('pushsubscriptionchange', (event) => {
     (event as ExtendableEvent).waitUntil(
       (async () => {
@@ -360,10 +353,5 @@ export const installPushHandlers = () => {
           await enablePush();
       })().catch(() => {}),
     );
-  });
-  browser.permissions.onAdded.addListener(listenForClicks);
-  browser.permissions.onRemoved.addListener((permissions) => {
-    if (permissions.permissions?.includes('notifications'))
-      void disablePush().catch(() => {});
   });
 };

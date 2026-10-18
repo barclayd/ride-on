@@ -1143,14 +1143,6 @@ export default defineBackground(() => {
   });
   browser.runtime.onMessage.addListener(
     (message: Message, sender, sendResponse) => {
-      // Only the panel, which can ask first (?from: opened in a tab by a page's button).
-      if (
-        ['enablePush', 'disablePush'].includes(message.type) &&
-        sender.url?.split(/[?#]/)[0] !== browser.runtime.getURL('/popup.html')
-      ) {
-        sendResponse({ error: 'Manage notifications in Ride On Preferences.' });
-        return false;
-      }
       handle(message, sender.tab).then(
         () => sendResponse({}),
         async (error) => {
