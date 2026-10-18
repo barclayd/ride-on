@@ -82,8 +82,6 @@ test('a ride that starts cool says until when, and draws both lines on a 5° gri
       { y: 50, label: '15°' },
       { y: 0, label: '25°' },
     ],
-    // The lines cross the middle of the range on the right, so the label goes left.
-    rangeLabel: { y: 50, slot: 'left' },
     from: '08:30',
     to: '~12:55',
     range: 'Your range 10–20°C',
@@ -134,16 +132,7 @@ test('the scale takes in the whole range, drops gridlines by its edges and rings
       { y: 33.33, label: '25°' },
     ],
     mark: { x: 39.47, y: 86.67, cool: true },
-    rangeLabel: { slot: 'centre' },
   });
-});
-
-test('a range block too thin for its label goes without', () => {
-  const t = temperaturePanel(ride(HORSHAM), LONDON, undefined, range(14, 15));
-  // 5–20°: the 14–15° block is under 7% of the plot.
-  expect(t?.high.y).toBe(33.33);
-  expect(t?.low.y).toBe(40);
-  expect(t?.rangeLabel).toBeNull();
 });
 
 test('fractional offsets from the API, as at the finish and the extremes, are fine', () => {
@@ -201,7 +190,6 @@ test('feeling warm the whole ride is amber, with the warmest point marked', () =
     headline: 'Feels warmer than your range the whole ride, 15–22°C',
     tone: 'warm',
     mark: { x: 94.74, y: 12, cool: false },
-    rangeLabel: { y: 60, slot: 'right' },
   });
 });
 

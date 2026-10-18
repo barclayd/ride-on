@@ -1027,7 +1027,7 @@ a.ro-name:hover {
   height: 128px;
   margin: 12px 0;
 }
-/* Bottom to top: your range, the grid, the usual band, "Your range", the lines, then tags and the marker. */
+/* Bottom to top: your range, the grid, the usual band, the lines, then tags and the marker. No text in the plot. */
 .ro-temp-block,
 .ro-temp-grid {
   position: absolute;
@@ -1038,24 +1038,6 @@ a.ro-name:hover {
 }
 .ro-temp-grid {
   border-top: 1px solid var(--ro-border);
-}
-.ro-temp-zone {
-  position: absolute;
-  left: 6px;
-  transform: translateY(-50%);
-  font: 700 10px var(--ro-sans);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--ro-olive-900);
-  white-space: nowrap;
-}
-.ro-temp-zone[data-slot="centre"] {
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-.ro-temp-zone[data-slot="right"] {
-  left: auto;
-  right: 6px;
 }
 .ro-temp-plot svg {
   position: absolute;
