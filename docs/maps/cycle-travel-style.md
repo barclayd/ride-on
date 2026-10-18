@@ -369,8 +369,8 @@ no equivalent.
 
 | | Rule |
 |---|---|
-| Font | Capital (`population_rank` ≥ 10): Medium, black. Town or city: Bold, `#242423`. Village: Medium, `#333333` |
-| Size | z6: capital 13, else 10. z10: capital 17, `min_zoom` ≤ 9 14, else 12. z14: capital 16, else 15 |
+| Font | Capital (`population_rank` ≥ 10, so London and Greenwich): Medium, black. Town or city: Bold, `#242423`. Village: Medium, `#333333`. Below z12 a town of under 16,000 people (Protomaps' `population`; 10,000 is its placeholder for unknown) is drawn as a village, as cycle.travel does below its z13: Teddington, Sydenham, Barking, Sidcup, Orpington, Clacton-on-Sea. Dorking (17,098) and Harwich (17,840) stay bold |
+| Size | z6: capital 13, else 10. z10: capital 17; towns of 100,000 or more 16.5; major towns (`min_zoom` ≤ 9 and 16,000 or more) 14; towns under 5,000 10; other towns 12; villages 10. z11: capital 16.75, 100,000+ 16.5, major 14.25, under 5,000 10, other towns 12.75, villages 10. z14: capital 16, else 15. Measured at 3× on the phone captures (WS2.6): villages about 12 at z12 (Ramsey, Great Oakley, Westhumble, Pixham); big towns 0.94–1.05× cycle.travel's width (Croydon, Ilford, Ealing, Wembley, Ipswich, Colchester); small towns within 3% (Teddington, Sydenham, Sidcup, Brightlingsea, Manningtree) |
 | Case | Mixed case below z12; from z12 towns and cities in capitals |
 | Letter spacing | 0 below z12; towns 0.08 from z12; the capital 0.55 from z14 ("L O N D O N") |
 | Halo | White, width 2, blur 0.5 |
@@ -380,7 +380,9 @@ no equivalent.
 | Layers | Below z12 villages and hamlets are a copy, `places_villages`, placed after the thinned stations (Stations at z10–11, below), and `places_locality` keeps towns and cities |
 
 **Neighbourhoods** (`places_subplace`): Medium, mixed case, no letter spacing, size 11 at z11 → 14 at z16,
-`#373836` for macrohoods and `#686966` for the rest, halo 1.5, padding 3.
+`#373836` for macrohoods and suburbs and `#686966` for the rest, halo 1.5, padding 3. Suburbs (OSM
+`place=suburb`: Putney, Greenstead) jump in size at cycle.travel's z14: 10.75 at z12 and 14 at z13, where
+the rest are 11.6 and 12.2 (WS2.6; Putney and Greenstead within 3% of cycle.travel's width).
 
 **Streets** (`roads_labels_*`): from z14 only, Regular 12, `#343434`, halo 1.5. "Street" → "St" and
 "Road" → "Rd" at the end of the name; Lane, Way, Place, Hill… stay whole (`abbreviate` in
@@ -598,7 +600,17 @@ From the ten comparisons in `screenshots/`. Tick them off in WS2.
 - [ ] AV badges along the Albert Embankment at z14 that cycle.travel doesn't draw
 - [ ] TfL Q routes as thin lavender lines at z11 (ours start at z12)
 - [ ] Village names: cycle.travel names more at z10 (Whatfield, Lindsey, Flowton) and Wrabness and
-  Bradfield at z11; our town names are bolder
+  Bradfield at z11
+- [x] Town names bolder than cycle.travel's (WS2.6: small towns drawn as villages below z12, sizes by
+  population)
+- [ ] Harwich is Medium on cycle.travel at our z10 but bold at z9 and z11; ours stays bold. Dovercourt
+  (Protomaps' 10,000 placeholder) is 1.12× ours there
+- [ ] Label choice in London at z9: cycle.travel names Hampstead, Chiswick, Barnes, Lewisham, Beckenham and
+  Surbiton where we name Camden Town, Eltham and Bromley
+- [ ] Quarters at z11 (Lot's Village, Nine Elms, Myatt's Fields): cycle.travel shows none there
+- [ ] Peaks without an elevation (Spankers Hill in Richmond Park): cycle.travel names them, we don't
+- [ ] TfL badges at z14 in the phone window: cycle.travel badges only the Q route by Westminster where we
+  add C3 and C56, and leaves out the Westminster label we draw
 - [x] Bolder railways; paler, thinner motorways when zoomed out (WS2.5)
 - [x] Railways: no tunnels (the Underground), thin sidings and yards with no white core (WS2.5)
 - [x] EuroVelo dots: opaque slate/lavender ring, red centre (WS2.5)
@@ -621,4 +633,6 @@ From the ten comparisons in `screenshots/`. Tick them off in WS2.
 - [ ] Built-up land with no land-use polygon in Protomaps' tiles: 20% of the land we leave bare in Richmond
   and 41% in Westminster is built-up on cycle.travel. Not yet traced: Protomaps may drop small `landuse`
   polygons, or cycle.travel may fill from other tags. WS1 data
-- [ ] Re-check every size at 3× on an iPhone (all tuning was at 2× in Chrome)
+- [x] Re-check every size at 3× on an iPhone (WS2.6, iPhone 17 Simulator: route dots 21 px across against
+  cycle.travel's 22, badges 45 px wide against 43; MapLibre Native draws labels as GL JS does, within a
+  pixel or two; village, small-town and suburb labels retuned)

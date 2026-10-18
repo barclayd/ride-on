@@ -498,23 +498,54 @@ const basemap = (): Layer[] =>
         const capital = ['>=', ['get', 'population_rank'], 10]
         const town = ['match', kd, ['town', 'city'], true, false]
         const hamlet = ['==', kd, 'hamlet']
+        // Below its z13 (our 12) cycle.travel draws small towns like villages, Medium in village grey: Teddington,
+        // Sydenham, Barking (Protomaps' 10000 placeholder), Sidcup (15400), Orpington (15311). Dorking (17098) and
+        // Harwich (17840) stay bold (WS2.6 phone captures).
+        const population = ['coalesce', ['get', 'population'], 0]
+        const bigTown = ['all', town, ['>=', population, 16000]]
+        const smallFonts = (big: unknown) => [
+          'case',
+          capital,
+          montserrat('Medium'),
+          big,
+          montserrat('Bold'),
+          hamlet,
+          montserrat('Regular'),
+          montserrat('Medium'),
+        ]
         layout['text-font'] = [
           'step',
           ['zoom'],
-          [
-            'case',
-            capital,
-            montserrat('Medium'),
-            town,
-            montserrat('Bold'),
-            hamlet,
-            montserrat('Regular'),
-            montserrat('Medium'),
-          ],
+          smallFonts(bigTown),
+          12,
+          smallFonts(town),
           15,
           ['case', capital, montserrat('Medium'), town, montserrat('Bold'), montserrat('Medium')],
         ]
-        paint['text-color'] = ['case', capital, '#000000', town, ct.town, ct.village]
+        paint['text-color'] = [
+          'step',
+          ['zoom'],
+          ['case', capital, '#000000', bigTown, ct.town, ct.village],
+          12,
+          ['case', capital, '#000000', town, ct.town, ct.village],
+        ]
+        // Villages measured on the phone captures (WS2.6): cycle.travel's are 0.8× the old 12 at our z10–11 and
+        // about 12 at z12 (Ramsey, Great Oakley, Harkstead, Westhumble, Pixham). Its small towns' size follows
+        // population, not Protomaps' min_zoom: Sidcup and Brightlingsea (8500) take the minor-town size, Manningtree
+        // (900) the village size. Towns of 100,000 or more are about 1.17× the major-town size at its z10–11 (Croydon,
+        // Ilford, Ealing, Wembley, Ipswich, Colchester: 1.10–1.21×). Greenwich (`population_rank` 10) is drawn as a
+        // capital, and matches cycle.travel's width to the pixel at z9.
+        const majorTown = ['all', ['<=', ['get', 'min_zoom'], 9], ['>=', population, 16000]]
+        const townSize = (major: number, minor: number) => [
+          'case',
+          ['>=', population, 100000],
+          16.5,
+          majorTown,
+          major,
+          ['<', population, 5000],
+          10,
+          minor,
+        ]
         layout['text-size'] = [
           'interpolate',
           ['linear'],
@@ -522,7 +553,9 @@ const basemap = (): Layer[] =>
           6,
           ['case', capital, 13, 10],
           10,
-          ['case', capital, 17, ['<=', ['get', 'min_zoom'], 9], 14, 12],
+          ['case', capital, 17, town, townSize(14, 12), 10],
+          11,
+          ['case', capital, 16.75, town, townSize(14.25, 12.75), 10],
           14,
           ['case', capital, 16, hamlet, 10, 15],
           15,
@@ -551,8 +584,28 @@ const basemap = (): Layer[] =>
         layout['text-letter-spacing'] = 0
         layout['text-font'] = montserrat('Medium')
         layout['text-padding'] = 3
-        layout['text-size'] = ['interpolate', ['linear'], ['zoom'], 11, 11, 16, 14]
-        paint['text-color'] = ['match', ['get', 'kind'], 'macrohood', ct.macrohood, ct.neighbourhood]
+        // Suburbs (OSM place=suburb: Putney, Greenstead) take the quarters' darker grey, and jump in size at
+        // cycle.travel's z14 (our 13): 0.92× ours at z12, 1.14× at z13 (WS2.6 phone captures).
+        const suburb = ['==', ['get', 'kind_detail'], 'suburb']
+        layout['text-size'] = [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          11,
+          11,
+          12,
+          ['case', suburb, 10.75, 11.6],
+          13,
+          ['case', suburb, 14, 12.2],
+          16,
+          14,
+        ]
+        paint['text-color'] = [
+          'case',
+          ['any', ['==', ['get', 'kind'], 'macrohood'], suburb],
+          ct.macrohood,
+          ct.neighbourhood,
+        ]
         paint['text-halo-width'] = 1.5
       }
       if (l.id === 'places_region' || l.id === 'places_country') layout['text-font'] = montserrat('Medium')
