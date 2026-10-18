@@ -90,12 +90,16 @@ public class CyclingProfile implements Profile {
     "living_street", "service", "road", "busway");
   /** Rail stations only: no Underground-only, tram or heritage stops. */
   static final Set<String> NOT_RAIL = Set.of("subway", "light_rail", "miniature", "monorail", "funicular", "tram");
-  /** POIs cycle.travel marks with an icon at street level (its map key), by OSM key and value. */
-  static final Map<String, Map<String, String>> AMENITIES = Map.of(
-    "amenity", Map.of("cafe", "cafe", "pub", "pub", "toilets", "toilets", "drinking_water", "drinking_water",
-      "bicycle_parking", "bicycle_parking", "parking", "parking"),
-    "shop", Map.of("bicycle", "bicycle_shop"),
-    "tourism", Map.of("camp_site", "camp_site", "viewpoint", "viewpoint"));
+  /**
+   * POIs cycle.travel marks with an icon at street level (its map key), by OSM key and value. A list, not a map: the
+   * first key that matches wins, so a café that is also a bike shop is a café in every build ({@code Map.of}'s
+   * iteration order changes from run to run).
+   */
+  static final List<Map.Entry<String, Map<String, String>>> AMENITIES = List.of(
+    Map.entry("amenity", Map.of("cafe", "cafe", "pub", "pub", "toilets", "toilets", "drinking_water", "drinking_water",
+      "bicycle_parking", "bicycle_parking", "parking", "parking")),
+    Map.entry("shop", Map.of("bicycle", "bicycle_shop")),
+    Map.entry("tourism", Map.of("camp_site", "camp_site", "viewpoint", "viewpoint")));
   /** The landmarks cycle.travel names, by OSM key and value. */
   static final Map<String, Set<String>> LANDMARKS = Map.of(
     "tourism", Set.of("attraction", "museum", "zoo", "aquarium", "theme_park"),
@@ -325,7 +329,7 @@ public class CyclingProfile implements Profile {
     if (tags.hasTag("access", "private", "no")) {
       return null;
     }
-    for (var key : AMENITIES.entrySet()) {
+    for (var key : AMENITIES) {
       String kind = key.getValue().get(tags.getString(key.getKey(), ""));
       if (kind != null) {
         return kind;

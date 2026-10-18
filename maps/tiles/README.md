@@ -100,7 +100,8 @@ Points, or a point inside the area for mapped buildings and car parks.
 | `bicycle_shop` | `shop=bicycle` | 14 |
 | `camp_site`, `viewpoint` | `tourism=*` | 14 |
 
-`name` when tagged. Private POIs are skipped. Car parks aren't styled; the rest are.
+A POI tagged for more than one icon takes the first that matches, in the order above: a café that is also
+a bike shop is a `cafe`. `name` when tagged. Private POIs are skipped. Car parks aren't styled; the rest are.
 
 The kinds the style draws as icons (every new kind but `parking`) also carry how crowded they are, which
 the style thins them by:
@@ -140,6 +141,8 @@ name.
 The 17 October 2026 UK extract (2.3 GB) builds in 1 min 42 s on an M4 Max to 126 MB: 152,850 tiles, the
 largest 215 KB (167 KB gzipped), central London at z10, nearly all `low_roads`. Before `low_roads` it was
 104 MB with a largest tile of 47 KB. Planetiler skips two POIs whose multipolygons are broken in OSM.
+Builds are reproducible: the same extract and profile give the same bytes, so a published key can be
+checked by rebuilding it.
 
 ## Test
 
@@ -150,7 +153,7 @@ docker run --rm -v "$PWD/maps/tiles":/src -v ~/.m2:/root/.m2 -w /src \
   maven:3.9-eclipse-temurin-21 mvn -B -q test
 ```
 
-139 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
+142 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
 `CyclingProfileTest` when a rule changes.
 
 ## Publish

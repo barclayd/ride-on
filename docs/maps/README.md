@@ -7,8 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap is on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 in progress: 2.1, 2.2, 2.3 and 2.4's badges done, the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite |
-| Handover | [`HANDOVER.md`](HANDOVER.md): open branches, the R2 upload by S3 and what blocks it, Chrome DevTools MCP, as of 18 October 2026. Read it first |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 in progress: 2.1–2.5 done (2.5 bar station throats), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; 2.6 next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -178,11 +177,11 @@ in `maps/tiles/README.md`):
 
 | GB build, 17 October 2026 extract | |
 |---|---|
-| Output | `cycling-gb-20261017.pmtiles`, 104 MB, 153,185 tiles, z0–14 (empty below z6) |
-| Time | 2 min 1 s on an M4 Max in Docker (8 GB VM, `-Xmx6g`) |
-| Largest tile | 47 KB (30 KB gzipped), z14 around Soho, mostly POIs; average 0.7 KB gzipped |
-| Tests | 85 (`CyclingProfileTest`): the path rule table, London's `minz`, badge refs, lanes, POIs and their crowd counts, merging, plus a Monaco end-to-end build |
-| On R2 | Not yet: published from a fresh build once batch D merges, with `maps/hosting/publish.sh` ([handover](HANDOVER.md#5-the-cycling-overlay)) |
+| Output | `cycling-gb-20261017.pmtiles`, 125,501,621 bytes, 152,850 tiles, z0–14 (empty below z6); 104 MB before batch D's `low_roads` |
+| Time | Under 2 minutes on an M4 Max in Docker (8 GB VM, `-Xmx6g`) |
+| Largest tile | 215 KB (167 KB gzipped), central London at z10, nearly all `low_roads`; before them 47 KB, z14 around Soho |
+| Tests | 142 (`CyclingProfileTest`): the path rule table, London's `minz`, badge refs, lanes, POIs and their crowd counts, merging, plus a Monaco end-to-end build |
+| On R2 | `https://maps.ride-on.cc/cycling-gb-20261017.pmtiles`, published 18 October 2026 with `maps/hosting/publish.sh`. A rebuild of main's profile reproduces it byte for byte |
 
 - Lines are merged per tile (`FeatureMerge.mergeLineStrings`) so dashes and dots don't restart at way
   joins. Routes merge by network and `minz`; badges by badge and label.
@@ -287,7 +286,8 @@ where `shot()` holds. The WS2.5 lines session's 3–12/255 offset matches the sR
 motorway fill solved then (`motorwayPale`) may be a shade too pale; re-check it on a P3 display.
 
 **2.6 3× and device.** Every size was tuned at 2× in Chrome. Re-check dots, badges and labels on an
-iPhone 17 at 3×. MapLibre Native draws text slightly differently from GL JS.
+iPhone 17 at 3×. MapLibre Native draws text slightly differently from GL JS. Agents use the iPhone 17
+simulator `79662D65-4914-46BC-BA2A-510E3989498D`, never Dan's iPhone 18 Pro one (`1F0874B6…`).
 
 **2.7 Dark mode** ([decision 6](#open-decisions)). Either a dark variant built from the same script, or
 the map stays light in Dark Mode.
