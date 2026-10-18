@@ -61,7 +61,7 @@ bun run lint:fix
 - `src/users/`: owner-bound saved settings, schema versions and atomic optimistic updates.
 - `src/ground/`: independent, experimental rainfall/drying evidence, shared D1 cache and bounded public-provider diagnostics; never invoked by recommendations.
 - `src/weather/`: generic contracts, Apple Weather and Met Office adapters, provider presets, source policy and KV-compatible cache.
-- `src/monitoring/`: scheduled tracked-ride checks, alert policy, owner-scoped device registration and durable APNs delivery. See `../docs/ride-monitoring.md`; app notification integration follows separately.
+- `src/monitoring/`: scheduled tracked-ride checks, alert policy, owner-scoped device registration and durable APNs/Web Push delivery. See `../docs/ride-monitoring.md`; Chrome and the Safari companion are integrated; full-app notification integration follows separately.
 - `migrations/`: D1 migrations, applied before deployment.
 - `test/`: deterministic ingestion, HTTP, algorithm, provider and cache tests.
 - `integration/`: MSW 3 scenarios against the real Worker runtime and fresh local D1/KV.

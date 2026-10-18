@@ -84,10 +84,14 @@ let replays: Map<string, Ride>;
 let scores: Record<string, number>; // a route's score, in place of 84 then 44
 let changes: Record<string, ScoreChange>; // the API's last recorded score change for a route
 let freshFor: number; // hours until the forecast behind the scores goes stale
+let trackedRide: any;
+let trackingVersion: number;
 let pauseDown: boolean; // pause writes fail
 
 const reset = () => {
   calls = [];
+  trackedRide = null;
+  trackingVersion = 0;
   providerDown = false;
   sunshineUncertain = false;
   replays = new Map();
@@ -462,6 +466,7 @@ const recommendations = (body: any) => {
           departuresUnknown: 0,
           departuresStandardsUnknown: 0,
           best: {
+            recommendationRef: `${routeId}:${date}`,
             ...best(date, i, scores[routeId] ?? 84 - i * 40), // a second route scores 44: Not recommended
             scoreChange: changes[routeId] ?? null,
             recentRides: recent(routeId)
@@ -502,6 +507,57 @@ const recommendations = (body: any) => {
 
 const handle = (method: string, url: URL, body: any): [number, unknown] => {
   const key = `${method} ${url.pathname}`;
+  if (key === 'GET /tracked-rides')
+    return [
+      200,
+      { activeTrackedRideId: trackedRide?.id ?? null, trackingVersion },
+    ];
+  if (key === 'POST /tracked-rides') {
+    if (
+      body.expectedTrackingVersion !== trackingVersion ||
+      body.replaceTrackedRideId !== (trackedRide?.id ?? null)
+    )
+      return [
+        409,
+        {
+          error: {
+            code: 'TRACKING_VERSION_CONFLICT',
+            message: 'Your tracked ride changed. Review it and try again.',
+          },
+        },
+      ];
+    const [routeId, date] = body.recommendationRef.split(':');
+    const candidate = best(date, 0, scores[routeId] ?? 84);
+    trackedRide = {
+      id: crypto.randomUUID(),
+      routeId,
+      departureAt: candidate.departureAt,
+      timeZone: 'Europe/London',
+      state: 'active',
+      endedReason: null,
+      baseline: {
+        pick: { candidate },
+        context: { routes: Object.values(routes) },
+      },
+      latestAssessment: null,
+      latestAssessmentKind: null,
+      refresh: {
+        closed: false,
+        refreshAt: null,
+        lastSuccessfulAssessmentAt: null,
+      },
+    };
+    trackingVersion++;
+    return [201, { ride: trackedRide }];
+  }
+  if (key === `GET /tracked-rides/${trackedRide?.id}`)
+    return [200, { ride: trackedRide }];
+  if (key === `DELETE /tracked-rides/${trackedRide?.id}`) {
+    trackedRide = null;
+    trackingVersion++;
+    return [204, undefined];
+  }
+
   // At its return instant the API reads as on, without a write.
   if (key === 'GET /users/me')
     return [
@@ -794,7 +850,7 @@ test('Rides tab opens first with one request for the planned days', async ({
   await page.screenshot({ path: test.info().outputPath('rides.png') });
 });
 
-test('alerts on one ride; Edit removes a ride and Undo brings it back', async ({
+test('tracking pins a shared departure; replacements are explicit and shortlist edits preserve it', async ({
   context,
   worker,
   extensionId,
@@ -803,66 +859,86 @@ test('alerts on one ride; Edit removes a ride and Undo brings it back', async ({
   selection.routeIds = ['r101', 'r102'];
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  const rides = page.locator('.ro-ride');
-  await expect(rides).toHaveCount(2);
-  const toast = page.locator('.ro-toast');
-  const message = toast.locator('span');
-  const hilly = rides.filter({ hasText: 'Hilly Loop' });
-  const coastCard = rides.filter({ hasText: 'Coast & Back' });
-
-  // One ride at a time: a second bell moves the alerts, and Undo moves them back.
-  await page.getByRole('button', { name: 'Get alerts for Hilly Loop' }).click();
-  await expect(message).toHaveText('Alerts on for Hilly Loop');
-  await expect(toast).toHaveAttribute('data-show', 'true');
-  await expect(hilly).toHaveClass(/ro-alert/);
-  await expect(
-    page.getByRole('button', {
-      name: 'Alerts on for Hilly Loop. Turn off alerts',
-    }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  const cards = page.locator('.ro-ride');
+  await expect(cards).toHaveCount(2);
+  const message = page.locator('.ro-toast span');
   await page
-    .getByRole('button', { name: 'Get alerts for Coast & Back' })
+    .getByRole('button', { name: 'Track this departure for Hilly Loop' })
     .click();
   await expect(message).toHaveText(
-    'Alerts moved from Hilly Loop to Coast & Back',
+    'Tracking Hilly Loop. Notifications are managed in Preferences.',
   );
-  await expect(coastCard).toHaveClass(/ro-alert/);
-  await expect(hilly).not.toHaveClass(/ro-alert/);
-  await toast.getByRole('button', { name: 'Undo' }).click();
-  await expect(hilly).toHaveClass(/ro-alert/);
-  await expect(coastCard).not.toHaveClass(/ro-alert/);
-  await expect(toast).toHaveAttribute('data-show', 'false');
-  // The tile with alerts keeps its size: 1px less padding for the 1px heavier border.
-  const [a, b] = [await hilly.boundingBox(), await coastCard.boundingBox()];
-  expect(a?.width).toBe(b?.width);
-  await page.screenshot({ path: test.info().outputPath('alerts.png') });
-
-  // Edit swaps every bell for an ×; removing the ride with alerts turns them off.
-  await page.getByRole('button', { name: 'Edit' }).click();
-  await expect(page.locator('.ro-bell')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Stop tracking Hilly Loop' }).click();
-  await expect(rides).toHaveCount(1);
-  await expect(message).toHaveText('Stopped tracking Hilly Loop. Alerts off.');
+  const original = trackedRide.id;
+  expect(trackedRide.routeId).toBe('r101');
   await expect(
-    page.getByRole('button', { name: 'Stop tracking Coast & Back' }),
-  ).toBeFocused();
-  await expect.poll(() => selection.routeIds).toEqual(['r102']);
-  await page.screenshot({ path: test.info().outputPath('alerts-edit.png') });
-  await toast.getByRole('button', { name: 'Undo' }).click();
-  await expect(rides).toHaveCount(2);
-  await expect.poll(() => selection.routeIds).toEqual(['r101', 'r102']);
-  await page.getByRole('button', { name: 'Done' }).click();
-  await expect(
-    page.getByRole('button', {
-      name: 'Alerts on for Hilly Loop. Turn off alerts',
-    }),
-  ).toBeVisible();
+    page.getByRole('region', { name: 'Tracked ride', exact: true }),
+  ).toContainText('Hilly Loop');
+  page.once('dialog', (dialog) => dialog.dismiss());
   await page
-    .getByRole('button', { name: 'Alerts on for Hilly Loop. Turn off alerts' })
+    .getByRole('button', { name: 'Track this departure for Coast & Back' })
     .click();
-  await expect(message).toHaveText('Alerts off for Hilly Loop');
-  await expect(page.locator('.ro-alert')).toHaveCount(0);
+  expect(trackedRide.id).toBe(original);
+  page.once('dialog', (dialog) => dialog.accept());
+  await page
+    .getByRole('button', { name: 'Track this departure for Coast & Back' })
+    .click();
+  await expect.poll(() => trackedRide.routeId).toBe('r102');
+  expect(
+    calls
+      .filter((c) => c.path === '/tracked-rides' && c.method === 'POST')
+      .at(-1)?.body.replaceTrackedRideId,
+  ).toBe(original);
+  // Taking a route off the shortlist does not silently stop an account-wide plan.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Remove Coast & Back from shortlist' })
+    .click();
+  await expect(message).toHaveText('Removed Coast & Back from your shortlist');
+  expect(trackedRide.routeId).toBe('r102');
+  await expect(
+    page.getByRole('region', { name: 'Tracked ride', exact: true }),
+  ).toContainText('Coast & Back');
+  await page.locator('.ro-toast').getByRole('button', { name: 'Undo' }).click();
+  await expect(cards).toHaveCount(2);
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  // A newly recommended departure for the same route can replace the pinned one.
+  page.once('dialog', (dialog) => dialog.accept());
+  await page
+    .getByRole('button', { name: 'Track this departure for Coast & Back' })
+    .click();
+  await expect.poll(() => trackingVersion).toBe(3);
   await expectPanelFits(page);
+});
+
+test('a stale account tracking version reloads instead of silently replacing another device choice', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  await expect(
+    page.getByRole('button', { name: 'Track this departure for Hilly Loop' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Track this departure for Hilly Loop' }),
+  ).toBeEnabled();
+  trackingVersion++;
+  await page
+    .getByRole('button', { name: 'Track this departure for Hilly Loop' })
+    .click();
+  await expect(page.locator('.ro-toast span')).toHaveText(
+    'Your tracked ride changed. Review it and try again.',
+  );
+  expect(trackedRide).toBeNull();
+  await page
+    .getByRole('button', { name: 'Track this departure for Hilly Loop' })
+    .click();
+  await expect.poll(() => trackedRide?.routeId).toBe('r101');
+  await page
+    .getByRole('button', { name: 'Tracking Hilly Loop. Stop monitoring' })
+    .click();
+  await expect.poll(() => trackedRide).toBeNull();
 });
 
 test('a refresh shows how scores changed, then moves the rides into order', async ({
@@ -1914,7 +1990,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     'tailwind opportunity',
   );
   await expect(
-    module.getByRole('button', { name: 'Get alerts for Hilly Loop' }),
+    module.getByRole('button', { name: 'Track this departure for Hilly Loop' }),
   ).toHaveAttribute('aria-pressed', 'false');
   const chip = page.locator('#jr_101 .ro-chip');
   await expect(chip).toHaveText(/^\w{3} \d{1,2} · \d\d:\d\d$/);
@@ -1993,11 +2069,11 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   const toast = module.locator('.ro-toast');
   await module.getByRole('button', { name: 'Edit' }).click();
   await module
-    .getByRole('button', { name: 'Stop tracking Coast & Back' })
+    .getByRole('button', { name: 'Remove Coast & Back from shortlist' })
     .click();
   await expect(tiles).toHaveCount(1);
   await expect(toast.locator('span')).toHaveText(
-    'Stopped tracking Coast & Back',
+    'Removed Coast & Back from your shortlist',
   );
   // It sits in the window's bottom right corner, over the page.
   await expect
@@ -2187,9 +2263,11 @@ test('Journeys page: paused, tiles show name and distance until turned back on',
     pausedAt: new Date().toISOString(),
   };
   await signIn(worker);
-  await worker.evaluate(
-    "chrome.storage.local.set({ state: { alertRouteId: 'r102' } })",
-  );
+  handle('POST', new URL('http://127.0.0.1/tracked-rides'), {
+    recommendationRef: `r102:${day(1)}`,
+    expectedTrackingVersion: 0,
+    replaceTrackedRideId: null,
+  });
   await fakeCycleTravel(context);
   const page = await context.newPage();
   await page.goto('https://cycle.travel/user/journeys');
@@ -2362,4 +2440,102 @@ test('a real extension reload leaves one copy on Journeys, without errors', asyn
       `${dev}.getExtensionInfo('${extensionId}').then((i) => i.runtimeErrors.map((e) => e.message))`,
     ),
   ).toEqual([]);
+});
+
+test('notification browser view shows saved changes safely, handles ended rides and offers sign-in', async ({
+  context,
+}) => {
+  const source = readFileSync(
+    path.resolve('../worker/src/monitoring/browser-page.ts'),
+    'utf8',
+  );
+  const html = source.match(/const html = `([\s\S]*?)`;/)?.[1];
+  const script = source.match(
+    /export const browserScript = `([\s\S]*?)`;/,
+  )?.[1];
+  expect(html).toBeTruthy();
+  expect(script).toBeTruthy();
+  const id = crypto.randomUUID();
+  const candidate = best(day(1), 0, 78);
+  const baseline = {
+    pick: { candidate: { ...candidate, score: 84 } },
+    context: {
+      routes: [{ id: 'r101', name: '<img src=x onerror=alert(1)> Hilly Loop' }],
+    },
+  };
+  const ride = {
+    id,
+    routeId: 'r101',
+    departureAt: candidate.departureAt,
+    timeZone: 'Europe/London',
+    state: 'active',
+    endedReason: null as string | null,
+    baseline,
+    latestAssessment: { ...baseline, pick: { candidate } },
+    latestAssessmentKind: 'last_known',
+    comparison: null,
+    refresh: {
+      closed: false,
+      refreshAt: null,
+      lastSuccessfulAssessmentAt: new Date().toISOString(),
+    },
+  };
+  let signedIn = true;
+  await context.route('https://api.ride-on.cc/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/notifications/open')
+      return route.fulfill({ contentType: 'text/html', body: html });
+    if (url.pathname === '/notifications/page.js')
+      return route.fulfill({ contentType: 'text/javascript', body: script });
+    if (url.pathname === '/auth/providers')
+      return route.fulfill({ json: { providers: ['google', 'apple'] } });
+    if (!signedIn) return route.fulfill({ status: 401, json: {} });
+    if (url.pathname.endsWith('/notifications'))
+      return route.fulfill({
+        json: {
+          notifications: [
+            {
+              acceptedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+              decision: { reasons: ['score_worsened'], score: 78 },
+            },
+          ],
+        },
+      });
+    if (route.request().method() === 'DELETE') {
+      ride.state = 'inactive';
+      ride.endedReason = 'stopped';
+      ride.refresh.closed = true;
+      return route.fulfill({ status: 204 });
+    }
+    return route.fulfill({ json: { ride } });
+  });
+  const page = await context.newPage();
+  await page.goto(`https://api.ride-on.cc/notifications/open#ride=${id}`);
+  await expect(
+    page.getByRole('heading', { name: 'Last known conditions' }),
+  ).toBeVisible();
+  await expect(page.locator('#delta')).toHaveText(
+    '-6 points since you chose this departure.',
+  );
+  await expect(page.locator('#updates')).toContainText('Conditions worsened');
+  await expect(page.locator('h1 img')).toHaveCount(0);
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Stop tracking' }).click();
+  await expect(page.locator('#lifecycle')).toContainText('Tracking has ended');
+  await expect(
+    page.getByRole('button', { name: 'Check for changes' }),
+  ).toBeDisabled();
+  await page.screenshot({
+    path: test.info().outputPath('notification-browser-view.png'),
+    fullPage: true,
+  });
+  signedIn = false;
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Continue with Apple' }),
+  ).toBeVisible();
+  await expect(page.locator('#ride')).toBeHidden();
+  await page.goto('https://api.ride-on.cc/notifications/open#ride=invalid');
+  await expect(page.getByRole('status')).toContainText('incomplete');
 });

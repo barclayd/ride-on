@@ -194,6 +194,8 @@ export type PrecipitationSummary =
   | 'snow'
   | 'thunder';
 export type Departure = {
+  recommendationRef?: string | null;
+  trackingAvailability?: 'available' | 'unavailable';
   windAssistance?: {
     usefulDistanceFraction: number;
     potentialPoints: number;

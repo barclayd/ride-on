@@ -335,7 +335,7 @@ export const useTracking = (view: View | null) => {
   const [held, setHeld] = useState(false); // the pointer or focus is on the message
   const routeIds = view?.state.selection?.routeIds ?? [];
   const wanted = view?.state.alertRouteId ?? null;
-  const alert = wanted && routeIds.includes(wanted) ? wanted : null;
+  const alert = wanted;
   // Six seconds, held while the rider is on it; a new message starts the count again.
   useEffect(() => {
     if (!said || held) return;
@@ -348,14 +348,12 @@ export const useTracking = (view: View | null) => {
   };
   const failed = (result: { error?: string }) =>
     result.error && say(result.error);
-  const name = (id: string) =>
-    view?.cards.find((c) => c.routeId === id)?.name ??
-    view?.state.routes[id]?.name ??
-    'your ride';
   return {
     editing,
     setEditing,
     alert,
+    departureAt: view?.state.tracker.ride?.departureAt ?? null,
+    ready: view?.state.tracker.ready === true,
     said,
     shown,
     setHeld,
@@ -363,35 +361,49 @@ export const useTracking = (view: View | null) => {
       setShown(false);
       said?.undo?.();
     },
-    // One ride at a time: turning on another moves the alerts.
-    bell: (card: Card) => {
-      const on = alert !== card.routeId;
-      send({ type: 'setAlert', routeId: on ? card.routeId : null });
+    // The selected recommendation pins the departure. A replacement is explicit.
+    bell: async (card: Card) => {
+      const tracker = view?.state.tracker;
+      if (!tracker?.ready || tracker.error)
+        return say('Refresh to check your tracked ride first.');
+      const on =
+        alert !== card.routeId ||
+        tracker.ride?.departureAt !== card.best?.departureAt;
+      if (on && !card.best?.recommendationRef)
+        return say('Refresh this ride before tracking it.');
+      if (
+        on &&
+        tracker.ride &&
+        !confirm(`Replace your tracked ride with ${card.name}?`)
+      )
+        return;
+      const result = await send({
+        type: 'setAlert',
+        routeId: on ? card.routeId : null,
+        recommendationRef: on
+          ? (card.best?.recommendationRef ?? undefined)
+          : undefined,
+        expectedTrackingVersion: tracker.version,
+        replaceTrackedRideId: tracker.ride?.id ?? null,
+      });
+      if (result.error) return say(result.error);
       say(
-        !on
-          ? `Alerts off for ${card.name}`
-          : alert
-            ? `Alerts moved from ${name(alert)} to ${card.name}`
-            : `Alerts on for ${card.name}`,
-        () => send({ type: 'setAlert', routeId: alert }),
+        on
+          ? `Tracking ${card.name}. Notifications are managed in Preferences.`
+          : `Stopped monitoring ${card.name}`,
       );
     },
     remove: (card: Card) => {
-      const had = alert === card.routeId;
       const index = routeIds.indexOf(card.routeId);
       // The last ride gone, the list shows its empty state instead.
       if (routeIds.length <= 1) setEditing(false);
-      say(
-        had
-          ? `Stopped tracking ${card.name}. Alerts off.`
-          : `Stopped tracking ${card.name}`,
-        () =>
-          send({
-            type: 'track',
-            routeId: card.routeId,
-            index,
-            alert: had,
-          }).then(failed),
+      say(`Removed ${card.name} from your shortlist`, () =>
+        send({
+          type: 'track',
+          routeId: card.routeId,
+          index,
+          alert: false,
+        }).then(failed),
       );
       send({ type: 'untrack', routeId: card.routeId }).then(failed);
     },
@@ -476,8 +488,8 @@ const TileAction = (props: {
       <button
         type="button"
         class="ro-remove"
-        title="Stop tracking"
-        aria-label={`Stop tracking ${card.name}`}
+        title="Remove from shortlist"
+        aria-label={`Remove ${card.name} from shortlist`}
         onClick={(event) => {
           // Focus moves on to the next ×, as the tile it was on goes.
           const all = [
@@ -495,7 +507,9 @@ const TileAction = (props: {
         ×
       </button>
     );
-  const on = tracking.alert === card.routeId;
+  const on =
+    tracking.alert === card.routeId &&
+    tracking.departureAt === card.best?.departureAt;
   return (
     <button
       type="button"
@@ -503,11 +517,15 @@ const TileAction = (props: {
       aria-pressed={on}
       aria-label={
         on
-          ? `Alerts on for ${card.name}. Turn off alerts`
-          : `Get alerts for ${card.name}`
+          ? `Tracking ${card.name}. Stop monitoring`
+          : `Track this departure for ${card.name}`
       }
-      title={on ? 'Alerts on. Click to turn off' : 'Get alerts for this ride'}
-      disabled={props.disabled}
+      title={
+        on
+          ? 'Ride tracked. Click to stop monitoring'
+          : 'Track this ride and departure'
+      }
+      disabled={props.disabled || !tracking.ready}
       onClick={() => tracking.bell(card)}
     >
       <BellIcon />

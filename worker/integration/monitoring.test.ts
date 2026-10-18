@@ -1196,3 +1196,178 @@ run(
     assert.ok(first(payloads).reasons.includes('evening_summary'));
   },
 );
+
+const browserKeys = generateKeyPairSync('ec', {
+  namedCurve: 'prime256v1',
+}).privateKey.export({ format: 'jwk' });
+const browserPublic = Buffer.concat([
+  Buffer.from([4]),
+  Buffer.from(browserKeys.x ?? '', 'base64url'),
+  Buffer.from(browserKeys.y ?? '', 'base64url'),
+]).toString('base64url');
+const webConfig = JSON.stringify({
+  subject: 'mailto:push@example.test',
+  publicKey: browserPublic,
+  privateKey: browserKeys.d,
+});
+const subscription = {
+  endpoint: 'https://fcm.googleapis.com/fcm/send/synthetic-device',
+  expirationTime: null,
+  keys: {
+    p256dh: browserPublic,
+    auth: Buffer.alloc(16, 42).toString('base64url'),
+  },
+};
+const registerBrowser = (
+  h: Harness,
+  id: string,
+  value = subscription,
+  token?: string,
+) =>
+  h.send(`/push-devices/${id}`, {
+    method: 'PUT',
+    ...(token ? { token } : {}),
+    body: JSON.stringify({
+      transport: 'web_push',
+      platform: 'chrome',
+      subscription: value,
+    }),
+  });
+run(
+  'Chrome registration rejects unsafe endpoints, keeps secrets private, rotates versions and enforces ownership',
+  async (h) => {
+    const id = crypto.randomUUID();
+    assert.equal((await registerBrowser(h, id)).status, 200);
+    assert.equal(
+      (await registerBrowser(h, id, subscription, BOB_TOKEN)).status,
+      409,
+    );
+    assert.equal((await registerBrowser(h, crypto.randomUUID())).status, 409);
+    for (const endpoint of [
+      'https://localhost/fcm/send/x',
+      'https://fcm.googleapis.com/fcm/send/x?redirect=1',
+      'https://fcm.googleapis.com.evil.test/fcm/send/x',
+    ])
+      assert.equal(
+        (
+          await registerBrowser(h, crypto.randomUUID(), {
+            ...subscription,
+            endpoint,
+          })
+        ).status,
+        400,
+      );
+    assert.equal(
+      (
+        await registerBrowser(h, id, {
+          ...subscription,
+          keys: {
+            ...subscription.keys,
+            p256dh: Buffer.alloc(65).toString('base64url'),
+          },
+        })
+      ).status,
+      400,
+    );
+    const version = async () =>
+      (await h.runtime.getD1Database('ROUTES_DB'))
+        .prepare('SELECT version FROM push_devices WHERE id=?')
+        .bind(id)
+        .first<{ version: number }>();
+    assert.equal((await version())?.version, 1);
+    assert.equal((await registerBrowser(h, id)).status, 200);
+    assert.equal((await version())?.version, 1);
+    assert.equal(
+      (
+        await registerBrowser(h, id, {
+          ...subscription,
+          keys: {
+            ...subscription.keys,
+            auth: Buffer.alloc(16, 43).toString('base64url'),
+          },
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await version())?.version, 2);
+    const listing = await (await h.send('/push-devices')).text();
+    assert.ok(listing.includes('web_push'));
+    assert.ok(!listing.includes(subscription.endpoint));
+    assert.ok(!listing.includes(subscription.keys.p256dh));
+    const configuration = await json<{
+      webPush: { publicKey: string | null; configured: boolean };
+    }>(await h.send('/push-devices/config'));
+    assert.equal(configuration.webPush.configured, false);
+    await h.restart({ WEB_PUSH_CONFIG_JSON: webConfig });
+    const configured = await (await h.send('/push-devices/config')).text();
+    assert.ok(configured.includes(browserPublic));
+    assert.ok(!configured.includes(browserKeys.d ?? 'missing-private-key'));
+    assert.equal(
+      (await h.send(`/push-devices/${id}`, { method: 'DELETE' })).status,
+      204,
+    );
+    assert.equal(await version(), null);
+  },
+);
+run(
+  'Chrome and Apple share one decision while retrying each installation independently',
+  async (h) => {
+    const ride = await seed(h);
+    await register(h);
+    assert.equal((await registerBrowser(h, crypto.randomUUID())).status, 200);
+    await h.restart({
+      APNS_CONFIG_JSON: config,
+      WEB_PUSH_CONFIG_JSON: webConfig,
+    });
+    let apple = 0,
+      web = 0,
+      fail = true;
+    h.use(
+      metOffice(),
+      http.post('https://api.sandbox.push.apple.com/3/device/:token', () => {
+        apple++;
+        return new HttpResponse(null, { status: 200 });
+      }),
+      http.post(subscription.endpoint, async ({ request }) => {
+        web++;
+        assert.equal(request.headers.get('content-encoding'), 'aes128gcm');
+        assert.ok((await request.arrayBuffer()).byteLength > 100);
+        return new HttpResponse(null, { status: fail ? 503 : 201 });
+      }),
+    );
+    await change(h, ride, -6);
+    await monitor(h, ride.id);
+    assert.equal(apple, 1);
+    assert.equal(web, 1);
+    let history = first((await notifications(h, ride.id)).notifications);
+    assert.equal(history.devicesAccepted, 1);
+    assert.equal(history.devicesPending, 1);
+    fail = false;
+    await h.restart({ TEST_NOW: '2026-10-09T12:15:00.000Z' });
+    await monitor(h, ride.id);
+    assert.equal(apple, 1);
+    assert.equal(web, 2);
+    history = first((await notifications(h, ride.id)).notifications);
+    assert.equal(history.devicesAccepted, 2);
+    await monitor(h, ride.id);
+    assert.equal(web, 2);
+  },
+);
+run(
+  'notification landing page is public but exposes no ride data and uses an external script with a restrictive CSP',
+  async (h) => {
+    const response = await h.send('/notifications/open');
+    assert.equal(response.status, 200);
+    assert.match(
+      response.headers.get('content-security-policy') ?? '',
+      /script-src 'self'/,
+    );
+    assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+    const page = await response.text();
+    assert.ok(page.includes('/notifications/page.js'));
+    assert.ok(!page.includes('test-token'));
+    const script = await h.send('/notifications/page.js');
+    assert.equal(script.status, 200);
+    assert.match(script.headers.get('content-type') ?? '', /javascript/);
+  },
+);

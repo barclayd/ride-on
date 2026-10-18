@@ -32,7 +32,7 @@ Builds target `https://api.ride-on.cc`; set `WXT_API_URL` to point elsewhere.
 
 Safari extensions ship inside an app: `safari/` is an XcodeGen project whose `RideOnExtension`
 target runs `bun run build:safari` and copies `.output/safari-mv3` into the extension bundle. The
-`RideOn` app around it only explains how to turn the extension on. It has the main app's identity
+`RideOn` app explains how to turn the extension on and delivers APNs ride notifications. It has the main app's identity
 (`com.danbarclay.rideon`, extension `com.danbarclay.rideon.Extension`), so these targets move into
 `app/project.yml` when the full app ships as an update to the same App Store record.
 
@@ -44,7 +44,7 @@ Then on macOS: Safari → Settings → Extensions → tick Ride On (for unsigned
 enable Settings → Advanced → "Show features for web developers", then Developer → "Allow unsigned
 extensions"). On iOS: Settings → Apps → Safari → Extensions → Ride On.
 
-Differences from Chrome, all for sign-in (Safari has no `identity` API):
+Sign-in differences from Chrome (Safari has no `identity` API):
 
 - The popup asks for `api.ride-on.cc` and `cycle.travel` access first, because Safari grants hosts per site.
 - Sign-in opens a tab instead of a window. The API redirects it to
@@ -53,6 +53,12 @@ Differences from Chrome, all for sign-in (Safari has no `identity` API):
   checks `state`, exchanges it and closes the tab. The PKCE flow waits in IndexedDB, because Safari
   can unload the background while the rider signs in. Closing the tab cancels it.
 - No manifest `key` and no `identity` permission. On iPhone the popup fills the sheet.
+
+## Ride notifications
+
+The bell pins the displayed departure for your account. Replacing it is explicit; all devices share the same tracked ride, saved minimums and pause. Shortlist changes do not stop the pinned departure. Choose **Preferences → Enable notifications** on each installation that should receive alerts.
+
+Chrome 121+ requests its optional notifications permission and subscribes to Web Push. Safari links to the containing app through native messaging; open that app and press **Enable notifications** to finish. Taps open the latest tracked ride in the browser, with sign-in if needed. See [monitoring and push delivery](../docs/ride-monitoring.md#chrome-and-safari-delivery-api-v0370) for the policy, API, secure shared Keychain, server configuration and signing environments. Apple push needs a separate APNs key; WeatherKit credentials do not enable it.
 
 ## Test
 
@@ -86,9 +92,8 @@ TestFlight. See [STORE.md](STORE.md) "App Store (Safari)".
 ## API
 
 Contracts: `docs/api.md`. Rankings are one `POST /recommendations` across the planned days, with
-`previewDays: 7` for the day strip. The default window, sunshine, rain and km/mi are stored only in
-this browser, and so, until the API stores alerts, is which tracked ride has its bell on (no alert
-is sent yet). A pause is also kept in this browser until the API stores it on the profile
-(`docs/extension-api-brief-v8.md`); while paused the background asks for no forecasts, and a
-`chrome.alarms` alarm turns Ride On back on at 00:00 on the chosen day. Only the background service worker calls the API; the popup and content script
-message it and render the shared state in `storage.local`.
+`previewDays: 7` for the day strip. The account's tracked departure, monitoring and pause are
+shared through the API; notification permission and delivery registration belong to each
+installation. The background service worker calls the API, while the popup and content script
+message it and render the shared state in `storage.local`. Safari's companion also calls the
+device-registration API using its private Keychain session.

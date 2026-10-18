@@ -5,8 +5,15 @@ import { readJsonBody, validateInput } from '../request.ts';
 import { getTracking, trackingNotFound } from '../tracking/store.ts';
 import type { Bindings, Env } from '../types.ts';
 import { PUSH_TOPIC, pushConfig } from './apns.ts';
+import { subscriptionSchema, webPushConfig } from './web-push.ts';
 
 export const monitoringCapabilities = (env: Env) => ({
+  notificationTransports: {
+    apns:
+      env.RIDE_MONITORING === 'enabled' &&
+      Object.keys(pushConfig(env)).length > 0,
+    webPush: env.RIDE_MONITORING === 'enabled' && !!webPushConfig(env),
+  },
   maximumActiveRides: 1,
   manualRefresh: true,
   automaticChecks: env.RIDE_MONITORING === 'enabled',
@@ -14,7 +21,7 @@ export const monitoringCapabilities = (env: Env) => ({
     env.RIDE_MONITORING === 'enabled' &&
     Object.keys(pushConfig(env)).length > 0,
 });
-const registrationSchema = z.strictObject({
+const nativeRegistrationSchema = z.strictObject({
   token: z
     .string()
     .min(32)
@@ -24,23 +31,90 @@ const registrationSchema = z.strictObject({
   environment: z.enum(['sandbox', 'production']),
   topic: z.literal(PUSH_TOPIC),
   platform: z.enum(['ios', 'macos']),
+  scope: z.enum(['all', 'tracked_rides']).default('all'),
 });
+const registrationSchema = z.union([
+  nativeRegistrationSchema,
+  z.strictObject({
+    transport: z.literal('web_push'),
+    platform: z.literal('chrome'),
+    subscription: subscriptionSchema,
+  }),
+]);
 export const notificationRoutes = (now: () => Date) => {
   const app = new Hono<Bindings>();
+  app.get('/push-devices/config', (c) =>
+    c.json({
+      webPush: {
+        publicKey: webPushConfig(c.env)?.publicKey ?? null,
+        configured: !!webPushConfig(c.env),
+      },
+      apns: {
+        sandbox: !!pushConfig(c.env).sandbox,
+        production: !!pushConfig(c.env).production,
+      },
+      automaticChecks: c.env.RIDE_MONITORING === 'enabled',
+    }),
+  );
   app.put('/push-devices/:id', async (c) => {
     const id = validateInput(z.uuid(), c.req.param('id'));
-    const input = await readJsonBody(c, registrationSchema);
+    const parsed = await readJsonBody(c, registrationSchema);
+    const input =
+      'subscription' in parsed
+        ? {
+            token: parsed.subscription.endpoint,
+            environment: 'production' as const,
+            topic: 'web-push',
+            platform: parsed.platform,
+            transport: 'web_push',
+            scope: 'tracked_rides',
+            subscription: JSON.stringify(parsed.subscription),
+          }
+        : { ...parsed, transport: 'apns', subscription: null };
+    if ('subscription' in parsed) {
+      try {
+        await crypto.subtle.importKey(
+          'raw',
+          Uint8Array.from(
+            atob(
+              parsed.subscription.keys.p256dh
+                .replaceAll('-', '+')
+                .replaceAll('_', '/'),
+            ),
+            (c) => c.charCodeAt(0),
+          ),
+          { name: 'ECDH', namedCurve: 'P-256' },
+          false,
+          [],
+        );
+      } catch {
+        throw new AppError(
+          400,
+          'INVALID_SUBSCRIPTION',
+          'Invalid push encryption key.',
+        );
+      }
+      if (
+        parsed.subscription.expirationTime !== null &&
+        parsed.subscription.expirationTime <= now().getTime()
+      )
+        throw new AppError(
+          400,
+          'INVALID_SUBSCRIPTION',
+          'The push subscription has expired.',
+        );
+    }
     const owner = c.get('ownerId'),
       db = c.env.ROUTES_DB;
     const result = await db
-      .prepare(`INSERT INTO push_devices(id,owner_id,token,environment,topic,platform,registered_at)
-      SELECT ?,?,?,?,?,?,? WHERE
+      .prepare(`INSERT INTO push_devices(id,owner_id,token,environment,topic,platform,registered_at,transport,subscription_json,scope)
+      SELECT ?,?,?,?,?,?,?,?,?,? WHERE
       NOT EXISTS (SELECT 1 FROM push_devices WHERE id = ? AND owner_id <> ?)
       AND NOT EXISTS (SELECT 1 FROM push_devices WHERE environment = ? AND topic = ? AND token = ? AND id <> ?)
       AND ((SELECT COUNT(*) FROM push_devices WHERE owner_id = ?) < 20 OR EXISTS (SELECT 1 FROM push_devices WHERE id = ? AND owner_id = ?))
       ON CONFLICT(id) DO UPDATE SET token = excluded.token, environment = excluded.environment, topic = excluded.topic,
-      platform = excluded.platform, registered_at = excluded.registered_at,
-      version = push_devices.version + CASE WHEN push_devices.token <> excluded.token OR push_devices.environment <> excluded.environment OR push_devices.topic <> excluded.topic THEN 1 ELSE 0 END
+      platform = excluded.platform, registered_at = excluded.registered_at, transport = excluded.transport, subscription_json = excluded.subscription_json, scope = excluded.scope,
+      version = push_devices.version + CASE WHEN push_devices.token <> excluded.token OR push_devices.environment <> excluded.environment OR push_devices.topic <> excluded.topic OR push_devices.transport <> excluded.transport OR push_devices.scope <> excluded.scope OR COALESCE(push_devices.subscription_json,'') <> COALESCE(excluded.subscription_json,'') THEN 1 ELSE 0 END
       WHERE push_devices.owner_id = excluded.owner_id`)
       .bind(
         id,
@@ -50,6 +124,9 @@ export const notificationRoutes = (now: () => Date) => {
         input.topic,
         input.platform,
         now().toISOString(),
+        input.transport,
+        input.subscription,
+        input.scope,
         id,
         owner,
         input.environment,
@@ -79,13 +156,18 @@ export const notificationRoutes = (now: () => Date) => {
         environment: input.environment,
         topic: input.topic,
         platform: input.platform,
+        transport: input.transport,
+        scope: input.scope,
       },
-      deliveryConfigured: !!pushConfig(c.env)[input.environment],
+      deliveryConfigured:
+        input.transport === 'web_push'
+          ? !!webPushConfig(c.env)
+          : !!pushConfig(c.env)[input.environment],
     });
   });
   app.get('/push-devices', async (c) => {
     const devices = await c.env.ROUTES_DB.prepare(
-      'SELECT id,environment,topic,platform,registered_at AS registeredAt FROM push_devices WHERE owner_id = ? ORDER BY id LIMIT 20',
+      'SELECT id,environment,topic,platform,transport,scope,registered_at AS registeredAt FROM push_devices WHERE owner_id = ? ORDER BY id LIMIT 20',
     )
       .bind(c.get('ownerId'))
       .all();

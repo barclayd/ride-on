@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
-import { ApiError, api, getToken, setToken } from '../lib/api';
+import { ApiError, api, getToken, setSecret, setToken } from '../lib/api';
 import {
   cancelSignIn,
   finishSignIn,
@@ -8,6 +8,12 @@ import {
   SignInCancelled,
   signIn,
 } from '../lib/auth';
+import {
+  disablePush,
+  enablePush,
+  installPushHandlers,
+  pushStatus,
+} from '../lib/push';
 import {
   DEFAULT_PLANNING,
   initialState,
@@ -19,6 +25,7 @@ import {
   type State,
 } from '../lib/state';
 import { surfaceSeenKey } from '../lib/surface';
+import { loadTracker, saveTrackedRide } from '../lib/tracking';
 import {
   MAX_TRACKED,
   type NextWindows,
@@ -63,6 +70,8 @@ const update = (patch: (state: State) => Partial<State>) => {
 };
 
 const signOutLocally = async (signInError: string | null = null) => {
+  await disablePush().catch(() => {});
+  await setSecret('track-action', null);
   await setToken(null);
   await browser.storage.local.remove('seen');
   await update(() => ({ ...initialState, signInError }));
@@ -461,6 +470,8 @@ const refresh = async (force = false) => {
   else if (!expired && shown && ended(shown, new Date())) await expire(true);
   else if (force || expired || !current(state)) await rank();
   await tags;
+  await syncTracking();
+  await updatePushStatus();
 };
 
 // The pause is on the profile (API 0.34), so the rider's other devices follow. It shows here at
@@ -664,6 +675,46 @@ const importJourney = async (journey: JourneyGpx) => {
   return route;
 };
 
+const syncTracking = async () => {
+  const owner = (await readState()).user?.id;
+  try {
+    const tracker = await loadTracker();
+    await update((state) =>
+      state.user?.id !== owner
+        ? {}
+        : {
+            tracker,
+            alertRouteId:
+              tracker.ride && !tracker.ride.refresh.closed
+                ? tracker.ride.routeId
+                : null,
+          },
+    );
+  } catch (error) {
+    await update((state) => ({
+      tracker:
+        state.user?.id !== owner
+          ? state.tracker
+          : { ...state.tracker, error: errorMessage(error) },
+    }));
+  }
+};
+const updatePushStatus = async () => {
+  const owner = (await readState()).user?.id;
+  try {
+    const push = await pushStatus();
+    await update((state) => (state.user?.id === owner ? { push } : {}));
+  } catch {
+    await update(() => ({
+      push: {
+        enabled: false,
+        status: 'unavailable',
+        message: 'Could not check notification setup. Try again.',
+      },
+    }));
+  }
+};
+
 const handle = async (message: Message) => {
   switch (message.type) {
     case 'signIn':
@@ -676,6 +727,7 @@ const handle = async (message: Message) => {
     case 'signInRedirect':
       return signedIn(finishSignIn(message.url));
     case 'signOut':
+      await disablePush();
       // Removals still in their undo window belong to this account; send them first.
       await commitDeletes(true).catch(() => {});
       await api('/api/auth/sign-out', { body: {} }).catch(() => {});
@@ -758,7 +810,7 @@ const handle = async (message: Message) => {
       const { alertRouteId } = await readState();
       return select(
         (ids) => ids.filter((id) => id !== message.routeId),
-        alertRouteId === message.routeId ? null : alertRouteId,
+        alertRouteId,
       );
     }
     case 'track': {
@@ -772,9 +824,41 @@ const handle = async (message: Message) => {
         message.alert ? routeId : alertRouteId,
       );
     }
-    // ponytail: local until the API stores alerts (follow-up PR); nothing is sent yet.
-    case 'setAlert':
-      return update(() => ({ alertRouteId: message.routeId }));
+    case 'setAlert': {
+      if (message.routeId) {
+        if (!message.recommendationRef)
+          throw new Error('Refresh this ride before tracking it.');
+        try {
+          const tracker = await saveTrackedRide(
+            message.recommendationRef,
+            message.expectedTrackingVersion,
+            message.replaceTrackedRideId,
+          );
+          return update(() => ({
+            tracker,
+            alertRouteId: tracker.ride?.routeId ?? null,
+          }));
+        } catch (error) {
+          await syncTracking();
+          throw error;
+        }
+      }
+      if (message.replaceTrackedRideId)
+        await api(`/tracked-rides/${message.replaceTrackedRideId}`, {
+          method: 'DELETE',
+        });
+      return syncTracking();
+    }
+    case 'enablePush': {
+      const push = await enablePush();
+      return update(() => ({ push }));
+    }
+    case 'disablePush': {
+      const push = await disablePush();
+      return update(() => ({ push }));
+    }
+    case 'pushStatus':
+      return updatePushStatus();
     // Back on at 00:00 local on until; the rider's days, times and alerts stay as they are.
     case 'pause': {
       const { until } = message;
@@ -919,6 +1003,7 @@ const handle = async (message: Message) => {
 };
 
 export default defineBackground(() => {
+  installPushHandlers();
   // A worker restart abandons Chrome's sign-in window, any unsent edit and any request in
   // flight (Safari stops its worker mid-fetch); don't leave them spinning or the panel dimmed.
   // Safari's sign-in tab outlives it, so that stays until it finishes or expires.
@@ -975,7 +1060,14 @@ export default defineBackground(() => {
     if (alarm.name === SYNC) syncPause().catch(() => {});
   });
   browser.runtime.onMessage.addListener(
-    (message: Message, _sender, sendResponse) => {
+    (message: Message, sender, sendResponse) => {
+      if (
+        ['enablePush', 'disablePush'].includes(message.type) &&
+        sender.url !== browser.runtime.getURL('/popup.html')
+      ) {
+        sendResponse({ error: 'Manage notifications in Ride On Preferences.' });
+        return false;
+      }
       handle(message).then(
         () => sendResponse({}),
         async (error) => {

@@ -1,6 +1,6 @@
-# Scheduled ride monitoring and Apple push
+# Scheduled ride monitoring and push delivery
 
-API v0.30.0 implements the backend policy agreed on 16 October 2026. It extends the [chosen-ride tracking API](ride-tracking-api.md); the accepted baseline, fixed departure, original comparison routes/dates/window, and scoring algorithm (`comfort-v0.17`) are unchanged. iOS/macOS permission, registration, notification presentation and navigation are a separate app integration.
+API v0.30.0 implements the backend policy agreed on 16 October 2026. It extends the [chosen-ride tracking API](ride-tracking-api.md); the accepted baseline, fixed departure, original comparison routes/dates/window, and scoring algorithm (`comfort-v0.17`) are unchanged. The Safari companion app and Chrome extension now integrate permission, registration, presentation and browser navigation; the full SwiftUI app remains a separate client integration.
 
 ## Agreed decisions
 
@@ -18,13 +18,13 @@ Except while the account is paused, all active tracked rides, including existing
 
 There are **no quiet hours**. A qualifying best option may be the same ride at another departure or another shortlisted route; copy names the new best option. Incomplete comparison coverage cannot establish a new best option. A small ranking shuffle alone is silent. The plan never switches automatically.
 
-The first score comparison uses the accepted Conditions score. After Apple accepts a notification containing current conditions, its score becomes the separate notification reference: 80 → 74 alerts, 72 stays quiet, 68 alerts once the gap permits. The original accepted baseline remains immutable. The reference also retains notified minimum failures and the suggested option. Separately observed minimum transitions detect a fresh breach even when an intervening recovery was held by the cooldown. Simultaneous events combine into one message and reset the reference to the conditions that message contains. The cooldown is measured from Apple acceptance, not queueing or a failed attempt. APNs acceptance means Apple accepted delivery, not that a device displayed it or the user read it.
+The first score comparison uses the accepted Conditions score. After either push service accepts a notification containing current conditions, its score becomes the separate notification reference: 80 → 74 alerts, 72 stays quiet, 68 alerts once the gap permits. The original accepted baseline remains immutable. The reference also retains notified minimum failures and the suggested option. Separately observed minimum transitions detect a fresh breach even when an intervening recovery was held by the cooldown. Simultaneous events combine into one message and reset the reference to the conditions that message contains. The cooldown is measured from the first transport acceptance, not queueing or a failed attempt. APNs acceptance means Apple accepted delivery, not that a device displayed it or the user read it.
 
 Preference, course, history, scoring-version and weather-source changes quietly restart forecast comparisons. They do not masquerade as weather changes. The original baseline and actual delivery history remain unchanged. Becoming assessable after unknown minimums does not itself prove a limit was crossed.
 
 Pending changes are recomputed against the current assessment. Withdrawn changes are cancelled; newer assessments supersede obsolete unsent deliveries. A retry is allowed only while the plan is active, before departure, with the same inputs, current assessment and current device registration. A push already accepted by Apple cannot be recalled if the rider subsequently stops the plan.
 
-At summary time, an unavailable assessment produces an explicit availability message with the last successful check when known. It counts as the outage notice; recovery follows once current assessments resume. No-device accounts keep their assessment current but cannot receive pushes or advance the last-notified reference. An eligible summary may retry after 19:00 until departure, with current content; it is never replayed after departure. Outage/summary state only counts as notified after an APNs acceptance.
+At summary time, an unavailable assessment produces an explicit availability message with the last successful check when known. It counts as the outage notice; recovery follows once current assessments resume. No-device accounts keep their assessment current but cannot receive pushes or advance the last-notified reference. An eligible summary may retry after 19:00 until departure, with current content; it is never replayed after departure. Outage/summary state only counts as notified after a push-service acceptance.
 
 ### Account pauses
 
@@ -97,7 +97,7 @@ A conflicting installation/token belonging to another registration, or a 21st de
 - `DELETE /push-devices/{installationUUID}` idempotently unregisters the owner's installation and cancels pending deliveries. Delete it on sign-out or notification opt-out.
 - `GET /tracked-rides/{id}/notifications?limit=20&cursor=...` returns paginated event history: `id`, `createdAt`, `expiresAt`, `acceptedAt`, `status`, `devicesAccepted`, `devicesPending` and `decision`. Limit 1–50; use the returned opaque cursor. Foreign plans return 404. This read does not fetch weather or send pushes.
 
-Event statuses are `pending`, `accepted`, `superseded`, `cancelled`, or `failed`. `accepted` means at least one APNs acceptance; other devices may still be pending. Decision fields include reasons, score/delta, new/recovered/remaining minimums, the qualifying alternative and last-success time. Per-device attempts and transport reason codes remain operational D1 records.
+Event statuses are `pending`, `accepted`, `superseded`, `cancelled`, or `failed`. `accepted` means at least one push-service acceptance; other devices may still be pending. Decision fields include reasons, score/delta, new/recovered/remaining minimums, the qualifying alternative and last-success time. Per-device attempts and transport reason codes remain operational D1 records.
 
 An Apple alert has standard sound and thread grouping by plan. No critical/time-sensitive entitlement is required. Custom payload fields:
 
@@ -135,10 +135,53 @@ Configure **optional** secret `APNS_CONFIG_JSON` separately from WeatherKit cred
 }
 ```
 
-Either environment may be omitted. Use `wrangler secret put APNS_CONFIG_JSON`; never commit a real value. Missing/invalid configuration leaves assessments running and reports notification delivery unconfigured. WeatherKit credentials do not establish APNs authorization. Current production secret metadata was checked on 16 October: the APNs secret was not yet configured. App registration and a real device smoke test remain prerequisites for live alert verification.
+Either environment may be omitted. Use `wrangler secret put APNS_CONFIG_JSON`; never commit a real value. Missing/invalid configuration leaves assessments running and reports notification delivery unconfigured. WeatherKit credentials do not establish APNs authorization. Separate production and sandbox APNs signing keys were validated and installed in the production Worker's secret on 18 October 2026. Private values were not written into the workspace. App registration and a real device smoke test remain prerequisites for live alert verification.
 
 The sender uses native Workers `fetch`; `node:http2` is not supported for this purpose. The [Workers runtime issue](https://github.com/cloudflare/workerd/issues/4841) records the local macOS HTTP/2 limitation for APNs while deployed Workers support this fetch path. Local integration tests mock the HTTP boundary and do not prove device delivery. Apple documents [request construction](https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns), [responses and retry handling](https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns), and [provider authentication](https://developer.apple.com/documentation/usernotifications/establishing-a-token-based-connection-to-apns).
 
 ## Verification
 
 `bun run check` covers deterministic policy scenarios and real Workers/D1/KV integration with synthetic weather and APNs responses: cooldown/reset thresholds, breaches/recoveries, unknown data, quiet rebases, best options, summaries and DST, outage recovery, authentication/ownership, token rotation, duplicate jobs, retry isolation, lifecycle cancellation and poison messages. Pause scenarios cover cancellation, skipped weather, preserved baselines, quiet explicit/cron resume, missed summaries, outage recovery, plans created while paused, and concurrent weather/APNs requests. `bun run build:check` validates the deployable bundle and bindings. No live weather quota or real user pushes are used by tests.
+
+
+## Chrome and Safari delivery (API v0.37.0)
+
+Both clients use the same monitoring policy and durable event. A successful send to either transport advances the notification reference once; each installation retries independently. No browser runs a separate forecast scheduler. Browser delivery does not change scoring or the agreed alert thresholds.
+
+Chrome desktop 121+ receives encrypted Web Push in the extension service worker and presents a system notification. Permission is optional and requested only from **Preferences → Enable notifications**. Chrome need not have a Ride On page open; a fully quit browser or disabled OS notifications may delay/prevent presentation. Subscription and installation data live in the extension's private IndexedDB. Token changes/versioning, expired endpoints, subscription-change events, reconnection, permission removal and sign-out are handled. The extension suppresses expired/duplicate pushes and checks account/plan lifecycle without requesting weather. During a temporary API outage it can show the still-valid encrypted message; notification taps always load current data.
+
+Safari on Mac, iPhone and iPad uses the signed Ride On containing app and APNs, not a website subscription. Enable in the extension, open the companion, then press **Enable notifications** to request system permission. The native extension and app share the installation and account session in their private Keychain access group; tokens never appear in a URL, content-script message or public storage. One native installation links to one Safari account at a time; disable it before linking another profile/account. The companion registers with Apple again when foregrounded, handles token changes, and unregisters from the backend on disable/sign-out. It reports setup/blocked/server-unconfigured states rather than claiming delivery is ready.
+
+The bell now pins the chosen recommendation's exact departure through `/tracked-rides`. Replacing a plan requires confirmation and the current tracking version. A conflict reloads rather than automatically overwriting another device's choice. Removing a route from the shortlist does not stop its tracked departure. The account's tracked ride remains visible in both browser surfaces even if its route is absent from the shortlist. Tracking works without enabling notifications.
+
+Both transports open `https://api.ride-on.cc/notifications/open#ride=<plan UUID>`. The companion uses the device's default browser. This page uses the existing HttpOnly browser session, offers Apple/Google sign-in when needed, and fetches the current owner-scoped plan and alert history. It labels saved/stale assessments, original-baseline deltas, minimum failures, assessed alternatives, and stopped/replaced/departed plans. An erased or other-account plan reveals no details. The page uses text-only dynamic rendering, a restrictive CSP and no-referrer policy. No credentials travel in the link.
+
+### Browser registration and capabilities
+
+`GET /push-devices/config` returns `webPush: {configured, publicKey}`, `apns: {sandbox, production}` and `automaticChecks`. Only the public VAPID key is exposed. Tracking/device capabilities add `notificationTransports: {apns, webPush}`; the legacy `notifications` flag retains its APNs meaning.
+
+```json
+{
+  "transport": "web_push",
+  "platform": "chrome",
+  "subscription": {
+    "endpoint": "https://fcm.googleapis.com/fcm/send/<subscription>",
+    "expirationTime": null,
+    "keys": { "p256dh": "<base64url P-256 public key>", "auth": "<base64url 16-byte secret>" }
+  }
+}
+```
+
+Send that body to the same authenticated `PUT /push-devices/{installationUUID}`. Endpoints are limited to HTTPS Google FCM `/fcm/send/` or `/wp/` URLs; redirects, credentials, query strings and arbitrary hosts are rejected. Key lengths and the elliptic-curve point are validated. Subscription keys and endpoints never appear in registration/list responses. A changed subscription increments the installation version and cancels old pending attempts. A 404/410 retires only that registration version; transient provider failures retry within the original expiry.
+
+Native registrations accept optional `scope: "tracked_rides" | "all"` (legacy default `all`). The Safari companion uses `tracked_rides`; Chrome registrations always have that scope. Existing full-app installations retain their Strava notifications. Browser clients receive the agreed ride-monitoring alerts, not unrelated Strava prompts whose review screen is in the full app.
+
+### Configuration and verification
+
+Apply migration `0018` before deploying. It preserves existing APNs registrations and Strava delivery records while adding transport/subscription/scope fields. Set optional Worker secret `WEB_PUSH_CONFIG_JSON` to `{ "subject": "https://api.ride-on.cc", "publicKey": "<base64url uncompressed P-256 point>", "privateKey": "<base64url 32-byte scalar>" }`. Generate this VAPID pair once and keep it stable. Changing it requires Chrome subscriptions to reconnect. Never commit the private key or log subscription bodies. The production VAPID key was generated and installed on 18 October 2026; its private value was not written into the workspace.
+
+Safari needs the separate `APNS_CONFIG_JSON` described above. Its Xcode targets share the `$(AppIdentifierPrefix)com.danbarclay.rideon.notifications` Keychain group. Debug uses the development APNs entitlement and `sandbox` registration; Release uses production for both. If exporting with development signing, use Debug or override **both** `APS_ENVIRONMENT=development` and `PUSH_ENVIRONMENT=sandbox`. When incorporating the extension into the full app, preserve this group/service/installation and move the registration/delegate code; do not register a second native installation for the same app.
+
+Automated verification includes independent RFC 8291/8188 payload decryption and VAPID signature validation; endpoint/key/owner validation; migration preservation with foreign keys enabled; mixed APNs/Web Push retries; and browser tests for explicit tracking replacement, stale versions and the signed-in/signed-out landing page. Real device receipt/click tests require production VAPID/APNs configuration and installed signed clients; mocks and successful builds do not prove live delivery.
+
+Platform references: [Chrome extension Web Push](https://developer.chrome.com/docs/extensions/how-to/integrate/web-push) and [Safari native messaging](https://developer.apple.com/documentation/safariservices/messaging-between-the-app-and-javascript-in-a-safari-web-extension).
