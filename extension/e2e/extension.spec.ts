@@ -803,6 +803,15 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
     return [204, undefined];
   }
   if (key === 'POST /api/auth/sign-out') return [200, {}];
+  // A test browser can't subscribe to Web Push, so delivery is off here.
+  if (key === 'GET /push-devices/config')
+    return [
+      200,
+      {
+        automaticChecks: true,
+        webPush: { publicKey: null, configured: false },
+      },
+    ];
   return [404, { error: { code: 'NOT_FOUND', message: key } }];
 };
 
@@ -965,9 +974,15 @@ test('Rides tab opens first with one request for the planned days', async ({
 
 const tracks = () =>
   calls.filter((c) => c.path === '/tracked-rides' && c.method === 'POST');
-// The browser's own notification prompt can't be answered in a test.
-const answerPrompt = (page: Page, allow: boolean) =>
-  page.evaluate(`chrome.permissions.request = async () => ${allow}`);
+// A test browser can't subscribe to Web Push: the panel's Enable gets the background's answer.
+const answerEnable = (page: Page, error?: string) =>
+  page.evaluate(`{
+    const send = chrome.runtime.sendMessage.bind(chrome.runtime);
+    chrome.runtime.sendMessage = (message, ...rest) =>
+      message?.type === 'enablePush'
+        ? Promise.resolve(${JSON.stringify(error ? { error } : {})})
+        : send(message, ...rest);
+  }`);
 
 test('the bell asks which alerts first; moving them is explicit, undoable and survives shortlist edits', async ({
   context,
@@ -978,7 +993,7 @@ test('the bell asks which alerts first; moving them is explicit, undoable and su
   selection.routeIds = ['r101', 'r102'];
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  await answerPrompt(page, true);
+  await answerEnable(page);
   const cards = page.locator('.ro-ride');
   await expect(cards).toHaveCount(2);
   const message = page.locator('.ro-toast span');
@@ -1003,9 +1018,8 @@ test('the bell asks which alerts first; moving them is explicit, undoable and su
   for (const toggle of await switches.all())
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await expect(dialog).toContainText('when you leave.');
-  await expect(dialog).toContainText(
-    'Your browser will ask you to allow notifications from Ride On.',
-  );
+  // Chrome turns notifications on without asking.
+  await expect(dialog).not.toContainText('notifications');
   await expect(dialog.locator('.ro-alerts-move')).toHaveCount(0);
   await expectPanelFits(page);
   await page.screenshot({ path: test.info().outputPath('alerts.png') });
@@ -1113,7 +1127,10 @@ test('a stale account tracking version reloads instead of silently replacing ano
 }) => {
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  await answerPrompt(page, false);
+  await answerEnable(
+    page,
+    'Notifications are blocked in your browser or system settings.',
+  );
   const bell = page.getByRole('button', { name: 'Get alerts for Hilly Loop' });
   const turnOn = page
     .getByRole('dialog')
@@ -1130,9 +1147,11 @@ test('a stale account tracking version reloads instead of silently replacing ano
   expect(trackedRide).toBeNull();
   await bell.click();
   await turnOn.click();
-  // Saved, but the browser said no to notifications.
+  // Saved, but notifications are blocked.
   await expect.poll(() => trackedRide?.routeId).toBe('r101');
-  await expect(message).toHaveText('Notifications are blocked in your browser');
+  await expect(message).toHaveText(
+    'Notifications are blocked in your browser or system settings.',
+  );
   // An on bell turns alerts off without asking, with Undo.
   await page
     .getByRole('button', { name: 'Alerts on for Hilly Loop. Turn off alerts' })
@@ -1153,7 +1172,7 @@ test('once the API advertises triggers, the choices go with the ride', async ({
   user.settings.preferences.minimumStandards = { maximumGustKph: 40 };
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  await answerPrompt(page, true);
+  await answerEnable(page);
   await page.getByRole('button', { name: 'Get alerts for Hilly Loop' }).click();
   const dialog = page.getByRole('dialog', { name: 'Get alerts for this ride' });
   await expect(dialog.getByRole('switch')).toHaveText([
@@ -1204,7 +1223,7 @@ test('alerts fix the time: the tile keeps it, and says what we are tracking', as
   capabilities = FIXED;
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  await answerPrompt(page, true);
+  await answerEnable(page);
   const at = slotAt(day(1), 0);
   const message = page.locator('.ro-toast span');
   const undo = page.locator('.ro-toast').getByRole('button', { name: 'Undo' });
@@ -1342,7 +1361,7 @@ test('a better time on the ride with alerts can take them, with Undo', async ({
   capabilities = FIXED;
   await signIn(worker);
   const page = await openPopup(context, extensionId);
-  await answerPrompt(page, true);
+  await answerEnable(page);
   const at = slotAt(day(1), 0);
   const next = slotAt(day(1), 1);
   const message = page.locator('.ro-toast span');
@@ -2293,6 +2312,33 @@ test('the popup page a Journeys button opens in a tab manages notifications like
   expect(
     await page.evaluate("chrome.runtime.sendMessage({ type: 'disablePush' })"),
   ).toEqual({});
+});
+
+test('Journeys page: turning on alerts turns on notifications here, without opening the popup', async ({
+  context,
+  worker,
+}) => {
+  await signIn(worker);
+  await fakeCycleTravel(context);
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys');
+  const module = page.locator('ride-on-module');
+  await module
+    .getByRole('button', { name: 'Get alerts for Hilly Loop' })
+    .click();
+  const dialog = module.getByRole('dialog', {
+    name: 'Get alerts for this ride',
+  });
+  await expect(dialog).not.toContainText('notifications');
+  const pages = context.pages().length;
+  await dialog.getByRole('button', { name: 'Turn on alerts' }).click();
+  await expect.poll(() => trackedRide?.routeId).toBe('r101');
+  // The background tried: the mock API has no Web Push, so the page says so.
+  await expect(module.locator('.ro-toast span')).toHaveText(
+    'Notification delivery is not available yet. Your ride can still be tracked.',
+  );
+  expect(calls.some((c) => c.path === '/push-devices/config')).toBe(true);
+  expect(context.pages()).toHaveLength(pages);
 });
 
 test('Journeys page: signed out, Sign in opens the popup in a tab when the browser refuses', async ({

@@ -170,8 +170,8 @@ const Dialog = ({ view, tracking }: { view: View; tracking: Tracking }) => {
             state.tracker.summaryTime ?? SUMMARY_TIME,
           )}
         </p>
-        {!change && asksPermission(state.push) && (
-          <p>Your browser will ask you to allow notifications from Ride On.</p>
+        {import.meta.env.SAFARI && !change && asksPermission(state.push) && (
+          <p>The Ride On app will ask to send you notifications.</p>
         )}
         <div class="ro-alerts-actions">
           <button

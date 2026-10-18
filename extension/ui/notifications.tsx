@@ -1,8 +1,7 @@
 import { useState } from 'preact/hooks';
-import { browser } from 'wxt/browser';
 import { type State, send } from '../lib/state';
 
-// Chrome asks the browser first. Safari's Ride On app asks macOS and registers the device.
+// Chrome needs no prompt. Safari's Ride On app asks macOS and registers the device.
 export const Notifications = ({ state }: { state: State }) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -10,14 +9,6 @@ export const Notifications = ({ state }: { state: State }) => {
     setError(null);
     setBusy(true);
     try {
-      if (
-        enable &&
-        !import.meta.env.SAFARI &&
-        !(await browser.permissions.request({ permissions: ['notifications'] }))
-      )
-        throw new Error(
-          'Notifications were not allowed. You can enable them later.',
-        );
       const result = await send({
         type: enable ? 'enablePush' : 'disablePush',
       });

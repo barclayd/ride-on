@@ -35,9 +35,11 @@ export default defineConfig({
       'scripting',
       // Turns Ride On back on at the end of a pause, with no panel open.
       'alarms',
+      // Chrome: Track on the Journeys page turns notifications on, and a page can't ask.
+      // Safari's app owns them.
+      ...(browser === 'safari' ? [] : ['notifications']),
     ],
     // For scripting; Safari asks per site, so this also lists cycle.travel for the popup's request.
-    optional_permissions: browser === 'safari' ? [] : ['notifications'],
     host_permissions: [`${apiUrl}/*`, 'https://cycle.travel/*'],
     action: { default_title: 'Ride On' },
     web_accessible_resources: [

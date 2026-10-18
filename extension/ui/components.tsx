@@ -499,8 +499,8 @@ export const useTracking = (view: View | null) => {
           : undefined,
       );
     },
-    // Saves the switches and turns alerts on. The first time, the browser asks to notify first;
-    // a page can't ask for the extension, so it opens the panel's Preferences after saving.
+    // Saves the switches and turns alerts on, and notifications on this device the first time:
+    // in the panel and on the Journeys page alike. On Safari, the Ride On app asks macOS.
     confirm: async (triggers: AlertTriggers) => {
       const card = asking?.card;
       if (asking?.change && card) {
@@ -521,14 +521,6 @@ export const useTracking = (view: View | null) => {
       const before = active;
       close();
       const { push, triggers: saved } = view.state;
-      const ask = asksPermission(push);
-      const panel = location.href.startsWith(browser.runtime.getURL('/'));
-      const allowed =
-        ask && panel && !import.meta.env.SAFARI
-          ? await browser.permissions
-              .request({ permissions: ['notifications'] })
-              .catch(() => false)
-          : null;
       const result = await startAlerts(card.routeId, ref, triggers);
       if (result.error) return say(result.error);
       // Undo puts back the ride that had alerts, while its departure is still on screen.
@@ -547,20 +539,18 @@ export const useTracking = (view: View | null) => {
               )
           : undefined
         : () => stopAlerts(card.routeId).then(failed);
-      if (allowed === false || push.status === 'blocked')
-        say('Notifications are blocked in your browser');
-      else
-        say(
-          moving
-            ? `Alerts moved from ${moving} to ${card.name}`
-            : `Alerts on for ${card.name}`,
-          undo,
-        );
-      if (!ask) return;
-      if (!panel) return send({ type: 'openPopup', tab: 'prefs' });
-      if (allowed === false) return;
-      // Safari: the Ride On app opens and macOS asks.
-      await send({ type: 'enablePush' });
+      if (push.status === 'blocked')
+        return say('Notifications are blocked in your browser');
+      say(
+        moving
+          ? `Alerts moved from ${moving} to ${card.name}`
+          : `Alerts on for ${card.name}`,
+        undo,
+      );
+      if (!asksPermission(push)) return;
+      // The ride is tracked either way; say if this device can't be told about it.
+      const enabled = await send({ type: 'enablePush' });
+      if (enabled.error) say(enabled.error);
     },
     // Change alerts: the 29c dialog again, with this ride's switches; saving keeps the slot.
     change: (card: Card) => {
