@@ -1,0 +1,7 @@
+node_modules/
+vendor/
+raw/
+data/
+shots/
+analysis/.venv/
+analysis/calib.npy

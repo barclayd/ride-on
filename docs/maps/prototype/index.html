@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ride On map prototype</title>
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<style>html, body, #map { margin: 0; height: 100%; background: #e6ead8 }</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="vendor/pmtiles.js"></script>
+<script type="module">
+import { Map, addProtocol, setWorkerUrl, NavigationControl } from './vendor/maplibre-gl.mjs'
+
+setWorkerUrl('./vendor/maplibre-gl-worker.mjs')
+addProtocol('pmtiles', new pmtiles.Protocol().tile)
+
+const p = new URLSearchParams(location.search)
+const map = new Map({
+  container: 'map',
+  style: './style.json',
+  center: [+(p.get('lon') ?? -0.1), +(p.get('lat') ?? 51.4)],
+  zoom: +(p.get('zoom') ?? 9),
+  hash: true,
+  attributionControl: { compact: false },
+})
+map.addControl(new NavigationControl({ showCompass: false }))
+
+// cycle.travel's route repeater badges, drawn here instead of a sprite sheet. Colours sampled from its @2x tiles,
+// passed through tools/shot.mjs to undo the screenshot's colour shift.
+const badges = {
+  // National: flat brick red, barely rounded. Stretched around the number by icon-text-fit.
+  'badge-red': (g, s, r) => { g.fillStyle = '#e96768'; g.beginPath(); g.roundRect(0, 0, s, s, r * 0.6); g.fill() },
+  // Regional/London: sky blue with a 1px darker rim, lighter top edge and darker bottom edge.
+  'badge-blue': (g, s, r) => {
+    const px = Math.max(1, Math.round(r / 2))
+    g.fillStyle = '#2fa5cf'; g.beginPath(); g.roundRect(0, 0, s, s, r * 0.6); g.fill()
+    g.fillStyle = '#37b3dd'; g.fillRect(px, px, s - 2 * px, s - 2 * px)
+    g.fillStyle = '#7acce3'; g.fillRect(px, px, s - 2 * px, px)
+    g.fillStyle = '#29a4cb'; g.fillRect(px, s - 2 * px, s - 2 * px, px)
+  },
+  // EuroVelo: navy square ringed with twelve yellow stars; the route number sits in the middle as text.
+  'badge-eu': (g, s, r) => {
+    g.fillStyle = '#0061a2'; g.beginPath(); g.roundRect(0, 0, s, s, r * 0.6); g.fill()
+    g.fillStyle = '#f9ee59'
+    const ring = s * 0.37, star = s * 0.05
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * 2 * Math.PI, cx = s / 2 + ring * Math.sin(a), cy = s / 2 - ring * Math.cos(a)
+      g.beginPath()
+      for (let k = 0; k < 10; k++) {
+        const b = (k / 10) * 2 * Math.PI, d = k % 2 ? star * 0.45 : star
+        g.lineTo(cx + d * Math.sin(b), cy - d * Math.cos(b))
+      }
+      g.fill()
+    }
+  },
+}
+map.on('styleimagemissing', ({ id }) => {
+  const draw = badges[id]
+  if (!draw) return
+  const r = devicePixelRatio, eu = id === 'badge-eu', s = Math.round((eu ? 16.5 : 8) * r)
+  const g = new OffscreenCanvas(s, s).getContext('2d')
+  draw(g, s, r)
+  const data = g.getImageData(0, 0, s, s)
+  map.addImage(id, { width: s, height: s, data: data.data },
+    eu ? { pixelRatio: r } : { pixelRatio: r, stretchX: [[2 * r, 6 * r]], stretchY: [[2 * r, 6 * r]] })
+})
+window.map = map
+map.on('idle', () => { document.body.dataset.idle = '1' })
+map.on('error', (e) => console.error('map error', e.error?.message ?? e))
+</script>
+</body>
+</html>
