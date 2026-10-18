@@ -476,6 +476,53 @@ const stations: Layer = {
     'circle-stroke-width': 0.9,
   },
 }
+// cycle.travel's POI icons (sprite poi-*), from its z15 (our 14). Car parks stay off, as on cycle.travel. Where icons
+// overlap, the earlier kinds in this list draw on top: what a rider stops for first.
+const poiKinds = [
+  'drinking_water',
+  'toilets',
+  'bicycle_shop',
+  'cafe',
+  'camp_site',
+  'viewpoint',
+  'pub',
+  'bicycle_parking',
+]
+// cycle.travel thins them by how crowded they are. At its z15 it shows a village's, a country park's and a lone one at
+// the edge of town, but not a town centre's; from its z16 all of them, except a city's cafés, which it never shows.
+// Bike shops always show. The overlay counts each icon's neighbours (crowd_500m, crowd_1km); these limits are
+// calibrated on Shere, Box Hill, Dorking, Putney and Westminster (docs/maps/cycle-travel-style.md, "POI icons").
+const quiet = 10 // other icons within 500 m, to show at our z14
+const cityCafes = 80 // other icons within 1 km, above which a café never shows
+const kind = ['get', 'kind']
+const pois: Layer = {
+  id: 'ct_pois',
+  type: 'symbol',
+  ...cycling('pois'),
+  minzoom: 14,
+  filter: [
+    'step',
+    ['zoom'],
+    [
+      'all',
+      ['in', kind, ['literal', poiKinds]],
+      ['any', ['==', kind, 'bicycle_shop'], ['<=', ['get', 'crowd_500m'], quiet]],
+    ],
+    15,
+    [
+      'all',
+      ['in', kind, ['literal', poiKinds]],
+      ['any', ['!=', kind, 'cafe'], ['<=', ['get', 'crowd_1km'], cityCafes]],
+    ],
+  ],
+  layout: {
+    'icon-image': ['match', kind, ...poiKinds.flatMap((k) => [k, `poi-${k.replaceAll('_', '-')}`]), ''],
+    // With overlap allowed, higher keys draw on top.
+    'symbol-sort-key': ['-', ['index-of', kind, ['literal', poiKinds]]],
+    // cycle.travel lets them overlap each other and the badges; labels still keep clear of them.
+    'icon-allow-overlap': true,
+  },
+}
 // Paths come from the cycling overlay, which keeps the surface and bicycle tags the basemap drops: class is 'p'
 // (paved, red and white), 'u' (unpaved, brown dashes) or 'foot' (other footpaths, green dashes).
 const pathClass = (c: string) => ['==', ['get', 'class'], c]
@@ -668,8 +715,9 @@ export const buildStyle = (target: Target): StyleSpecification => {
   all.splice(at('roads_rail'), 0, ...paths)
   all.splice(at('roads_labels_minor'), 0, ...routes, stations)
   all.splice(at('roads_labels_major') + 1, 0, roadRefs)
-  // Later layers win label collisions: badges beat point labels, EuroVelo beats national beats regional.
-  all.splice(at('places_subplace'), 0, ...labels, ...badges)
+  // Later layers win label collisions: badges beat POI icons, which beat point labels; EuroVelo beats national
+  // beats regional.
+  all.splice(at('places_subplace'), 0, ...labels, pois, ...badges)
 
   return {
     version: 8,

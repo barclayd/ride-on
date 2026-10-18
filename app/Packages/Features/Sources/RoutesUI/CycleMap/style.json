@@ -3273,6 +3273,108 @@
    }
   },
   {
+   "id": "ct_pois",
+   "type": "symbol",
+   "source": "cycling",
+   "source-layer": "pois",
+   "minzoom": 14,
+   "filter": [
+    "step",
+    ["zoom"],
+    [
+     "all",
+     [
+      "in",
+      ["get", "kind"],
+      [
+       "literal",
+       [
+        "drinking_water",
+        "toilets",
+        "bicycle_shop",
+        "cafe",
+        "camp_site",
+        "viewpoint",
+        "pub",
+        "bicycle_parking"
+       ]
+      ]
+     ],
+     [
+      "any",
+      ["==", ["get", "kind"], "bicycle_shop"],
+      ["<=", ["get", "crowd_500m"], 10]
+     ]
+    ],
+    15,
+    [
+     "all",
+     [
+      "in",
+      ["get", "kind"],
+      [
+       "literal",
+       [
+        "drinking_water",
+        "toilets",
+        "bicycle_shop",
+        "cafe",
+        "camp_site",
+        "viewpoint",
+        "pub",
+        "bicycle_parking"
+       ]
+      ]
+     ],
+     ["any", ["!=", ["get", "kind"], "cafe"], ["<=", ["get", "crowd_1km"], 80]]
+    ]
+   ],
+   "layout": {
+    "icon-image": [
+     "match",
+     ["get", "kind"],
+     "drinking_water",
+     "poi-drinking-water",
+     "toilets",
+     "poi-toilets",
+     "bicycle_shop",
+     "poi-bicycle-shop",
+     "cafe",
+     "poi-cafe",
+     "camp_site",
+     "poi-camp-site",
+     "viewpoint",
+     "poi-viewpoint",
+     "pub",
+     "poi-pub",
+     "bicycle_parking",
+     "poi-bicycle-parking",
+     ""
+    ],
+    "symbol-sort-key": [
+     "-",
+     [
+      "index-of",
+      ["get", "kind"],
+      [
+       "literal",
+       [
+        "drinking_water",
+        "toilets",
+        "bicycle_shop",
+        "cafe",
+        "camp_site",
+        "viewpoint",
+        "pub",
+        "bicycle_parking"
+       ]
+      ]
+     ]
+    ],
+    "icon-allow-overlap": true
+   }
+  },
+  {
    "id": "ct_route_badges_rcn",
    "type": "symbol",
    "source": "cycling",

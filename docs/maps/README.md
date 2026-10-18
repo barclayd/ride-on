@@ -170,14 +170,14 @@ in `maps/tiles/README.md`):
 | `route_badges` | line | `badge` (red/blue/eu), `label`, `ev` | 11–14 | One line per signed route; refs of up to two letters and three digits, no lcn |
 | `paths` | line | `class` (`p`/`u`/`foot`), `bridge` | 12–14, `foot` from 14 | The path rule in the style spec; `foot` is every other footway, path, steps or track except pavements, crossings and private ways |
 | `cycle_lanes` | line | `side` (left/right/both), `bus` | 12–14 | `cycleway`, `cycleway:both/left/right` = `lane` or `share_busway` on roads. Not styled yet (1.3) |
-| `pois` | point | `kind`, `name`, `ele` (peaks) | 12–14, new kinds from 14 | Stations and named peaks as before, plus cafe, pub, toilets, drinking_water, bicycle_parking, parking, bicycle_shop, camp_site, viewpoint. New kinds not styled yet (1.3) |
+| `pois` | point | `kind`, `name`, `ele` (peaks), `crowd_500m`/`crowd_1km` (icons) | 12–14, new kinds from 14 | Stations and named peaks as before, plus cafe, pub, toilets, drinking_water, bicycle_parking, parking, bicycle_shop, camp_site, viewpoint. Icons (all but parking) styled in 2.4; the crowd counts thin them |
 
 | GB build, 17 October 2026 extract | |
 |---|---|
-| Output | `cycling-gb-20261017.pmtiles`, 102 MB, 153,185 tiles, z0–14 (empty below z6) |
-| Time | 1 min 54 s on an M4 Max in Docker (8 GB VM, `-Xmx6g`) |
-| Largest tile | 39 KB (24 KB gzipped), z14 around Covent Garden, mostly POIs; average 6.4 KB |
-| Tests | 82 (`CyclingProfileTest`): the path rule table, London's `minz`, badge refs, lanes, POIs, merging, plus a Monaco end-to-end build |
+| Output | `cycling-gb-20261017.pmtiles`, 104 MB, 153,185 tiles, z0–14 (empty below z6) |
+| Time | 2 min 1 s on an M4 Max in Docker (8 GB VM, `-Xmx6g`) |
+| Largest tile | 47 KB (30 KB gzipped), z14 around Soho, mostly POIs; average 0.7 KB gzipped |
+| Tests | 85 (`CyclingProfileTest`): the path rule table, London's `minz`, badge refs, lanes, POIs and their crowd counts, merging, plus a Monaco end-to-end build |
 | On R2 | Not yet: published once WS1.1's upload finishes (`maps/hosting/publish.sh` runs one at a time) |
 
 - Lines are merged per tile (`FeatureMerge.mergeLineStrings`) so dashes and dots don't restart at way
@@ -239,10 +239,14 @@ each image's `pixelRatio` of 3 makes 2× screens scale it down. Stretch bands pl
 `icon-text-fit-padding` size them, so they need no `content` box. Red and blue now capture within 2–3/255
 of cycle.travel's (they were lighter); [values](cycle-travel-style.md#repeater-badges). No spreet: three
 images drawn in code needed no second tool, and resvg-js keeps it in Bun.
-Still to do: POI icons (café, pub, toilets, water, bike parking, parking, bike shop, campsite,
-viewpoint; the overlay's `pois` at z14) from [Maki](https://github.com/mapbox/maki) /
-[Temaki](https://github.com/ideditor/temaki) (CC0) or drawn by us, never cycle.travel's SVGs, added to
-`icons` in `sprite.ts`.
+POI icons done (2.4b): `ct_pois` draws café, pub, toilets, water, bike parking, bike shop, campsite and
+viewpoint from the overlay's `pois` at z14+, with [Maki](https://github.com/mapbox/maki) 8.2.0 glyphs
+(CC0, `maps/style/src/maki.ts`) in the colours of cycle.travel's key, never its SVGs. No car parks:
+cycle.travel doesn't mark them. cycle.travel thins its icons by crowding (a village's show at its z15, a
+town centre's from z16, a city's cafés never), so the overlay counts each icon's neighbours
+(`crowd_500m`, `crowd_1km`) and the style filters on them; the rule is an approximation, calibrated on five
+views ([POI icons](cycle-travel-style.md#poi-icons)). **Publish an overlay built with the counts:** from
+an older one the style shows only bike shops at z14 and no cafés from z15.
 
 **2.5 Gaps.** Work through the style spec's [known gaps](cycle-travel-style.md#known-gaps).
 

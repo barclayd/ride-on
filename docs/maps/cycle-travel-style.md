@@ -347,6 +347,64 @@ tile z14.
   start at z12 with every station.
 - **Peaks:** `natural=peak` or `hill` with a name. `ct_peaks` from z12, Medium Italic 11, `#754634`.
 
+## POI icons
+
+`ct_pois`, a symbol layer on the overlay's `pois`, from z14 (cycle.travel's z15). Icons are sprite images
+drawn by `maps/style/src/sprite.ts` with [Maki](https://github.com/mapbox/maki) 8.2.0 glyphs (CC0,
+`maps/style/src/maki.ts`); the water drop is ours. Never cycle.travel's SVGs: only its colours are taken.
+
+| Kind | Sprite | Drawn as | Colour |
+|---|---|---|---|
+| `cafe` | `poi-cafe` | Maki `cafe`, 11 px | food `#cc8d7b` |
+| `pub` | `poi-pub` | Maki `beer`, 12.5 px | food `#cc8d7b` |
+| `toilets` | `poi-toilets` | Maki `toilet`, 11.5 px | water `#008b8b` |
+| `drinking_water` | `poi-drinking-water` | White drop 7.5 px on an 11 px rounded square | water `#008b8b` |
+| `bicycle_parking` | `poi-bicycle-parking` | White Maki `parking` 6.5 px on a 9 px square | parking `#64bde1` |
+| `bicycle_shop` | `poi-bicycle-shop` | White Maki `bicycle` 9.5 px on a 12 px square | bike `#938ec4` |
+| `camp_site` | `poi-camp-site` | Maki `campsite`, 12 px | camping `#378b36` |
+| `viewpoint` | `poi-viewpoint` | Maki `viewpoint`, 12 px | `#7a4433` (not in the key; captured) |
+
+Sizes are along the glyph's longer side, as cycle.travel draws them at its z15; they don't scale with
+zoom. Colours are the key's (`/map/snippet_key`), drawn as they are. Every icon has a 1.25 px cream
+(`#fdfdf4`) halo drawn into the image, since MapLibre only halos SDF icons. Car parks (`parking`) are
+in the overlay but not drawn: cycle.travel doesn't mark them.
+
+`icon-allow-overlap` is on, as cycle.travel lets icons overlap each other and the badges; labels still
+keep clear of them. Where they overlap, `symbol-sort-key` puts water on top, then toilets, bike shop,
+café, campsite, viewpoint, pub, bike parking.
+
+### Thinning
+
+cycle.travel doesn't show every POI. What it shows, compared view by view (ct zoom = ours + 1):
+
+| View | ct z15 (our 14) | ct z16 (our 15) | ct z17 |
+|---|---|---|---|
+| Villages, country parks (Shere, Box Hill) | Everything | — | — |
+| Small town (Dorking) | Centre hidden; bike shops, a campsite, a P at the edge | Everything, every café, overlapping | — |
+| Putney | Only the bike shop and rental | Pubs, Ps, water, convenience, rental; no cafés | — |
+| Westminster, Victoria | Only park and river items (St James's Café, Tattershall Castle) | Pubs, Ps, water; no cafés | No cafés |
+
+Bike shops show at every zoom. Counting all eight icon kinds around those POIs:
+
+| Where | Other icons within 500 m | Within 1 km |
+|---|---|---|
+| Shere | ≤ 6 | ≤ 7 |
+| Box Hill | ≤ 8 | ≤ 18 |
+| Dorking cafés | 24–47 | 53–61 |
+| Dorking's edge P | 0 | 41 |
+| Putney cafés | 29 (10th percentile) | ≥ 103 |
+| Westminster | ~82 (10th percentile) | ≥ 384 |
+| St James's Café | 65 | — |
+
+So the overlay counts each icon's neighbours (`crowd_500m`, `crowd_1km`, across tile edges; see
+`maps/tiles/README.md`) and the style filters on them:
+
+- **z14:** an icon shows when it has at most 10 others within 500 m (`quiet`), or is a bike shop.
+- **z15+:** every icon shows, except cafés with more than 80 others within 1 km (`cityCafes`).
+
+This is an approximation of a rule we can't see. Checked against the five views, it matches what shows
+and what doesn't, except for the gaps below.
+
 ## Layer order
 
 Bottom to top, as `style.ts` splices them into Protomaps' `light` layers:
@@ -358,8 +416,8 @@ Bottom to top, as `style.ts` splices them into Protomaps' `light` layers:
 3. `ct_routes_eurovelo_ring`, `ct_routes`, `ct_stations` just before `roads_labels_minor`, so route dots
    sit above every line and below every label.
 4. `ct_road_refs` just after `roads_labels_major`.
-5. `ct_landmarks`, `ct_localities`, `ct_parks`, `ct_peaks`, `ct_stations_label`, then the four badge
-   layers, just before `places_subplace`.
+5. `ct_landmarks`, `ct_localities`, `ct_parks`, `ct_peaks`, `ct_stations_label`, `ct_pois`, then the
+   four badge layers, just before `places_subplace`.
 6. Protomaps place labels on top.
 
 ## Protomaps changes
@@ -370,7 +428,7 @@ The basemap is `@protomaps/basemaps` 5.7.2's `layers('basemap', flavour, { lang:
 - **Dropped layers:** `pois` (replaced by the `ct_*` point labels), `roads_shields`, `roads_oneway`,
   `address_label`, `landcover`.
 - **No Protomaps sprite:** every `icon-*` layout property is removed. The style's sprite is ours
-  (`maps/style/src/sprite.ts`): the badges, and the POI icons to come.
+  (`maps/style/src/sprite.ts`): the badges and the POI icons.
 - `roads_other` is limited to `kind=other` (no piers): the `ct_*` path layers draw paths.
 - Font names in the flavour are `Montserrat-Regular` / `Montserrat-SemiBold` / `Montserrat-Italic`.
 - The basemap is z0–15; MapLibre overzooms it past 15.
@@ -392,7 +450,15 @@ them is dropped. The tests check every stack has its glyphs and every glyph dire
 From the six comparisons in `screenshots/`. Tick them off in WS2.
 
 - [ ] Hillshade and contours (needs a DEM, WS1)
-- [ ] POI icons: café, pub, toilets, water, bike parking, bike shop, campsite, parking, viewpoint (WS1 data, WS2 icons)
+- [x] POI icons: café, pub, toilets, water, bike parking, bike shop, campsite, viewpoint (WS2.4b; no car
+  parks, as on cycle.travel)
+- [ ] POI kinds we don't draw: restaurant, convenience shop, museum, attraction, bike rental, hostel,
+  fuel
+- [ ] Café and other POI name labels (cycle.travel labels some cafés, e.g. Shere's Dabbling Duck)
+- [ ] POI thinning misses London's park and river POIs at z14 (St James's Café: 65 others within 500 m);
+  the rule is an approximation
+- [ ] Icons at one spot stack (Box Hill's café, toilets, water and Ps); cycle.travel spreads them out
+- [ ] More bike parking in London than cycle.travel shows (Putney at our z15)
 - [ ] Purple cycle lanes on roads (WS1 data)
 - [ ] London rcn: far fewer lines, thinner and lavender; work out cycle.travel's rule
 - [ ] lcn dots lighter
