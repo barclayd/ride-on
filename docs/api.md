@@ -1,5 +1,7 @@
 # Ride On API MVP
 
+API v0.41.0 adds `conditions.skyConditionShares`: known sky categories retain their distance shares when symbols are missing, alongside an explicit `unknown` share. This supports the extension's sky timeline and “Data unavailable” legend. Scoring stays `comfort-v0.17`; fixed departures, alert editing and per-device switches are unchanged.
+
 API v0.40.0 keeps the tracked route's recommendation on its fixed departure, suggests better times on that route and supports editing its alert switches without replacing the plan. See [fixed departures](#fixed-departures-v0400) and [alert edits](#edit-tracked-ride-alerts-v0400). Per-device switches from v0.39.0 remain unchanged. Scoring stays `comfort-v0.17`.
 
 API v0.38.0 adds per-ride alert switches, a 50% rain warning, feels-like cold warnings, and an 18:00 local final forecast. ±5-point score alerts and maximum-temperature alerts remain independent of the per-ride switches. Scoring stays `comfort-v0.17`. See [the tracked-ride contract](#tracked-ride-alerts-v0380).
@@ -719,6 +721,24 @@ preference scores, **not an assertion that sunny intervals mean 70% sunshine**.
 sampled route distance received each category. The fractions may sum to 0.99 or
 1.01 after rounding. The separate `sunshine` factor is a comfort score.
 
+Since v0.41.0, `conditions.skyConditionShares` preserves those shares even when
+some symbols are missing. It contains all eight category names above plus
+`unknown`, with each value between 0 and 1. Every value uses the summary's own
+sampled distance: the whole ride for overall conditions, that hour's distance
+for `rideHours[].conditions`. Values use the same two-decimal rounding as the
+legacy fractions. For example, `sunny: 0.42, sunnyIntervals: 0.18, unknown: 0.4`
+with all other categories zero describes 40% unavailable data, not 40% cloud.
+Gaps can occur mid-ride as well as at the forecast horizon.
+
+When no symbols are known, `unknown` is 1 and every named category is 0.
+When sunshine has zero weight, `skyConditionShares` is null, matching
+`sunshineAssessment`: symbols were not sampled. Every newly generated non-null
+conditions summary includes the field, including alternatives, day winners,
+next-window winners, tracked assessments and partial assessments. It is optional
+when reading historical saved plans; existing stored plans are not rewritten.
+`skyConditionDistanceFractions` and `factors.sunshine` retain their previous
+behavior and remain null when symbols are missing.
+
 This makes a route with visible sunshine through substantial cloud eligible for
 a high sunshine score, while another profile can explicitly prefer lower cloud.
 A missing weather symbol never becomes sunny, even if temperature and wind look
@@ -727,7 +747,8 @@ comfortable. No cloud percentage is inferred from a weather symbol.
 In `comfort-v0.10`, unknown sunshine contributes neutral comfort (0.5) to the
 combined score for the affected route sections, without blocking an otherwise
 assessable departure or removing hours from day coverage. It remains missing in
-the reported sunshine factor and category shares. Each departure includes
+the reported sunshine factor and legacy category fractions; the new shares
+report the missing distance explicitly as `unknown`. Each departure includes
 `sunshineAssessment: {status, unknownDistanceFraction}`, where status is
 `complete`, `partial` or `unavailable`; the assessment is null when sunshine
 has zero weight. The response assumptions and departure drawbacks disclose the
@@ -926,7 +947,7 @@ The response includes:
 | `best.recommendationPriority`, `best.tailwindOpportunity` | v0.27 ordering value (0–105) and separate opportunity explanation/points. Keep showing `score` for Conditions; see [contract](tailwind-opportunity.md). |
 | `best.windStretches` | Contiguous wind sections with route bounds, ride times, wind effect/direction/speed and estimated maximum adverse gust. Also on alternatives, partial assessments, day winners and next-window winners. See below. |
 | `best.temperatureAlongRide` | Ten-minute air/feels-like/usual temperature tuples, provenance and nullable monthly climate comparison. Also on alternatives, partial assessments, day winners and next-window winners. |
-| `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate and maximum hourly amount/basis, categorical sky-condition distance fractions, assisted-distance fraction and the v0.15 wind/precipitation summaries below. |
+| `best.conditions`, `best.rideHours` | Derived overall/per-ride-hour temperature range, average sustained wind and components, maximum headwind/crosswind/gust, total cloud mean/maximum fractions (or null), precipitation risk/rate and maximum hourly amount/basis, categorical sky-condition distance fractions, v0.41 `skyConditionShares` (all eight categories plus `unknown`, or null when sunshine is not sampled), assisted-distance fraction and the v0.15 wind/precipitation summaries below. |
 | `best.standards` | `meets`, `below`, `unknown`, or `not_configured`, with structured failures. |
 | `minimumStandardsStatus` | Collection-level `match_found`, `none_meet`, `unknown`, `not_configured`, or `no_feasible_departure`. |
 | `message`, `best.drawbacks` | Readable conclusion and trade-offs. |

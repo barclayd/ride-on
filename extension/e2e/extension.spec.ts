@@ -39,7 +39,7 @@ const day = (offset: number) =>
     Date.now() + offset * 86_400_000,
   );
 
-// ---- Mock Ride On API v0.12 (port baked into the e2e build) ----
+// ---- Mock Ride On API v0.41 (port baked into the e2e build) ----
 
 const APPLE_LEGAL =
   'https://developer.apple.com/weatherkit/data-source-attribution/';
@@ -165,6 +165,17 @@ const CONDITIONS = {
     overcast: 0,
     obscured: 0,
   },
+  skyConditionShares: {
+    sunny: 0.2,
+    sunnyIntervals: 0.5,
+    cloudy: 0.3,
+    overcast: 0,
+    obscured: 0,
+    precipitation: 0,
+    clearNight: 0,
+    partlyCloudyNight: 0,
+    unknown: 0,
+  },
   maximumGustKph: 48,
   gustExposure: {
     directionBasis: 'prevailing-wind-estimate' as const,
@@ -258,9 +269,18 @@ const best = (date: string, i: number, score: number) => ({
     potentialPoints: 1.4,
     appliedPoints: 1.4,
   },
-  // The API nulls the shares when any sky symbol is missing.
   conditions: sunshineUncertain
-    ? { ...CONDITIONS, skyConditionDistanceFractions: null }
+    ? {
+        ...CONDITIONS,
+        skyConditionDistanceFractions: null,
+        skyConditionShares: {
+          ...CONDITIONS.skyConditionShares,
+          sunny: 0.1,
+          sunnyIntervals: 0.3,
+          cloudy: 0.2,
+          unknown: 0.4,
+        },
+      }
     : CONDITIONS,
   forecastDetails: {
     temperatureMethod: 'linear-interpolation',
@@ -306,11 +326,17 @@ const best = (date: string, i: number, score: number) => ({
       // Dry, then drizzle possible (handoff v7, 25b).
       maximumPrecipitationProbability: [0.05, 0.45][h],
       maximumPrecipitationAmountMm: [0, 0.6][h],
-      // The second hour crosses the forecast horizon.
+      // Missing symbols in the second hour keep its known sunny share.
       skyConditionDistanceFractions:
         sunshineUncertain && h === 1
           ? null
           : { ...sky, overcast: 0, obscured: 0 },
+      skyConditionShares: {
+        ...CONDITIONS.skyConditionShares,
+        ...(sunshineUncertain && h === 1
+          ? { sunny: 0.2, sunnyIntervals: 0, cloudy: 0, unknown: 0.8 }
+          : sky),
+      },
     },
   })),
   // Feels cooler than the 10° minimum until 2½ hours in, on a colder day than usual (24a).
@@ -1578,11 +1604,12 @@ test('a scored ride explains uncertain sunshine in the popup and on Journeys', a
   const sky = card.locator('.ro-sky-chip button');
   await expect(sky).toHaveAttribute('data-partial', 'true');
   await sky.click();
-  await expect(sky).toHaveText('Sunny intervals');
+  await expect(sky).toHaveText('Sun and sunny intervals');
   await expect(card.locator('.ro-sky li')).toHaveText([
+    'Sunny~10%',
     'Sunny intervals~30%',
     'Cloud~20%',
-    'Data unavailable~50%',
+    'Data unavailable~40%',
   ]);
   await expect(card.locator('.ro-meter')).toHaveText('Conditions84/100');
   await expectPanelFits(page);
@@ -1595,6 +1622,14 @@ test('a scored ride explains uncertain sunshine in the popup and on Journeys', a
   await expect(
     journeys.locator('.ro-ride').first().locator('.ro-coverage'),
   ).toHaveText('Sunshine is uncertain for this ride.');
+  const tile = journeys.locator('.ro-ride').first();
+  await tile.locator('.ro-sky-chip button').click();
+  await expect(tile.locator('.ro-sky li')).toHaveText([
+    'Sunny~10%',
+    'Sunny intervals~30%',
+    'Cloud~20%',
+    'Data unavailable~40%',
+  ]);
 });
 
 test('When tab: Days and Time visible; custom times re-query', async ({

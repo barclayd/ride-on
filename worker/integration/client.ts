@@ -33,6 +33,22 @@ const conditions = z.object({
   skyConditionDistanceFractions: z
     .record(z.string(), z.number().min(0).max(1))
     .nullable(),
+  skyConditionShares: z
+    .record(
+      z.enum([
+        'sunny',
+        'sunnyIntervals',
+        'cloudy',
+        'overcast',
+        'obscured',
+        'precipitation',
+        'clearNight',
+        'partlyCloudyNight',
+        'unknown',
+      ]),
+      z.number().min(0).max(1),
+    )
+    .nullable(),
   averageWindSpeedKph: z.number(),
   averageCrosswindKph: z.number(),
   cloudCoverFraction: z

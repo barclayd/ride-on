@@ -44,13 +44,27 @@ const log = (
       ...(plan === undefined ? {} : { plan }),
     }),
   });
-const fixture = async (h: Harness) => {
-  h.use(metOffice(({ request }) => HttpResponse.json(hourlyForecast(request))));
+const fixture = async (h: Harness, partialSky = false) => {
+  h.use(
+    metOffice(({ request }) =>
+      HttpResponse.json(
+        hourlyForecast(request, {
+          values: (hour) => ({
+            significantWeatherCode: partialSky && hour >= 9 ? 999 : 1,
+          }),
+        }),
+      ),
+    ),
+  );
   const route = await upload(h);
   const response = await h.send('/recommendations', {
     body: JSON.stringify({
       routeIds: [route.id],
       date: '2026-10-10',
+      preferences: { weights: { sunshine: partialSky ? 0.25 : 0 } },
+      ...(partialSky
+        ? { riding: { window: { start: '09:00', end: '12:00' } } }
+        : {}),
       weather: { mode: 'strict', providerId: 'met-office' },
       forecast: {
         representation: 'deterministic',
@@ -137,6 +151,33 @@ integration(
 );
 
 integration(
+  'partial sky shares survive saved-plan storage, restart and replay',
+  async (h) => {
+    const { route, plan } = await fixture(h, true);
+    const shares = plan.conditions.skyConditionShares;
+    assert.ok(shares && shares.sunny > 0 && shares.unknown > 0);
+    assert.equal(plan.conditions.skyConditionDistanceFractions, null);
+    const key = crypto.randomUUID();
+    const created = await log(h, route.id, plan, key);
+    assert.equal(created.status, 201, await created.clone().text());
+    const ride = await readRide(created);
+    assert.deepEqual(ride.plan?.conditions.skyConditionShares, shares);
+    await h.restart();
+    assert.deepEqual(
+      (await readRide(await h.send(`/rides/${ride.id}`))).plan?.conditions
+        .skyConditionShares,
+      shares,
+    );
+    const replay = await log(h, route.id, plan, key);
+    assert.equal(replay.status, 200);
+    assert.deepEqual(
+      (await readRide(replay)).plan?.conditions.skyConditionShares,
+      shares,
+    );
+  },
+);
+
+integration(
   'historical plans without condition chips still write, replay and read unchanged',
   async (h) => {
     const { route, plan } = await fixture(h);
@@ -145,6 +186,7 @@ integration(
       precipitationSummary: _rain,
       maximumPrecipitationAmountMm: _amount,
       precipitationAmountBasis: _amountBasis,
+      skyConditionShares: _sky,
       ...conditions
     } = plan.conditions;
     const { windStretches: _stretches, ...oldPlan } = plan;
@@ -154,6 +196,7 @@ integration(
     assert.equal(created.status, 201);
     const ride = await readRide(created);
     assert.deepEqual(ride.plan?.conditions, conditions);
+    assert.equal(ride.plan?.conditions.skyConditionShares, undefined);
     assert.equal(ride.plan?.windStretches, undefined);
     await h.restart();
     const fetched = await readRide(await h.send(`/rides/${ride.id}`));
@@ -294,6 +337,27 @@ integration(
         },
       },
       { ...plan, conditions: { ...plan.conditions, providerPayload: {} } },
+      {
+        ...plan,
+        conditions: { ...plan.conditions, skyConditionShares: { unknown: 1 } },
+      },
+      {
+        ...plan,
+        conditions: {
+          ...plan.conditions,
+          skyConditionShares: {
+            sunny: 0,
+            sunnyIntervals: 0,
+            cloudy: 0,
+            overcast: 0,
+            obscured: 0,
+            precipitation: 0,
+            clearNight: 0,
+            partlyCloudyNight: 0,
+            unknown: 2,
+          },
+        },
+      },
       {
         ...plan,
         conditions: {

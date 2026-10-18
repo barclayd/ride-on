@@ -3,6 +3,17 @@ import { precipitationSummaries } from '../weather/precipitation.ts';
 
 const fraction = z.number().min(0).max(1);
 const nonnegative = z.number().nonnegative();
+// Keep v1 persisted plans readable if the live vocabulary later expands.
+const skyCategories = [
+  'sunny',
+  'sunnyIntervals',
+  'cloudy',
+  'overcast',
+  'obscured',
+  'precipitation',
+  'clearNight',
+  'partlyCloudyNight',
+] as const;
 /** Provider-neutral, version-one summary used by recommendations and saved plans.
  * Do not rename historical fields when adding a new forecast adapter. */
 export const conditionsSchema = z.strictObject({
@@ -19,21 +30,12 @@ export const conditionsSchema = z.strictObject({
     .optional(),
   precipitationSummary: z.enum(precipitationSummaries).optional(),
   skyConditionDistanceFractions: z
-    .record(
-      // Keep v1 persisted plans readable if the live vocabulary later expands.
-      z.enum([
-        'sunny',
-        'sunnyIntervals',
-        'cloudy',
-        'overcast',
-        'obscured',
-        'precipitation',
-        'clearNight',
-        'partlyCloudyNight',
-      ]),
-      fraction,
-    )
+    .record(z.enum(skyCategories), fraction)
     .nullable(),
+  skyConditionShares: z
+    .record(z.enum([...skyCategories, 'unknown']), fraction)
+    .nullable()
+    .optional(),
   windFromDegrees: z.number().int().min(0).max(359).nullable().optional(),
   averageWindSpeedKph: nonnegative,
   averageHeadwindKph: nonnegative,

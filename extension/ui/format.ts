@@ -426,7 +426,6 @@ export const skyChip = (
 ): Sky | null => {
   const assessed = b.sunshineAssessment;
   if (!assessed || assessed.status === 'unavailable') return null;
-  // Before skyConditionShares, an hour with a gap has no shares: count it all as not forecast.
   const hours = (b.rideHours ?? []).flatMap((h) =>
     h.conditions?.distanceKm
       ? [{ km: h.conditions.distanceKm, k: skyKinds(h.conditions) ?? GAP }]

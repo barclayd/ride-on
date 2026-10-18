@@ -1124,7 +1124,7 @@ test('sky chip (handoff v4, 18a): labels, the timeline in ride order and rounded
   expect(
     sky({ sunny: 0.4, sunnyIntervals: 0.3, unknown: 0.3 }, [], partial)?.label,
   ).toBe('Sky: sun and sunny intervals where forecast');
-  // Before skyConditionShares, a gap nulls the overall shares and its hour's: rebuilt from the hours.
+  // Historical responses without explicit shares can still be rebuilt from their known hours.
   expect(
     brief(
       skyChip({
