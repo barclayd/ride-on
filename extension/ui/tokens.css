@@ -2329,15 +2329,17 @@ a.ro-name:hover {
   border-color: var(--ro-lime);
   color: var(--ro-ink);
 }
-/* The Undo message (v5 §4). The dock sits about 72px under the last tile and sticks to the bottom
-   of the view while the list runs past it; the message hangs above it, centred. */
+/* The Undo message (v5 §4), centred. On the Journeys page the dock takes no room: the message floats
+   over the page about 72px under the last tile, and sticks 18px above the bottom of the view while
+   the list runs past it. */
 .ro-toast-dock {
   position: sticky;
-  bottom: 18px;
+  bottom: 72px;
   z-index: 7;
   height: 0;
-  margin: 42px 0 18px;
+  margin-top: -12px; /* takes back the module's gap */
 }
+/* In the panel the dock keeps its room, so the last card scrolls clear of the message. */
 .ro-stack .ro-toast-dock {
   bottom: 16px;
   margin: 44px 0 2px; /* with the stack's gap and padding, 70px under the last card */
@@ -2345,7 +2347,7 @@ a.ro-name:hover {
 .ro-toast {
   position: absolute;
   left: 50%;
-  bottom: 0;
+  bottom: -54px;
   width: max-content;
   max-width: calc(100% - 28px);
   box-sizing: border-box;
@@ -2365,6 +2367,9 @@ a.ro-name:hover {
   transition:
     opacity 0.2s ease,
     transform 0.2s ease;
+}
+.ro-stack .ro-toast {
+  bottom: 0;
 }
 .ro-toast[data-show="true"] {
   opacity: 1;
