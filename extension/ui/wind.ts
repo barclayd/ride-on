@@ -162,17 +162,19 @@ const gustsRow = (
   const overLimit = limit !== undefined && peak > limit;
   const overComfort = (adverse ?? peak) > comfort;
   const title = `Gusts up to ${speed(peak, u)}`;
+  // Within comfort, how hard the gusts against you blow goes unsaid: the title already gives the peak.
   if (!overLimit && !overComfort)
     return {
       warn: false,
       title,
-      text: `${tailShare > 0.5 ? 'Mostly behind you, so they help. ' : ''}${
+      text: [
+        tailShare > 0.5 && 'Mostly behind you, so they help.',
         adverse === undefined
           ? `Within your ${speed(comfort, u)} comfort.`
-          : adverse < 1
-            ? 'None against you.'
-            : `At most ${speed(adverse, u)} against you.`
-      }`,
+          : adverse < 1 && 'None against you.',
+      ]
+        .filter(Boolean)
+        .join(' '),
     };
   // Name the stretch when the gusts past comfort fall in one place: calmer gaps under 5% of
   // the ride (the API keeps short stretches) don't split it.

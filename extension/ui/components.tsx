@@ -1558,7 +1558,7 @@ const WindPanel = (props: {
           <Icon name="wind" size={14} weight={1.6} />
           <div>
             <b>{wind.gusts.title}</b>
-            <span>{wind.gusts.text}</span>
+            {wind.gusts.text && <span>{wind.gusts.text}</span>}
           </div>
         </div>
       )}

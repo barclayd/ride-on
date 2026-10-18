@@ -261,9 +261,9 @@ matched by `routeId@departure`, not by reference. The limits come from `RiderSet
    - Legend, largest first: ● Tailwind 9 mph ~65%, ● Crosswind 11 mph ~20%, ● Headwind 10 mph
      ~20%. Light wind reads "under 6 mph".
    - Divider, then `wind` "Gusts up to 28 km/h" (semibold) and the extension's sentence: "Mostly
-     behind you, so they help. At most 28 km/h against you." Over your comfort or limit the
-     symbol turns orange and the sentence says where: "From the side on the way back,
-     10:31–11:40. Over your 35 km/h comfort."
+     behind you, so they help." Within comfort it doesn't say how hard they blow against you (the
+     title has the peak). Over your comfort or limit the symbol turns orange and the sentence
+     says where: "From the side on the way back, 10:31–11:40. Over your 35 km/h comfort."
 7. **"Along the Route"**: `RouteProfile`. Elevation area chart 0–200 m over 0–50 km, peak marker
    "186 m" at ~31 km; under it a wind strip (accent tailwind 0–32 km, yellow crosswind 32–42 km,
    red headwind 42–51 km) and a legend: Tailwind "First 32 km", Crosswind "Next 10 km", Headwind

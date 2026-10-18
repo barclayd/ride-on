@@ -155,8 +155,28 @@ test('gusts that help read neutral; gusts against you or past the limit read amb
   expect(w.gusts).toEqual({
     warn: false,
     title: 'Gusts up to 48 km/h',
-    text: 'Mostly behind you, so they help. At most 12 km/h against you.',
+    text: 'Mostly behind you, so they help.',
   });
+  // Within comfort, the title's peak is enough: no "at most" against you.
+  expect(
+    windPanel(
+      ride({
+        conditions: C({
+          maximumGustKph: 30,
+          gustExposure: against(12),
+          windDistanceFractions: {
+            tailwind: 0.2,
+            crosswind: 0.5,
+            headwind: 0.3,
+          },
+        }),
+      }),
+      null,
+      'UTC',
+      METRIC,
+      comfort(35),
+    ).gusts,
+  ).toEqual({ warn: false, title: 'Gusts up to 30 km/h', text: '' });
   expect(w.legend.map((l) => l.share)).toEqual(['~70%', '~20%', '~10%']);
   // No direction from the API: no compass letter in the bar.
   expect(w.blocks).toEqual([{ effect: 'tailwind', share: 1, label: '' }]);
