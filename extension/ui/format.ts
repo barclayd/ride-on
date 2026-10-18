@@ -390,7 +390,7 @@ export const conditionChips = (
 // Null hides it: sunshine isn't weighed, or no symbol is forecast at all.
 export type SkyKind = 'sunny' | 'sunnyIntervals' | 'other' | 'unknown';
 export type Sky = Chip & {
-  partial?: boolean; // part of the ride isn't forecast yet: the dashed chip
+  partial?: boolean; // part of the ride has no sky data: the dashed chip
   segments?: { kind: SkyKind; share: number }[]; // ride order, neighbours merged, shares of distance
   legend?: { kind: SkyKind; name: string; share: string }[];
 };
@@ -399,7 +399,7 @@ const SKY_NAMES: Record<SkyKind, string> = {
   sunny: 'Sunny',
   sunnyIntervals: 'Sunny intervals',
   other: 'Cloud',
-  unknown: 'Not forecast yet',
+  unknown: 'Data unavailable',
 };
 const GAP: Record<SkyKind, number> = {
   sunny: 0,

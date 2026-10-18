@@ -1582,7 +1582,7 @@ test('a scored ride explains uncertain sunshine in the popup and on Journeys', a
   await expect(card.locator('.ro-sky li')).toHaveText([
     'Sunny intervals~30%',
     'Cloud~20%',
-    'Not forecast yet~50%',
+    'Data unavailable~50%',
   ]);
   await expect(card.locator('.ro-meter')).toHaveText('Conditions84/100');
   await expectPanelFits(page);
