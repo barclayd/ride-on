@@ -1257,7 +1257,6 @@ export const RouteTile = (props: {
       )}
       {open === skyId && card.best && sky?.segments && sky.legend && (
         <div class="ro-sky" id={skyId}>
-          <b>Expected conditions along the ride</b>
           <div class="ro-sky-bar" aria-hidden="true">
             {sky.segments.map((g, i) => (
               <span key={i} data-sky={g.kind} style={{ flex: g.share }} />
@@ -1349,7 +1348,6 @@ const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
   const at = (x: number, y: number) => ({ left: `${x}%`, top: `${y}%` });
   return (
     <div class="ro-temp" id={props.id}>
-      <b>Temperature along the ride</b>
       <div class="ro-temp-head">
         <strong data-tone={t.tone}>{t.headline}</strong>
         {t.usual && <span>{t.usual.sub}</span>}
@@ -1442,7 +1440,6 @@ const RainPanel = (props: { id: string; rain: Rain }) => {
   const { rain } = props;
   return (
     <div class="ro-rain" id={props.id}>
-      <b>Rain along the ride</b>
       <strong data-wet={rain.wet}>{rain.headline}</strong>
       <p>{rain.sentence}</p>
       <ol class="ro-rain-hours">
@@ -1515,7 +1512,6 @@ const WindPanel = (props: {
   const leave = () => setAlong(null);
   return (
     <div class="ro-wind" id={props.id}>
-      <b>Wind along the ride</b>
       {wind.sketch && <Sketch sketch={wind.sketch} along={along} />}
       <div
         class="ro-wind-bar"
