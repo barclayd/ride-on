@@ -130,6 +130,20 @@ test('every hour under 20% is a dry ride, under 40% a small chance', () => {
     headline: 'Dry ride',
     sentence: 'Chance of rain stays under 20% for the whole ride.',
   });
+  // No chance at all in any hour says so plainly.
+  expect(
+    rainPanel(
+      ride([
+        [0, 0],
+        [0, 0],
+      ]),
+      LONDON,
+    ),
+  ).toMatchObject({
+    text: 'Dry',
+    headline: 'Dry ride',
+    sentence: 'No rain expected for the ride.',
+  });
   expect(
     rainPanel(
       ride([
