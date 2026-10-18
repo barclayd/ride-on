@@ -35,22 +35,21 @@ That check drew the same four swatches (DOM divs, plus a WebGL canvas for the fi
 cycle.travel and the prototype and screenshotted both: **the two pages capture identically**, so
 side-by-side comparisons are fair even though neither shows true colours.
 
-`shot()` (`maps/style/src/shot.ts`) tries to undo the capture: `shot(sampled)` → the colour the page drew. It was
-fitted earlier from 80 swatches as "power 1.96 → matrix → sRGB curve". Two problems found since:
+So, since WS2.2:
 
-1. **It lightens greys and pale tints.** `shot('#808080')` is `#8b8b8b`, but `#808080` captures as
-   itself. Using the sRGB curve on both sides (sRGB decode → the same matrix → sRGB encode) round-trips
-   all four swatches to within 2/255, except the cycleway blue channel (gamut clipping). The corrected
-   inverse turns the sampled unpaved brown `#834a21` into `#8b451e`, next to the key's gravel colour
-   `#8b4513`, which suggests it's right.
-2. **It was applied to map-key colours too.** The key's values (`#73bded`, `#dd4c18`…) are what
-   cycle.travel draws, not screenshot samples. Running them through `shot()` over-saturates them: our
-   cycleway draws `#f14506` where cycle.travel draws `#dd4c18`.
+- **Map-key colours are drawn as they are.** The key's values (`#73bded`, `#dd4c18`…) are what
+  cycle.travel draws, not screenshot samples. Our cycleway now captures as `#cd562d`, the same as theirs.
+- **Screenshot samples go through `shot()`** (`maps/style/src/shot.ts`), which undoes the capture: sRGB
+  decode → a fitted 3×3 matrix → sRGB encode. It round-trips the four swatches above to within 2/255,
+  except the cycleway's blue channel (gamut clipping); `maps/style/test/shot.test.ts` checks that. It
+  turns the sampled unpaved brown `#834a21` into `#8b451e`, next to the key's gravel `#8b4513`.
 
-The prototype still has both problems, on purpose: the committed screenshots were taken with it.
-**WS2 fixes them**: use key values as they are, and run only screenshot samples through the corrected
-inverse. The table below gives both values. Re-check any colour you change with a new swatch test
-rather than trusting a model.
+The fit before WS2.2 used a 1/1.96 power instead of the sRGB curves, which lightened greys
+(`#808080` → `#8b8b8b`), and it ran key colours through `shot()` too (our cycleway drew `#f14506`).
+The WS1.2 screenshots were taken with that.
+
+Check a colour you change against a new screenshot, not the model: draw ours, screenshot both pages at
+the same view, and compare the pixels where both draw that feature.
 
 Route dots, badges and other runtime-drawn colours were tuned by eye against screenshots and never went
 through `shot()`.
@@ -82,49 +81,49 @@ Maki/Temaki (CC0) or draw our own.
 
 ## Palette
 
-"Production" is the value WS2 should start from: the key value for key colours, the corrected inverse
-for sampled ones. "Prototype draws" is what `style.ts` uses today.
+"cycle.travel value" is the key's value for key colours and what its pixels capture as for sampled
+ones. "Draws" is what `style.ts` draws: the key value as it is, or `shot()` of the sample.
 
-| Name | Source | cycle.travel value | Prototype draws | Production |
-|---|---|---|---|---|
-| land (background, earth) | sampled | `#eef2e1` | `#f0f4e5` | `#edf2e1` |
-| urban, below z11 | sampled | `#dde0d0` | `#e1e4d6` | `#dde0d0` |
-| urban, z11–13 | sampled | `#e5e9d8` | `#e8ecdd` | `#e4e9d8` |
-| urban, z13 up | sampled | `#e8e4e4` | `#ece7e7` | `#e9e4e4` |
-| park | sampled | `#d8e7cf` | `#dbebd5` | `#d5e8cf` |
-| wood | sampled | `#d2e3c6` | `#d5e7cd` | `#cfe4c6` |
-| scrub, grass, pitches | sampled | `#e2ecd6` | `#e4efdb` | `#e0ecd6` |
-| water | sampled | `#aecad0` | `#b1d2d6` | `#a8cbd0` |
-| building | sampled | `#d9d2cf` | `#dfd7d5` | `#dad2cf` |
-| railway | sampled | `#9a9a99` | `#a4a4a3` | `#9a9a99` |
-| minor road casing | sampled | `#a3a3a3` | `#adadad` | `#a3a3a3` |
-| major road casing, z10 | sampled | `#b8aea8` | `#c2b6b1` | `#baada8` |
-| major road casing, z14 | sampled | `#7a7a7a` | `#858585` | `#7a7a7a` |
-| minor road, z11 (white from z13) | sampled | `#b9b9b9` | `#c1c1c1` | `#b9b9b9` |
-| motorway | key | `#73bded` | `#69c8f0` | `#73bded` |
-| trunk | key | `#c0c8ae` | `#c6cfb7` | `#c0c8ae` |
-| primary | key | `#f7bda7` | `#ffc2af` | `#f7bda7` |
-| secondary | key | `#fdd5a5` | `#ffd8ae` | `#fdd5a5` |
-| tertiary | key | `#fff5d0` | `#fff6d6` | `#fff5d0` |
-| cycleway casing | key | `#dd4c18` | `#f14506` | `#dd4c18` |
-| footpath | key | `#99bb2e` | `#9ec436` | `#99bb2e` |
-| unpaved path | sampled | `#834a21` | `#964f22` | `#8b4513` (key gravel) |
-| text | sampled | `#222222` | `#262626` | `#222222` |
-| subtext | sampled | `#4a4a4a` | `#545454` | `#4a4a4a` |
-| town label | sampled | `#242423` | `#282827` | `#242423` |
-| village label | sampled | `#333333` | `#3a3a3a` | `#333333` |
-| macrohood label | sampled | `#373836` | `#3f403e` | `#373836` |
-| neighbourhood label | sampled | `#686966` | `#737471` | `#686966` |
-| street label | sampled | `#343434` | `#3b3b3b` | `#343434` |
-| river label | sampled | `#65707a` | `#6e7c85` | `#63717a` |
-| road number | sampled | `#686766` | `#737271` | `#686766` |
-| landmark label | sampled | `#bb806d` | `#cb8877` | `#c47c6c` |
-| park label | sampled | `#3c6633` | `#39733b` | `#316734` |
-| locality label | sampled | `#686867` | `#737372` | `#686867` |
-| peak label | sampled | `#754634` | `#874c3a` | `#7b4333` |
-| station dot and label | sampled | `#cd562d` | `#e1562e` | `#db4927` (probably the key's `#dd4c18`) |
-| route dots | key | ncn `#ff0000`, rcn `#0000ff`, lcn `#008b8b` | same, with opacity | same |
-| EuroVelo ring | by eye | – | `#00559d` | `#00559d` |
+| Name | Source | cycle.travel value | Draws |
+|---|---|---|---|
+| land (background, earth) | sampled | `#eef2e1` | `#edf2e1` |
+| urban, below z11 | sampled | `#dde0d0` | `#dde0d0` |
+| urban, z11–13 | sampled | `#e5e9d8` | `#e4e9d8` |
+| urban, z13 up | sampled | `#e8e4e4` | `#e9e4e4` |
+| park | sampled | `#d8e7cf` | `#d5e8cf` |
+| wood | sampled | `#d2e3c6` | `#cfe4c6` |
+| scrub, grass, pitches | sampled | `#e2ecd6` | `#e0ecd6` |
+| water | sampled | `#b3c9cf` (re-sampled in WS2.2) | `#aecacf` |
+| building | sampled | `#d9d2cf` | `#dad2cf` |
+| railway | sampled | `#9a9a99` | `#9a9a99` |
+| minor road casing | sampled | `#a3a3a3` | `#a3a3a3` |
+| major road casing, z10 | sampled | `#b8aea8` | `#baada8` |
+| major road casing, z14 | sampled | `#7a7a7a` | `#7a7a7a` |
+| minor road, z11 (white from z13) | sampled | `#b9b9b9` | `#b9b9b9` |
+| motorway | key | `#73bded` | `#73bded` |
+| trunk | key | `#c0c8ae` | `#c0c8ae` |
+| primary | key | `#f7bda7` | `#f7bda7` |
+| secondary | key | `#fdd5a5` | `#fdd5a5` |
+| tertiary | key | `#fff5d0` | `#fff5d0` |
+| cycleway casing | key | `#dd4c18` | `#dd4c18` |
+| footpath | key | `#99bb2e` | `#99bb2e` |
+| unpaved path | key (gravel) | `#8b4513`; samples `#834a21` | `#8b4513` |
+| text | sampled | `#222222` | `#222222` |
+| subtext | sampled | `#4a4a4a` | `#4a4a4a` |
+| town label | sampled | `#242423` | `#242423` |
+| village label | sampled | `#333333` | `#333333` |
+| macrohood label | sampled | `#373836` | `#373836` |
+| neighbourhood label | sampled | `#686966` | `#686966` |
+| street label | sampled | `#343434` | `#343434` |
+| river label | sampled | `#65707a` | `#63717a` |
+| road number | sampled | `#686766` | `#686766` |
+| landmark label | sampled | `#bb806d` | `#c47c6c` |
+| park label | sampled | `#3c6633` | `#316734` |
+| locality label | sampled | `#686867` | `#686867` |
+| peak label | sampled | `#754634` | `#7b4333` |
+| station dot and label | key (cycleway) | `#dd4c18`: its dot captures exactly as the key's swatch | `#dd4c18` |
+| route dots | key | ncn `#ff0000`, rcn `#0000ff`, lcn `#008b8b` | same, with opacity |
+| EuroVelo ring | by eye | – | `#00559d` |
 
 Unsampled Protomaps flavour slots (hospital, school, industrial, beach…) are set by eye in
 `style.ts`'s `flavour` object.
@@ -388,11 +387,16 @@ From the six comparisons in `screenshots/`. Tick them off in WS2.
 - [ ] Paths from z11 in London (thin red)
 - [ ] More minor streets at z11–13
 - [ ] Bolder railways; paler, thinner motorways when zoomed out
-- [ ] Brown unpaved dashes slightly lighter
+- [x] Brown unpaved dashes slightly lighter (WS2.2: the key's `#8b4513` captures as cycle.travel's `#834a21`)
 - [ ] Landmark selection: drop the extras
 - [ ] No farm or hamlet labels in rural areas at z12
 - [ ] Station subset at z10–11
 - [ ] Knockout shade inside parks
 - [ ] Pedestrian areas outlined in red at street level
-- [ ] Colours: stop running key values through `shot()`; fix the curve (above)
+- [x] Colours: stop running key values through `shot()`; fix the curve (above). WS2.2
+- [ ] Park fill lighter: Richmond Park captures as `#eaf2d9` on cycle.travel, against our park `#d8e7cf`
+- [ ] Buildings at z14: 72% of the pixels we fill as building in the Westminster view are plain urban
+  (`#e8e4e4`) on cycle.travel
+- [ ] Scrub and grass: cycle.travel shows land colour where we fill them
+- [ ] Find what draws the `#e3e2d9` fill that covers 16% of our Westminster view
 - [ ] Re-check every size at 3× on an iPhone (all tuning was at 2× in Chrome)

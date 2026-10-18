@@ -37,11 +37,24 @@ interface Layer {
   paint?: Record<string, Expression>
 }
 
-// Colours sampled from cycle.travel screenshots and its map key (/map/snippet_key). Route colours are tuned by
-// opacity against screenshots, so they stay as they are; everything sampled goes through shot().
-// Known issue (docs/maps/cycle-travel-style.md, "Colour sampling"): the map-key values (motorway…footpath) are
-// already what cycle.travel draws, so shot() double-corrects them, and shot() itself lightens greys. WS2.2 fixes
-// both and re-takes the comparisons.
+// cycle.travel's colours (docs/maps/cycle-travel-style.md, "Palette"). Its map key (/map/snippet_key) gives the
+// values it draws, so those are used as they are.
+const key = {
+  motorway: '#73bded',
+  trunk: '#c0c8ae',
+  primary: '#f7bda7',
+  secondary: '#fdd5a5',
+  tertiary: '#fff5d0',
+  minor: '#ffffff',
+  cycleway: '#dd4c18',
+  // Stations too: their dot samples exactly as a #dd4c18 swatch does.
+  station: '#dd4c18',
+  footpath: '#99bb2e',
+  // The key's gravel cycleway: the unpaved dashes sample as #8b451e, next to it.
+  unpaved: '#8b4513',
+  halo: '#ffffff',
+}
+// Everything else was sampled off screenshots, which aren't the colours the page drew; shot() undoes the capture.
 const sampled = {
   land: '#eef2e1',
   urban: '#dde0d0',
@@ -50,23 +63,31 @@ const sampled = {
   park: '#d8e7cf',
   wood: '#d2e3c6',
   scrub: '#e2ecd6',
-  water: '#aecad0',
+  // Re-sampled in WS2.2: cycle.travel's colour under our water in every comparison view that has water.
+  water: '#b3c9cf',
   building: '#d9d2cf',
   rail: '#9a9a99',
   casing: '#a3a3a3',
-  motorway: '#73bded',
-  trunk: '#c0c8ae',
-  primary: '#f7bda7',
-  secondary: '#fdd5a5',
-  tertiary: '#fff5d0',
-  minor: '#ffffff',
-  cycleway: '#dd4c18',
-  footpath: '#99bb2e',
+  majorCasingLow: '#b8aea8',
+  majorCasingHigh: '#7a7a7a',
+  minorLow: '#b9b9b9',
   text: '#222222',
   subtext: '#4a4a4a',
-  halo: '#ffffff',
+  town: '#242423',
+  village: '#333333',
+  macrohood: '#373836',
+  neighbourhood: '#686966',
+  street: '#343434',
+  waterLabel: '#65707a',
+  roadRef: '#686766',
+  landmark: '#bb806d',
+  locality: '#686867',
+  parkLabel: '#3c6633',
+  peak: '#754634',
 }
+// Route colours are the key's, tuned by opacity against screenshots; the EuroVelo ring is by eye.
 const ct = {
+  ...key,
   ...(Object.fromEntries(Object.entries(sampled).map(([k, v]) => [k, shot(v)])) as Record<
     keyof typeof sampled,
     string
@@ -196,7 +217,7 @@ const majorWidth = [
   byClass(16, 14, 12),
 ]
 const majorCasing = ['interpolate', ['linear'], ['zoom'], 9, 0, 9.5, 0.5, 12, 0.8, 16, 1.2]
-const casingColour = ['interpolate', ['linear'], ['zoom'], 10, shot('#b8aea8'), 14, shot('#7a7a7a')]
+const casingColour = ['interpolate', ['linear'], ['zoom'], 10, ct.majorCasingLow, 14, ct.majorCasingHigh]
 const minorWidth = ['interpolate', ['exponential', 1.6], ['zoom'], 10, 0.3, 12, 0.7, 13, 1.3, 15, 2.5, 18, 11]
 
 // Name-ending shortening as cycle.travel does it: only Street and Road; Lane, Way, Place, Hill… stay whole.
@@ -243,7 +264,7 @@ const basemap = (): Layer[] =>
       if (l.id === 'roads_minor')
         Object.assign(paint, {
           'line-width': minorWidth,
-          'line-color': ['interpolate', ['linear'], ['zoom'], 11, shot('#b9b9b9'), 13, '#ffffff'],
+          'line-color': ['interpolate', ['linear'], ['zoom'], 11, ct.minorLow, 13, '#ffffff'],
         })
       if (l.id === 'roads_minor_casing')
         Object.assign(paint, {
@@ -273,7 +294,7 @@ const basemap = (): Layer[] =>
         const capital = ['>=', ['get', 'population_rank'], 10]
         const town = ['match', ['get', 'kind_detail'], ['town', 'city'], true, false]
         layout['text-font'] = ['case', capital, montserrat('Medium'), town, montserrat('Bold'), montserrat('Medium')]
-        paint['text-color'] = ['case', capital, '#000000', town, shot('#242423'), shot('#333333')]
+        paint['text-color'] = ['case', capital, '#000000', town, ct.town, ct.village]
         layout['text-size'] = [
           'interpolate',
           ['linear'],
@@ -308,7 +329,7 @@ const basemap = (): Layer[] =>
         layout['text-font'] = montserrat('Medium')
         layout['text-padding'] = 3
         layout['text-size'] = ['interpolate', ['linear'], ['zoom'], 11, 11, 16, 14]
-        paint['text-color'] = ['match', ['get', 'kind'], 'macrohood', shot('#373836'), shot('#686966')]
+        paint['text-color'] = ['match', ['get', 'kind'], 'macrohood', ct.macrohood, ct.neighbourhood]
         paint['text-halo-width'] = 1.5
       }
       if (l.id === 'places_region' || l.id === 'places_country') layout['text-font'] = montserrat('Medium')
@@ -320,17 +341,17 @@ const basemap = (): Layer[] =>
           'text-font': montserrat('Regular'),
           'text-field': abbreviate(['coalesce', ['get', 'name:en'], ['get', 'name'], '']),
         })
-        Object.assign(paint, { 'text-color': shot('#343434'), 'text-halo-width': 1.5 })
+        Object.assign(paint, { 'text-color': ct.street, 'text-halo-width': 1.5 })
       }
       // Rivers: slate italic, widely spaced, no halo, from cycle.travel's z13 (our 12).
       if (l.id === 'water_waterway_label') {
         l.minzoom = 12
         Object.assign(layout, { 'text-font': montserrat('Italic'), 'text-letter-spacing': 0.25 })
-        Object.assign(paint, { 'text-color': shot('#65707a'), 'text-halo-width': 0 })
+        Object.assign(paint, { 'text-color': ct.waterLabel, 'text-halo-width': 0 })
       }
       if (l.id === 'water_label_lakes') {
         layout['text-font'] = montserrat('Italic')
-        Object.assign(paint, { 'text-color': shot('#65707a'), 'text-halo-width': 0 })
+        Object.assign(paint, { 'text-color': ct.waterLabel, 'text-halo-width': 0 })
       }
       return l
     })
@@ -357,7 +378,7 @@ const roadRefs: Layer = {
     'text-size': ['interpolate', ['linear'], ['zoom'], 10, 9, 14, 10.5],
     'text-padding': 20,
   },
-  paint: { 'text-color': shot('#686766'), 'text-halo-color': '#ffffff', 'text-halo-width': 1 },
+  paint: { 'text-color': ct.roadRef, 'text-halo-color': '#ffffff', 'text-halo-width': 1 },
 }
 
 // Point labels cycle.travel adds at street level (its z15, our 14), coloured by what they are.
@@ -391,7 +412,7 @@ const labels: Layer[] = [
       ['!', ['has', 'kind_detail']],
     ],
     layout: { ...pointLabel(11, 'SemiBold'), 'symbol-sort-key': ['get', 'min_zoom'] },
-    paint: halo(shot('#bb806d')),
+    paint: halo(ct.landmark),
   },
   {
     id: 'ct_localities',
@@ -401,7 +422,7 @@ const labels: Layer[] = [
     minzoom: 14,
     filter: ['all', ['==', ['get', 'kind'], 'locality'], ['==', ['get', 'kind_detail'], 'locality']],
     layout: pointLabel(11, 'Medium'),
-    paint: halo(shot('#686867')),
+    paint: halo(ct.locality),
   },
   {
     id: 'ct_parks',
@@ -411,7 +432,7 @@ const labels: Layer[] = [
     minzoom: 14,
     filter: poiKind(['park', 'garden', 'nature_reserve', 'wood', 'forest', 'golf_course']),
     layout: { ...pointLabel(11.5, 'MediumItalic'), 'symbol-sort-key': ['get', 'min_zoom'] },
-    paint: halo(shot('#3c6633')),
+    paint: halo(ct.parkLabel),
   },
   // Protomaps only ships hills from tile z14, so these come from the cycling overlay (natural=peak|hill).
   {
@@ -421,7 +442,7 @@ const labels: Layer[] = [
     minzoom: 12,
     filter: ['==', ['get', 'kind'], 'peak'],
     layout: pointLabel(11, 'MediumItalic', 6),
-    paint: halo(shot('#754634')),
+    paint: halo(ct.peak),
   },
   // Above or below the dot, sliding to a corner when that's taken (Charing Cross beside LONDON).
   {
@@ -435,7 +456,7 @@ const labels: Layer[] = [
       'text-variable-anchor': ['top', 'bottom', 'bottom-right', 'bottom-left', 'top-right', 'top-left'],
       'text-radial-offset': 0.6,
     },
-    paint: halo(shot('#cd562d')),
+    paint: halo(ct.station),
   },
 ]
 // National Rail stations as cycle.travel's orange dot. At its z11–12 it shows only a handful (no rule we can copy),
@@ -447,7 +468,7 @@ const stations: Layer = {
   minzoom: 12,
   filter: ['==', ['get', 'kind'], 'station'],
   paint: {
-    'circle-color': shot('#cd562d'),
+    'circle-color': ct.station,
     'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2.2, 14, 2.6],
     'circle-stroke-color': '#000000',
     'circle-stroke-width': 0.9,
@@ -474,7 +495,7 @@ const paths: Layer[] = [
     minzoom: 12,
     filter: pathClass('u'),
     paint: {
-      'line-color': shot('#834a21'),
+      'line-color': ct.unpaved,
       'line-width': width([12, 0.95, 15, 1.1, 18, 2]),
       'line-dasharray': [5.5, 2.5],
     },
