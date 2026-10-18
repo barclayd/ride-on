@@ -53,9 +53,11 @@
       .onReceive(
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
       ) { _ in Task { await setup.refresh() } }
-      // The popup's "Open Ride On" link.
+      // The extension's Enable notifications opens rideon-notifications://enable.
       .onOpenURL { url in
-        if url.scheme == "rideon-notifications" { pane = .notifications }
+        guard url.scheme == "rideon-notifications" else { return }
+        pane = .notifications
+        if url.host == "enable" { Task { await setup.enable() } }
       }
     }
   }

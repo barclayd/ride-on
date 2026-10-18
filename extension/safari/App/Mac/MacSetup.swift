@@ -71,6 +71,16 @@
       }
     }
 
+    /// The extension's Enable notifications: macOS asks if it hasn't yet, then this Mac registers
+    /// for the switches that are on (the extension turned them on if none were).
+    func enable() async {
+      account = try? PushStore.read("link")
+      alerts = (try? PushStore.read("alerts")) ?? PushStore.Alerts()
+      permission = await UNUserNotificationCenter.current().notificationSettings()
+        .authorizationStatus
+      if permission == .notDetermined { await allow() } else { await sync() }
+    }
+
     private func allow() async {
       guard permission == .notDetermined else { return }
       _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [

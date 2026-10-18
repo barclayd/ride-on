@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
-import { API_URL } from '../lib/api';
 import { type State, send } from '../lib/state';
 
+// Chrome asks the browser first. Safari's Ride On app asks macOS and registers the device.
 export const Notifications = ({ state }: { state: State }) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,30 +32,6 @@ export const Notifications = ({ state }: { state: State }) => {
       setBusy(false);
     }
   };
-  // Safari: the Ride On app shares this sign-in and owns this device's alert switches.
-  if (import.meta.env.SAFARI)
-    return (
-      <section class="ro-card ro-col" aria-label="Notifications">
-        <span class="ro-label">Notifications</span>
-        <p>{state.push.message}</p>
-        <button
-          type="button"
-          class="ro-primary"
-          onClick={() => {
-            location.href = 'rideon-notifications://notifications';
-          }}
-        >
-          Open Ride On
-        </button>
-        <button
-          type="button"
-          class="ro-edit"
-          onClick={() => send({ type: 'pushStatus' })}
-        >
-          Check setup
-        </button>
-      </section>
-    );
   return (
     <section class="ro-card ro-col" aria-label="Notifications">
       <span class="ro-label">Notifications</span>
@@ -80,81 +56,7 @@ export const Notifications = ({ state }: { state: State }) => {
           Turn off on this device
         </button>
       )}
-      <button
-        type="button"
-        class="ro-edit"
-        disabled={busy}
-        onClick={() => send({ type: 'pushStatus' })}
-      >
-        Check setup
-      </button>
       {error && <p role="alert">{error}</p>}
-    </section>
-  );
-};
-export const TrackedRideSummary = ({ state }: { state: State }) => {
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const ride = state.tracker.ride;
-  if (!ride)
-    return state.tracker.error ? (
-      <p role="status">
-        Could not check your tracked ride. Refresh to try again.
-      </p>
-    ) : null;
-  const name =
-    ride.baseline.context.routes.find((r) => r.id === ride.routeId)?.name ??
-    'Your ride';
-  const time = new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: ride.timeZone,
-  }).format(new Date(ride.departureAt));
-  return (
-    <section class="ro-card ro-col" aria-label="Tracked ride">
-      <span class="ro-label">
-        {ride.refresh.closed ? 'Ride departure passed' : 'Tracking your ride'}
-      </span>
-      <strong>{name}</strong>
-      <span>{time}</span>
-      <a
-        href={`${API_URL}/notifications/open#ride=${encodeURIComponent(ride.id)}`}
-        target="_blank"
-        rel="noreferrer"
-      >
-        View latest ride update
-      </a>
-      {!ride.refresh.closed && (
-        <button
-          type="button"
-          class="ro-link"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            const result = await send({
-              type: 'setAlert',
-              routeId: null,
-              expectedTrackingVersion: state.tracker.version,
-              replaceTrackedRideId: ride.id,
-            });
-            setError(result.error ?? null);
-            setBusy(false);
-          }}
-        >
-          Stop monitoring this departure
-        </button>
-      )}
-      {error && <p role="alert">{error}</p>}
-      {state.push.status !== 'ready' && !ride.refresh.closed && (
-        <span>
-          {import.meta.env.SAFARI
-            ? 'Turn on notifications in the Ride On app to get alerts on this device.'
-            : 'Enable notifications in Preferences to receive alerts on this device.'}
-        </span>
-      )}
     </section>
   );
 };

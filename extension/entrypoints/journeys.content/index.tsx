@@ -26,7 +26,6 @@ import {
   useView,
 } from '../../ui/components';
 import { buildResults, longWeekday } from '../../ui/format';
-import { TrackedRideSummary } from '../../ui/notifications';
 import css from '../../ui/tokens.css?inline';
 
 type Row = {
@@ -304,7 +303,6 @@ const Page = ({ rows }: { rows: Row[] }) => {
           </div>
         </div>
       )}
-      <TrackedRideSummary state={view.state} />
       <Banners
         view={view}
         onProvider={() => send({ type: 'openPopup', tab: 'prefs' })}

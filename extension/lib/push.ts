@@ -61,26 +61,30 @@ const accountEmail = async (owner: string) => {
   return email;
 };
 
+// Safari: the Ride On app owns notifications. Checking in shares the account with it; 'on' opens
+// the app, which asks macOS and registers this device, and 'off' stops this device's alerts.
+const checkIn = async (notifications?: 'on' | 'off'): Promise<PushStatus> => {
+  const state = await readState();
+  const token = await getToken();
+  if (!state.user || !token) return PUSH_OFF;
+  const result = await native({
+    type: 'account',
+    owner: state.user.id,
+    token,
+    email: await accountEmail(state.user.id).catch(() => null),
+    apiURL: API_URL,
+    ...(notifications && { notifications }),
+  });
+  if (result.signOut) throw new SignedOutInApp();
+  return {
+    enabled: result.enabled,
+    status: result.status,
+    message: result.message,
+  };
+};
+
 export const pushStatus = async (): Promise<PushStatus> => {
-  if (import.meta.env.SAFARI) {
-    // Safari: the Ride On app owns notifications. Checking in shares the account with it.
-    const state = await readState();
-    const token = await getToken();
-    if (!state.user || !token) return PUSH_OFF;
-    const result = await native({
-      type: 'account',
-      owner: state.user.id,
-      token,
-      email: await accountEmail(state.user.id).catch(() => null),
-      apiURL: API_URL,
-    });
-    if (result.signOut) throw new SignedOutInApp();
-    return {
-      enabled: result.enabled,
-      status: result.status,
-      message: result.message,
-    };
-  }
+  if (import.meta.env.SAFARI) return checkIn();
   const saved = await getSecret<Registration>('push-registration');
   if (!saved?.enabled) return PUSH_OFF;
   if (
@@ -124,8 +128,7 @@ const enable = async (): Promise<PushStatus> => {
   const state = await readState();
   if (!state.user || !(await getToken()))
     throw new Error('Sign in before enabling notifications.');
-  if (import.meta.env.SAFARI)
-    throw new Error('Turn on notifications in the Ride On app.');
+  if (import.meta.env.SAFARI) return checkIn('on');
   if (!(await browser.permissions.contains({ permissions: ['notifications'] })))
     throw new Error('Allow notifications to continue.');
   const config = await api<{
@@ -215,7 +218,11 @@ const change = <T>(action: () => Promise<T>) => {
   return result;
 };
 export const enablePush = () => change(enable);
+/** Signing out. Safari's app forgets the account too. */
 export const disablePush = () => change(disable);
+/** Preferences' Turn off: Safari keeps the account shared with the app. */
+export const turnOffPush = () =>
+  change(() => (import.meta.env.SAFARI ? checkIn('off') : disable()));
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type PushPayload = {
