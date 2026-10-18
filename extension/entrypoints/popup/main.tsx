@@ -74,7 +74,7 @@ import {
   windowName,
   windowWhen,
 } from '../../ui/format';
-import { Notifications, TrackedRideSummary } from '../../ui/notifications';
+import { Notifications } from '../../ui/notifications';
 import '../../ui/tokens.css';
 
 const TABS: [Tab, string][] = [
@@ -785,17 +785,10 @@ const WindowHeading = (props: {
 const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
   const tracking = useTracking(view);
   // Paused: the status line only; every ride card is a score.
-  if (view.paused)
-    return (
-      <>
-        <PausedLine view={view} />
-        <TrackedRideSummary state={view.state} />
-      </>
-    );
+  if (view.paused) return <PausedLine view={view} />;
   if (view.state.expired)
     return (
       <>
-        <TrackedRideSummary state={view.state} />
         <CheckIn view={view} />
         <NextWindows view={view} />
         <button type="button" class="ro-link ro-choose" onClick={onChoose}>
@@ -805,7 +798,6 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
     );
   return (
     <>
-      <TrackedRideSummary state={view.state} />
       <CheckIn view={view} />
       {view.range ? (
         <WindowHeading view={view} range={view.range} tracking={tracking} />

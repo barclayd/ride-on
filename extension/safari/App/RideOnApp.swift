@@ -73,7 +73,7 @@ struct RideOnApp: App {
         .padding(32)
         .frame(maxWidth: 560, alignment: .leading)
       }
-      // The extension popup's "Open Ride On" link.
+      // rideon-notifications:// links.
       .onOpenURL { url in
         if url.scheme == "rideon-notifications" { Task { await notifications.refresh() } }
       }

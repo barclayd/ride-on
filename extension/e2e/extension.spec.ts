@@ -1060,9 +1060,11 @@ test('the bell asks which alerts first; moving them is explicit, undoable and su
   await expect(message).toHaveText('Alerts on for Hilly Loop');
   await expect.poll(() => trackedRide?.routeId).toBe('r101');
   const original = trackedRide.id;
-  await expect(
-    page.getByRole('region', { name: 'Tracked ride', exact: true }),
-  ).toContainText('Hilly Loop');
+  // The tile shows the tracked ride; there's no separate card for it.
+  await expect(page.locator('.ro-ride.ro-alert')).toContainText('Hilly Loop');
+  await expect(page.getByRole('region', { name: 'Tracked ride' })).toHaveCount(
+    0,
+  );
   // Only one ride has alerts: the dialog says they'll move.
   await coastBell.click();
   await expect(dialog.locator('.ro-alerts-move')).toHaveText(
@@ -1091,9 +1093,6 @@ test('the bell asks which alerts first; moving them is explicit, undoable and su
     .click();
   await expect(message).toHaveText('Removed Coast & Back from your shortlist');
   expect(trackedRide.routeId).toBe('r102');
-  await expect(
-    page.getByRole('region', { name: 'Tracked ride', exact: true }),
-  ).toContainText('Coast & Back');
   await undo.click();
   await expect(cards).toHaveCount(2);
   await page.getByRole('button', { name: 'Done', exact: true }).click();
@@ -2276,6 +2275,25 @@ const fakeCycleTravel = (context: BrowserContext) =>
       }),
     ),
   ]);
+
+test('the popup page a Journeys button opens in a tab manages notifications like the popup', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  // The page only shows these buttons once signed in.
+  const page = await openPopup(context, extensionId);
+  await expect(page.getByRole('tab', { name: 'Preferences' })).toBeVisible();
+  await page.goto(`chrome-extension://${extensionId}/popup.html?from=1`);
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+  const card = page.getByRole('region', { name: 'Notifications' });
+  await expect(card).toContainText('Notifications are off on this device.');
+  await expect(card.getByRole('button')).toHaveText(['Enable notifications']);
+  expect(
+    await page.evaluate("chrome.runtime.sendMessage({ type: 'disablePush' })"),
+  ).toEqual({});
+});
 
 test('Journeys page: signed out, Sign in opens the popup in a tab when the browser refuses', async ({
   context,

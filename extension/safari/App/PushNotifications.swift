@@ -100,7 +100,7 @@ final class PushNotifications {
     } catch {
       message =
         (error as? PushStore.Failure)?.message
-        ?? "Could not connect notification delivery. Check setup in Safari and try again."
+        ?? "Could not connect notification delivery. Enable notifications in Safari again."
       failure = message
     }
   }

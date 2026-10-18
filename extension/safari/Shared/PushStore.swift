@@ -235,7 +235,7 @@ enum PushStore {
       guard devices.devices.contains(where: { $0.id == id }) else {
         return [
           "installationId": id, "status": "setup",
-          "message": "Open Ride On and enable notifications again to reconnect this device.",
+          "message": "Enable notifications again to reconnect this device.",
         ]
       }
       guard configuration.automaticChecks && configuration.apns[receipt?.environment ?? ""] == true
@@ -258,7 +258,7 @@ enum PushStore {
     }
     return [
       "installationId": id, "status": "setup",
-      "message": "Open the Ride On app to finish notification setup.",
+      "message": "Enable notifications to finish setup on this device.",
     ]
   }
 }

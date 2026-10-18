@@ -14,6 +14,7 @@ import {
   installPushHandlers,
   pushStatus,
   SignedOutInApp,
+  turnOffPush,
 } from '../lib/push';
 import {
   DEFAULT_PLANNING,
@@ -901,7 +902,7 @@ const handle = async (message: Message, from?: Browser.tabs.Tab) => {
       return update(() => ({ push }));
     }
     case 'disablePush': {
-      const push = await disablePush();
+      const push = await turnOffPush();
       return update(() => ({ push }));
     }
     case 'pushStatus':
@@ -1142,16 +1143,12 @@ export default defineBackground(() => {
   });
   browser.runtime.onMessage.addListener(
     (message: Message, sender, sendResponse) => {
+      // Only the panel, which can ask first (?from: opened in a tab by a page's button).
       if (
         ['enablePush', 'disablePush'].includes(message.type) &&
-        (import.meta.env.SAFARI ||
-          sender.url !== browser.runtime.getURL('/popup.html'))
+        sender.url?.split(/[?#]/)[0] !== browser.runtime.getURL('/popup.html')
       ) {
-        sendResponse({
-          error: import.meta.env.SAFARI
-            ? 'Turn on notifications in the Ride On app.'
-            : 'Manage notifications in Ride On Preferences.',
-        });
+        sendResponse({ error: 'Manage notifications in Ride On Preferences.' });
         return false;
       }
       handle(message, sender.tab).then(
