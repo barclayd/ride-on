@@ -62,10 +62,19 @@ export type WeatherProvider = {
   attribution: Attribution[];
 };
 
+// API 0.34: Ride On paused on the profile, so every device follows. until is the local day it turns
+// back on and resumesAt its 00:00 in the profile's zone; both null until the rider turns it back on.
+export type Pause = {
+  until: string | null;
+  resumesAt: string | null;
+  pausedAt?: string; // absent on a pause made here and not yet saved
+};
+
 export type User = {
   id: string;
   version: number;
   displayName: string;
+  pause?: Pause | null; // null when on; absent before API 0.34
   // The public picker choice; null for an advanced fallback/custom policy.
   weatherProviderId: string | null;
   preferenceLevels?: Levels; // absent on users saved before 0.19

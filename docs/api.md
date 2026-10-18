@@ -207,7 +207,8 @@ returning to the foreground, hide forecasts/scores/check-ins, keep the route nam
 and distance, and stop automatic forecast calls while paused. The extension also
 reads on a daily alarm and at `resumesAt`; on resume it fetches fresh recommendations.
 The extension's default pause sends today + 7 in the rider's zone; its other
-choices send today + 3 or `null`. Client UI integration is a separate follow-up.
+choices send today + 3 or `null`. The browser extension uses these endpoints; the
+app does not yet.
 
 ### Tailwind opportunity preference
 

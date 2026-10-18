@@ -6,6 +6,7 @@ import type {
   Climbing,
   Conditions,
   NextWindows,
+  Pause,
   PreferencesPatch,
   Recommendations,
   Ride,
@@ -96,11 +97,8 @@ export type Checkin = {
   key: string | null; // Idempotency-Key for routeId, kept so a retry can't log twice
   alert: string | null; // the ride with alerts when the window ended; asked about instead of the top pick
 };
-// Paused: no forecasts, scores, alerts or check-in. until is the local day it turns back on, null until the rider does.
-export type Pause = {
-  until: string | null;
-  resumesAt: string | null; // 00:00 on until in the profile's time zone
-};
+// Paused: no forecasts, scores, alerts or check-in. The profile's pause, shown here before its PUT lands.
+export type { Pause } from './types';
 
 // One shared view state. The background owns writes; popup and page render it.
 export type State = {

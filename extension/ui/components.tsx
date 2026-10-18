@@ -103,16 +103,24 @@ export const Segmented = <T extends string>(props: {
 // "Ride On is paused until Sun 18 Oct." and a link that turns it back on (handoff v6 §4).
 export const PausedLine = ({ view }: { view: View }) => {
   const until = view.paused?.until;
+  const [failed, setFailed] = useState(false);
   return (
     <div class="ro-paused">
       <span>Ride On is paused{until && ` until ${shortDate(until)}`}.</span>
       <button
         type="button"
         class="ro-link"
-        onClick={() => send({ type: 'resume' })}
+        onClick={() =>
+          send({ type: 'resume' }).then((result) => setFailed(!!result.error))
+        }
       >
         Turn back on
       </button>
+      {failed && (
+        <span class="ro-pause-error" role="alert">
+          Couldn't turn it back on. Try again.
+        </span>
+      )}
     </div>
   );
 };

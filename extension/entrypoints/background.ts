@@ -13,6 +13,7 @@ import {
   initialState,
   type JourneyGpx,
   type Message,
+  type Pause,
   type Planning,
   readState,
   type State,
@@ -420,6 +421,8 @@ const refresh = async (force = false) => {
     return;
   }
   await commitDeletes().catch(() => {});
+  await pauseWrite; // read after a pause in flight, not before it lands
+  const was = (await readState()).pause;
   const [user, selection, routes, providers, rides] = await Promise.all([
     loadUser(),
     loadSelection(),
@@ -432,6 +435,7 @@ const refresh = async (force = false) => {
     auth: 'signed-in',
     // An unsent edit outranks the stored profile until its PATCH lands.
     user: withPreferences(user, pendingPatch),
+    pause: activePause(user.pause ?? null, new Date()),
     selection,
     routes,
     providers,
@@ -453,16 +457,63 @@ const refresh = async (force = false) => {
   const tags = loadSummaries().catch(() => {}); // tags only; the panel works without them
   const state = await readState();
   const { shown, expired, pause } = state;
-  // Paused: nothing to rank or ask about. Past its date, it turns back on.
-  if (pause) {
-    if (!activePause(pause, new Date())) await resume();
-  } else if (!expired && shown && ended(shown, new Date())) await expire(true);
+  await armResume();
+  // Paused: nothing to rank or ask about. Back on (its date, or another device), fresh scores.
+  if (pause) recommendation++;
+  else if (was) await resume();
+  else if (!expired && shown && ended(shown, new Date())) await expire(true);
   else if (force || expired || !current(state)) await rank();
   await tags;
 };
 
-// ponytail: the pause is kept in this browser until the API stores it on the profile
-// (docs/extension-api-brief-v8.md); it doesn't reach the rider's other devices yet.
+// The pause is on the profile (API 0.34), so the rider's other devices follow. It shows here at
+// once; the API's answer replaces it, and a failed write puts the last one back.
+let pauseWrites = 0;
+let pauseWrite: Promise<unknown> = Promise.resolve();
+const savePause = (
+  before: Pause | null,
+  write: () => Promise<{ user: User }>,
+) => {
+  const id = ++pauseWrites;
+  const run = pauseWrite.then(async () => {
+    if (!(await getToken())) return;
+    try {
+      const { user } = await write();
+      // A newer choice is already on screen and on its way.
+      if (id === pauseWrites)
+        await update(() => ({
+          pause: activePause(user.pause ?? null, new Date()),
+        }));
+    } catch (error) {
+      if (id === pauseWrites) {
+        if (before) recommendation++; // back to paused: a ranking in flight is dropped
+        await update(() => ({ pause: before }));
+      }
+      throw error; // the switch or link says it wasn't saved
+    } finally {
+      await armResume();
+    }
+  });
+  pauseWrite = run.catch(() => {});
+  return run;
+};
+
+// Daily, and when it's due back: the rider may have paused or turned it back on elsewhere.
+const syncPause = async () => {
+  if (!(await getToken())) return;
+  await pauseWrite;
+  const { user } = await api<{ user: User }>('/users/me');
+  const was = (await readState()).pause;
+  const pause = activePause(user.pause ?? null, new Date());
+  if (pause) {
+    recommendation++;
+    await update(() => ({ pause, loading: false }));
+    return armResume();
+  }
+  if (was) return resume();
+};
+
+const SYNC = 'sync';
 const RESUME = 'resume';
 const armResume = async () => {
   const { pause } = await readState();
@@ -730,6 +781,7 @@ const handle = async (message: Message) => {
     // Back on at 00:00 local on until; the rider's days, times and alerts stay as they are.
     case 'pause': {
       const { until } = message;
+      const { pause: before } = await readState();
       recommendation++; // a ranking in flight is dropped
       await update((state) => ({
         pause: {
@@ -738,10 +790,19 @@ const handle = async (message: Message) => {
         },
         loading: false,
       }));
-      return armResume();
+      await armResume();
+      return savePause(before, () =>
+        api('/users/me/pause', { method: 'PUT', body: { until } }),
+      );
     }
-    case 'resume':
-      return resume();
+    case 'resume': {
+      const { pause: before } = await readState();
+      await Promise.all([
+        resume(),
+        savePause(before, () => api('/users/me/pause', { method: 'DELETE' })),
+      ]);
+      return;
+    }
     case 'openPopup':
       await update(() => ({ popupTab: message.tab }));
       // Chrome 127+, Safari 16+; without a focused window it throws and the page keeps its state.
@@ -901,8 +962,20 @@ export default defineBackground(() => {
   revive().catch(() => {});
   // Alarms may not outlive a browser restart or an update, so each wake sets it again.
   armResume().catch(() => {});
+  // Made once: setting it again on every wake would restart its day.
+  browser.alarms
+    .get(SYNC)
+    .then((alarm) => {
+      if (!alarm)
+        return browser.alarms.create(SYNC, {
+          delayInMinutes: 24 * 60,
+          periodInMinutes: 24 * 60,
+        });
+    })
+    .catch(() => {});
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === RESUME) refresh().catch(() => {});
+    if (alarm.name === SYNC) syncPause().catch(() => {});
   });
   browser.runtime.onMessage.addListener(
     (message: Message, _sender, sendResponse) => {

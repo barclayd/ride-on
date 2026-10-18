@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { API_URL } from '../../lib/api';
 import {
+  type Message,
   type Planning,
   type Provider,
   type Search,
@@ -265,6 +266,10 @@ type Return = '3' | '7' | 'choose';
 const PauseCard = ({ view }: { view: View }) => {
   const { paused, today } = view;
   const until = paused?.until ?? null;
+  // A write that fails puts the last choice back; this says why the switch moved.
+  const [failed, setFailed] = useState(false);
+  const save = (message: Message) =>
+    send(message).then((result) => setFailed(!!result.error));
   // The date is stored, not the option; one a day or more old matches neither.
   const option: Return | null = !paused
     ? null
@@ -288,7 +293,7 @@ const PauseCard = ({ view }: { view: View }) => {
           on={!!paused}
           label="Pause Ride On"
           onClick={() =>
-            send(
+            save(
               paused
                 ? { type: 'resume' }
                 : { type: 'pause', until: addDays(today, 7) },
@@ -296,6 +301,11 @@ const PauseCard = ({ view }: { view: View }) => {
           }
         />
       </div>
+      {failed && (
+        <span class="ro-pause-error" role="alert">
+          Couldn't save that. Check your connection and try again.
+        </span>
+      )}
       {paused && (
         <div class="ro-pause-return">
           <span class="ro-pause-label">Turn back on</span>
@@ -308,7 +318,7 @@ const PauseCard = ({ view }: { view: View }) => {
             ]}
             value={option}
             onChange={(value) =>
-              send({
+              save({
                 type: 'pause',
                 until: value === 'choose' ? null : addDays(today, +value),
               })
