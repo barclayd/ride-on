@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 in progress: 2.1–2.5 done (2.5 bar station throats), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; 2.6 next |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 in progress: 2.1–2.6 done (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; 2.7 next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -285,9 +285,27 @@ capture cycle.travel and the prototype on the same display, and sample new colou
 where `shot()` holds. The WS2.5 lines session's 3–12/255 offset matches the sRGB display's skew, so the
 motorway fill solved then (`motorwayPale`) may be a shade too pale; re-check it on a P3 display.
 
-**2.6 3× and device.** Every size was tuned at 2× in Chrome. Re-check dots, badges and labels on an
-iPhone 17 at 3×. MapLibre Native draws text slightly differently from GL JS. Agents use the iPhone 17
-simulator `79662D65-4914-46BC-BA2A-510E3989498D`, never Dan's iPhone 18 Pro one (`1F0874B6…`).
+**2.6 3× and device.** Done, 19 October 2026, on the iPhone 17 Simulator: the ten views compared in the
+Routes map's window at the medium detent (402×299 pt, 1206×897 px), cycle.travel's mobile site against the
+app (MapLibre Native) and the prototype (GL JS) ([phone gallery](#phone-comparisons-3), method in
+[`prototype/README.md`](prototype/README.md#comparing-against-cycletravel)). Findings:
+- **Dots and badges hold at 3×.** Route dots are 21 px across against cycle.travel's 22; badges 45×36 px
+  against its 43 wide. Its mobile site draws 2× tiles scaled 1.5×, so it is the softer of the two.
+- **MapLibre Native draws as GL JS does.** Label widths, dots, badges and lines in the app match the
+  prototype to a pixel or two in every view, so the 2× tuning in Chrome carries over to the device.
+- **Labels retuned** ([style spec, Labels](cycle-travel-style.md#labels)). Villages were 1.25× cycle.travel's
+  at z10–11: now 10, about 12 at z12. Below z12 cycle.travel draws towns under about 16,000 people as
+  villages (Teddington, Sidcup, Clacton-on-Sea), and sizes towns by population: 16.5 for 100,000 or more
+  (Croydon, Ipswich, Colchester), village size under 5,000 (Manningtree). Suburbs (Putney, Greenstead)
+  take the quarters' darker grey and jump to 14 at z13. Every label measured is now within 6% of
+  cycle.travel's width.
+- **Still different**, logged in the style spec's [known gaps](cycle-travel-style.md#known-gaps): Harwich
+  is Medium on cycle.travel at z10 only; London's z9 label choice; quarters at z11 (Lot's Village, Nine
+  Elms); unnamed peaks (Spankers Hill); hillshade, contours and more POI icons on cycle.travel.
+
+Agents use the iPhone 17 simulator `79662D65-4914-46BC-BA2A-510E3989498D`, never Dan's iPhone 18 Pro one
+(`1F0874B6…`). Dan: the phone trios are the place to judge "reads as cycle.travel"; a run on the iPhone
+itself is still worth doing for frame rate (WS3.0's "Not checked").
 
 **2.7 Dark mode** ([decision 6](#open-decisions)). Either a dark variant built from the same script, or
 the map stays light in Dark Mode.
@@ -502,16 +520,19 @@ DevTools MCP, 1200×800 at DPR 2, cycle.travel's sidebar hidden, MapLibre zoom =
 `analysis/pair2.py` to pair them. Re-take all ten views after any WS2 change and attach them to the PR.
 The prototype's side can be captured headless (`capture/ml-headless.mjs`, then `analysis/lut.py` for the
 display's colours); cycle.travel's can't.
-On device, compare an iPhone screenshot with cycle.travel's mobile site at the same place and zoom.
+On device, compare the app with cycle.travel's mobile site at the same place and zoom: `capture/app-sim.sh`
+for the app in the Simulator, `capture/ml-headless.mjs --phone` for the prototype, a display Chrome
+emulating `402x299x3,mobile,touch` with `capture/ct-phone-prep.js` for cycle.travel, and
+`analysis/trio.py` to put them side by side ([method](prototype/README.md#comparing-against-cycletravel)).
 
 Don't scrape, proxy or bulk-download cycle.travel's tiles or APIs. Screenshots of the public page are
 fine for comparison.
 
 ## Comparison screenshots
 
-cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). All ten re-taken on
-18 October 2026 after batch D, on an overlay built with its changes (`cycling-gb-20261017`). cycle.travel
-was captured in a display Chrome on the sRGB display with the DevTools MCP; it returns 403 to headless
+cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). cycle.travel's side
+taken on 18 October 2026 after batch D; the prototype's re-taken on 19 October after WS2.6's label
+changes, on an overlay built with batch D's changes (`cycling-gb-20261017`). cycle.travel was captured in a display Chrome on the sRGB display with the DevTools MCP; it returns 403 to headless
 Chrome. The prototype was captured headless and its colours mapped to that display's with a per-channel
 curve fitted on paired captures: 94–98% of pixels within 2/255, geometry identical
 ([method](prototype/README.md#comparing-against-cycletravel)). Colours sampled from these images carry the
@@ -526,9 +547,29 @@ sRGB display's skew.
 | [Richmond Park, z13](screenshots/cmp-richmond-park-z13.jpg) (51.4455, −0.2665) | NCN 4 on red-and-white paths, brown unpaved dashes, lcn teal and the built-up, park, wood and golf fills match. C30 is a lavender line there, violet dots here. It shows more toilet, café and parking icons |
 | [Surrey Hills, z12](screenshots/cmp-surrey-hills-z12.jpg) (51.245, −0.33) | NCN 22, the railways, hamlets and farms match. cycle.travel has hillshade and contours. A few bare `footway` + `bicycle=yes` stubs across fields near White Hill and Dunley Hill draw red here and not at all there. Our brown dashes are heavier |
 | [Harwich, z9](screenshots/cmp-harwich-z9.jpg) (51.93, 1.2) | EuroVelo and national dots: size, colours and spacing match; no ferry dots across the North Sea. Railways and minor roads now draw on both |
-| [Harwich, z10](screenshots/cmp-harwich-z10.jpg) | As z9; regional routes are dots on a thin blue line on both. Station dots along the Clacton line, Wrabness and Trimley match. cycle.travel shows a EuroVelo badge at Colchester (ours start at z11) and names more villages (Whatfield, Lindsey, Flowton); our town names are bolder |
+| [Harwich, z10](screenshots/cmp-harwich-z10.jpg) | As z9; regional routes are dots on a thin blue line on both. Station dots along the Clacton line, Wrabness and Trimley match. cycle.travel shows a EuroVelo badge at Colchester (ours start at z11) and names more villages (Whatfield, Lindsey, Flowton). Small towns are Medium in village grey on both (Clacton-on-Sea, Brightlingsea, Manningtree); cycle.travel draws Harwich Medium too, where ours stays bold |
 | [Harwich, z11](screenshots/cmp-harwich-z11.jpg) | EuroVelo ring and centre colours, sizes and spacing match; railways and station dots on both. cycle.travel draws the Harwich ferry dashed (ours left out on purpose) and names Wrabness and Bradfield, which we don't |
 | [Colchester, z12](screenshots/cmp-colchester-z12.jpg) (51.8787, 0.964) | The path rule's test view. Middlewick's and High Woods' permissive paths are brown dashes on both, with the same few red stretches. Routes 1 and 51 and the EuroVelo dots match; cycle.travel badges EuroVelo 2 beside the 51 shield, we show only the 51. It shows café and pub icons; ours start at z14 |
+
+### Phone comparisons (3×)
+
+cycle.travel's mobile site, the app (MapLibre Native, iPhone 17 Simulator) and the prototype (GL JS), left
+to right; each panel is the Routes map's window at the medium detent, 402×299 pt at 3× (1206×897 px).
+Taken 19 October 2026 (WS2.6). The prototype's colours are as captured headless, so judge sizes and
+placement here and colour in the 2× set above. The app's map controls sit top and bottom right.
+
+| View | What to look at |
+|---|---|
+| [London, z9](screenshots/phone-london-z9.jpg) | Town weights and sizes match (Wembley, Ealing, Croydon, Wimbledon bold; Teddington, Sydenham, Sidcup Medium in grey). cycle.travel picks other London names (Hampstead, Chiswick, Lewisham, Beckenham) |
+| [London, z11](screenshots/phone-london-z11.jpg) | Street net, NCN 4 and dots match in weight. We name quarters (Lot's Village, Nine Elms) cycle.travel doesn't; it draws TfL Q and C57 routes and AV badges along the Avenue Verte that we don't at this zoom |
+| [Putney, z13](screenshots/phone-putney-z13.jpg) | Putney's size and grey, the lcn teal dots, NCN 4 badges and the station dot match. cycle.travel has café and shop icons and a beige foreshore |
+| [Westminster, z14](screenshots/phone-westminster-z14.jpg) | Parks, paths, the Palace of Westminster and Q badges match; we add C3 and C56 badges and the Westminster label |
+| [Richmond Park, z13](screenshots/phone-richmond-park-z13.jpg) | NCN 4 on red-and-white paths, its badges and the lcn teal match. cycle.travel has contours, water icons and Spankers Hill |
+| [Surrey Hills, z12](screenshots/phone-surrey-hills-z12.jpg) | DORKING, Westhumble, Pixham and the hills' italic names match in size; NCN 22 and the regional route too. cycle.travel has hillshade, contours and more POI icons |
+| [Harwich, z9](screenshots/phone-harwich-z9.jpg) | Felixstowe and Harwich bold, Manningtree and Brightlingsea Medium on both; EuroVelo dots match |
+| [Harwich, z10](screenshots/phone-harwich-z10.jpg) | Village names and sizes match (Holbrook, Stutton, Ramsey, Wix). cycle.travel draws Harwich Medium at this zoom only, and Dovercourt a little larger |
+| [Harwich, z11](screenshots/phone-harwich-z11.jpg) | EuroVelo 2 dots and badges, Ramsey, Little Oakley and Great Oakley match; cycle.travel names Wrabness |
+| [Colchester, z12](screenshots/phone-colchester-z12.jpg) | Greenstead in the suburbs' grey and size, the A133 and B roads, Routes 51 and EuroVelo 2 match; cycle.travel badges EuroVelo beside the 51 |
 
 ## Links
 

@@ -4294,6 +4294,21 @@
       "case",
       [">=", ["get", "population_rank"], 10],
       ["literal", ["Montserrat-Medium"]],
+      [
+       "all",
+       ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+       [">=", ["coalesce", ["get", "population"], 0], 16000]
+      ],
+      ["literal", ["Montserrat-Bold"]],
+      ["==", ["get", "kind_detail"], "hamlet"],
+      ["literal", ["Montserrat-Regular"]],
+      ["literal", ["Montserrat-Medium"]]
+     ],
+     12,
+     [
+      "case",
+      [">=", ["get", "population_rank"], 10],
+      ["literal", ["Montserrat-Medium"]],
       ["match", ["get", "kind_detail"], ["town", "city"], true, false],
       ["literal", ["Montserrat-Bold"]],
       ["==", ["get", "kind_detail"], "hamlet"],
@@ -4328,9 +4343,44 @@
       "case",
       [">=", ["get", "population_rank"], 10],
       17,
-      ["<=", ["get", "min_zoom"], 9],
-      14,
-      12
+      ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+      [
+       "case",
+       [">=", ["coalesce", ["get", "population"], 0], 100000],
+       16.5,
+       [
+        "all",
+        ["<=", ["get", "min_zoom"], 9],
+        [">=", ["coalesce", ["get", "population"], 0], 16000]
+       ],
+       14,
+       ["<", ["coalesce", ["get", "population"], 0], 5000],
+       10,
+       12
+      ],
+      10
+     ],
+     11,
+     [
+      "case",
+      [">=", ["get", "population_rank"], 10],
+      16.75,
+      ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+      [
+       "case",
+       [">=", ["coalesce", ["get", "population"], 0], 100000],
+       16.5,
+       [
+        "all",
+        ["<=", ["get", "min_zoom"], 9],
+        [">=", ["coalesce", ["get", "population"], 0], 16000]
+       ],
+       14.25,
+       ["<", ["coalesce", ["get", "population"], 0], 5000],
+       10,
+       12.75
+      ],
+      10
      ],
      14,
      [
@@ -4396,12 +4446,29 @@
    },
    "paint": {
     "text-color": [
-     "case",
-     [">=", ["get", "population_rank"], 10],
-     "#000000",
-     ["match", ["get", "kind_detail"], ["town", "city"], true, false],
-     "#242423",
-     "#333333"
+     "step",
+     ["zoom"],
+     [
+      "case",
+      [">=", ["get", "population_rank"], 10],
+      "#000000",
+      [
+       "all",
+       ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+       [">=", ["coalesce", ["get", "population"], 0], 16000]
+      ],
+      "#242423",
+      "#333333"
+     ],
+     12,
+     [
+      "case",
+      [">=", ["get", "population_rank"], 10],
+      "#000000",
+      ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+      "#242423",
+      "#333333"
+     ]
     ],
     "text-halo-color": "#ffffff",
     "text-halo-width": 2,
@@ -4704,11 +4771,32 @@
     "text-max-width": 7,
     "text-letter-spacing": 0,
     "text-padding": 3,
-    "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 16, 14],
+    "text-size": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     11,
+     11,
+     12,
+     ["case", ["==", ["get", "kind_detail"], "suburb"], 10.75, 11.6],
+     13,
+     ["case", ["==", ["get", "kind_detail"], "suburb"], 14, 12.2],
+     16,
+     14
+    ],
     "text-transform": "none"
    },
    "paint": {
-    "text-color": ["match", ["get", "kind"], "macrohood", "#373836", "#686966"],
+    "text-color": [
+     "case",
+     [
+      "any",
+      ["==", ["get", "kind"], "macrohood"],
+      ["==", ["get", "kind_detail"], "suburb"]
+     ],
+     "#373836",
+     "#686966"
+    ],
     "text-halo-color": "#ffffff",
     "text-halo-width": 1.5
    }
@@ -5304,6 +5392,21 @@
       "case",
       [">=", ["get", "population_rank"], 10],
       ["literal", ["Montserrat-Medium"]],
+      [
+       "all",
+       ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+       [">=", ["coalesce", ["get", "population"], 0], 16000]
+      ],
+      ["literal", ["Montserrat-Bold"]],
+      ["==", ["get", "kind_detail"], "hamlet"],
+      ["literal", ["Montserrat-Regular"]],
+      ["literal", ["Montserrat-Medium"]]
+     ],
+     12,
+     [
+      "case",
+      [">=", ["get", "population_rank"], 10],
+      ["literal", ["Montserrat-Medium"]],
       ["match", ["get", "kind_detail"], ["town", "city"], true, false],
       ["literal", ["Montserrat-Bold"]],
       ["==", ["get", "kind_detail"], "hamlet"],
@@ -5338,9 +5441,44 @@
       "case",
       [">=", ["get", "population_rank"], 10],
       17,
-      ["<=", ["get", "min_zoom"], 9],
-      14,
-      12
+      ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+      [
+       "case",
+       [">=", ["coalesce", ["get", "population"], 0], 100000],
+       16.5,
+       [
+        "all",
+        ["<=", ["get", "min_zoom"], 9],
+        [">=", ["coalesce", ["get", "population"], 0], 16000]
+       ],
+       14,
+       ["<", ["coalesce", ["get", "population"], 0], 5000],
+       10,
+       12
+      ],
+      10
+     ],
+     11,
+     [
+      "case",
+      [">=", ["get", "population_rank"], 10],
+      16.75,
+      ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+      [
+       "case",
+       [">=", ["coalesce", ["get", "population"], 0], 100000],
+       16.5,
+       [
+        "all",
+        ["<=", ["get", "min_zoom"], 9],
+        [">=", ["coalesce", ["get", "population"], 0], 16000]
+       ],
+       14.25,
+       ["<", ["coalesce", ["get", "population"], 0], 5000],
+       10,
+       12.75
+      ],
+      10
      ],
      14,
      [
@@ -5406,12 +5544,29 @@
    },
    "paint": {
     "text-color": [
-     "case",
-     [">=", ["get", "population_rank"], 10],
-     "#000000",
-     ["match", ["get", "kind_detail"], ["town", "city"], true, false],
-     "#242423",
-     "#333333"
+     "step",
+     ["zoom"],
+     [
+      "case",
+      [">=", ["get", "population_rank"], 10],
+      "#000000",
+      [
+       "all",
+       ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+       [">=", ["coalesce", ["get", "population"], 0], 16000]
+      ],
+      "#242423",
+      "#333333"
+     ],
+     12,
+     [
+      "case",
+      [">=", ["get", "population_rank"], 10],
+      "#000000",
+      ["match", ["get", "kind_detail"], ["town", "city"], true, false],
+      "#242423",
+      "#333333"
+     ]
     ],
     "text-halo-color": "#ffffff",
     "text-halo-width": 2,
