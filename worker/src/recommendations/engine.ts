@@ -136,10 +136,18 @@ type Failure = {
   affectedDistanceKm: number;
   sections: { fromKm: number; toKm: number; observedAt: string }[];
 };
-const summarize = (rows: readonly Observation[]) => {
+const summarize = (rows: readonly Observation[], sunshineEnabled: boolean) => {
   const distance = rows.reduce((sum, row) => sum + row.distanceM, 0);
   const mean = (value: (row: Observation) => number) =>
     rows.reduce((sum, row) => sum + value(row) * row.distanceM, 0) / distance;
+  const skyFractions = sunshineEnabled
+    ? Object.fromEntries(
+        Object.entries(skyConditions).map(([name, code]) => [
+          name,
+          round(mean((r) => (r.skyCondition === code ? 1 : 0))),
+        ]),
+      )
+    : null;
   return conditionsSchema.parse({
     windDistanceFractions: {
       headwind: round(
@@ -162,12 +170,13 @@ const summarize = (rows: readonly Observation[]) => {
     },
     precipitationSummary: summarizePrecipitation(rows),
     skyConditionDistanceFractions: rows.every((r) => r.skyCondition !== null)
-      ? Object.fromEntries(
-          Object.entries(skyConditions).map(([name, code]) => [
-            name,
-            round(mean((r) => (r.skyCondition === code ? 1 : 0))),
-          ]),
-        )
+      ? skyFractions
+      : null,
+    skyConditionShares: skyFractions
+      ? {
+          ...skyFractions,
+          unknown: round(mean((r) => (r.skyCondition === null ? 1 : 0))),
+        }
       : null,
     windFromDegrees: meanWindFrom(rows),
     averageWindSpeedKph: round(mean((r) => r.windSpeedKph)),
@@ -407,7 +416,7 @@ const assessCandidate = (
   }
   if (missing.size || !rows.length)
     return { status: 'unknown' as const, reasons: [...missing] };
-  const conditions = summarize(rows);
+  const conditions = summarize(rows, weights.sunshine > 0);
   const unknownSunshine = rows.filter((row) => row.sunshine === null);
   const sunshineAssessment =
     weights.sunshine > 0
@@ -578,7 +587,9 @@ const assessCandidate = (
       return {
         start: iso(start),
         end: iso(end),
-        conditions: section.length ? summarize(section) : null,
+        conditions: section.length
+          ? summarize(section, weights.sunshine > 0)
+          : null,
       };
     },
   );

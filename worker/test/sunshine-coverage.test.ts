@@ -6,6 +6,7 @@ import {
 import { daySummary } from '../src/recommendations/multi-day.ts';
 import { importGpx } from '../src/routes/gpx.ts';
 import { normaliseAppleWeather } from '../src/weather/apple-weather.ts';
+import { skyConditions } from '../src/weather/conditions.ts';
 import { APPLE_NOW, appleWeatherFixture } from './fixtures/apple-weather.ts';
 import {
   defaultValue,
@@ -44,6 +45,71 @@ test('mixed known and unknown route sections retain partial sunshine uncertainty
   expect(best?.sunshineAssessment?.unknownDistanceFraction).toBeLessThan(1);
   expect(best?.factors.sunshine).toBeNull();
   expect(best?.conditions.skyConditionDistanceFractions).toBeNull();
+});
+
+test('sky shares retain the known distance within a ride hour when symbols stop or have an interior gap', async () => {
+  const route = await importGpx(
+    `<gpx version="1.1"><trk><trkseg>${Array.from({ length: 15 }, (_, i) => `<trkpt lat="${51.2 + i * 0.03}" lon="-1"/>`).join('')}</trkseg></trk></gpx>`,
+  );
+  const departure = Date.parse('2026-10-10T09:15:00Z');
+  for (const interior of [false, true]) {
+    for (const sunshine of [0.25, 0]) {
+      const input = inputFor([route], {
+        preferences: { weights: { sunshine } },
+      });
+      const forecasts = forecastsFor(
+        [route],
+        (quantity, hour) =>
+          quantity === 'sky-condition'
+            ? (interior ? hour === 11 : hour >= 11)
+              ? null
+              : skyConditions.sunny
+            : defaultValue(quantity),
+        requiredWeatherFor(input),
+      );
+      const result = recommendRides(
+        [route],
+        input,
+        forecasts,
+        Date.parse(APPLE_NOW),
+        10_000,
+        3,
+        undefined,
+        new Map([[route.id, departure]]),
+      );
+      const best = present(present(result.rankings[0]).best);
+      if (!best) throw new Error('Expected an assessed departure');
+      expect(best.conditions.skyConditionDistanceFractions).toBeNull();
+      expect(best.factors.sunshine).toBeNull();
+      if (sunshine === 0) {
+        expect(best.sunshineAssessment).toBeNull();
+        expect(best.conditions.skyConditionShares).toBeNull();
+        for (const hour of best.rideHours)
+          expect(hour.conditions?.skyConditionShares).toBeNull();
+        continue;
+      }
+      const shares = best.conditions.skyConditionShares;
+      expect(Object.keys(shares ?? {}).sort()).toEqual(
+        [...Object.keys(skyConditions), 'unknown'].sort(),
+      );
+      expect(shares?.sunny).toBeGreaterThan(0);
+      expect(shares?.unknown).toBeGreaterThan(0);
+      expect(shares?.unknown).toBeCloseTo(
+        best.sunshineAssessment?.unknownDistanceFraction ?? -1,
+        2,
+      );
+      expect(
+        Object.values(shares ?? {}).reduce((sum, v) => sum + v, 0),
+      ).toBeCloseTo(1, 2);
+      const boundary = present(best.rideHours[1]).conditions;
+      expect(boundary?.skyConditionDistanceFractions).toBeNull();
+      expect(boundary?.skyConditionShares?.sunny).toBeGreaterThan(0);
+      expect(boundary?.skyConditionShares?.unknown).toBeGreaterThan(0);
+      // Each hour has its own denominator; the boundary hour isn't the whole route.
+      expect(boundary?.skyConditionShares?.unknown).not.toBe(shares?.unknown);
+      expect(best.rideHours[0]?.conditions?.skyConditionShares?.sunny).toBe(1);
+    }
+  }
 });
 
 const assess = async (
@@ -114,6 +180,17 @@ test('Apple wind/heat and unknown sky codes retain complete essential coverage a
     });
     expect(best.factors.sunshine).toBeNull();
     expect(best.conditions.skyConditionDistanceFractions).toBeNull();
+    expect(best.conditions.skyConditionShares).toEqual({
+      sunny: 0,
+      sunnyIntervals: 0,
+      cloudy: 0,
+      overcast: 0,
+      obscured: 0,
+      precipitation: 0,
+      clearNight: 0,
+      partlyCloudyNight: 0,
+      unknown: 1,
+    });
     expect(best.drawbacks).toContain(
       'Sunshine details are incomplete; unknown sections have a neutral effect on the score.',
     );
@@ -142,6 +219,15 @@ test('unknown sunshine scores between observed sun and overcast without claiming
       { temperature: 0, wind: 0, dryness: 0, clearSkies: 0, sunshine: 1 },
     );
     scores.push(result.rankings[0]?.best?.weatherScore);
+    const conditions = result.rankings[0]?.best?.conditions;
+    if (code !== 'Breezy') {
+      const fractions = conditions?.skyConditionDistanceFractions;
+      if (!fractions) throw new Error('Expected complete sky fractions');
+      expect(conditions?.skyConditionShares).toEqual({
+        ...fractions,
+        unknown: 0,
+      });
+    }
   }
   expect(scores).toEqual([100, 50, 0]);
 });

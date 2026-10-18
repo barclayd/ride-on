@@ -6,6 +6,11 @@ for the current worker. Additive: no scoring, ranking or algorithm-version chang
 Ship it as the next minor: **0.41.0** ([brief v13](extension-api-brief-v13.md)
 shipped as 0.40.0).
 
+**Implemented in API 0.41.0**, after brief v13. No scoring, ranking,
+algorithm-version or database migration change. The extension's e2e mock now
+includes the field and checks the known/unknown shares in both surfaces; the
+pre-release fallback note has been removed.
+
 Design handoff v4 (sunshine wording) adds a sky chip and an "Expected conditions
 along the ride" timeline to the Journeys tiles and the popup's Rides cards. Each
 ride hour is a bar segment, sized by distance and coloured sunny, sunny intervals,
