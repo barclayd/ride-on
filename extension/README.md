@@ -58,6 +58,9 @@ Sign-in differences from Chrome (Safari has no `identity` API):
   checks `state`, exchanges it and closes the tab. The PKCE flow waits in IndexedDB, because Safari
   can unload the background while the rider signs in. Closing the tab cancels it.
 - No manifest `key` and no `identity` permission. On iPhone the popup fills the sheet.
+- Safari can't open the popup from a script, so the Journeys page's buttons (Sign in, the window,
+  the forecast provider) open the popup page in a tab beside it. Chrome does the same when
+  `action.openPopup()` refuses, for example without a focused window.
 
 ## Ride notifications
 

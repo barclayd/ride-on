@@ -1,4 +1,4 @@
-import { browser } from 'wxt/browser';
+import { type Browser, browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { ApiError, api, getToken, setSecret, setToken } from '../lib/api';
 import {
@@ -740,7 +740,7 @@ const updatePushStatus = async () => {
   }
 };
 
-const handle = async (message: Message) => {
+const handle = async (message: Message, from?: Browser.tabs.Tab) => {
   switch (message.type) {
     case 'signIn':
       await update(() => ({
@@ -931,10 +931,25 @@ const handle = async (message: Message) => {
       ]);
       return;
     }
-    case 'openPopup':
+    case 'openPopup': {
       await update(() => ({ popupTab: message.tab }));
-      // Chrome 127+, Safari 16+; without a focused window it throws and the page keeps its state.
-      return browser.action.openPopup?.().catch(() => {});
+      // Chrome 127+ opens it over the page while its window has focus. Safari can't open it from a
+      // script, so it, and Chrome when it refuses, opens the same page in a tab beside the rider's.
+      if (!import.meta.env.SAFARI) {
+        const opened = await browser.action
+          .openPopup?.(from?.windowId ? { windowId: from.windowId } : undefined)
+          .then(
+            () => true,
+            () => false,
+          );
+        if (opened) return;
+      }
+      await browser.tabs.create({
+        url: browser.runtime.getURL('/popup.html'),
+        ...(from && { windowId: from.windowId, index: from.index + 1 }),
+      });
+      return;
+    }
     case 'setTab':
       return update(() => ({ popupTab: message.tab }));
     case 'checkin': {
@@ -1138,7 +1153,7 @@ export default defineBackground(() => {
         });
         return false;
       }
-      handle(message).then(
+      handle(message, sender.tab).then(
         () => sendResponse({}),
         async (error) => {
           if (error instanceof ApiError && error.status === 401)
