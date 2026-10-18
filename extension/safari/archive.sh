@@ -14,4 +14,6 @@ for platform in iOS macOS; do
   xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist ExportOptions.plist \
     -exportPath "build/$platform" -allowProvisioningUpdates
 done
+# The archives' copies register with Safari too; hand it back to the newest local build.
+./unregister-stale.sh
 echo "Uploaded Ride On $version ($build). It appears in TestFlight once processed."

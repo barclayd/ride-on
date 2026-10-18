@@ -49,6 +49,22 @@ Then on macOS: Safari → Settings → Extensions → tick Ride On (for unsigned
 enable Settings → Advanced → "Show features for web developers", then Developer → "Allow unsigned
 extensions"). On iOS: Settings → Apps → Safari → Extensions → Ride On.
 
+On macOS, Safari runs **every** registered copy of the extension at once. Each copy has its own
+background, but they all share one `storage.local`. A copy built in another DerivedData folder, a
+worktree, an archive or a `-derivedDataPath` scratch folder then fails the current copy's writes
+(`SQLITE_BUSY` in Safari's log) and draws its own older Journeys strip, so a fix looks like it never
+landed. So the `RideOn` target's last build phase unregisters every copy but the one it just built
+(`safari/unregister-stale.sh`), and `archive.sh` hands Safari back to the newest local build. After
+building some other way, run:
+
+```sh
+bun run safari:unregister-stale   # keep the newest non-archive build, unregister the rest
+pluginkit -m -A -D -v -i com.danbarclay.rideon.Extension   # list the registered copies
+```
+
+Safari drops the old copies within a minute. Then reload any open cycle.travel tabs, because the old
+copies' content scripts stay in them until then.
+
 Sign-in differences from Chrome (Safari has no `identity` API):
 
 - The popup asks for `api.ride-on.cc` and `cycle.travel` access first, because Safari grants hosts per site.

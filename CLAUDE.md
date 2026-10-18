@@ -41,6 +41,11 @@ otherwise**: keep browser differences behind `import.meta.env.SAFARI` and the pe
 `extension/wxt.config.ts`, and check `bun run build:safari` (or `bun run safari` for the Xcode build)
 alongside `bun run check` and `bun run test:e2e`.
 
+Safari runs **every** registered build of the extension at once, so builds left in other
+DerivedData folders, worktrees or `-derivedDataPath` scratch folders fight the current one and keep
+serving old code. A Mac build of `extension/safari` unregisters the others itself; after anything
+else, run `bun run safari:unregister-stale` in `extension/` (see `extension/README.md`).
+
 ## Build & test commands
 
 Regenerate the Xcode project after touching `app/project.yml` or adding/removing files in any target:

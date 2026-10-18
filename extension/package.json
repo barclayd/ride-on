@@ -9,6 +9,7 @@
     "build:safari": "wxt build -b safari --mv3",
     "safari": "wxt build -b safari --mv3 && xcodegen generate --spec safari/project.yml",
     "safari:archive": "safari/archive.sh",
+    "safari:unregister-stale": "safari/unregister-stale.sh",
     "zip": "wxt zip",
     "postinstall": "wxt prepare",
     "check": "biome check . && tsc --noEmit && bun test unit",
