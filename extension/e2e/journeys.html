@@ -1,19 +1,30 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>Journeys</title></head>
+<head><meta charset="utf-8"><title>Journeys</title>
+<style>
+  /* cycle.travel's row layout: baseline-aligned, a tall line height, a small serif meta. */
+  .journey_row { display: flex; align-items: baseline; gap: 13px; padding: 1.5px 9px; font: 17.5px / 31.5px serif; border-bottom: 1px solid #e2e5e9; }
+  .journey_check { align-self: center; }
+  .journey_name { flex: 1 1 192px; font: 600 17.5px / 23.6px sans-serif; }
+  .journey_meta { display: contents; font: 10.9px / 19.6px serif; }
+  .journey_tools { display: flex; align-items: center; align-self: center; height: 23.4px; }
+</style>
+</head>
 <body>
 <div class="page_column">
   <header class="page_header"><h1 id="folder_title">Journeys</h1></header>
   <div class="toolbar"><div class="tab_list"><span class="selected"><a href="/user/journeys?page=1">By date</a></span></div></div>
   <ul class="journey_list" id="journey_list">
-    <li class="journey_row" id="jr_101" style="display:flex;gap:8px">
+    <li class="journey_row" id="jr_101">
+      <input type="checkbox" class="journey_check" name="101">
       <a class="journey_name" id="jn_101" href="/map/journey/101">Hilly Loop</a>
-      <span class="journey_meta"><span class="journey_dist">51 km</span></span>
+      <span class="journey_meta"><span class="journey_dist">51 km</span> <time class="journey_date">18 Oct</time></span>
       <div class="journey_tools"></div>
     </li>
-    <li class="journey_row" id="jr_102" style="display:flex;gap:8px">
+    <li class="journey_row" id="jr_102">
+      <input type="checkbox" class="journey_check" name="102">
       <a class="journey_name" id="jn_102" href="/map/journey/102">Coast &amp; Back</a>
-      <span class="journey_meta"><span class="journey_dist">64 km</span></span>
+      <span class="journey_meta"><span class="journey_dist">64 km</span> <time class="journey_date">11 Oct</time></span>
       <div class="journey_tools"></div>
     </li>
   </ul>

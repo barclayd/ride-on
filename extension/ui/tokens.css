@@ -2382,20 +2382,20 @@ a.ro-name:hover {
 .ro-chip:disabled {
   color: var(--ro-disabled);
 }
-.ro-chip.ro-tracked {
+.ro-chip.ro-chip-tracked {
   border-color: transparent;
   background: var(--ro-tint);
   color: var(--ro-olive-ink);
 }
-.ro-chip.ro-tracked[data-state="below"] {
+.ro-chip.ro-chip-tracked[data-state="below"] {
   background: var(--ro-warn-bg);
   color: var(--ro-warn-fg);
 }
-.ro-chip.ro-tracked[data-state="nofit"] {
+.ro-chip.ro-chip-tracked[data-state="nofit"] {
   background: #eceee8;
   color: var(--ro-slate);
 }
-.ro-chip.ro-tracked[data-state="incomplete"] {
+.ro-chip.ro-chip-tracked[data-state="incomplete"] {
   background: #f2eedc;
   color: #6b5516;
 }

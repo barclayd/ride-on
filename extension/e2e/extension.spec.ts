@@ -2599,6 +2599,29 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     '',
   );
   await expect(page.locator('#jr_102 .ro-chip')).toHaveText('+ Track');
+  // Rows centre everything on one line, with a time or + Track, at one height (cycle.travel aligns
+  // them on the text baseline, which left the name at the top of a row the chip made taller).
+  const middle = async (part: string) => {
+    const box = await page.locator(part).boundingBox();
+    return (box?.y ?? 0) + (box?.height ?? 0) / 2;
+  };
+  for (const row of ['#jr_101', '#jr_102']) {
+    const line = await middle(row);
+    for (const part of [
+      '.journey_check',
+      '.journey_name',
+      '.ro-chip',
+      '.journey_dist',
+      '.journey_date',
+    ])
+      expect(
+        Math.abs((await middle(`${row} ${part}`)) - line),
+        `${row} ${part}`,
+      ).toBeLessThanOrEqual(1);
+  }
+  expect((await page.locator('#jr_102').boundingBox())?.height).toBe(
+    (await page.locator('#jr_101').boundingBox())?.height,
+  );
   // Ride tags sit after the journey name, on the row and on the card.
   await expect(page.locator('#jr_101 .ro-tags .ro-tag')).toHaveText(
     /^Last ridden \d{1,2} \w{3}$/,
