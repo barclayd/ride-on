@@ -1,7 +1,8 @@
 # cycle.travel map style: reference
 
-What cycle.travel's map looks like, measured off its tiles, and how the prototype
-(`prototype/tools/build-style.mjs`) reproduces each part. This is the spec for WS2 in the
+What cycle.travel's map looks like, measured off its tiles, and how the style builder
+([`maps/style/src/style.ts`](../../maps/style/src/style.ts), the prototype's builder since WS2.1)
+reproduces each part. This is the spec for WS2 in the
 [plan](README.md): when the production style disagrees with this doc, check a fresh cycle.travel
 screenshot, then fix whichever is wrong.
 
@@ -34,7 +35,7 @@ That check drew the same four swatches (DOM divs, plus a WebGL canvas for the fi
 cycle.travel and the prototype and screenshotted both: **the two pages capture identically**, so
 side-by-side comparisons are fair even though neither shows true colours.
 
-`prototype/tools/shot.mjs` tries to undo the capture: `shot(sampled)` → the colour the page drew. It was
+`shot()` (`maps/style/src/shot.ts`) tries to undo the capture: `shot(sampled)` → the colour the page drew. It was
 fitted earlier from 80 swatches as "power 1.96 → matrix → sRGB curve". Two problems found since:
 
 1. **It lightens greys and pale tints.** `shot('#808080')` is `#8b8b8b`, but `#808080` captures as
@@ -82,7 +83,7 @@ Maki/Temaki (CC0) or draw our own.
 ## Palette
 
 "Production" is the value WS2 should start from: the key value for key colours, the corrected inverse
-for sampled ones. "Prototype draws" is what `build-style.mjs` uses today.
+for sampled ones. "Prototype draws" is what `style.ts` uses today.
 
 | Name | Source | cycle.travel value | Prototype draws | Production |
 |---|---|---|---|---|
@@ -126,7 +127,7 @@ for sampled ones. "Prototype draws" is what `build-style.mjs` uses today.
 | EuroVelo ring | by eye | – | `#00559d` | `#00559d` |
 
 Unsampled Protomaps flavour slots (hospital, school, industrial, beach…) are set by eye in
-`build-style.mjs`'s `flavour` object.
+`style.ts`'s `flavour` object.
 
 ## Land and land use
 
@@ -268,8 +269,8 @@ sprite sheet or `mapView(_:didFailToLoadImage:)` (WS2).
 ## Typography
 
 cycle.travel's tiles look like Montserrat for place names and Open Sans for small labels. **Dan chose
-Montserrat throughout**, so every label here is Montserrat (SIL OFL 1.1, `prototype/fonts/`). Weights
-in use: Regular, Medium, SemiBold, Bold, Italic, Medium Italic, SemiBold Italic.
+Montserrat throughout**, so every label here is Montserrat (SIL OFL 1.1, glyph PBFs in the app's
+`RoutesUI/CycleMap/glyphs/`). Weights in use: Regular, Medium, SemiBold, Bold, Italic, Medium Italic.
 
 The map is the only place Montserrat appears in the app. DESIGN-SYSTEM.md §4 says "SF Pro, system text
 styles only", so it needs a map exception (plan WS4). Map labels don't follow Dynamic Type; MapLibre has
@@ -294,7 +295,7 @@ no equivalent.
 
 **Streets** (`roads_labels_*`): from z14 only, Regular 12, `#343434`, halo 1.5. "Street" → "St" and
 "Road" → "Rd" at the end of the name; Lane, Way, Place, Hill… stay whole (`abbreviate` in
-`build-style.mjs`).
+`style.ts`).
 
 **Road numbers** (`ct_road_refs`): A/B roads (motorway, trunk, primary, secondary with a `ref`) from
 z10, Italic 9 → 10.5 at z14, `#686766`, along the line every 350 px, padding 20.
@@ -336,7 +337,7 @@ tile z14.
 
 ## Layer order
 
-Bottom to top, as `build-style.mjs` splices them into Protomaps' `light` layers:
+Bottom to top, as `style.ts` splices them into Protomaps' `light` layers:
 
 1. Protomaps background, earth, water, land use… with `ct_urban` and `ct_greens` inserted just before
    `landuse_park`.
@@ -359,7 +360,7 @@ The basemap is `@protomaps/basemaps` 5.7.2's `layers('basemap', flavour, { lang:
 - **No sprite:** every `icon-*` layout property is removed, so the style needs no sprite until WS2 adds
   badges and POI icons.
 - `roads_other` is limited to `kind=other` (no piers): the `ct_*` path layers draw paths.
-- Font names in the flavour are Montserrat Regular / SemiBold / Italic.
+- Font names in the flavour are `Montserrat-Regular` / `Montserrat-SemiBold` / `Montserrat-Italic`.
 - The basemap is z0–15; MapLibre overzooms it past 15.
 - Protomaps ships hills only from tile z14 and stations thinned out below z14, hence our own POI layer.
 - Protomaps has no `surface`, `bicycle`, `cycleway=*` or route relation data, hence our own path and
@@ -367,11 +368,12 @@ The basemap is `@protomaps/basemaps` 5.7.2's `layers('basemap', flavour, { lang:
 
 ## Fonts in the style
 
-The prototype loads woff2 files through the style's top-level `font-faces` and has no `glyphs` URL. GL
-JS 6.11.2 supports that; MapLibre Native supports `font-faces` from 6.18.0, but **can't omit `glyphs`**
-(maplibre-native#165). For the app: generate glyph PBFs with maplibre/font-maker (or `build_pbf_glyphs`)
-for every weight above and bundle them, or keep `font-faces` and confirm it on device. See the plan's
-WS2.
+Glyph PBFs, in the app and the prototype alike (WS2.3). MapLibre Native supports `font-faces` from 6.18.0
+but **can't omit `glyphs`** (maplibre-native#165), so the prototype's woff2 `font-faces` went.
+`maps/style/scripts/glyphs.sh` builds one directory per face, named after the TTF (`Montserrat-Medium`),
+and every `text-font` stack is one of those names. Ranges: Latin, Latin-1, Latin Extended-A and -B,
+Latin Extended Additional (Welsh), punctuation and letterlike symbols. A label with a character outside
+them is dropped. The tests check every stack has its glyphs and every glyph directory is used.
 
 ## Known gaps
 

@@ -28,7 +28,7 @@ const map = new Map({
 map.addControl(new NavigationControl({ showCompass: false }))
 
 // cycle.travel's route repeater badges, drawn here instead of a sprite sheet. Colours sampled from its @2x tiles,
-// passed through tools/shot.mjs to undo the screenshot's colour shift.
+// passed through shot() (maps/style/src/shot.ts) to undo the screenshot's colour shift.
 const badges = {
   // National: flat brick red, barely rounded. Stretched around the number by icon-text-fit.
   'badge-red': (g, s, r) => { g.fillStyle = '#e96768'; g.beginPath(); g.roundRect(0, 0, s, s, r * 0.6); g.fill() },

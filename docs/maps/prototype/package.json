@@ -4,11 +4,11 @@
   "type": "module",
   "scripts": {
     "setup": "sh scripts/setup-vendor.sh",
-    "style": "node tools/build-style.mjs style.json http://localhost:8787",
+    "style": "bun ../../../maps/style/src/cli.ts web style.json http://localhost:8787",
+    "style:local": "bun ../../../maps/style/src/cli.ts web style.json http://localhost:8787 http://localhost:8787/data",
     "serve": "bun tools/serve.ts ."
   },
   "dependencies": {
-    "@protomaps/basemaps": "5.7.2",
     "maplibre-gl": "6.11.2",
     "pmtiles": "4.5.0"
   }
