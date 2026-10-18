@@ -35,7 +35,7 @@ for (const cell of data.cells) {
 }
 
 /** Containment, not nearest station: do not invent normals outside coverage. */
-export const monthlyClimateAt = (coordinate: {
+export const climateCellAt = (coordinate: {
   latitude: number;
   longitude: number;
 }) => {
@@ -48,7 +48,7 @@ export const monthlyClimateAt = (coordinate: {
       if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
         inside = !inside;
     }
-    if (inside) return cell.maximumC;
+    if (inside) return cell;
   }
   return null;
 };
@@ -73,3 +73,18 @@ export const compileSeasonalNormal = (date: string) => {
 
 export const seasonalNormal = (monthly: readonly number[], date: string) =>
   compileSeasonalNormal(date)(monthly);
+
+/** Retain the maximum-only scoring contract and version. */
+export const monthlyClimateAt = (coordinate: {
+  latitude: number;
+  longitude: number;
+}) => climateCellAt(coordinate)?.maximumC ?? null;
+
+export const displayClimateSource = {
+  version: data.displayVersion,
+  referencePeriod: data.referencePeriod,
+  statistics: ['maximum', 'minimum'] as const,
+  attribution: data.attribution,
+  source: data.catalogue,
+  licence: data.licence,
+};

@@ -10,7 +10,6 @@ import { type RouteOutline, routeOutline } from '../routes/outline.ts';
 import { skyConditions } from '../weather/conditions.ts';
 import type {
   ForecastDescriptor,
-  ForecastSample,
   LocationForecastResult,
 } from '../weather/contracts.ts';
 import {
@@ -35,6 +34,15 @@ import {
   routeDirectionality,
 } from './tailwind-opportunity.ts';
 import { compileTemperature } from './temperature.ts';
+import {
+  compileDisplayWeather,
+  temperatureAlongRideFor,
+  usualClimateFor,
+} from './temperature-along-ride.ts';
+import { compileSeries } from './weather-sampling.ts';
+
+export { sampleAt } from './weather-sampling.ts';
+
 import { temperatureComfort } from './temperature-comfort.ts';
 import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
 import { meanWindFrom } from './wind-direction.ts';
@@ -70,66 +78,16 @@ export const requiredWeatherFor = (
 };
 const HOUR = 3_600_000;
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
+const roundTemperature = (value: number) => Math.round(value * 10) / 10;
 const round = (value: number) => Math.round(value * 100) / 100;
 const iso = (value: number) => new Date(value).toISOString();
 
-/** Compile timestamps once; all departure comparisons reuse these lookups. */
-const compileSeries = (samples: readonly ForecastSample[]) => {
-  const indexed = samples.map((sample) => ({
-    validAt: Date.parse(sample.validAt),
-    value: sample.value,
-    period:
-      sample.time.kind === 'period' &&
-      (sample.time.aggregation !== 'mean' ||
-        Date.parse(sample.time.range.end) -
-          Date.parse(sample.time.range.start) >=
-          HOUR)
-        ? {
-            start: Date.parse(sample.time.range.start),
-            end: Date.parse(sample.time.range.end),
-          }
-        : null,
-  }));
-  return (at: number): number | null => {
-    let low = 0;
-    let high = indexed.length;
-    while (low < high) {
-      const mid = (low + high) >>> 1;
-      if ((indexed[mid]?.validAt ?? Infinity) < at) low = mid + 1;
-      else high = mid;
-    }
-    let nearest: (typeof indexed)[number] | undefined;
-    for (
-      let index = Math.max(0, low - 1);
-      index < Math.min(indexed.length, low + 2);
-      index++
-    ) {
-      const sample = indexed[index];
-      if (!sample) continue;
-      if (sample.period) {
-        if (sample.period.start <= at && at < sample.period.end)
-          return sample.value;
-      } else if (
-        !nearest ||
-        Math.abs(sample.validAt - at) < Math.abs(nearest.validAt - at)
-      )
-        nearest = sample;
-    }
-    return nearest && Math.abs(nearest.validAt - at) <= HOUR / 2
-      ? nearest.value
-      : null;
-  };
-};
-/** Native period bounds for events, maxima and full-hour means; nearest validity for instants / short wind means. */
-export const sampleAt = (
-  samples: readonly ForecastSample[],
-  at: number,
-): number | null => compileSeries(samples)(at);
 type PreparedWeather = ReadonlyMap<
   string,
   {
     values: readonly ReturnType<typeof compileSeries>[];
     temperature: ReturnType<typeof compileTemperature>;
+    display: ReturnType<typeof compileDisplayWeather>;
   }
 >;
 
@@ -156,6 +114,8 @@ type Observation = {
   assistance: number;
   precipitationProbability: number;
   precipitationRateMmH: number;
+  precipitationAmountMm: number;
+  precipitationAmountBasis: 'hourly-accumulation' | 'rate-estimate';
   temperature: number;
   blendTemperature: number;
   coldPenalty: number;
@@ -224,10 +184,10 @@ const summarize = (rows: readonly Observation[]) => {
       : null,
     distanceKm: round(distance / 1000),
     temperatureC: {
-      minimum: round(
+      minimum: roundTemperature(
         Math.min(...rows.map((row) => row.temperatureRange.minimum.value)),
       ),
-      maximum: round(
+      maximum: roundTemperature(
         Math.max(...rows.map((row) => row.temperatureRange.maximum.value)),
       ),
     },
@@ -250,6 +210,15 @@ const summarize = (rows: readonly Observation[]) => {
     maximumPrecipitationRateMmH: round(
       Math.max(...rows.map((row) => row.precipitationRateMmH)),
     ),
+    maximumPrecipitationAmountMm: roundTemperature(
+      Math.max(...rows.map((row) => row.precipitationAmountMm)),
+    ),
+    precipitationAmountBasis: rows.every(
+      (row) =>
+        row.precipitationAmountBasis === rows[0]?.precipitationAmountBasis,
+    )
+      ? rows[0]?.precipitationAmountBasis
+      : 'mixed',
     assistedDistanceFraction: round(
       rows.reduce(
         (sum, row) =>
@@ -413,6 +382,12 @@ const assessCandidate = (
       assistance: exposure.assistance,
       precipitationProbability,
       precipitationRateMmH,
+      precipitationAmountMm:
+        weather?.display.precipitationAmount(at) ?? precipitationRateMmH,
+      precipitationAmountBasis:
+        weather?.display.precipitationAmount(at) == null
+          ? 'rate-estimate'
+          : 'hourly-accumulation',
       temperature,
       blendTemperature: thermal.blendComfort,
       coldPenalty: thermal.coldPenalty,
@@ -862,6 +837,7 @@ export const recommendRides = (
       return [
         id,
         {
+          display: compileDisplayWeather(result, requiredWeatherFor(input)),
           temperature: compileTemperature(
             byDescriptor.get(
               descriptorKey(
@@ -878,6 +854,9 @@ export const recommendRides = (
         },
       ];
     }),
+  );
+  const displayWeather = new Map(
+    [...prepared].map(([id, weather]) => [id, weather.display]),
   );
   const normalForDate = compileSeasonalNormal(input.date);
   const evaluated = routes.map((route) => {
@@ -906,6 +885,7 @@ export const recommendRides = (
         return [leg, monthly ? normalForDate(monthly) : null] as const;
       }),
     );
+    const usualClimate = usualClimateFor(route, input.date);
     const candidates = plan.departures.map((departure) =>
       assessCandidate(
         route,
@@ -949,6 +929,14 @@ export const recommendRides = (
       );
       return {
         ...candidate,
+        temperatureAlongRide: temperatureAlongRideFor(
+          route,
+          Date.parse(candidate.departureAt),
+          Date.parse(candidate.finishAt),
+          displayWeather,
+          usualClimate,
+          input.timeZone,
+        ),
         windStretches:
           detailed.status === 'assessed' ? detailed.windStretches : [],
       };

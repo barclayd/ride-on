@@ -15,6 +15,7 @@ import type {
 } from './contracts.ts';
 import {
   descriptorKey,
+  optionalDisplayDescriptors,
   precipitationTypeDescriptor,
   weatherDescriptors as weather,
 } from './descriptors.ts';
@@ -27,7 +28,7 @@ const ORIGIN = 'https://weatherkit.apple.com';
 export const appleWeatherSource = {
   providerId: 'apple-weather',
   productId: 'weatherkit-hourly',
-  adapterVersion: '1',
+  adapterVersion: '2',
 } as const;
 // URLs returned by Apple's /attribution/en endpoint, verified 2026-10-10.
 export const appleWeatherAttribution = {
@@ -337,12 +338,9 @@ export const normaliseAppleWeather = (
   const start = Date.parse(request.range.start);
   const end = Date.parse(request.range.end);
   const wanted = [...request.required];
-  if (
-    !wanted.some(
-      (d) => descriptorKey(d) === descriptorKey(precipitationTypeDescriptor),
-    )
-  )
-    wanted.push(precipitationTypeDescriptor);
+  for (const descriptor of optionalDisplayDescriptors)
+    if (!wanted.some((d) => descriptorKey(d) === descriptorKey(descriptor)))
+      wanted.push(descriptor);
   const series = wanted.flatMap<ForecastSeries>((descriptor) => {
     const mapping = mappingFor(descriptor);
     if (!mapping) {
@@ -378,10 +376,14 @@ export const normaliseAppleWeather = (
             : { kind: 'instant', at: validAt },
         };
       });
-    // A missing display label must not change eligibility, fallback or cacheability.
+    // Optional display evidence must not change eligibility or cacheability.
     if (
-      descriptor.kind === 'category' &&
-      descriptor.quantity === 'precipitation-type'
+      optionalDisplayDescriptors.some(
+        (d) => descriptorKey(d) === descriptorKey(descriptor),
+      ) &&
+      !request.required.some(
+        (d) => descriptorKey(d) === descriptorKey(descriptor),
+      )
     )
       return [{ descriptor, samples }];
     const present = new Set(samples.map((s) => Date.parse(s.validAt)));

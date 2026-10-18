@@ -115,6 +115,13 @@ integration(
     assert.equal(ride.best.conditions.maximumGustKph, 14.4);
     assert.equal(ride.best.conditions.maximumPrecipitationProbability, 0.081);
     assert.equal(ride.best.conditions.temperatureC.minimum, 14);
+    assert.equal(ride.best.temperatureAlongRide.feelsLikeBasis, 'derived');
+    assert.ok(ride.best.temperatureAlongRide.points.every((p) => p[2] === 14));
+    assert.equal(
+      ride.best.conditions.precipitationAmountBasis,
+      'rate-estimate',
+    );
+    assert.equal(ride.best.conditions.maximumPrecipitationAmountMm, 0);
     const details = ride.best.forecastDetails;
     assert.equal(details.temperatureMethod, 'linear-interpolation');
     const site = first(details.locations);

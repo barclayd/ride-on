@@ -12,6 +12,7 @@ import type {
 } from './contracts.ts';
 import {
   descriptorKey,
+  optionalDisplayDescriptors,
   precipitationTypeDescriptor,
   weatherDescriptors as weather,
 } from './descriptors.ts';
@@ -28,7 +29,7 @@ const ENDPOINT =
 const source = {
   providerId: 'met-office',
   productId: 'global-spot-hourly',
-  adapterVersion: '1',
+  adapterVersion: '2',
 } as const;
 type Transport = (url: string, init: RequestInit) => Promise<Response>;
 type Mapping = Readonly<{
@@ -248,16 +249,17 @@ export const normaliseGlobalSpot = (
   const start = Date.parse(request.range.start);
   const end = Date.parse(request.range.end);
   const wanted = [...request.required];
-  if (
-    !wanted.some(
-      (d) => descriptorKey(d) === descriptorKey(precipitationTypeDescriptor),
-    )
-  )
-    wanted.push(precipitationTypeDescriptor);
+  for (const descriptor of optionalDisplayDescriptors)
+    if (!wanted.some((d) => descriptorKey(d) === descriptorKey(descriptor)))
+      wanted.push(descriptor);
   const series = wanted.flatMap((descriptor) => {
     const optional =
-      descriptor.kind === 'category' &&
-      descriptor.quantity === 'precipitation-type';
+      optionalDisplayDescriptors.some(
+        (d) => descriptorKey(d) === descriptorKey(descriptor),
+      ) &&
+      !request.required.some(
+        (d) => descriptorKey(d) === descriptorKey(descriptor),
+      );
     const mapping = mappings.find(
       (candidate) =>
         descriptorKey(candidate.descriptor) === descriptorKey(descriptor),

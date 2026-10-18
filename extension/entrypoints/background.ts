@@ -215,10 +215,10 @@ const recRequest = (state: State) => {
   };
   return {
     body,
-    // Drop persisted scores from before the forecast/scoring correction, or without range.dates.
+    // Refresh persisted rankings that lack temperature traces and hourly rain amounts.
     key: JSON.stringify([
       'comfort-v0.17',
-      'api-0.27',
+      'api-0.35',
       body,
       user.id,
       user.version,

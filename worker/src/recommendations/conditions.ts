@@ -58,6 +58,10 @@ export const conditionsSchema = z.strictObject({
     .optional(),
   maximumPrecipitationProbability: fraction,
   maximumPrecipitationRateMmH: nonnegative,
+  maximumPrecipitationAmountMm: nonnegative.optional(),
+  precipitationAmountBasis: z
+    .enum(['hourly-accumulation', 'rate-estimate', 'mixed'])
+    .optional(),
   assistedDistanceFraction: fraction,
 });
 export type Conditions = z.infer<typeof conditionsSchema>;

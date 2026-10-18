@@ -200,7 +200,11 @@ describe('Global Spot normalisation', () => {
       result.series
         .filter((s) => s.descriptor.kind === 'scalar')
         .map((s) => s.descriptor),
-    ).toEqual([weather.airTemperature]);
+    ).toEqual([
+      weather.airTemperature,
+      weather.feelsLikeTemperature,
+      weather.precipitationAmount,
+    ]);
     expect(result.issues[0]?.code).toBe('unsupported-statistic');
   });
 
