@@ -138,9 +138,9 @@ docker run --rm -v "$PWD/maps/tiles":/src -v ~/.m2:/root/.m2 -w /src \
 
 ## Publish
 
-`../hosting/publish.sh <file>` uploads to the `ride-on-maps` R2 bucket, served from
-`https://maps.ride-on.cc/<file>` (WS1.1). Run one publish at a time: each deploys and then deletes the
-same temporary upload Worker. Then bump the `cycling` source URL in the style.
+`maps/hosting/publish.sh <file>` uploads to the `ride-on-maps` R2 bucket, served from
+`https://maps.ride-on.cc/<file>`; it needs the `r2` AWS CLI profile ([`maps/README.md`](../README.md#publishing-a-file)).
+Then bump `archives.cycling` in `maps/style/src/style.ts` and rebuild the style.
 
 ## Links
 
