@@ -433,30 +433,36 @@
     ["!has", "is_link"]
    ],
    "paint": {
-    "line-color": "#e0e0e0",
+    "line-color": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     9,
+     "#9aa0a4",
+     11,
+     "#000000",
+     12,
+     "#151719"
+    ],
     "line-dasharray": [6, 0.5],
     "line-gap-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
+     6,
+     0.6,
+     9,
+     1.6,
+     11,
      3,
-     0,
-     3.5,
-     0.5,
+     12,
+     4.8,
+     15,
+     7,
      18,
      15
     ],
-    "line-width": [
-     "interpolate",
-     ["exponential", 1.6],
-     ["zoom"],
-     7,
-     0,
-     7.5,
-     1,
-     20,
-     15
-    ]
+    "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0, 9, 0.5, 11, 0.6]
    }
   },
   {
@@ -603,14 +609,16 @@
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
-     3,
-     0,
      6,
-     1.1,
-     12,
+     0.6,
+     9,
      1.6,
+     11,
+     3,
+     12,
+     4.8,
      15,
-     5,
+     7,
      18,
      15
     ]
@@ -879,29 +887,35 @@
     ["!has", "is_link"]
    ],
    "paint": {
-    "line-color": "#444444",
+    "line-color": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     9,
+     "#9aa0a4",
+     11,
+     "#000000",
+     12,
+     "#151719"
+    ],
     "line-gap-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
+     6,
+     0.6,
+     9,
+     1.6,
+     11,
      3,
-     0,
-     3.5,
-     0.5,
+     12,
+     4.8,
+     15,
+     7,
      18,
      15
     ],
-    "line-width": [
-     "interpolate",
-     ["exponential", 1.6],
-     ["zoom"],
-     7,
-     0,
-     7.5,
-     1,
-     20,
-     15
-    ]
+    "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0, 9, 0.5, 11, 0.6]
    }
   },
   {
@@ -1182,19 +1196,35 @@
     ["!has", "is_link"]
    ],
    "paint": {
-    "line-color": "#444444",
+    "line-color": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     9,
+     "#9aa0a4",
+     11,
+     "#000000",
+     12,
+     "#151719"
+    ],
     "line-gap-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
+     6,
+     0.6,
+     9,
+     1.6,
+     11,
      3,
-     0,
-     3.5,
-     0.5,
+     12,
+     4.8,
+     15,
+     7,
      18,
      15
     ],
-    "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 7, 0, 7.5, 1]
+    "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0, 9, 0.5, 11, 0.6]
    }
   },
   {
@@ -1210,19 +1240,21 @@
     ["!has", "is_link"]
    ],
    "paint": {
-    "line-color": "#73bded",
+    "line-color": "#bed9e7",
     "line-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
-     3,
-     0,
      6,
-     1.1,
-     12,
+     0.6,
+     9,
      1.6,
+     11,
+     3,
+     12,
+     4.8,
      15,
-     5,
+     7,
      18,
      15
     ]
@@ -1323,21 +1355,67 @@
    "type": "line",
    "source": "basemap",
    "source-layer": "roads",
-   "filter": ["==", "kind", "rail"],
+   "filter": [
+    "all",
+    ["==", ["get", "kind"], "rail"],
+    ["!", ["has", "is_tunnel"]]
+   ],
    "paint": {
-    "line-dasharray": [0.3, 0.75],
-    "line-opacity": 0.5,
+    "line-opacity": 1,
     "line-color": "#9a9a99",
     "line-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
-     3,
-     0,
      6,
-     0.15,
+     ["case", ["has", "service"], 0.2, 0.4],
+     9,
+     ["case", ["has", "service"], 1.25, 2.5],
+     10,
+     ["case", ["has", "service"], 1.45, 2.9],
+     12,
+     ["case", ["has", "service"], 1.625, 3.25],
+     14,
+     ["case", ["has", "service"], 2, 4],
      18,
-     9
+     ["case", ["has", "service"], 4, 8]
+    ]
+   }
+  },
+  {
+   "id": "ct_rail_core",
+   "type": "line",
+   "source": "basemap",
+   "source-layer": "roads",
+   "minzoom": 9,
+   "filter": [
+    "all",
+    ["all", ["==", ["get", "kind"], "rail"], ["!", ["has", "is_tunnel"]]],
+    ["!", ["has", "service"]]
+   ],
+   "paint": {
+    "line-color": "#ffffff",
+    "line-width": [
+     "interpolate",
+     ["exponential", 1.5],
+     ["zoom"],
+     9,
+     0.5,
+     10,
+     1,
+     12,
+     2.25,
+     14,
+     3,
+     18,
+     6
+    ],
+    "line-dasharray": [
+     "step",
+     ["zoom"],
+     ["literal", [5.5, 5.5]],
+     11,
+     ["literal", [4, 4]]
     ]
    }
   },
@@ -1686,29 +1764,35 @@
     ["!has", "is_link"]
    ],
    "paint": {
-    "line-color": "#444444",
+    "line-color": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     9,
+     "#9aa0a4",
+     11,
+     "#000000",
+     12,
+     "#151719"
+    ],
     "line-gap-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
+     6,
+     0.6,
+     9,
+     1.6,
+     11,
      3,
-     0,
-     3.5,
-     0.5,
+     12,
+     4.8,
+     15,
+     7,
      18,
      15
     ],
-    "line-width": [
-     "interpolate",
-     ["exponential", 1.6],
-     ["zoom"],
-     7,
-     0,
-     7.5,
-     1,
-     20,
-     15
-    ]
+    "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0, 9, 0.5, 11, 0.6]
    }
   },
   {
@@ -1723,19 +1807,21 @@
     ["!has", "is_link"]
    ],
    "paint": {
-    "line-color": "#73bded",
+    "line-color": "#bed9e7",
     "line-width": [
      "interpolate",
      ["exponential", 1.6],
      ["zoom"],
-     3,
-     0,
      6,
-     1.1,
-     12,
+     0.6,
+     9,
      1.6,
+     11,
+     3,
+     12,
+     4.8,
      15,
-     5,
+     7,
      18,
      15
     ]
@@ -2026,8 +2112,172 @@
    }
   },
   {
-   "id": "ct_routes_eurovelo_ring",
-   "type": "line",
+   "id": "ct_routes_lcn",
+   "type": "symbol",
+   "source": "cycling",
+   "source-layer": "routes",
+   "filter": [
+    "all",
+    ["==", ["get", "network"], "lcn"],
+    [">=", ["zoom"], ["get", "minz"]]
+   ],
+   "layout": {
+    "symbol-placement": "line",
+    "symbol-spacing": [
+     "step",
+     ["zoom"],
+     10,
+     15,
+     10.5,
+     16,
+     11,
+     17,
+     11.5,
+     18,
+     12.5
+    ],
+    "icon-image": [
+     "step",
+     ["zoom"],
+     "route-lcn-13",
+     15,
+     "route-lcn-15",
+     16,
+     "route-lcn-16",
+     17,
+     "route-lcn-17",
+     18,
+     "route-lcn-18"
+    ],
+    "icon-allow-overlap": true,
+    "icon-ignore-placement": true,
+    "icon-rotation-alignment": "viewport",
+    "icon-pitch-alignment": "viewport"
+   }
+  },
+  {
+   "id": "ct_routes_rcn",
+   "type": "symbol",
+   "source": "cycling",
+   "source-layer": "routes",
+   "filter": [
+    "all",
+    ["==", ["get", "network"], "rcn"],
+    [">=", ["zoom"], ["get", "minz"]]
+   ],
+   "layout": {
+    "symbol-placement": "line",
+    "symbol-spacing": [
+     "step",
+     ["zoom"],
+     11.5,
+     11,
+     17,
+     12,
+     20.5,
+     15,
+     21,
+     16,
+     21.5,
+     17,
+     23,
+     18,
+     24.5
+    ],
+    "icon-image": [
+     "step",
+     ["zoom"],
+     "route-rcn-10",
+     11,
+     "route-rcn-11",
+     12,
+     "route-rcn-12",
+     15,
+     "route-rcn-15",
+     16,
+     "route-rcn-16",
+     17,
+     "route-rcn-17",
+     18,
+     "route-rcn-18"
+    ],
+    "icon-allow-overlap": true,
+    "icon-ignore-placement": true,
+    "icon-rotation-alignment": "viewport",
+    "icon-pitch-alignment": "viewport"
+   }
+  },
+  {
+   "id": "ct_routes",
+   "type": "symbol",
+   "source": "cycling",
+   "source-layer": "routes",
+   "filter": [
+    "all",
+    ["==", ["get", "network"], "ncn"],
+    [">=", ["zoom"], ["get", "minz"]]
+   ],
+   "layout": {
+    "symbol-placement": "line",
+    "symbol-spacing": [
+     "step",
+     ["zoom"],
+     8,
+     7,
+     9,
+     8,
+     10.5,
+     9,
+     11.5,
+     10,
+     15,
+     11,
+     19.5,
+     12,
+     20.5,
+     15,
+     21,
+     16,
+     21.5,
+     17,
+     23,
+     18,
+     24.5
+    ],
+    "icon-image": [
+     "step",
+     ["zoom"],
+     "route-ncn-6",
+     7,
+     "route-ncn-7",
+     8,
+     "route-ncn-8",
+     9,
+     "route-ncn-9",
+     10,
+     "route-ncn-10",
+     11,
+     "route-ncn-11",
+     12,
+     "route-ncn-12",
+     15,
+     "route-ncn-15",
+     16,
+     "route-ncn-16",
+     17,
+     "route-ncn-17",
+     18,
+     "route-ncn-18"
+    ],
+    "icon-allow-overlap": true,
+    "icon-ignore-placement": true,
+    "icon-rotation-alignment": "viewport",
+    "icon-pitch-alignment": "viewport"
+   }
+  },
+  {
+   "id": "ct_routes_eurovelo",
+   "type": "symbol",
    "source": "cycling",
    "source-layer": "routes",
    "filter": [
@@ -2035,94 +2285,62 @@
     ["==", ["get", "network"], "icn"],
     [">=", ["zoom"], ["get", "minz"]]
    ],
-   "layout": {"line-cap": "round", "line-join": "round"},
-   "paint": {
-    "line-color": "#00559d",
-    "line-opacity": 0.85,
-    "line-width": [
-     "interpolate",
-     ["exponential", 1.5],
-     ["zoom"],
-     6,
-     4.8999999999999995,
-     8,
-     7,
-     10,
-     9.1,
-     12,
-     9.799999999999999,
-     14,
-     9.799999999999999,
-     18,
-     11.899999999999999
-    ],
-    "line-dasharray": [
-     "step",
-     ["zoom"],
-     ["literal", [0, 1.6428571428571428]],
-     11,
-     ["literal", [0, 1.8571428571428574]],
-     13,
-     ["literal", [0, 2.0714285714285716]]
-    ]
-   }
-  },
-  {
-   "id": "ct_routes",
-   "type": "line",
-   "source": "cycling",
-   "source-layer": "routes",
-   "filter": [">=", ["zoom"], ["get", "minz"]],
    "layout": {
-    "line-cap": "round",
-    "line-join": "round",
-    "line-sort-key": ["get", "rank"]
-   },
-   "paint": {
-    "line-color": [
-     "match",
-     ["get", "network"],
-     "icn",
-     "#ff0000",
-     "ncn",
-     "#ff0000",
-     "rcn",
-     "#0000ff",
-     "#008b8b"
-    ],
-    "line-opacity": [
+    "symbol-placement": "line",
+    "symbol-spacing": [
      "step",
-     ["zoom"],
-     ["match", ["get", "network"], "rcn", 0.45, 0.62],
-     11,
-     0.62
-    ],
-    "line-width": [
-     "interpolate",
-     ["exponential", 1.5],
      ["zoom"],
      6,
-     3.5,
-     8,
-     5,
-     10,
+     7,
      6.5,
+     8,
+     7.5,
+     9,
+     10,
+     10,
+     17,
+     11,
+     19.5,
      12,
-     7,
-     14,
-     7,
+     19.5,
+     15,
+     20,
+     16,
+     20.5,
+     17,
+     21,
      18,
-     8.5
+     22
     ],
-    "line-dasharray": [
+    "icon-image": [
      "step",
      ["zoom"],
-     ["literal", [0, 2.3]],
+     "route-icn-6",
+     7,
+     "route-icn-7",
+     8,
+     "route-icn-8",
+     9,
+     "route-icn-9",
+     10,
+     "route-icn-10",
      11,
-     ["literal", [0, 2.6]],
-     13,
-     ["literal", [0, 2.9]]
-    ]
+     "route-icn-11",
+     12,
+     "route-icn-12",
+     15,
+     "route-icn-12",
+     16,
+     "route-icn-16",
+     17,
+     "route-icn-17",
+     18,
+     "route-icn-18"
+    ],
+    "icon-allow-overlap": true,
+    "icon-ignore-placement": true,
+    "icon-rotation-alignment": "viewport",
+    "icon-pitch-alignment": "viewport"
    }
   },
   {

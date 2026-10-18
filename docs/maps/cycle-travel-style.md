@@ -51,9 +51,16 @@ The WS1.2 screenshots were taken with that.
 Check a colour you change against a new screenshot, not the model: draw ours, screenshot both pages at
 the same view, and compare the pixels where both draw that feature.
 
-Route dots and the EuroVelo badge were tuned by eye against screenshots and never went through
-`shot()`. The red and blue badges are `shot()` of cycle.travel's, then checked against a new screenshot
-(WS2.4, [repeater badges](#repeater-badges)).
+Route dot sizes and spacings and the EuroVelo badge were tuned by eye against screenshots and never went
+through `shot()`. The red and blue badges are `shot()` of cycle.travel's, then checked against a new
+screenshot (WS2.4, [repeater badges](#repeater-badges)).
+
+**`shot()` drifts between sessions.** In the WS2.5 lines session the same Chrome captured 3–12/255
+darker than `shot()` predicts, so a colour fitted with it drew visibly off. The EuroVelo dot's colours
+were solved instead against swatches captured alongside the comparison shots: draw a grid of candidate
+colours on our page, screenshot it in the same session as cycle.travel, and pick the candidate that
+captures as cycle.travel does. They land within 1/255. Do that for any colour that has to match closely,
+and refit `shot()` before relying on it again.
 
 ## cycle.travel's map key
 
@@ -101,12 +108,12 @@ ones. "Draws" is what `style.ts` draws: the key value as it is, or `shot()` of t
 | building edge (WS2.5; the fill is urban) | sampled | `#d2cbc8` | `#d3cbc8` |
 | military edge (WS2.5) | sampled | `#e44c43` | `#f4373e` |
 | military band (WS2.5) | solved | `#ebc5b6` over land | `#f01914` at 22% |
-| railway | sampled | `#9a9a99` | `#9a9a99` |
+| railway (white dashed core, `ct_rail_core`) | sampled | `#9a9a99` | `#9a9a99` |
 | minor road casing | sampled | `#a3a3a3` | `#a3a3a3` |
 | major road casing, z10 | sampled | `#b8aea8` | `#baada8` |
 | major road casing, z14 | sampled | `#7a7a7a` | `#7a7a7a` |
 | minor road, z11 (white from z13) | sampled | `#b9b9b9` | `#b9b9b9` |
-| motorway | key | `#73bded` | `#73bded` |
+| motorway (WS2.5: the map draws far paler than the key) | sampled, then matched in a same-session capture | `#bad1e3` | `#bed9e7` |
 | trunk | key | `#c0c8ae` | `#c0c8ae` |
 | primary | key | `#f7bda7` | `#f7bda7` |
 | secondary | key | `#fdd5a5` | `#fdd5a5` |
@@ -129,10 +136,12 @@ ones. "Draws" is what `style.ts` draws: the key value as it is, or `shot()` of t
 | peak label | sampled | `#754634` | `#7b4333` |
 | station dot and label | key (cycleway) | `#dd4c18`: its dot captures exactly as the key's swatch | `#dd4c18` |
 | route dots | key | ncn `#ff0000`, rcn `#0000ff`, lcn `#008b8b` | same, with opacity |
-| EuroVelo ring | by eye | – | `#00559d` |
+| EuroVelo ring (WS2.5) | solved against swatches | slate at z9, lavender from z10 | `#6a808c` (z9), `#8295c1` (z10 up), opaque |
+| EuroVelo centre, z9 / z10 / z11 / z12 up (WS2.5) | solved against swatches | red, paling as you zoom in | `#f76b68` / `#f7837f` / `#fb8d8e` / `#f59691`, opaque |
 
-The military band is the one colour solved rather than sampled: the page blends drawn colours, so the
-band's red is worked out from `shot()` of its capture and of the land under it, and drawn as it is.
+The military band is solved rather than sampled: the page blends drawn colours, so the band's red is
+worked out from `shot()` of its capture and of the land under it, and drawn as it is. The EuroVelo dots
+are solved against same-session swatches (above).
 
 Unsampled Protomaps flavour slots (beach, aerodrome, pier…) are set by eye in `style.ts`'s `flavour`
 object.
@@ -172,16 +181,22 @@ object.
 | Minor width | Exponential 1.6: z10 0.3, z12 0.7, z13 1.3, z15 2.5, z18 11 |
 | Minor colour | Grey (`#b9b9b9`) at z11 → white at z13, so the minor network reads as thin grey lines when zoomed out, as on cycle.travel |
 | Minor casing | From z12.5 (0 → 0.6 at z13 → 1 at z16) |
-| Motorway | Key blue with `#444` casing |
+| Motorway | Pale blue (`#bed9e7`: far paler than the key's swatch). Exponential 1.6: z6 0.6, z9 1.6, z11 3, z12 4.8, z15 7, z18 15 |
+| Motorway casing | Width 0 at z7 → 0.5 at z9 → 0.6 from z11; colour faint grey `#9aa0a4` at z9 → black at z11 → `#151719` from z12 |
+| Railway | `kind=rail` only, and not tunnels (`is_tunnel`), so most of the Underground isn't drawn, as on cycle.travel. Solid grey `#9a9a99` (Protomaps draws faint dashes): exponential 1.6, z6 0.4, z9 2.5, z10 2.9, z12 3.25, z14 4, z18 8. Sidings, yards, crossovers and spurs (any `service`) are half as wide |
+| Railway core (`ct_rail_core`) | White dashes along the middle of main lines (no `service`) from z9: width z9 0.5, z10 1, z12 2.25, z14 3, z18 6; dash `[5.5, 5.5]` below z11, `[4, 4]` from z11 |
 
 The dots of a cycle route sit on whatever road or path carries it: **the line between the dots is the
 road or path underneath**, not part of the route style. So every road and path a route uses has to be
 visible from the zoom its dots appear. That's why minor roads start at z10 here and why cycle paths need
 their own layer (next section).
 
-**Gaps:** cycle.travel shows more minor streets than we do at z11–13 (Protomaps thins them). Its
-railways are bolder (grey with white dashes at street level); ours are faint. Its motorways are thin
-and pale when zoomed out; ours are dark slate lines at z9.
+**Gaps:**
+- cycle.travel shows more minor streets than we do at z11–13 (Protomaps thins them).
+- Below z11 our basemap tiles have no railways or minor roads at all, so London z9 and Harwich z9–10 lack
+  the rail lines and lanes cycle.travel draws. WS1 data (basemap build), not style.
+- Station throats (Waterloo, Victoria) read heavier than cycle.travel's at z14: every platform track is
+  drawn, half-width but still dense.
 
 ## Cycle paths and footpaths
 
@@ -223,43 +238,63 @@ need a knockout over a basemap footpath, which the prototype used to draw as a p
 
 Source: OSM route relations with `route=bicycle`, by `network` (`icn`, `ncn`, `rcn`, `lcn`). Each way
 takes the highest network of any relation it's in, and the lowest visibility zoom (the overlay's
-`routes` layer). Ways with the same network and zoom are merged into long lines in each tile, because
-MapLibre restarts a dash pattern at the start of every feature, which bunches dots at joins.
+`routes` layer), so dots of two networks never share a line. Only EuroVelo counts as `icn` (a `ref`
+starting `EV` or `cycle_network=EuroVelo`): other international routes, like the Avenue Verte, rank and
+dot as `ncn`, as on cycle.travel. Ways with the same network and zoom are merged into long lines in each
+tile, because symbol placement restarts at the start of every feature, which bunches dots at joins.
 
 **When each network appears** (`minz` on the feature, `['>=', ['zoom'], ['get', 'minz']]` in the style):
 
 | Network | From |
 |---|---|
 | `icn`, `ncn` | z6 |
-| `rcn` outside London | z8.5 |
+| `rcn` outside London | z10 (cycle.travel's z11) |
 | London `rcn` (`cycle_network` starts `GB:London`) with a `ref` (C, Q, CS numbers) | z11 |
 | London `rcn` without a `ref` | z13 |
 | `lcn` | z13 |
 
-**Dots:** one `ct_routes` line layer, round caps and joins, `line-sort-key` by rank (lcn 1 < rcn 2 <
-ncn 3 < icn 4).
+Ferry crossings are left out, as on cycle.travel: EuroVelo 2 would otherwise dot its way across the
+North Sea from Harwich.
 
-| | Value |
-|---|---|
-| Colour | ncn and icn red, rcn blue, lcn teal (key) |
-| Opacity | 0.62; rcn 0.45 below z11 |
-| Width (= dot diameter) | Exponential 1.5: z6 3.5, z8 5, z10 6.5, z12 7, z14 7, z18 8.5. Measured: dots stay ~6.5–7.5 px across from ct z11 up |
-| Dash array | `[0, 2.3]` below z11, `[0, 2.6]` z11–13, `[0, 2.9]` from z13, so dot centres are 15–20 px apart and the gap opens as you zoom in |
+**Dots are icons, not dashes** (`maps/style/src/dots.ts`). MapLibre draws a dotted line as round-capped
+zero-length dashes, and slices or bends every dot that straddles a vertex of the line, which many do at
+z9–11; and a two-layer EuroVelo dot (ring plus centre) can't keep its centre on its ring. So each network
+is one `symbol` layer that places a dot image along the route:
 
-A zero-length dash with round caps draws a dot; the gap is in multiples of the line width.
+- `symbol-placement: line`, `icon-allow-overlap` and `icon-ignore-placement`, rotation and pitch
+  alignment `viewport` (a round dot looks the same either way).
+- One image per zoom from the network's first zoom to z18, drawn at that zoom's size and colours and
+  rounded to a quarter pixel (zooms that round the same share an image, named `route-<network>-<zoom>`).
+  `icon-image` and `symbol-spacing` are `step` expressions on the zoom.
+- The images are in the sprite (`src/sprite.ts`), like the badges.
 
-**EuroVelo:** `ct_routes_eurovelo_ring` under the dots for `icn` ways: `#00559d` at 0.85 opacity, widths
-×1.4, gaps ÷1.4, so each red dot sits in a navy ring.
+Layers, bottom to top: `ct_routes_lcn`, `ct_routes_rcn`, `ct_routes` (ncn), `ct_routes_eurovelo`.
+
+| Network | Dot | Diameter (exponential 1.5) | Centre to centre | Opacity |
+|---|---|---|---|---|
+| `ncn` | Red `#ff0000` (key) | z6 3.5, z8 4.5, z9 5, z10 6.5, z12 7, z14 7, z18 8.5 | 2.3 diameters below z11, 2.9 from z11 (11.5 px at z9, ~20 px from z11) | 0.59 below z10, 0.55 at z10, 0.5 from z11 |
+| `rcn` | Blue `#0000ff` (key) | As ncn, but z10 5 | As ncn | 0.26 below z11, 0.33 from z11 |
+| `lcn` | Teal `#008b8b` (key) | z13 4.75, z18 6 | 2.1 diameters | 0.53 |
+| `icn` (EuroVelo) | Opaque ring with an opaque red centre: ring `#6a808c` at z9, `#8295c1` from z10; centre 58% of the dot at z9, half from z10, `#f76b68` / `#f7837f` / `#fb8d8e` / `#f59691` at z9 / z10 / z11 / z12 up | z6 3.5, z8 4.5, z9 6, z10 8, z14 8, z18 9 | 10 px at z9, 17 px at z10, 19.5 px from z11 | 1 |
+
+National and regional dots are translucent on cycle.travel, so the road underneath shows through; the
+EuroVelo ones aren't. Every size, spacing and opacity was measured against cycle.travel's screenshots at
+our z9–14 (its z10–15).
+
+**Trade-offs of symbol dots:**
+- Layout properties take the tile's integer zoom, and symbols keep their screen size while the map
+  scales. Between integer zooms the dots stay the same size but spread apart, up to 2× just before the
+  next zoom's tiles load.
+- Placement starts again in each tile, so the dot rhythm jumps at tile edges.
+- Dots fade in as new tiles load, like labels, instead of appearing with the line.
 
 **Gaps:**
 - **London is too busy.** cycle.travel shows London's regional network as a few thin lavender dotted
   lines (C57, C34, C30…) and hides most of it until street level. We draw saturated blue dots across
   whole boroughs (Roehampton, Southfields, Westminster) and blue clusters in central London even at z9.
   Work out cycle.travel's rule (likely signed or `state`-tagged routes only, drawn as thin dashes rather
-  than dots) before tuning opacity.
-- Our lcn teal is heavier than cycle.travel's.
-- Where NCN 4 and the Avenue Verte (EV) overlap along the Albert Embankment, we draw heavy dark red
-  stacked dots; cycle.travel draws one clean red line.
+  than dots) before tuning opacity. At street level (our z13–14) its London regional dots are also
+  smaller and closer together than elsewhere.
 - Some relations are incomplete in OSM (part of NCN 4's western spur in Richmond Park is missing): not
   a style bug.
 
@@ -434,9 +469,9 @@ Bottom to top, as `style.ts` splices them into Protomaps' `light` layers:
    `landuse_park`, `ct_pitches` just after it, and `ct_military_band`, `ct_military` just after
    `buildings`.
 2. Protomaps roads, with `ct_footpaths`, `ct_unpaved`, `ct_cycleways_casing`, `ct_cycleways` just
-   before `roads_rail`.
-3. `ct_routes_eurovelo_ring`, `ct_routes`, `ct_stations` just before `roads_labels_minor`, so route dots
-   sit above every line and below every label.
+   before `roads_rail`, and `ct_rail_core` just after it.
+3. `ct_routes_lcn`, `ct_routes_rcn`, `ct_routes`, `ct_routes_eurovelo`, `ct_stations` just before
+   `roads_labels_minor`, so route dots sit above every line and below every label.
 4. `ct_road_refs` just after `roads_labels_major`.
 5. `ct_landmarks`, `ct_localities`, `ct_parks`, `ct_peaks`, `ct_stations_label`, `ct_pois`, then the
    four badge layers, just before `places_subplace`.
@@ -469,7 +504,7 @@ them is dropped. The tests check every stack has its glyphs and every glyph dire
 
 ## Known gaps
 
-From the six comparisons in `screenshots/`. Tick them off in WS2.
+From the nine comparisons in `screenshots/`. Tick them off in WS2.
 
 - [ ] Hillshade and contours (needs a DEM, WS1)
 - [x] POI icons: café, pub, toilets, water, bike parking, bike shop, campsite, viewpoint (WS2.4b; no car
@@ -483,11 +518,18 @@ From the six comparisons in `screenshots/`. Tick them off in WS2.
 - [ ] More bike parking in London than cycle.travel shows (Putney at our z15)
 - [ ] Purple cycle lanes on roads (WS1 data)
 - [ ] London rcn: far fewer lines, thinner and lavender; work out cycle.travel's rule
-- [ ] lcn dots lighter
-- [ ] NCN + EuroVelo overlap drawn as one line, not stacked dots
+- [x] lcn dots lighter (WS2.5: also smaller and closer together, in their own layer)
+- [x] NCN + EuroVelo overlap drawn as one line, not stacked dots (WS2.5: one network per way, and the
+  Avenue Verte dots as national)
+- [x] Route dots round at every zoom, with cycle.travel's sizes and spacing (WS2.5: symbol dots)
 - [ ] Paths from z11 in London (thin red)
 - [ ] More minor streets at z11–13
-- [ ] Bolder railways; paler, thinner motorways when zoomed out
+- [ ] Railways and minor roads below z11 (missing from our basemap tiles, WS1 data)
+- [ ] Station throats lighter at z14 (Waterloo, Victoria)
+- [x] Bolder railways; paler, thinner motorways when zoomed out (WS2.5)
+- [x] Railways: no tunnels (the Underground), thin sidings and yards with no white core (WS2.5)
+- [x] EuroVelo dots: opaque slate/lavender ring, red centre (WS2.5)
+- [x] Ferry crossings left out of routes; regional routes from cycle.travel's z11 (WS2.5)
 - [x] Brown unpaved dashes slightly lighter (WS2.2: the key's `#8b4513` captures as cycle.travel's `#834a21`)
 - [ ] Landmark selection: drop the extras
 - [ ] No farm or hamlet labels in rural areas at z12

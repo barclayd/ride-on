@@ -2,6 +2,7 @@
 // (maps/tiles). Every rule here is described, with its reasons, in docs/maps/cycle-travel-style.md.
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec'
 import { layers, namedFlavor } from '@protomaps/basemaps'
+import { dots, networks } from './dots.ts'
 import { shot } from './shot.ts'
 
 /** Where the style's URLs point. */
@@ -76,6 +77,7 @@ const sampled = {
   building: '#d2cbc8',
   // Military land's red edge.
   military: '#e44c43',
+  // Railways: a grey line with a white dashed core (ct_rail_core).
   rail: '#9a9a99',
   casing: '#a3a3a3',
   majorCasingLow: '#b8aea8',
@@ -95,20 +97,20 @@ const sampled = {
   parkLabel: '#3c6633',
   peak: '#754634',
 }
-// Route colours are the key's, tuned by opacity against screenshots; the EuroVelo ring is by eye.
+// The key's colours and the sampled ones (route dots are in src/dots.ts).
 const ct = {
   ...key,
   ...(Object.fromEntries(Object.entries(sampled).map(([k, v]) => [k, shot(v)])) as Record<
     keyof typeof sampled,
     string
   >),
-  ncn: '#ff0000',
-  rcn: '#0000ff',
-  lcn: '#008b8b',
-  eurovelo: '#00559d',
   // The pale band inside military land's edge: this red at 22%, solved after shot() from the band's capture over
   // land, since the page blends drawn colours, not captured ones.
   militaryBand: '#f01914',
+  // Solved in WS2.5 (lines) against swatches captured alongside the comparison shots, not with shot(): that session
+  // captured 3–12/255 darker than shot() predicts. Each draws to within 1/255 of cycle.travel's capture.
+  // Motorways draw far paler than the key's swatch: this is their fill at cycle.travel's z10–15.
+  motorwayPale: '#bed9e7',
 }
 
 const flavour = {
@@ -135,14 +137,14 @@ const flavour = {
   minor_service_casing: '#a8a8a8',
   major: ct.secondary,
   link: ct.secondary,
-  highway: ct.motorway,
+  highway: ct.motorwayPale,
   major_casing_early: ct.casing,
   major_casing_late: '#6e6e6e',
   link_casing: '#6e6e6e',
   highway_casing_early: '#444444',
   highway_casing_late: '#444444',
   bridges_major: ct.secondary,
-  bridges_highway: ct.motorway,
+  bridges_highway: ct.motorwayPale,
   bridges_link: ct.secondary,
   bridges_minor: ct.minor,
   bridges_other: ct.minor,
@@ -224,6 +226,21 @@ const majorWidth = [
 ]
 const majorCasing = ['interpolate', ['linear'], ['zoom'], 9, 0, 9.5, 0.5, 12, 0.8, 16, 1.2]
 const casingColour = ['interpolate', ['linear'], ['zoom'], 10, ct.majorCasingLow, 14, ct.majorCasingHigh]
+// Motorways: pale blue, wider than A roads from our z9, with a thin casing that darkens from faint grey to black.
+const motorwayWidth = ['interpolate', ['exponential', 1.6], ['zoom'], 6, 0.6, 9, 1.6, 11, 3, 12, 4.8, 15, 7, 18, 15]
+const motorwayCasing = {
+  'line-gap-width': motorwayWidth,
+  'line-width': ['interpolate', ['linear'], ['zoom'], 7, 0, 9, 0.5, 11, 0.6],
+  'line-color': ['interpolate', ['linear'], ['zoom'], 9, '#9aa0a4', 11, '#000000', 12, '#151719'],
+}
+const railway = ['all', ['==', ['get', 'kind'], 'rail'], ['!', ['has', 'is_tunnel']]]
+const railStops = [6, 0.4, 9, 2.5, 10, 2.9, 12, 3.25, 14, 4, 18, 8]
+const railWidth = [
+  'interpolate',
+  ['exponential', 1.6],
+  ['zoom'],
+  ...railStops.map((v, i) => (i % 2 ? ['case', ['has', 'service'], v / 2, v] : v)),
+]
 const minorWidth = ['interpolate', ['exponential', 1.6], ['zoom'], 10, 0.3, 12, 0.7, 13, 1.3, 15, 2.5, 18, 11]
 
 // Name-ending shortening as cycle.travel does it: only Street and Road; Lane, Way, Place, Hill… stay whole.
@@ -319,6 +336,25 @@ const basemap = (): Layer[] =>
         ].includes(l.id)
       )
         Object.assign(paint, { 'line-gap-width': majorWidth, 'line-width': majorCasing, 'line-color': casingColour })
+      if (['roads_highway', 'roads_bridges_highway', 'roads_tunnels_highway'].includes(l.id))
+        paint['line-width'] = motorwayWidth
+      if (
+        [
+          'roads_highway_casing_early',
+          'roads_highway_casing_late',
+          'roads_bridges_highway_casing',
+          'roads_tunnels_highway_casing',
+        ].includes(l.id)
+      )
+        Object.assign(paint, motorwayCasing)
+      // Railways are a solid grey line from cycle.travel's z10 (our 9), wider than minor roads; ct_rail_core dashes
+      // white along the middle. Sidings, yards and crossovers are half as wide, and tunnels (most of the Underground)
+      // aren't drawn, as on cycle.travel.
+      if (l.id === 'roads_rail') {
+        delete paint['line-dasharray']
+        l.filter = railway
+        Object.assign(paint, { 'line-opacity': 1, 'line-color': ct.rail, 'line-width': railWidth })
+      }
       if (l.id === 'roads_minor')
         Object.assign(paint, {
           'line-width': minorWidth,
@@ -414,7 +450,7 @@ const basemap = (): Layer[] =>
       return l
     })
 
-const width = (stops: number[]) => ['interpolate', ['exponential', 1.5], ['zoom'], ...stops]
+const width = (stops: Expression[]) => ['interpolate', ['exponential', 1.5], ['zoom'], ...stops]
 // A/B road numbers: small grey italics from cycle.travel's z11 (our 10).
 const roadRefs: Layer = {
   id: 'ct_road_refs',
@@ -625,50 +661,33 @@ const paths: Layer[] = [
   },
 ]
 
-// Cycle network relations (the overlay's routes layer), drawn as cycle.travel's dotted lines: [colour, 5px,
-// dash 0.1/9, round cap].
+// Cycle network relations (the overlay's routes layer), drawn as cycle.travel's dotted lines: dot icons placed along
+// each route (src/dots.ts), local under regional under national under EuroVelo. Each overlay way carries its
+// highest-ranked network, so dots of two networks never share a line.
 const net = ['get', 'network']
 const visible = ['>=', ['zoom'], ['get', 'minz']]
-// Measured off cycle.travel @2x screenshots: dots stay ~6.5–7.5px across from z10 up, centres 15–20px apart,
-// so the gap (in line widths) opens up as you zoom in.
-const dotStops = [6, 3.5, 8, 5, 10, 6.5, 12, 7, 14, 7, 18, 8.5]
-const dotGap = (scale = 1) => [
-  'step',
-  ['zoom'],
-  ['literal', [0, 2.3 / scale]],
-  11,
-  ['literal', [0, 2.6 / scale]],
-  13,
-  ['literal', [0, 2.9 / scale]],
-]
-const routes: Layer[] = [
-  {
-    id: 'ct_routes_eurovelo_ring',
-    type: 'line',
-    ...cycling('routes'),
-    filter: ['all', ['==', net, 'icn'], visible],
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: {
-      'line-color': ct.eurovelo,
-      'line-opacity': 0.85,
-      'line-width': width(dotStops.map((v, i) => (i % 2 ? v * 1.4 : v))),
-      'line-dasharray': dotGap(1.4),
-    },
+// Steps take effect at the tile's integer zoom, as layout properties do.
+const step = (values: { zoom: number; value: Expression }[]) => {
+  const [first, ...rest] = values
+  return rest.length
+    ? ['step', ['zoom'], first?.value, ...rest.flatMap(({ zoom, value }) => [zoom, value])]
+    : first?.value
+}
+const routes: Layer[] = networks.map((network) => ({
+  id: network === 'ncn' ? 'ct_routes' : `ct_routes_${network === 'icn' ? 'eurovelo' : network}`,
+  type: 'symbol',
+  ...cycling('routes'),
+  filter: ['all', ['==', net, network], visible],
+  layout: {
+    'symbol-placement': 'line',
+    'symbol-spacing': step(dots[network].steps.map(({ zoom, spacing }) => ({ zoom, value: spacing }))),
+    'icon-image': step(dots[network].steps.map(({ zoom, image }) => ({ zoom, value: image }))),
+    'icon-allow-overlap': true,
+    'icon-ignore-placement': true,
+    'icon-rotation-alignment': 'viewport',
+    'icon-pitch-alignment': 'viewport',
   },
-  {
-    id: 'ct_routes',
-    type: 'line',
-    ...cycling('routes'),
-    filter: visible,
-    layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['get', 'rank'] },
-    paint: {
-      'line-color': ['match', net, 'icn', ct.ncn, 'ncn', ct.ncn, 'rcn', ct.rcn, ct.lcn],
-      'line-opacity': ['step', ['zoom'], ['match', net, 'rcn', 0.45, 0.62], 11, 0.62],
-      'line-width': width(dotStops),
-      'line-dasharray': dotGap(),
-    },
-  },
-]
+}))
 
 // cycle.travel's repeater badges: upright, every ~160px along the route, from its z12 (our 11). Red for national,
 // blue for regional/London; boxes are 11.5px tall and 15/20/25px wide for 1/2/3 characters.
@@ -796,6 +815,21 @@ const military: Layer[] = [
   },
 ]
 
+// The white dashes along a main line's middle. Below cycle.travel's z12 (our 11) they're longer and thinner.
+const railCore: Layer = {
+  id: 'ct_rail_core',
+  type: 'line',
+  source: 'basemap',
+  'source-layer': 'roads',
+  minzoom: 9,
+  filter: ['all', railway, ['!', ['has', 'service']]],
+  paint: {
+    'line-color': '#ffffff',
+    'line-width': width([9, 0.5, 10, 1, 12, 2.25, 14, 3, 18, 6]),
+    'line-dasharray': ['step', ['zoom'], ['literal', [5.5, 5.5]], 11, ['literal', [4, 4]]],
+  },
+}
+
 const attribution = '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
 
 export const buildStyle = (target: Target): StyleSpecification => {
@@ -809,6 +843,7 @@ export const buildStyle = (target: Target): StyleSpecification => {
   all.splice(at('landuse_park') + 1, 0, pitches)
   all.splice(at('buildings') + 1, 0, ...military)
   all.splice(at('roads_rail'), 0, ...paths)
+  all.splice(at('roads_rail') + 1, 0, railCore)
   all.splice(at('roads_labels_minor'), 0, ...routes, stations)
   all.splice(at('roads_labels_major') + 1, 0, roadRefs)
   // Later layers win label collisions: badges beat POI icons, which beat point labels; EuroVelo beats national

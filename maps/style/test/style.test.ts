@@ -69,9 +69,15 @@ describe('sprite', () => {
   const sprite = buildSprite()
 
   test('has every image the style uses', () => {
-    // A plain name, or each output of a match on a feature property (the last is its fallback, '').
+    // A plain name, each output of a match on a feature property (the last is its fallback, ''), or of a zoom step.
     const names = (image: unknown): string[] =>
-      Array.isArray(image) && image[0] === 'match' ? image.slice(3, -1).filter((_, i) => i % 2 === 0) : [String(image)]
+      !Array.isArray(image)
+        ? [String(image)]
+        : image[0] === 'match'
+          ? image.slice(3, -1).filter((_, i) => i % 2 === 0)
+          : image[0] === 'step'
+            ? image.slice(2).filter((_, i) => i % 2 === 0)
+            : [String(image)]
     const images = targets.native.layers.flatMap((layer) =>
       layer.type === 'symbol' && layer.layout?.['icon-image'] !== undefined ? names(layer.layout['icon-image']) : [],
     )

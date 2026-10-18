@@ -1,7 +1,8 @@
-// The style's images, drawn as SVG and rasterised with resvg into one sprite sheet: cycle.travel's repeater
-// badges and its POI icons. Badge red and blue are shot() of its badges in a Chrome screenshot, checked against a
+// The style's images, drawn as SVG and rasterised with resvg into one sprite sheet: cycle.travel's route dots
+// (src/dots.ts), repeater badges and POI icons. Badge red and blue are shot() of its badges in a Chrome screenshot, checked against a
 // new one; EuroVelo is by eye. See docs/maps/cycle-travel-style.md, "Repeater badges" and "POI icons".
 import { Resvg } from '@resvg/resvg-js'
+import { dots, networks } from './dots.ts'
 import { type Glyph, maki } from './maki.ts'
 
 interface Icon {
@@ -120,6 +121,11 @@ export const icons: Record<string, Icon> = {
   'poi-bicycle-shop': boxed(maki.bicycle, 12, 9.5, poi.bike),
   'poi-camp-site': bare(maki.campsite, 12, poi.camping),
   'poi-viewpoint': bare(maki.viewpoint, 12, poi.view),
+  ...Object.fromEntries(
+    networks.flatMap((network) =>
+      dots[network].images.map(({ name, side, svg }): [string, Icon] => [name, { size: side, draw: () => svg }]),
+    ),
+  ),
 }
 
 /**

@@ -65,9 +65,11 @@ class CyclingProfileTest {
 
   @Test
   void keepsBicycleRoutesOnTheFourNetworks() {
-    assertEquals(new CyclingProfile.Route(1, "ncn", "4", false), relation("network=ncn ref=4"));
-    assertEquals(new CyclingProfile.Route(1, "rcn", "C9", true),
+    assertEquals(new CyclingProfile.Route(1, "ncn", "4", false, false), relation("network=ncn ref=4"));
+    assertEquals(new CyclingProfile.Route(1, "rcn", "C9", true, false),
       relation("network=rcn ref=C9 cycle_network=GB:London:Cycleways"));
+    assertEquals(new CyclingProfile.Route(1, "icn", "EV2", false, true), relation("network=icn ref=EV2"));
+    assertEquals(new CyclingProfile.Route(1, "icn", "", false, true), relation("network=icn cycle_network=EuroVelo"));
     assertNull(relation("network=mtb ref=4"));
     assertNull(relation(""));
     assertNull(profile.preprocessOsmRelation(new OsmElement.Relation(1, tags("type=route route=hiking network=ncn"),
@@ -78,7 +80,7 @@ class CyclingProfileTest {
   @CsvSource({
     "network=icn ref=EV2, 6",
     "network=ncn ref=4, 6",
-    "network=rcn ref=7, 8.5",
+    "network=rcn ref=7, 10",
     "network=rcn ref=C9 cycle_network=GB:London:Cycleways, 11",
     "network=rcn cycle_network=GB:London, 13",
     "network=lcn ref=LCN, 13",
@@ -96,6 +98,24 @@ class CyclingProfileTest {
       relation("network=rcn ref=C9 cycle_network=GB:London")), "routes");
     assertEquals(1, routes.size());
     assertEquals(Map.of("network", "ncn", "rank", 3, "minz", 6.0), routes.getFirst().getAttrsAtZoom(14));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "network=icn ref=EV2, icn",
+    "network=icn cycle_network=EuroVelo, icn",
+    "network=icn ref=AV, ncn",
+  })
+  void onlyEuroVeloRoutesAreDottedAsInternational(String pairs, String network) {
+    var routes = layer(way("highway=residential", relation(pairs)), "routes");
+    assertEquals(network, routes.getFirst().getAttrsAtZoom(14).get("network"));
+  }
+
+  @Test
+  void ferryCrossingsOnARouteAreLeftOut() {
+    var features = way("route=ferry", relation("network=icn ref=EV2"), relation("network=ncn ref=51"));
+    assertEquals(List.of(), layer(features, "routes"));
+    assertEquals(List.of(), layer(features, "route_badges"));
   }
 
   @ParameterizedTest
