@@ -45,7 +45,7 @@ const LONDON = 'Europe/London';
 
 test('before the final forecast it says when that is and when alerts stop', () => {
   expect(timingLine(DEPARTURE, LONDON, new Date('2026-10-16T12:00:00Z'))).toBe(
-    'Plus the final forecast at 19:00 on Fri 16 Oct. Alerts stop at 08:30 when you leave.',
+    'Plus the final forecast at 18:00 on Fri 16 Oct. Alerts stop at 08:30 when you leave.',
   );
 });
 
@@ -58,10 +58,10 @@ test('after the final forecast only when alerts stop', () => {
 test('the API can move the final forecast', () => {
   // 18:30 BST: after 18:00, before 19:00.
   const now = new Date('2026-10-16T17:30:00Z');
-  expect(timingLine(DEPARTURE, LONDON, now, '18:00')).toBe(
+  expect(timingLine(DEPARTURE, LONDON, now)).toBe(
     'Alerts stop at 08:30 when you leave.',
   );
-  expect(timingLine(DEPARTURE, LONDON, now)).toStartWith(
+  expect(timingLine(DEPARTURE, LONDON, now, '19:00')).toStartWith(
     'Plus the final forecast at 19:00',
   );
 });

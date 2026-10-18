@@ -843,11 +843,13 @@ const handle = async (message: Message) => {
             message.replaceTrackedRideId,
             triggers && (await readState()).tracker.triggers ? triggers : null,
           );
+          // The API keeps an active plan's choices when the same departure is tracked again.
+          const saved = tracker.ride?.alerts?.triggers ?? triggers;
           return update((state) => ({
             tracker,
             alertRouteId: tracker.ride?.routeId ?? null,
-            ...(triggers && {
-              triggers: { ...state.triggers, [routeId]: triggers },
+            ...(saved && {
+              triggers: { ...state.triggers, [routeId]: saved },
             }),
           }));
         } catch (error) {
