@@ -2547,7 +2547,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   const warmth = module.locator('.ro-temp');
   await expect(warmth).not.toContainText('along the ride');
   await expect(warmth.locator('.ro-temp-head strong')).toHaveText(
-    /^Feels cooler than your range \(down to 6°C\) until about \d\d:\d0, then in your range to the finish$/,
+    /^Feels cooler than your preferred range \(down to 6°C\) until about \d\d:\d0, then in range to the finish$/,
   );
   await expect(warmth.locator('.ro-temp-head span')).toHaveText(
     /^Usual for \d\d:\d\d–\d\d:\d\d in \w+: 7–16°C$/,
@@ -2567,7 +2567,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(warmth.locator('.ro-temp-grid')).toHaveCount(3);
   // No text in the plot (26b): the block, its green edge labels and the legend say which is your range.
   await expect(warmth.locator('.ro-temp-plot')).not.toContainText(
-    /your range|warmer|cooler/i,
+    /range|warmer|cooler/i,
   );
   // The coldest feels like is ringed, without a label.
   await expect(warmth.locator('.ro-temp-mark')).toHaveCount(1);
@@ -2576,7 +2576,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     'Temperature',
     'Feels like',
     /^Usual in \w+$/,
-    'Your range 10–22°C',
+    'Your preferred range 10–22°C',
   ]);
   await module.screenshot({ path: test.info().outputPath('temperature.png') });
   // Rain along the ride (25b) replaces it: a card per hour with its chance and amount.
@@ -2852,7 +2852,7 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
     '(down to 43°F)',
   );
   await expect(module.locator('.ro-temp .ro-key li').last()).toHaveText(
-    'Your range 50–72°F',
+    'Your preferred range 50–72°F',
   );
   // The wind dropdown follows: the legend, the gusts and the sketch's speed.
   await module
