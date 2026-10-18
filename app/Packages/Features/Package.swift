@@ -42,7 +42,7 @@ let package = Package(
                 .product(name: "MapLibre", package: "maplibre-gl-native-distribution",
                          condition: .when(platforms: [.iOS])),
             ],
-            resources: [.copy("CycleMapSpike")]),
+            resources: [.copy("CycleMap")]),
         .target(
             name: "PreferencesUI",
             dependencies: baseDeps + ["SharedUI"]),

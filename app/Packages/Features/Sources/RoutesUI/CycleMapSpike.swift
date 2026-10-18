@@ -8,9 +8,9 @@ import Models
 /// the Routes map when the app is launched with `--cycle-map`. Throwaway: WS3.2 replaces it with
 /// `CycleMap` in SharedUI (DESIGN-SYSTEM.md §6 #17).
 ///
-/// The style is the prototype's, basemap layers only, built by
-/// `docs/maps/prototype/scripts/native-spike.sh` into `CycleMapSpike/`. Routes are style layers
-/// under the labels, the way `CycleMap` will draw them.
+/// The style is the production one, basemap and cycling overlay, built by `maps/style` into
+/// `CycleMap/` with its glyphs. Routes are style layers under the labels, the way `CycleMap` will
+/// draw them.
 struct CycleMapSpike: UIViewRepresentable {
     static var isEnabled: Bool { ProcessInfo.processInfo.arguments.contains("--cycle-map") }
 
@@ -168,20 +168,17 @@ struct CycleMapSpike: UIViewRepresentable {
     }
 
     /// The bundled style with `bundle://` pointed at the resource bundle. Native needs absolute glyph
-    /// URLs, so the style is rewritten once into Caches. `-CycleMapBasemap <url>` swaps the basemap
-    /// archive, e.g. `pmtiles://file:///…/basemap-gb-20261017.pmtiles` for a local extract.
+    /// URLs, so the style is rewritten once into Caches. `-CycleMapTiles <url>` swaps the tile host,
+    /// e.g. `file:///…/tiles` for a folder holding local `basemap-gb-*.pmtiles` and `cycling-gb-*.pmtiles`.
     private static let styleURL: URL = {
-        let directory = Bundle.module.url(forResource: "CycleMapSpike", withExtension: nil)!
-        let json = try! String(contentsOf: directory.appending(path: "style.json"), encoding: .utf8)
+        let directory = Bundle.module.url(forResource: "CycleMap", withExtension: nil)!
+        var json = try! String(contentsOf: directory.appending(path: "style.json"), encoding: .utf8)
             .replacingOccurrences(of: "bundle://", with: directory.absoluteString)
-        var style = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
-        if let basemap = UserDefaults.standard.string(forKey: "CycleMapBasemap"),
-           var sources = style["sources"] as? [String: [String: Any]] {
-            sources["basemap"]?["url"] = basemap
-            style["sources"] = sources
+        if let tiles = UserDefaults.standard.string(forKey: "CycleMapTiles") {
+            json = json.replacingOccurrences(of: "https://maps.ride-on.cc", with: tiles)
         }
-        let url = URL.cachesDirectory.appending(path: "cycle-map-spike-style.json")
-        try! JSONSerialization.data(withJSONObject: style).write(to: url, options: .atomic)
+        let url = URL.cachesDirectory.appending(path: "cycle-map-style.json")
+        try! json.write(to: url, atomically: true, encoding: .utf8)
         return url
     }()
 }
