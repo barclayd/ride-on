@@ -51,7 +51,7 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 | Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
 | Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero track bell `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while tracked |
 | Routes panel | **Regular** glass floating over the map, 8pt from the screen edges and 14pt above the tab bar; grabber, search and "+" pinned, everything else scrolling beneath and fading into the bottom edge | `FloatingPanel` (§6): `.glassEffect(.regular, in: .rect(cornerRadius: 34))`, `.safeAreaBar(edge: .top)` |
-| Controls over the Routes map (map style, my location) | **Clear** glass capsule, white glyphs, held at a fixed size like MapKit's own. Over the light cycle map (`CycleMap`, §6), **regular** glass with `.primary` glyphs instead | `.glassEffect(.clear.interactive(), in: .capsule)` (`.regular.interactive()` over the cycle map), `.dynamicTypeSize(...xLarge)` + `.accessibilityShowsLargeContentViewer()` |
+| Controls over the Routes map (map style, my location) | **Clear** glass capsule, white glyphs, held at a fixed size like MapKit's own. Over the light cycle map (`CycleMap`, §6), **regular** glass with `.primary` glyphs instead, held light in Dark Mode as the map is | `.glassEffect(.clear.interactive(), in: .capsule)` (`.regular.interactive()` and `.environment(\.colorScheme, .light)` over the cycle map), `.dynamicTypeSize(...xLarge)` + `.accessibilityShowsLargeContentViewer()` |
 | Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
 | Partial-height sheets (Track) | System glass, floating inset over the dimmed screen; Close leading, actions as full-width capsules at the bottom | `.presentationDetents([.height(content)])`, `Button(role: .close)`, `.glassProminent` / `.glass` capsules |
 | Pushed screens' back button | 44pt glass circle, chevron only | stock `NavigationStack` back button |
@@ -61,7 +61,8 @@ Rules:
 - **Regular glass by default.** Clear glass only over rich media (the hero map, the Routes
   map), with a ~35% dark gradient behind it on the hero so white glyphs stay legible (the
   Routes map is satellite imagery, dark enough on its own). The cycle map is light, so controls
-  over it use regular glass.
+  over it use regular glass, held light in Dark Mode; nothing dims it, and the status bar's glyphs
+  go dark over it (`.toolbarColorScheme(.light, for: .navigationBar)`).
 - **Scroll edge effects, not dividers.** No hairlines under toolbars or between sections; the
   system edge effect separates scrolling content from chrome.
 - **Group glass that can touch or morph** in one `GlassEffectContainer` (glass can't sample glass).
@@ -108,7 +109,9 @@ Rules:
   cycle.travel's map and live in its map style, not in SwiftUI or the asset catalog. Values and
   the rules behind them: [`docs/maps/cycle-travel-style.md`](docs/maps/cycle-travel-style.md).
   The map stays light in Dark Mode for now; a dark variant is an open decision
-  ([`docs/maps/README.md`](docs/maps/README.md#open-decisions), 6).
+  ([`docs/maps/README.md`](docs/maps/README.md#open-decisions), 6). Over it the status bar and the
+  map controls stay light too (§2); the system tab bar's labels don't yet, and read at 1.4:1 there in
+  Dark Mode (WS2.7 in the same doc).
 
 ## 4. Typography
 

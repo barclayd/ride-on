@@ -77,6 +77,9 @@ public struct RoutesView: View {
         .navigationTitle("Routes")
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
+        // The cycle map stays light in Dark Mode (docs/maps/README.md, WS2.7), so the status bar's
+        // glyphs go dark over it. Not the tab bar: forcing it light drops the accent from the selected tab.
+        .toolbarColorScheme(cycleMap ? .light : nil, for: .navigationBar)
         #endif
         .sensoryFeedback(.selection, trigger: selection)
         .sensoryFeedback(.impact(flexibility: .soft), trigger: library.shortlist)
@@ -100,6 +103,16 @@ public struct RoutesView: View {
 
     private static let sidePanelWidth: CGFloat = 380
 
+    /// The cycle map (the WS3.0 spike, `--cycle-map`, iOS only) instead of MapKit's imagery: light,
+    /// so nothing dims it and its controls take regular glass.
+    private var cycleMap: Bool {
+        #if os(iOS)
+        CycleMapSpike.isEnabled
+        #else
+        false
+        #endif
+    }
+
     // MARK: Map
 
     private func map(padding: EdgeInsets, showsCallout: Bool) -> some View {
@@ -110,16 +123,18 @@ public struct RoutesView: View {
         .safeAreaPadding(padding)
         .ignoresSafeArea()
         .overlay(alignment: .top) {
-            // Dims under the status bar so its glyphs and the map controls stay legible (§2).
-            LinearGradient(colors: [.black.opacity(0.34), .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 110)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+            // Dims under the status bar so its glyphs and the map controls stay legible over imagery (§2).
+            if !cycleMap {
+                LinearGradient(colors: [.black.opacity(0.34), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 110)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
         }
     }
 
     private var controls: some View {
-        MapControls(look: $look) {
+        MapControls(look: $look, overLightMap: cycleMap) {
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestWhenInUseAuthorization()
             }
