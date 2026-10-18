@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 (basemap on R2) uploading; WS2 in progress: 2.1, 2.2 and 2.3 done, the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 (basemap on R2) uploading; WS2 in progress: 2.1, 2.2, 2.3 and 2.4's badges done, the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -71,7 +71,7 @@ What the prototype does that **can't ship**:
 - Basemap streamed from strava-stitch's file (Ride On needs its own). Fixed in WS2.1: it reads the
   `maps.ride-on.cc` archives, or local copies in `data/`.
 - Fonts as woff2 via `font-faces` (fixed in WS2.3: glyph PBFs), badges drawn at runtime in JavaScript
-  (WS2.4).
+  (fixed in WS2.4: the app's sprite).
 - Tuned at 2× in desktop Chrome (WS2 re-tunes at 3× on iPhone).
 
 ## Architecture
@@ -231,11 +231,18 @@ uses (SemiBold Italic dropped), six Latin ranges, 2.9 MB in `RoutesUI/CycleMap/g
 the directory names (`Montserrat-SemiBold`). The style says `bundle://glyphs/...`; the app rewrites
 `bundle://` to the resource bundle's URL at load.
 
-**2.4 Sprite.** Badge images (red, blue, EuroVelo) with stretch areas and a `content` box so
-`icon-text-fit` works, plus POI icons from [Maki](https://github.com/mapbox/maki) /
-[Temaki](https://github.com/ideditor/temaki) (CC0) or drawn by us, never cycle.travel's SVGs. Build
-@2x and @3x with [spreet](https://github.com/flother/spreet). Alternative for badges only: draw them in
-`mapView(_:didFailToLoadImage:)` like the prototype's `styleimagemissing`.
+**2.4 Sprite.** Badges done: `maps/style/src/sprite.ts` draws the red, blue and EuroVelo badges as SVG
+and rasterises them with resvg into `RoutesUI/CycleMap/sprite@2x.{json,png}` (1.5 KB); the prototype
+loads the same files, and its runtime drawing is gone. One sheet, drawn at 3× but named `@2x`, because
+MapLibre Native only ever asks for `@2x` ([`resource.cpp`](https://github.com/maplibre/maplibre-native/blob/main/src/mln/storage/resource.cpp));
+each image's `pixelRatio` of 3 makes 2× screens scale it down. Stretch bands plus
+`icon-text-fit-padding` size them, so they need no `content` box. Red and blue now capture within 2–3/255
+of cycle.travel's (they were lighter); [values](cycle-travel-style.md#repeater-badges). No spreet: three
+images drawn in code needed no second tool, and resvg-js keeps it in Bun.
+Still to do: POI icons (café, pub, toilets, water, bike parking, parking, bike shop, campsite,
+viewpoint; the overlay's `pois` at z14) from [Maki](https://github.com/mapbox/maki) /
+[Temaki](https://github.com/ideditor/temaki) (CC0) or drawn by us, never cycle.travel's SVGs, added to
+`icons` in `sprite.ts`.
 
 **2.5 Gaps.** Work through the style spec's [known gaps](cycle-travel-style.md#known-gaps).
 
@@ -427,7 +434,7 @@ comparison. Fine for a design reference, but don't put them in the app or market
 | macOS left behind | Decision 2; the wrapper hides the implementation |
 | Light map breaks Liquid Glass legibility | WS4a design call before UI work |
 | Performance and battery with live maps | Snapshots for cards and thumbnails; live views only on the hero and Routes map |
-| App size | Measured in the spike: about 11 MB uncompressed (framework 7.8 MB, glyphs 3.5 MB); the sprite is still to come |
+| App size | Measured in the spike: about 11 MB uncompressed (framework 7.8 MB, glyphs 3.5 MB); the badge sprite adds 1.5 KB |
 | OSM data gaps (broken relations, missing surface tags) | Not a style bug; fix upstream in OSM when worth it |
 | Tile build breaks or R2 file goes missing | Dated keys, keep previous builds, style pinned in the app bundle |
 | Overpass used beyond the prototype | Never: production builds from Geofabrik extracts |
@@ -461,7 +468,8 @@ fine for comparison.
 ## Comparison screenshots
 
 cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). Re-taken in WS2.2
-with the corrected colours, on the planetiler overlay; the notes below still hold.
+with the corrected colours, on the planetiler overlay; the notes below still hold. Putney was re-taken in
+WS2.4 with the sprite's badges; the others still show the lighter runtime-drawn ones.
 
 | View | What to look at |
 |---|---|

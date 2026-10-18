@@ -1,0 +1,5 @@
+{
+  "badge-red": {"x":0,"y":0,"width":24,"height":24,"pixelRatio":3,"stretchX":[[6,18]],"stretchY":[[6,18]]},
+  "badge-blue": {"x":26,"y":0,"width":24,"height":24,"pixelRatio":3,"stretchX":[[6,18]],"stretchY":[[6,18]]},
+  "badge-eu": {"x":52,"y":0,"width":50,"height":50,"pixelRatio":3}
+}

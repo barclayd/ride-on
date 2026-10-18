@@ -13,6 +13,7 @@
    "attribution": "© <a href=\"https://openstreetmap.org/copyright\">OpenStreetMap</a>"
   }
  },
+ "sprite": "http://localhost:8787/sprite",
  "glyphs": "http://localhost:8787/glyphs/{fontstack}/{range}.pbf",
  "layers": [
   {

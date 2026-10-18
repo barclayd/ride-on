@@ -51,8 +51,9 @@ The WS1.2 screenshots were taken with that.
 Check a colour you change against a new screenshot, not the model: draw ours, screenshot both pages at
 the same view, and compare the pixels where both draw that feature.
 
-Route dots, badges and other runtime-drawn colours were tuned by eye against screenshots and never went
-through `shot()`.
+Route dots and the EuroVelo badge were tuned by eye against screenshots and never went through
+`shot()`. The red and blue badges are `shot()` of cycle.travel's, then checked against a new screenshot
+(WS2.4, [repeater badges](#repeater-badges)).
 
 ## cycle.travel's map key
 
@@ -249,8 +250,8 @@ repeat. Only short signed refs (`^[A-Z]{0,2}\d{0,3}$`, not empty, not a bare `C`
 
 | Badge | Networks | Look |
 |---|---|---|
-| Red | `ncn`, and non-EuroVelo `icn` (e.g. Avenue Verte, "AV") from z12 | Flat `#e96768`, corner radius 0.6 × DPR |
-| Blue | `rcn` (London C, Q, CS) | `#2fa5cf` with a 1 px rim: inner `#37b3dd`, top edge `#7acce3`, bottom edge `#29a4cb` |
+| Red | `ncn`, and non-EuroVelo `icn` (e.g. Avenue Verte, "AV") from z12 | Flat `#e65a5d`, corner radius 0.6 |
+| Blue | `rcn` (London C, Q, CS) | `#26abe1` inside a 1 px border of two half-pixel rings: outer `#1c9cc7`, inner `#24a6d2`; along the top `#6fc4db` then `#38abce` |
 | EuroVelo | `icn` with an `EV` ref, z11–12 only | `#0061a2` square, twelve `#f9ee59` stars in a ring, number in the middle |
 
 | Property | Value |
@@ -262,8 +263,20 @@ repeat. Only short signed refs (`^[A-Z]{0,2}\d{0,3}$`, not empty, not a bare `C`
 | Padding | Text and icon padding 2 |
 | Priority | Layer order rcn < ncn < non-EV icn < EuroVelo (later wins). **No `symbol-sort-key`**: with line placement it sometimes drops the box and draws the number alone |
 
-The prototype draws the badge images at runtime (`styleimagemissing` in `index.html`). Native needs a
-sprite sheet or `mapView(_:didFailToLoadImage:)` (WS2).
+The images are in the sprite (`maps/style/src/sprite.ts`, WS2.4), which the app and the prototype both
+load. Red and blue started as `shot()` of cycle.travel's badges at Putney z13, then the blue fill was
+nudged after a new screenshot. They capture as:
+
+| Badge | cycle.travel | Ours |
+|---|---|---|
+| Red fill | `#d76560`–`#da655e` | `#d66361` |
+| Blue fill | `#52a8dc` | `#54a9dc` |
+| Blue border, left and bottom (out → in) | `#4799c7`, `#4ea3d2` | `#4b9bc3`, `#4e9fc8` |
+| Blue border, top (out → in) | `#81c1db`, `#58a8ce` | `#84c2d8`, `#58a9d1` |
+
+Close-up, cycle.travel left of each pair: [`screenshots/badges-putney-z13.png`](screenshots/badges-putney-z13.png).
+Before WS2.4 the prototype drew them at runtime (`#e96768` red; blue `#37b3dd` inside a `#2fa5cf` rim),
+which captured lighter: red `#d96f6c`, blue `#5eb1d9`.
 
 ## Typography
 
@@ -356,8 +369,8 @@ The basemap is `@protomaps/basemaps` 5.7.2's `layers('basemap', flavour, { lang:
 
 - **Dropped layers:** `pois` (replaced by the `ct_*` point labels), `roads_shields`, `roads_oneway`,
   `address_label`, `landcover`.
-- **No sprite:** every `icon-*` layout property is removed, so the style needs no sprite until WS2 adds
-  badges and POI icons.
+- **No Protomaps sprite:** every `icon-*` layout property is removed. The style's sprite is ours
+  (`maps/style/src/sprite.ts`): the badges, and the POI icons to come.
 - `roads_other` is limited to `kind=other` (no piers): the `ct_*` path layers draw paths.
 - Font names in the flavour are `Montserrat-Regular` / `Montserrat-SemiBold` / `Montserrat-Italic`.
 - The basemap is z0–15; MapLibre overzooms it past 15.

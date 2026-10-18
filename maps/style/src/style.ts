@@ -8,6 +8,8 @@ import { shot } from './shot.ts'
 export interface Target {
   /** Glyph PBFs, with `{fontstack}` and `{range}`. */
   glyphs: string
+  /** The sprite sheet (src/sprite.ts), without `@2x.json` or `@2x.png`. */
+  sprite: string
   /** The directory holding the tile archives, without a trailing slash. */
   tiles: string
 }
@@ -568,7 +570,7 @@ const routes: Layer[] = [
 // cycle.travel's repeater badges: upright, every ~160px along the route, from its z12 (our 11). Red for national,
 // blue for regional/London; boxes are 11.5px tall and 15/20/25px wide for 1/2/3 characters.
 // EuroVelo shows as a starred navy square only at our z11; from z12 the Avenue Verte turns red and EVs drop out.
-// The badge images (badge-red, badge-blue, badge-eu) aren't in a sprite yet (WS2.4).
+// The badge images (badge-red, badge-blue, badge-eu) are in the sprite (src/sprite.ts).
 const badge = ['get', 'badge']
 // No symbol-sort-key: with line placement it drops the box from some badges (MapLibre draws the number alone),
 // so priority comes from layer order instead.
@@ -673,6 +675,7 @@ export const buildStyle = (target: Target): StyleSpecification => {
     version: 8,
     name: 'Ride On cycle map',
     glyphs: target.glyphs,
+    sprite: target.sprite,
     sources: {
       basemap: {
         type: 'vector',
