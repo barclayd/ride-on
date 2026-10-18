@@ -272,8 +272,10 @@ station throats): London's TfL routes from z12 with a C/Q/CS number and z13 with
 under-construction routes left out; paved and unpaved paths from z11, plus private drives open to bikes;
 lanes, streets and main-line railways below the basemap's zooms from a new overlay layer, `low_roads`
 (lanes and streets z10–11, rail z8–10); A/B roads at cycle.travel's constant 4 px from z12 with a
-near-black hairline casing; unclassified lanes and tertiary roads white/cream with a dark casing from z11
-and grey below, and only tertiary roads at z9, as cycle.travel's z10. Station throats at z14 still draw
+near-black hairline casing (dark grey at z11); trunk roads far paler than the key, as motorways are;
+unclassified lanes and tertiary roads white/cream with a dark casing from z11 and grey below, and only
+tertiary roads at z9, as cycle.travel's z10; residential streets a solid grey line until z14, as
+cycle.travel's z15. Station throats at z14 still draw
 every platform track. The overlay changes need the rebuilt overlay.
 
 Screenshot colours depend on the display the tab is on ([style spec](cycle-travel-style.md#colour-sampling)):

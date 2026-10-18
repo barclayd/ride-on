@@ -124,10 +124,13 @@ ones. "Draws" is what `style.ts` draws: the key value as it is, or `shot()` of t
 | lane and tertiary casing (WS2.5) | key | `#444444` | `#444444` |
 | minor road casing | sampled | `#a3a3a3` | `#a3a3a3` |
 | major road casing, z9–10 | sampled | `#b8aea8` | `#baada8` |
-| major road casing, z11 up (WS2.5) | sampled | `#060606` | `#060606` |
-| minor road, z10 (white from z13) | sampled | `#b9b9b9` | `#b9b9b9` |
+| major road casing, z11 (WS2.5, rural; solved on an sRGB display) | solved from ours | `#37`–`#4f` grey device pixel | `#2e2e2e` |
+| major road casing, z12 up (WS2.5) | sampled | `#060606` | `#060606` |
+| minor road, z10–11 | sampled | `#b9b9b9` | `#b9b9b9` |
+| residential street, z12 (WS2.5) | as lanes at z10 | `#8f8f8e` on an sRGB display, as our `#9a9a9a` | `#9a9a9a` |
+| residential street, z13 (WS2.5; white from z14) | solved from ours | `#a0a0a0` on an sRGB display | `#a9a9a9` |
 | motorway (WS2.5: the map draws far paler than the key) | sampled, then matched in a same-session capture | `#bad1e3` | `#bed9e7` |
-| trunk | key | `#c0c8ae` | `#c0c8ae` |
+| trunk (WS2.5: the map draws far paler than the key, at every zoom) | solved from ours | `#d3d8c5` on an sRGB display, where the key's `#c0c8ae` captures `#b9c1a4` | `#d9decd` |
 | primary | key | `#f7bda7` | `#f7bda7` |
 | secondary | key | `#fdd5a5` | `#fdd5a5` |
 | tertiary | key | `#fff5d0` | `#fff5d0` |
@@ -188,12 +191,12 @@ object.
 
 | | Rule |
 |---|---|
-| Fill colour | By `kind_detail`: trunk, primary, secondary, tertiary from the key; everything else in the major layer gets tertiary. At z9 cycle.travel draws A roads paler and B roads deeper than its key, and tertiary roads as grey lines (`#ababab`, then `#9a9a9a` at z10); they take the key's cream from z11 |
+| Fill colour | By `kind_detail`: primary, secondary, tertiary from the key, trunk far paler (`#d9decd`); everything else in the major layer gets tertiary. At z9 cycle.travel draws A roads paler and B roads deeper than its key, and tertiary roads as grey lines (`#ababab`, then `#9a9a9a` at z10); they take the key's cream from z11 |
 | Major width | Exponential 1.6, `majorStops` [A/B, tertiary]: z7 0.4, z9 1/0.9, z10 2.5/0.9, z11 2.6/2.3, z12 3.9/2.9, z13 4/3.75, z16 4/4, z18 9/8. cycle.travel draws trunk, A and B roads at one width, a constant 4 px from its z13 to z17 (our 12–16), with tertiary roads closing in on it |
-| Major casing | A/B: a 0.5 px hairline from z9.5 (1 px from z18), faint `#b8aea8` until z10, near-black `#060606` from z11 (cycle.travel's casings are mid-grey at its z11, black from z12). Tertiary: the lanes' `#444444` casing, from z10 |
-| Minor width | Exponential 1.6, `minorStops` [unclassified lane, street]: z10 0.9/0.3, z11 2.3/0.45, z12 2.9/0.7, z13 3.75/1.3, z15 5/2.5, z18 12/11. None at z9: cycle.travel's z10 shows only tertiary roads |
-| Minor colour | Lanes: grey `#9a9a9a` at z10, white from z11, as cycle.travel's key draws them. Streets: grey `#b9b9b9` until z11 → white at z13 |
-| Minor casing | Lanes: `#444444`, 0.5 px from z11 → 0.6 at z13 → 1 at z16. Streets: from z12.5 (0 → 0.6 at z13 → 1 at z16), `#a3a3a3` |
+| Major casing | A/B: a 0.5 px hairline from z9.5 (1 px from z18), faint `#b8aea8` until z10, dark grey `#2e2e2e` at z11, near-black `#060606` from z12 (cycle.travel's casings are mid-grey at its z11, dark grey at z12, black from z13; its low-zoom London tiles keep mid-grey ones at z12). Tertiary: the lanes' `#444444` casing, from z10 |
+| Minor width | Exponential 1.6, `minorStops` [unclassified lane, street]: z10 0.9/0.3, z11 2.3/0.45, z12 2.9/1.1, z13 3.75/1.15, z15 5/2.5, z18 12/11. None at z9: cycle.travel's z10 shows only tertiary roads |
+| Minor colour | Lanes: grey `#9a9a9a` at z10, white from z11, as cycle.travel's key draws them. Streets: a solid grey line, light `#b9b9b9` until z11, dark `#9a9a9a` at z12, `#a9a9a9` at z13, white from z14, as cycle.travel's z12–15 |
+| Minor casing | Lanes: `#444444`, 0.5 px from z11 → 0.6 at z13 → 1 at z16. Streets: from z13 (0 → 0.73 at z14 → 1 at z16), `#a3a3a3` |
 | Low zooms | The basemap tiles carry minor roads from z12 and railways from z11, so the overlay's `low_roads` fills in below (`ct_low_minor`, `ct_low_minor_casing` z10–11; `ct_low_rail`, `ct_low_rail_core` z8–10), painted the same way |
 | Motorway | Pale blue (`#bed9e7`: far paler than the key's swatch). Exponential 1.6: z6 0.6, z9 1.6, z11 3, z12 4.8, z15 7, z18 15 |
 | Motorway casing | Width 0 at z7 → 0.5 at z9 → 0.6 from z11; colour faint grey `#9aa0a4` at z9 → black at z11 → `#151719` from z12 |
@@ -575,9 +578,11 @@ From the nine comparisons in `screenshots/`. Tick them off in WS2.
   Avenue Verte dots as national)
 - [x] Route dots round at every zoom, with cycle.travel's sizes and spacing (WS2.5: symbol dots)
 - [x] Paths from z11 in London (WS2.5: paved and unpaved paths from z11, thinner below z13)
-- [ ] More minor streets at z12–13 (WS2.5 covers z10–11 from the overlay's `low_roads`; the basemap still thins z12–13)
+- [ ] More minor streets at z12–13 (WS2.5 covers z10–11 from the overlay's `low_roads`; the basemap still thins z12–13).
+  The streets it has are now the solid grey lines cycle.travel draws until its z15
 - [x] Railways and minor roads below z11 (WS2.5: the overlay's `low_roads`)
-- [x] A/B roads a constant 4 px from z12 with a near-black hairline casing; lanes and tertiary roads as
+- [x] Trunk roads far paler than the key (WS2.5)
+- [x] A/B roads a constant 4 px from z12 with a near-black hairline casing, dark grey at z11; lanes and tertiary roads as
   cycle.travel's key draws them, grey below z11; only tertiary roads at z9 (WS2.5)
 - [ ] Station throats lighter at z14 (Waterloo, Victoria)
 - [x] Bolder railways; paler, thinner motorways when zoomed out (WS2.5)

@@ -83,10 +83,13 @@ const sampled = {
   rail: '#9a9a99',
   casing: '#a3a3a3',
   majorCasingLow: '#b8aea8',
-  // A/B road casings from cycle.travel's z12 (our 11): one near-black device pixel, sampled at Colchester z13–17. Its
-  // z11 casings are mid-grey.
+  // A/B road casings from cycle.travel's z13 (our 12): one near-black device pixel, sampled at Colchester z13–17. A
+  // zoom out they're dark grey (majorCasingZ11).
   majorCasing: '#060606',
   minorLow: '#b9b9b9',
+  // Residential streets at cycle.travel's z14 (our 13): still a solid grey line, lighter than a zoom out, where they
+  // take laneLow. Solved against our own casing and minorLow on the same display as the Putney capture.
+  streetZ13: '#a9a9a9',
   // cycle.travel's z10 (our 9), sampled over London: tertiary roads and railways in a lighter grey than a zoom in, A
   // roads paler and B roads deeper than its key.
   greyZ9: '#ababab',
@@ -122,6 +125,12 @@ const ct = {
   // captured 3–12/255 darker than shot() predicts. Each draws to within 1/255 of cycle.travel's capture.
   // Motorways draw far paler than the key's swatch: this is their fill at cycle.travel's z10–15.
   motorwayPale: '#bed9e7',
+  // Trunk roads too draw far paler than the key's swatch, at every zoom: #d3d8c5 in each comparison capture, where
+  // the key's colour captures 7–10/255 darker than drawn. Solved from that offset; check it on a P3 display.
+  trunkPale: '#d9decd',
+  // A/B casings at cycle.travel's z12 (our 11) in the country: a dark grey device pixel, lighter than the near-black
+  // from its z13. Solved from ours capturing about 30/255 lighter than drawn (the pixel is partly covered).
+  majorCasingZ11: '#2e2e2e',
 }
 
 const flavour = {
@@ -198,7 +207,7 @@ const kd = ['get', 'kind_detail']
 // 10), then a wide fill with a dark casing. At its z10 (our 9) they're the only minor roads it draws.
 const tertiary = ['==', kd, 'tertiary']
 // Road fill by OSM class, from cycle.travel's key.
-const keyColour = ['match', kd, 'trunk', ct.trunk, 'primary', ct.primary, 'secondary', ct.secondary, ct.tertiary]
+const keyColour = ['match', kd, 'trunk', ct.trunkPale, 'primary', ct.primary, 'secondary', ct.secondary, ct.tertiary]
 const roadColour = [
   'interpolate',
   ['linear'],
@@ -254,6 +263,8 @@ const casingColour = [
   9,
   ['case', tertiary, ct.laneCasing, ct.majorCasingLow],
   11,
+  ['case', tertiary, ct.laneCasing, ct.majorCasingZ11],
+  12,
   ['case', tertiary, ct.laneCasing, ct.majorCasing],
 ]
 // Motorways: pale blue, wider than A roads from our z9, with a thin casing that darkens from faint grey to black.
@@ -273,15 +284,15 @@ const railWidth = [
   ...railStops.map((v, i) => (i % 2 ? ['case', ['has', 'service'], v / 2, v] : v)),
 ]
 // cycle.travel draws unclassified lanes as its key does, white with a dark casing, nearly as wide as an A road from
-// its z12 (our 11), and as a solid grey line below that, from its z11 (our 10). Residential streets stay thin and grey
-// until our z13.
+// its z12 (our 11), and as a solid grey line below that, from its z11 (our 10). Residential streets stay a solid grey
+// line, about 1px from our z12, until cycle.travel's z15 (our 14) gives them a white fill and a casing.
 const lane = ['==', kd, 'unclassified']
 // [zoom, lane, street]
 const minorStops = [
   [10, 0.9, 0.3],
   [11, 2.3, 0.45],
-  [12, 2.9, 0.7],
-  [13, 3.75, 1.3],
+  [12, 2.9, 1.1],
+  [13, 3.75, 1.15],
   [15, 5, 2.5],
   [18, 12, 11],
 ]
@@ -299,7 +310,11 @@ const minorColour = [
   ['case', lane, ct.laneLow, ct.minorLow],
   11,
   ['case', lane, '#ffffff', ct.minorLow],
+  12,
+  ['case', lane, '#ffffff', ct.laneLow],
   13,
+  ['case', lane, '#ffffff', ct.streetZ13],
+  14,
   '#ffffff',
 ]
 const minorCasing = [
@@ -313,7 +328,9 @@ const minorCasing = [
   12.5,
   ['case', lane, 0.57, 0],
   13,
-  0.6,
+  ['case', lane, 0.6, 0],
+  14,
+  0.73,
   16,
   1,
 ]
@@ -450,7 +467,7 @@ const basemap = (): Layer[] =>
             ['case', lane, 0.57, 0],
             13,
             ['case', lane, 0.6, 0],
-            13.5,
+            14,
             0.8,
           ],
         })
