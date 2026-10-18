@@ -1,0 +1,17 @@
+{
+  "name": "ride-on-map-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "sh scripts/setup-vendor.sh",
+    "fetch": "sh scripts/fetch-osm.sh",
+    "data": "sh scripts/build-data.sh",
+    "style": "node tools/build-style.mjs style.json http://localhost:8787",
+    "serve": "bun tools/serve.ts ."
+  },
+  "dependencies": {
+    "@protomaps/basemaps": "5.7.2",
+    "maplibre-gl": "6.11.2",
+    "pmtiles": "4.5.0"
+  }
+}
