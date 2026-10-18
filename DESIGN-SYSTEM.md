@@ -217,7 +217,7 @@ before adding a custom component in code.
     carry a `.caption2` label over where it starts ("SW", "W"). Its card writes the ride's start
     under the leading edge and "~finish" under the trailing one, with a worded legend below (dot,
     name, "~45%", or "Throughout" when there's only one). Hidden from VoiceOver; the legend speaks.
-    Sky colours: sunny `.yellow`, sunny intervals `.yellow` 50%, cloud `.gray`, not forecast yet
+    Sky colours: sunny `.yellow`, sunny intervals `.yellow` 50%, cloud `.gray`, data unavailable
     `.gray` 15%. Wind colours as `RouteProfile`: tailwind accent, crosswind `.orange`, headwind
     `.red`, light wind `.gray`.
 15. **`WindCompass`** — Weather's wind dial (104pt, scaled, at most 160pt): ticks every 5°, N E S W

@@ -18,7 +18,7 @@ struct SkyOnTheRide: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(sky.summary).font(.headline)
                     if sky.partial {
-                        Text("Part of the ride isn't forecast yet.")
+                        Text("Sky data isn't available for part of the ride.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }

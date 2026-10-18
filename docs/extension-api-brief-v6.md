@@ -9,7 +9,7 @@ Ship it as the next minor: **0.40.0**, or **0.41.0** if
 Design handoff v4 (sunshine wording) adds a sky chip and an "Expected conditions
 along the ride" timeline to the Journeys tiles and the popup's Rides cards. Each
 ride hour is a bar segment, sized by distance and coloured sunny, sunny intervals,
-cloud, or not forecast yet. The legend shows each category's share of the ride
+cloud, or data unavailable. The legend shows each category's share of the ride
 (`~55%`). When part of the ride has no sky symbol, the chip reads
 `Sunny where forecast` if every known part is sunny. The extension has shipped all
 of this; it is waiting on the data below.
@@ -31,7 +31,7 @@ whose daylight is unknown, to null, so the gap can fall mid-ride.
 scoring. As a result:
 
 - `best.conditions` loses every sky share, so the legend can't show the sunny and
-  sunny intervals shares beside `Not forecast yet`;
+  sunny intervals shares beside `Data unavailable`;
 - the ride hour that contains the gap loses its known part too. The client can't
   tell whether the known part is all sunny (`Sunny where forecast`) or how much
   of that hour to colour.
@@ -108,7 +108,7 @@ The extension already reads the field: `skyKinds` in `extension/ui/format.ts`
 takes `skyConditionShares ?? skyConditionDistanceFractions`, and `SkyShares` in
 `extension/lib/types.ts` allows `unknown`. Until the API sends it:
 
-- an hour with a gap counts entirely as `Not forecast yet`;
+- an hour with a gap counts entirely as `Data unavailable`;
 - the overall shares are the ride hours' shares, weighted by distance.
 
 Once it ships:
@@ -116,5 +116,5 @@ Once it ships:
 - add the field to the e2e mock;
 - drop the "Before skyConditionShares" fallback note.
 
-Separately, ask design whether `Not forecast yet` is the right label for a
-mid-ride Apple Weather gap.
+The legend calls the unknown share `Data unavailable`, not `Not forecast yet`,
+because the gap can fall mid-ride. The iOS app's Ride detail uses the same label.

@@ -15,7 +15,7 @@ public extension RideDetail {
                 case .sunny: "Sunny"
                 case .sunnyIntervals: "Sunny intervals"
                 case .cloud: "Cloud"
-                case .unknown: "Not forecast yet"
+                case .unknown: "Data unavailable"
                 }
             }
         }
@@ -40,7 +40,7 @@ public extension RideDetail {
         public var segments: [Segment]
         /// Each kind's share of the whole ride; kinds that don't appear are left out.
         public var shares: [Kind: Double]
-        /// Part of the ride isn't forecast yet.
+        /// Part of the ride has no sky data.
         public var partial: Bool
 
         public init(summary: String, look: Look, segments: [Segment], shares: [Kind: Double], partial: Bool) {

@@ -311,7 +311,7 @@ Build:
 - [x] "Wind from the …" footnote from `windFromDegrees` in 16 compass words, hidden when null or when "Wind on the Ride" shows ([reviewed contract](ride-detail-api-requests.md) §1)
 - [x] "Sky on the Ride": the extension's sky chip rules (`extension/ui/format.ts` `skyChip`) over
       `conditions.skyConditionShares` per ride hour and for the ride, `sunshineAssessment` for
-      what isn't forecast yet (`RideDetail.SkyBreakdown`)
+      the part of the ride with no sky data (`RideDetail.SkyBreakdown`)
 - [x] "Wind on the Ride": the extension's wind panel (`extension/ui/wind.ts`) over `windStretches`,
       falling back to `rideHours[]` without the map; gusts sentence against your comfort and limit
       in your units and the response time zone (`RideDetail.WindBreakdown`)

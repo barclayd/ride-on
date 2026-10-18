@@ -1119,7 +1119,7 @@ test('sky chip (handoff v4, 18a): labels, the timeline in ride order and rounded
       ),
     ),
   ).toBe(
-    'sun Sunny where forecast (dashed) | Sky: sunny where forecast | sunny 0.70, unknown 0.30 | Sunny ~70%, Not forecast yet ~30%',
+    'sun Sunny where forecast (dashed) | Sky: sunny where forecast | sunny 0.70, unknown 0.30 | Sunny ~70%, Data unavailable ~30%',
   );
   expect(
     sky({ sunny: 0.4, sunnyIntervals: 0.3, unknown: 0.3 }, [], partial)?.label,
@@ -1151,7 +1151,7 @@ test('sky chip (handoff v4, 18a): labels, the timeline in ride order and rounded
       }),
     ),
   ).toBe(
-    'sun Sunny where forecast (dashed) | Sky: sunny where forecast | sunny 0.75, unknown 0.25 | Sunny ~75%, Not forecast yet ~25%',
+    'sun Sunny where forecast (dashed) | Sky: sunny where forecast | sunny 0.75, unknown 0.25 | Sunny ~75%, Data unavailable ~25%',
   );
 
   // Mostly cloud keeps its word, amber only when sunshine is Important; cloud on a sunny ride is a mix.
