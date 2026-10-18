@@ -60,7 +60,9 @@ Sign-in differences from Chrome (Safari has no `identity` API):
 - No manifest `key` and no `identity` permission. On iPhone the popup fills the sheet.
 - Safari can't open the popup from a script, so the Journeys page's buttons (Sign in, the window,
   the forecast provider) open the popup page in a tab beside it. Chrome does the same when
-  `action.openPopup()` refuses, for example without a focused window.
+  `action.openPopup()` refuses, for example without a focused window. Signing in on that page
+  doesn't open the panel full screen: it says to close the page and go back to cycle.travel, with
+  **Back to cycle.travel** to do it (`?from=<tab id>` names the tab to return to).
 
 ## Ride notifications
 

@@ -2295,13 +2295,31 @@ test('Journeys page: signed out, Sign in opens the popup in a tab when the brows
   const opened = context.waitForEvent('page');
   await page.getByRole('button', { name: 'Sign in' }).click();
   const popup = await opened;
-  expect(popup.url()).toBe(`chrome-extension://${extensionId}/popup.html`);
+  expect(popup.url()).toMatch(
+    new RegExp(`^chrome-extension://${extensionId}/popup\\.html\\?from=\\d+$`),
+  );
   await expect(
     popup.getByRole('button', { name: 'Continue with Google' }),
   ).toBeVisible();
   // A card in the middle of the tab, not the popup's corner.
   const panel = await box(popup, '.ro-panel');
   expect(panel.x).toBeGreaterThan(0);
+
+  // Signed in there, it sends the rider back to cycle.travel instead of running the panel full screen.
+  await signIn(worker);
+  await popup.evaluate("chrome.runtime.sendMessage({ type: 'refresh' })");
+  await expect(popup.locator('.ro-hero-text')).toHaveText(
+    "You're signed inClose this page and go back to cycle.travel to use Ride On.",
+  );
+  await expect(popup.getByRole('tablist')).toHaveCount(0);
+  await popup.screenshot({ path: test.info().outputPath('signed-in-tab.png') });
+  const closed = popup.waitForEvent('close');
+  await popup.getByRole('button', { name: 'Back to cycle.travel' }).click();
+  await closed;
+  // The Journeys page has already caught up.
+  await expect(page.locator('ride-on-module .ro-module-title')).toContainText(
+    'Tracked routes',
+  );
 });
 
 test('Journeys page: Tracked routes, window button, row chips and + Track', async ({

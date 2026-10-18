@@ -944,8 +944,9 @@ const handle = async (message: Message, from?: Browser.tabs.Tab) => {
           );
         if (opened) return;
       }
+      // ?from names the rider's tab, so signing in here can send them back to it.
       await browser.tabs.create({
-        url: browser.runtime.getURL('/popup.html'),
+        url: `${browser.runtime.getURL('/popup.html')}?from=${from?.id ?? ''}`,
         ...(from && { windowId: from.windowId, index: from.index + 1 }),
       });
       return;
