@@ -1237,6 +1237,9 @@ test('alerts fix the time: the tile keeps it, and says what we are tracking', as
     "Alerts lock this day and time. The tile stops moving to the best time, and we'll tell you if a better one opens up.",
   );
   await expect(dialog.locator('.ro-alerts-go svg')).toHaveCount(1);
+  await expect(dialog.locator('.ro-alerts-when > span')).toHaveText(
+    'Notifications sent if',
+  );
   await expectPanelFits(page);
   await page.screenshot({ path: test.info().outputPath('alerts-fixed.png') });
   await dialog
