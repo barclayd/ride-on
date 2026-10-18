@@ -1857,12 +1857,24 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   // No comparison with usual, averages or licence line: the chart shows how it compares.
   await expect(warmth).not.toContainText('than usual');
   await expect(warmth.locator('p, small')).toHaveCount(0);
+  // The axis (26b): a 5° grid around the lines and the shaded range, whose edges are labelled instead.
   await expect(warmth.locator('.ro-temp-end')).toHaveText(['9°', '14°']);
-  await expect(warmth.locator('.ro-temp-feels-label')).toHaveText('feels 6°');
-  await expect(warmth.locator('.ro-temp-gutter span')).toHaveText([
+  await expect(warmth.locator('.ro-temp-gutter [data-edge]')).toHaveText([
     '22°',
     '10°',
   ]);
+  await expect(
+    warmth.locator('.ro-temp-gutter span:not([data-edge])'),
+  ).toHaveText(['5°', '15°', '25°']);
+  await expect(warmth.locator('.ro-temp-grid')).toHaveCount(3);
+  await expect(warmth.locator('.ro-temp-zone')).toHaveText('Your range');
+  await expect(warmth.locator('.ro-temp-zone')).toHaveAttribute(
+    'data-slot',
+    'left',
+  );
+  // The coldest feels like is ringed, without a label.
+  await expect(warmth.locator('.ro-temp-mark')).toHaveCount(1);
+  await expect(warmth).not.toContainText('feels 6°');
   await expect(warmth.locator('.ro-key li')).toHaveText([
     'Temperature',
     'Feels like',
