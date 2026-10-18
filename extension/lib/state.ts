@@ -8,6 +8,7 @@ import type {
   Attribution,
   Climbing,
   Conditions,
+  Departure,
   NextWindows,
   Pause,
   PreferencesPatch,
@@ -241,6 +242,13 @@ export type Message =
       triggers?: AlertTriggers;
       expectedTrackingVersion: number;
       replaceTrackedRideId: string | null;
+      departure?: Departure; // a fixed time moving to it (brief v13) shows at once
+    }
+  | {
+      type: 'setTriggers';
+      trackedRideId: string;
+      triggers: AlertTriggers;
+      expectedTrackingVersion: number;
     }
   | { type: 'enablePush' | 'disablePush' | 'pushStatus' }
   | { type: 'pause'; until: string | null }

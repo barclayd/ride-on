@@ -25,8 +25,14 @@ import {
   type State,
 } from '../lib/state';
 import { surfaceSeenKey } from '../lib/surface';
-import { loadTracker, saveTrackedRide } from '../lib/tracking';
 import {
+  loadTracker,
+  saveTrackedRide,
+  saveTriggers,
+  type Tracker,
+} from '../lib/tracking';
+import {
+  type AlertTriggers,
   MAX_TRACKED,
   type NextWindows,
   type PreferencesPatch,
@@ -48,6 +54,7 @@ import {
   instant,
   logged,
   newest,
+  pinDeparture,
   planFor,
   searchPatch,
   shownOf,
@@ -230,6 +237,10 @@ const recRequest = (state: State) => {
       user.id,
       user.version,
       state.rides[0]?.id,
+      // Rankings keep the tracked departure (brief v13), so they follow the plan.
+      ...(state.tracker.fixed
+        ? [state.alertRouteId && state.tracker.ride?.id]
+        : []),
     ]),
   };
 };
@@ -461,6 +472,9 @@ const refresh = async (force = false) => {
         : null,
   }));
   const tags = loadSummaries().catch(() => {}); // tags only; the panel works without them
+  // Rankings keep the tracked departure (brief v13): a plan changed on another device ranks again.
+  const fixed = (await readState()).tracker.fixed;
+  if (fixed) await syncTracking();
   const state = await readState();
   const { shown, expired, pause } = state;
   await armResume();
@@ -470,7 +484,7 @@ const refresh = async (force = false) => {
   else if (!expired && shown && ended(shown, new Date())) await expire(true);
   else if (force || expired || !current(state)) await rank();
   await tags;
-  await syncTracking();
+  if (!fixed) await syncTracking();
   await updatePushStatus();
 };
 
@@ -675,27 +689,27 @@ const importJourney = async (journey: JourneyGpx) => {
   return route;
 };
 
+// The plan as saved, with its switches remembered for its ride (shown in Chrome, Safari and Journeys).
+const tracked =
+  (tracker: Tracker, triggers?: AlertTriggers) =>
+  (state: State): Partial<State> => {
+    const ride = tracker.ride;
+    const saved = ride?.alerts?.triggers ?? triggers;
+    return {
+      tracker,
+      alertRouteId: ride && !ride.refresh.closed ? ride.routeId : null,
+      ...(ride &&
+        saved && { triggers: { ...state.triggers, [ride.routeId]: saved } }),
+    };
+  };
+
 const syncTracking = async () => {
   const owner = (await readState()).user?.id;
   try {
     const tracker = await loadTracker();
+    // Choices made on another device come with it.
     await update((state) =>
-      state.user?.id !== owner
-        ? {}
-        : {
-            tracker,
-            alertRouteId:
-              tracker.ride && !tracker.ride.refresh.closed
-                ? tracker.ride.routeId
-                : null,
-            // Choices made on another device.
-            ...(tracker.ride?.alerts && {
-              triggers: {
-                ...state.triggers,
-                [tracker.ride.routeId]: tracker.ride.alerts.triggers,
-              },
-            }),
-          },
+      state.user?.id !== owner ? {} : tracked(tracker)(state),
     );
   } catch (error) {
     await update((state) => ({
@@ -835,7 +849,7 @@ const handle = async (message: Message) => {
       if (message.routeId) {
         if (!message.recommendationRef)
           throw new Error('Refresh this ride before tracking it.');
-        const { routeId, triggers } = message;
+        const { routeId, triggers, departure } = message;
         try {
           const tracker = await saveTrackedRide(
             message.recommendationRef,
@@ -844,14 +858,16 @@ const handle = async (message: Message) => {
             triggers && (await readState()).tracker.triggers ? triggers : null,
           );
           // The API keeps an active plan's choices when the same departure is tracked again.
-          const saved = tracker.ride?.alerts?.triggers ?? triggers;
-          return update((state) => ({
-            tracker,
-            alertRouteId: tracker.ride?.routeId ?? null,
-            ...(saved && {
-              triggers: { ...state.triggers, [routeId]: saved },
-            }),
-          }));
+          const moved = tracker.fixed && departure && tracker.ride;
+          await update((state) => {
+            const next = { ...state, ...tracked(tracker, triggers)(state) };
+            // Alerts moved to another time show there at once; the rankings follow below.
+            if (!moved || !state.recs) return next;
+            next.recs = pinDeparture(state.recs, routeId, departure, moved.id);
+            return { ...next, shown: state.shown && shownOf(next, new Date()) };
+          });
+          if (moved) rank().catch(() => {});
+          return;
         } catch (error) {
           await syncTracking();
           throw error;
@@ -863,6 +879,19 @@ const handle = async (message: Message) => {
         });
       return syncTracking();
     }
+    // Change alerts (handoff v11, 30c): new switches on the same plan and departure.
+    case 'setTriggers':
+      try {
+        const tracker = await saveTriggers(
+          message.trackedRideId,
+          message.expectedTrackingVersion,
+          message.triggers,
+        );
+        return update(tracked(tracker, message.triggers));
+      } catch (error) {
+        await syncTracking();
+        throw error;
+      }
     case 'enablePush': {
       const push = await enablePush();
       return update(() => ({ push }));

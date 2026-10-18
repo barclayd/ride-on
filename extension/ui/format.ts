@@ -31,6 +31,7 @@ import type {
   SkyShares,
   Standard,
   StandardsStatus,
+  TrackedDeparture,
   Window,
 } from '../lib/types';
 
@@ -548,6 +549,9 @@ export type Card = {
   best: Departure | null;
   outline: Outline | null; // the route sketch's shape (docs/extension-api-brief-v7.md)
   recent: boolean; // shares roads with recent rides, so scored a little lower
+  // docs/extension-api-brief-v13.md: the ride with alerts stays on its time; a better one is offered.
+  fixed: TrackedDeparture | null;
+  better: Departure | null;
 };
 export type Banner = 'provider' | 'nomatch' | 'incomplete' | 'distance';
 export type Results = {
@@ -608,6 +612,8 @@ export const buildResults = (
       best: null,
       outline: r?.outline ?? null,
       recent: false,
+      fixed: r?.trackedDeparture ?? null,
+      better: r?.betterDeparture ?? null,
     };
     if (!r)
       return selected.length && none.length === selected.length
@@ -997,6 +1003,46 @@ export const viewOf = (state: State, now: Date) => {
 };
 
 // The window on screen now, kept so the next open can tell it has ended.
+// Alerts moved to another time (handoff v11, 30c): the route shows it, fixed, until the API ranks
+// again. Its score and conditions are the API's, from the suggestion or the tile before.
+export const pinDeparture = (
+  recs: Recommendations,
+  routeId: string,
+  departure: Departure,
+  trackedRideId: string,
+): Recommendations => {
+  const pin = (r: RouteResult): RouteResult =>
+    r.routeId !== routeId || r.best?.departureAt === departure.departureAt
+      ? r
+      : {
+          ...r,
+          status: 'assessed',
+          best: { ...departure, scoreChange: null },
+          trackedDeparture: {
+            trackedRideId,
+            departureAt: departure.departureAt,
+            finishAt: departure.finishAt,
+            status: 'assessed',
+            reasonCode: null,
+          },
+          betterDeparture: null,
+          verdict: {
+            status:
+              departure.standards.status === 'below'
+                ? 'below_minimums'
+                : departure.standards.status === 'unknown'
+                  ? 'incomplete'
+                  : 'meets',
+            code: r.verdict.code,
+          },
+        };
+  return {
+    ...recs,
+    rankings: recs.rankings.map(pin),
+    unranked: recs.unranked.map(pin),
+  };
+};
+
 export const shownOf = (state: State, now: Date): Shown | null => {
   const { recs } = state;
   if (!recs?.range) return null;

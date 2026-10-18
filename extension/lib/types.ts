@@ -314,12 +314,22 @@ export type RouteResult = {
   departuresUnknown: number;
   departuresStandardsUnknown: number;
   best: Departure | null;
+  // docs/extension-api-brief-v13.md: the ride with alerts keeps its departure; absent before it ships.
+  trackedDeparture?: TrackedDeparture | null;
+  betterDeparture?: Departure | null; // 5+ points better in the window, for Move alerts
   issues: string[];
   warnings: string[];
   verdict: {
     status: 'meets' | 'below_minimums' | 'doesnt_fit' | 'incomplete';
     code: string;
   };
+};
+export type TrackedDeparture = {
+  trackedRideId: string;
+  departureAt: string;
+  finishAt: string;
+  status: 'assessed' | 'unavailable'; // unavailable: best is null, shown without a score
+  reasonCode?: string | null;
 };
 export type StandardsStatus =
   | 'not_configured'

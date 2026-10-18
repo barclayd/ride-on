@@ -20,6 +20,7 @@ import type {
 import {
   addDays,
   applyPatch,
+  clock,
   datesLabel,
   dayOfMonth,
   instant,
@@ -29,6 +30,7 @@ import {
   shortDate,
   weekday,
 } from '../ui/format';
+import { alertTimeline } from '../ui/triggers';
 
 const EXTENSION = path.resolve('.output/chrome-mv3-e2e');
 const JOURNEYS = readFileSync(path.resolve('e2e/journeys.html'), 'utf8');
@@ -87,6 +89,10 @@ let freshFor: number; // hours until the forecast behind the scores goes stale
 let trackedRide: any;
 let trackingVersion: number;
 let capabilities: Record<string, unknown> | undefined; // GET /tracked-rides' capabilities
+// With fixedDeparture (brief v13): a better departure an hour after the tracked one, and whether the
+// forecast still covers the tracked one.
+let betterScore: number | null;
+let pinnedUnavailable: boolean;
 let pauseDown: boolean; // pause writes fail
 
 const reset = () => {
@@ -94,6 +100,8 @@ const reset = () => {
   trackedRide = null;
   trackingVersion = 0;
   capabilities = undefined;
+  betterScore = null;
+  pinnedUnavailable = false;
   providerDown = false;
   sunshineUncertain = false;
   replays = new Map();
@@ -450,6 +458,46 @@ const recommendations = (body: any) => {
     rides.some(
       (r) => r.routeId === routeId && r.riddenOn >= addDays(day(0), -28),
     );
+  // With fixedDeparture the route with alerts keeps its departure, and offers a better one.
+  const pinned = (routeId: string) =>
+    capabilities?.fixedDeparture &&
+    trackedRide?.routeId === routeId &&
+    !trackedRide.refresh.closed
+      ? (trackedRide.pinned as { date: string; i: number })
+      : null;
+  const fixed = (routeId: string, i: number) => {
+    const at = pinned(routeId);
+    if (!at) return null;
+    const score = scores[routeId] ?? 84 - i * 40;
+    return {
+      best: pinnedUnavailable
+        ? null
+        : {
+            recommendationRef: `${routeId}:${at.date}:${at.i}`,
+            ...best(at.date, at.i, score),
+            scoreChange: changes[routeId] ?? null,
+            recentRides: { status: 'disabled', penaltyPoints: 0 },
+          },
+      trackedDeparture: {
+        trackedRideId: trackedRide.id,
+        departureAt: trackedRide.departureAt,
+        finishAt: trackedRide.finishAt,
+        status: pinnedUnavailable ? 'unavailable' : 'assessed',
+        reasonCode: pinnedUnavailable ? 'forecast_unavailable' : null,
+      },
+      betterDeparture:
+        betterScore === null || pinnedUnavailable
+          ? null
+          : {
+              recommendationRef: `${routeId}:${at.date}:${at.i + 1}`,
+              ...best(at.date, at.i + 1, betterScore),
+            },
+      ...(pinnedUnavailable && {
+        status: 'unassessable',
+        verdict: { status: 'incomplete', code: 'forecast_unavailable' },
+      }),
+    };
+  };
   const rankings = date
     ? selection.routeIds
         .map((routeId, i) => ({
@@ -468,7 +516,7 @@ const recommendations = (body: any) => {
           departuresUnknown: 0,
           departuresStandardsUnknown: 0,
           best: {
-            recommendationRef: `${routeId}:${date}`,
+            recommendationRef: `${routeId}:${date}:${i}`,
             ...best(date, i, scores[routeId] ?? 84 - i * 40), // a second route scores 44: Not recommended
             scoreChange: changes[routeId] ?? null,
             recentRides: recent(routeId)
@@ -477,12 +525,13 @@ const recommendations = (body: any) => {
                   status: variety ? 'no_recent_history' : 'disabled',
                   penaltyPoints: 0,
                 },
-          },
+          } as any,
           issues: [],
           warnings: [],
           verdict: { status: 'meets', code: 'meets' },
+          ...fixed(routeId, i),
         }))
-        .sort((a, b) => b.best.score - a.best.score)
+        .sort((a, b) => (b.best?.score ?? -1) - (a.best?.score ?? -1))
     : [];
   return {
     generatedAt: new Date().toISOString(),
@@ -535,12 +584,15 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
     // Like the API, it rejects fields it doesn't advertise.
     if (body.alerts && !capabilities?.alertTriggers)
       return [400, { error: { code: 'VALIDATION', message: 'Unknown field' } }];
-    const [routeId, date] = body.recommendationRef.split(':');
-    const candidate = best(date, 0, scores[routeId] ?? 84);
+    const [routeId, date, slot = '0'] = body.recommendationRef.split(':');
+    const i = Number(slot);
+    const candidate = best(date, i, scores[routeId] ?? 84);
     trackedRide = {
       id: crypto.randomUUID(),
       routeId,
       departureAt: candidate.departureAt,
+      finishAt: candidate.finishAt,
+      pinned: { date, i },
       timeZone: 'Europe/London',
       state: 'active',
       endedReason: null,
@@ -562,6 +614,29 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
   }
   if (key === `GET /tracked-rides/${trackedRide?.id}`)
     return [200, { ride: trackedRide }];
+  // Change alerts (brief v13 §3): new switches on the same plan.
+  if (key === `PATCH /tracked-rides/${trackedRide?.id}`) {
+    if (body.expectedTrackingVersion !== trackingVersion)
+      return [
+        409,
+        {
+          error: {
+            code: 'TRACKING_VERSION_CONFLICT',
+            message: 'Your tracked ride changed. Review it and try again.',
+          },
+        },
+      ];
+    trackedRide = { ...trackedRide, alerts: body.alerts };
+    trackingVersion++;
+    return [
+      200,
+      {
+        ride: trackedRide,
+        trackingVersion,
+        activeTrackedRideId: trackedRide.id,
+      },
+    ];
+  }
   if (key === `DELETE /tracked-rides/${trackedRide?.id}`) {
     trackedRide = null;
     trackingVersion++;
@@ -995,6 +1070,8 @@ test('the bell asks which alerts first; moving them is explicit, undoable and su
   await expect(cards).toHaveCount(2);
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   // A newly recommended departure for the same route can replace the pinned one.
+  selection.routeIds = ['r102', 'r101']; // Coast & Back's best moves an hour earlier
+  await page.getByRole('button', { name: 'Refresh forecast' }).click();
   const version = trackingVersion;
   await coastBell.click();
   await dialog.getByRole('button', { name: 'Turn on alerts' }).click();
@@ -1064,6 +1141,239 @@ test('once the API advertises triggers, the choices go with the ride', async ({
   expect(tracks().at(-1)?.body.alerts).toEqual({
     triggers: { rain: false, wind: true, cold: true, betterTime: true },
   });
+  // Until the API keeps the time fixed, the tile has no fixed time and the bell turns alerts off.
+  await expect(page.locator('.ro-fixed')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', {
+      name: 'Alerts on for Hilly Loop. Turn off alerts',
+    }),
+  ).toBeVisible();
+});
+
+// Brief v13: the API keeps the time fixed on the ride with alerts, and takes changes to its switches.
+const FIXED = {
+  alertTriggers: true,
+  finalForecastLocalTime: '18:00',
+  fixedDeparture: true,
+  alertEdits: true,
+};
+// The mock's departure i on a date, as the tile says it.
+const slotAt = (date: string, i: number) => {
+  const departureAt = `${date}T0${8 + i}:00:00Z`;
+  return {
+    departureAt,
+    day: shortDate(date),
+    dep: clock(departureAt, 'Europe/London'),
+    fin: clock(`${date}T1${1 + i}:00:00Z`, 'Europe/London'),
+  };
+};
+
+test('alerts fix the time: the tile keeps it, and says what we are tracking', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  capabilities = FIXED;
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  await answerPrompt(page, true);
+  const at = slotAt(day(1), 0);
+  const message = page.locator('.ro-toast span');
+  const undo = page.locator('.ro-toast').getByRole('button', { name: 'Undo' });
+  // 30d: the dialog shows the time as fixed, and says what that means.
+  await page.getByRole('button', { name: 'Get alerts for Hilly Loop' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Get alerts for this ride' });
+  await expect(dialog.locator('.ro-alerts-fixed')).toHaveText(
+    `${at.day} · ${at.dep} → ~${at.fin}`,
+  );
+  await expect(dialog.locator('.ro-alerts-ride > p')).toHaveText(
+    "Alerts lock this day and time. The tile stops moving to the best time, and we'll tell you if a better one opens up.",
+  );
+  await expect(dialog.locator('.ro-alerts-go svg')).toHaveCount(1);
+  await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('alerts-fixed.png') });
+  await dialog
+    .getByRole('switch', { name: 'It feels colder than your 10° minimum' })
+    .click();
+  await dialog.getByRole('button', { name: 'Turn on alerts' }).click();
+  await expect(message).toHaveText('Alerts on for Hilly Loop');
+  await expect.poll(() => trackedRide?.departureAt).toBe(at.departureAt);
+  // 30c: the tile shows the time as a pill; it and the bell open what we're tracking.
+  const card = page.locator('.ro-ride').first();
+  const pill = card.getByRole('button', {
+    name: `Alerts on for ${at.day}, ${at.dep} to ${at.fin}. What we're tracking for Hilly Loop`,
+  });
+  const bell = card.getByRole('button', {
+    name: "Alerts on for Hilly Loop. What we're tracking",
+  });
+  const tracked = page.getByRole('dialog', { name: 'Alerts for Hilly Loop' });
+  await expect(pill).toContainText(`${at.dep} → ~${at.fin}`);
+  await expect(card.locator('.ro-better')).toHaveCount(0);
+  await pill.click();
+  await expect(pill).toHaveAttribute('aria-expanded', 'true');
+  await expect(tracked).toBeFocused();
+  await expect(tracked.locator('.ro-tracked-slot')).toContainText(
+    `${at.day} · ${at.dep} → ~${at.fin}`,
+  );
+  // Only the switches that are on.
+  await expect(tracked.locator('ul li')).toHaveText([
+    'Rain becomes likely',
+    'A better time or day opens up',
+  ]);
+  const steps = alertTimeline(
+    at.departureAt,
+    'Europe/London',
+    new Date(),
+    '18:00',
+  );
+  await expect(tracked.locator('ol li b')).toHaveText(steps.map((s) => s.at));
+  await expect(tracked.locator('ol li')).toContainText(
+    steps.map((s) => s.text),
+  );
+  await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('tracking.png') });
+  // Escape, ×, a click outside and the pill again close it; focus goes back where it was.
+  await page.keyboard.press('Escape');
+  await expect(tracked).toBeHidden();
+  await expect(pill).toBeFocused();
+  await bell.click();
+  await expect(bell).toHaveAttribute('aria-expanded', 'true');
+  await tracked.getByRole('button', { name: 'Close' }).click();
+  await expect(tracked).toBeHidden();
+  await expect(bell).toBeFocused();
+  await pill.click();
+  await expect(tracked).toBeVisible();
+  await page.locator('.ro-heading').click({ position: { x: 2, y: 2 } });
+  await expect(tracked).toBeHidden();
+  await pill.click();
+  await expect(tracked).toBeVisible();
+  await pill.click();
+  await expect(tracked).toBeHidden();
+  // Change alerts edits the switches on the same plan.
+  const id = trackedRide.id;
+  const version = trackingVersion;
+  await pill.click();
+  await tracked.getByRole('button', { name: 'Change alerts' }).click();
+  const change = page.getByRole('dialog', {
+    name: 'Change alerts for this ride',
+  });
+  await expect(tracked).toBeHidden();
+  await expect(change.locator('.ro-alerts-fixed')).toHaveText(
+    `${at.day} · ${at.dep} → ~${at.fin}`,
+  );
+  await expect(change.locator('.ro-alerts-ride > p')).toHaveCount(0);
+  await expect(change).not.toContainText('Your browser will ask');
+  expect(
+    await change
+      .getByRole('switch')
+      .evaluateAll((all) => all.map((el) => el.getAttribute('aria-checked'))),
+  ).toEqual(['true', 'false', 'true']);
+  await change.getByRole('switch', { name: 'Rain becomes likely' }).click();
+  await change.getByRole('button', { name: 'Save alerts' }).click();
+  await expect(change).toBeHidden();
+  await expect(pill).toBeFocused();
+  await expect(message).toHaveText('Alerts updated for Hilly Loop');
+  await expect(undo).toHaveCount(0);
+  const patch = patches().at(-1);
+  expect(patch?.path).toBe(`/tracked-rides/${id}`);
+  expect(patch?.body).toEqual({
+    expectedTrackingVersion: version,
+    alerts: {
+      triggers: { rain: false, wind: true, cold: false, betterTime: true },
+    },
+  });
+  expect(trackedRide.id).toBe(id);
+  await pill.click();
+  await expect(tracked.locator('ul li')).toHaveText([
+    'A better time or day opens up',
+  ]);
+  // Turn off alerts stops the plan, with Undo; the tile goes back to the best time.
+  await tracked.getByRole('button', { name: 'Turn off alerts' }).click();
+  await expect(message).toHaveText('Alerts off for Hilly Loop');
+  await expect.poll(() => trackedRide).toBeNull();
+  await expect(card.locator('.ro-fixed')).toHaveCount(0);
+  await expect(
+    card.getByRole('button', { name: 'Get alerts for Hilly Loop' }),
+  ).toBeFocused();
+  await undo.click();
+  await expect.poll(() => trackedRide?.departureAt).toBe(at.departureAt);
+  expect(tracks().at(-1)?.body).toMatchObject({
+    recommendationRef: `r101:${day(1)}:0`,
+    alerts: {
+      triggers: { rain: false, wind: true, cold: false, betterTime: true },
+    },
+  });
+  await expect(pill).toBeVisible();
+});
+
+test('a better time on the ride with alerts can take them, with Undo', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  capabilities = FIXED;
+  await signIn(worker);
+  const page = await openPopup(context, extensionId);
+  await answerPrompt(page, true);
+  const at = slotAt(day(1), 0);
+  const next = slotAt(day(1), 1);
+  const message = page.locator('.ro-toast span');
+  const undo = page.locator('.ro-toast').getByRole('button', { name: 'Undo' });
+  await page.getByRole('button', { name: 'Get alerts for Hilly Loop' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Turn on alerts' })
+    .click();
+  await expect.poll(() => trackedRide?.departureAt).toBe(at.departureAt);
+  const card = page.locator('.ro-ride').first();
+  const better = card.locator('.ro-better');
+  await expect(card.locator('.ro-fixed')).toBeVisible();
+  await expect(better).toHaveCount(0);
+  // The API finds a better departure on the same route.
+  betterScore = 91;
+  await page.getByRole('button', { name: 'Refresh forecast' }).click();
+  await expect(better).toContainText(
+    `Better: ${at.day} · ${next.dep} → ~${next.fin} scores 91`,
+  );
+  await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('better.png') });
+  const original = trackedRide.id;
+  betterScore = null;
+  await better.getByRole('button', { name: 'Move alerts' }).click();
+  await expect(message).toHaveText(
+    `Alerts moved to ${weekday(day(1))} ${next.dep}`,
+  );
+  await expect.poll(() => trackedRide.departureAt).toBe(next.departureAt);
+  expect(tracks().at(-1)?.body).toMatchObject({
+    recommendationRef: `r101:${day(1)}:1`,
+    replaceTrackedRideId: original,
+    alerts: {
+      triggers: { rain: true, wind: true, cold: true, betterTime: true },
+    },
+  });
+  const moved = card.getByRole('button', {
+    name: `Alerts on for ${next.day}, ${next.dep} to ${next.fin}. What we're tracking for Hilly Loop`,
+  });
+  await expect(moved).toBeFocused();
+  await expect(better).toHaveCount(0);
+  // Undo puts them back on the time they were on.
+  await undo.click();
+  await expect.poll(() => trackedRide.departureAt).toBe(at.departureAt);
+  expect(tracks().at(-1)?.body.recommendationRef).toBe(`r101:${day(1)}:0`);
+  await expect(card.locator('.ro-fixed')).toContainText(
+    `${at.dep} → ~${at.fin}`,
+  );
+  // When the forecast can't score the fixed time, the tile keeps it, without a score.
+  pinnedUnavailable = true;
+  await page.getByRole('button', { name: 'Refresh forecast' }).click();
+  await expect(card).toContainText(
+    "Can't be assessed. The forecast is unavailable right now.",
+  );
+  await expect(card).toContainText('No score');
+  await expect(card.locator('.ro-fixed')).toContainText(
+    `${at.dep} → ~${at.fin}`,
+  );
+  await expect(better).toHaveCount(0);
 });
 
 test('a refresh shows how scores changed, then moves the rides into order', async ({

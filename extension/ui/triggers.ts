@@ -1,4 +1,5 @@
-// The alerts dialog's words (handoff v10, 29c): its triggers, when alerts run and its button.
+// The alerts dialog's words (handoff v10, 29c): its triggers, when alerts run and its button. What
+// we're tracking (v11, 30c) shows the same triggers and timing.
 import type { PushStatus } from '../lib/push';
 import type { AlertTriggers, Preferences } from '../lib/types';
 import {
@@ -66,17 +67,57 @@ export const triggerRows = (
 };
 
 // The final forecast is the evening before; a ride tracked after it only stops at departure.
+const finalForecast = (
+  departureAt: string,
+  timeZone: string,
+  now: Date,
+  summaryTime: string,
+) => {
+  const eve = addDays(localDate(departureAt, timeZone), -1);
+  return now.getTime() < Date.parse(instant(eve, summaryTime, timeZone))
+    ? eve
+    : null;
+};
+
 export const timingLine = (
   departureAt: string,
   timeZone: string,
   now: Date,
   summaryTime = SUMMARY_TIME,
 ) => {
-  const eve = addDays(localDate(departureAt, timeZone), -1);
+  const eve = finalForecast(departureAt, timeZone, now, summaryTime);
   const stop = `Alerts stop at ${clock(departureAt, timeZone)} when you leave.`;
-  return now.getTime() < Date.parse(instant(eve, summaryTime, timeZone))
+  return eve
     ? `Plus the final forecast at ${summaryTime} on ${shortDate(eve)}. ${stop}`
     : stop;
+};
+
+// What we're tracking (v11, 30c): when the rider hears from us, as a timeline.
+export type TimelineStep = { at: string; text: string; dot: string };
+export const alertTimeline = (
+  departureAt: string,
+  timeZone: string,
+  now: Date,
+  summaryTime = SUMMARY_TIME,
+): TimelineStep[] => {
+  const eve = finalForecast(departureAt, timeZone, now, summaryTime);
+  return [
+    { at: 'From now', text: 'Only when something changes', dot: '#8bc61f' },
+    ...(eve
+      ? [
+          {
+            at: `${shortDate(eve)}, ${summaryTime}`,
+            text: 'Final forecast for the ride',
+            dot: '#4c6223',
+          },
+        ]
+      : []),
+    {
+      at: `${shortDate(localDate(departureAt, timeZone))}, ${clock(departureAt, timeZone)}`,
+      text: 'Alerts stop when you leave',
+      dot: '#a9b0a0',
+    },
+  ];
 };
 
 export const confirmLabel = (on: number, moving: boolean) =>
