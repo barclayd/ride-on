@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { decodeJwt, decodeProtectedHeader } from 'jose';
 import { HttpResponse, http } from 'msw/http';
+import type { DeviceAlerts } from '../src/monitoring/device-alerts.ts';
 import type { MonitorState } from '../src/monitoring/policy.ts';
 import type { Alerts } from '../src/tracking/alerts.ts';
 import type { Snapshot } from '../src/tracking/model.ts';
@@ -113,6 +114,7 @@ const register = async (
   h: Harness,
   token = 'a'.repeat(64),
   id = crypto.randomUUID(),
+  alerts?: DeviceAlerts,
 ) => {
   const response = await h.send(`/push-devices/${id}`, {
     method: 'PUT',
@@ -121,6 +123,7 @@ const register = async (
       environment: 'sandbox',
       topic: 'com.danbarclay.rideon',
       platform: 'ios',
+      alerts,
     }),
   });
   assert.equal(response.status, 200);
@@ -189,6 +192,521 @@ const monitorState = async (h: Harness, id: string) => {
     .bind('alice', id)
     .first<{ state_json: string | null; resume_pending: number }>();
 };
+const setDeviceAlerts = async (
+  h: Harness,
+  id: string,
+  alerts: DeviceAlerts,
+) => {
+  const response = await h.send(`/push-devices/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ alerts }),
+  });
+  assert.equal(response.status, 200);
+  return json<{
+    device: { id: string; alerts: DeviceAlerts };
+    deliveryConfigured: boolean;
+  }>(response);
+};
+const allDeviceAlerts = { rideAlerts: true, finalForecast: true, sound: true };
+const noDeviceAlerts = {
+  rideAlerts: false,
+  finalForecast: false,
+  sound: false,
+};
+type DeliveredMessage = {
+  reasons: string[];
+  aps: {
+    sound?: string;
+    alert: { title: string; body: string };
+    'thread-id': string;
+  };
+};
+
+run(
+  'device alert settings validate strictly, preserve token rotation, and stay private to the owner',
+  async (h) => {
+    const id = await register(h);
+    const body = {
+      token: 'a'.repeat(64),
+      environment: 'sandbox',
+      topic: 'com.danbarclay.rideon',
+      platform: 'ios',
+    };
+    const db = await h.runtime.getD1Database('ROUTES_DB');
+    const row = () =>
+      db
+        .prepare('SELECT version,registered_at FROM push_devices WHERE id = ?')
+        .bind(id)
+        .first();
+    const initial = await row();
+    const listing = async () =>
+      json<{ devices: { id: string; alerts: DeviceAlerts }[] }>(
+        await h.send('/push-devices'),
+      );
+    assert.deepEqual(first((await listing()).devices).alerts, allDeviceAlerts);
+    for (const alerts of [
+      {},
+      { rideAlerts: true },
+      { ...allDeviceAlerts, sound: 'false' },
+      { ...allDeviceAlerts, extra: true },
+      null,
+    ]) {
+      for (const method of ['PUT', 'PATCH'])
+        assert.equal(
+          (
+            await h.send(`/push-devices/${id}`, {
+              method,
+              body: JSON.stringify(
+                method === 'PUT' ? { ...body, alerts } : { alerts },
+              ),
+            })
+          ).status,
+          400,
+        );
+    }
+    for (const invalid of [{}, { alerts: allDeviceAlerts, token: body.token }])
+      assert.equal(
+        (
+          await h.send(`/push-devices/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(invalid),
+          })
+        ).status,
+        400,
+      );
+    assert.equal(
+      (
+        await h.send(`/push-devices/${id}`, {
+          method: 'PATCH',
+          token: null,
+          body: JSON.stringify({ alerts: noDeviceAlerts }),
+        })
+      ).status,
+      401,
+    );
+    for (const [deviceId, token] of [
+      [id, BOB_TOKEN],
+      [crypto.randomUUID(), undefined],
+    ])
+      assert.equal(
+        (
+          await h.send(`/push-devices/${deviceId}`, {
+            method: 'PATCH',
+            token,
+            body: JSON.stringify({ alerts: noDeviceAlerts }),
+          })
+        ).status,
+        404,
+      );
+    const patched = await setDeviceAlerts(h, id, noDeviceAlerts);
+    assert.deepEqual(patched.device.alerts, noDeviceAlerts);
+    assert.deepEqual(await row(), initial);
+    await register(h, 'b'.repeat(64), id);
+    assert.deepEqual(first((await listing()).devices).alerts, noDeviceAlerts);
+    assert.equal(
+      (
+        await db
+          .prepare('SELECT version FROM push_devices WHERE id = ?')
+          .bind(id)
+          .first<{ version: number }>()
+      )?.version,
+      2,
+    );
+    const changed = await h.send(`/push-devices/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...body,
+        token: 'b'.repeat(64),
+        alerts: { ...allDeviceAlerts, sound: false },
+      }),
+    });
+    assert.equal(changed.status, 200);
+    assert.deepEqual(
+      (await json<{ device: { alerts: DeviceAlerts } }>(changed)).device.alerts,
+      { ...allDeviceAlerts, sound: false },
+    );
+    assert.equal(
+      (
+        await db
+          .prepare('SELECT version FROM push_devices WHERE id = ?')
+          .bind(id)
+          .first<{ version: number }>()
+      )?.version,
+      2,
+    );
+    const second = await register(
+      h,
+      'c'.repeat(64),
+      crypto.randomUUID(),
+      noDeviceAlerts,
+    );
+    assert.deepEqual(
+      (await listing()).devices.find((d) => d.id === second)?.alerts,
+      noDeviceAlerts,
+    );
+    const browser = crypto.randomUUID();
+    assert.equal((await registerBrowser(h, browser)).status, 200);
+    assert.equal(
+      (
+        await h.send(`/push-devices/${browser}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ alerts: noDeviceAlerts }),
+        })
+      ).status,
+      404,
+    );
+    assert.equal(
+      (
+        await h.send(`/push-devices/${browser}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            transport: 'web_push',
+            platform: 'chrome',
+            subscription,
+            alerts: allDeviceAlerts,
+          }),
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await json<{ deviceAlerts: boolean }>(
+          await h.send('/push-devices/config'),
+        )
+      ).deviceAlerts,
+      true,
+    );
+  },
+);
+
+run(
+  'per-device ride switches isolate score and breach notifications and remove sound only for the silent device',
+  async (h) => {
+    const ride = await seed(h);
+    await register(h);
+    await register(h, 'b'.repeat(64), crypto.randomUUID(), {
+      rideAlerts: false,
+      finalForecast: true,
+      sound: true,
+    });
+    await register(h, 'c'.repeat(64), crypto.randomUUID(), {
+      rideAlerts: true,
+      finalForecast: false,
+      sound: false,
+    });
+    await register(h, 'd'.repeat(64), crypto.randomUUID(), noDeviceAlerts);
+    await h.restart({ APNS_CONFIG_JSON: config });
+    const payloads = new Map<string, DeliveredMessage>();
+    h.use(
+      metOffice(),
+      http.post(
+        'https://api.sandbox.push.apple.com/3/device/:token',
+        async ({ request, params }) => {
+          payloads.set(
+            String(params.token),
+            (await request.json()) as DeliveredMessage,
+          );
+          return new HttpResponse(null, { status: 200 });
+        },
+      ),
+    );
+    await change(h, ride, -6, (s) => {
+      s.pick.candidate.standards.status = 'below';
+      s.pick.candidate.standards.failures = [
+        {
+          standard: 'maximumGustKph',
+          actual: 45,
+          limit: 30,
+          at: ride.departureAt,
+          date: '2026-10-10',
+          timeZone: 'Europe/London',
+          positionKm: 0,
+          affectedDistanceKm: 1,
+          sections: [{ fromKm: 0, toKm: 1, observedAt: ride.departureAt }],
+        },
+      ];
+    });
+    await monitor(h, ride.id);
+    assert.deepEqual([...payloads.keys()].sort(), [
+      'a'.repeat(64),
+      'c'.repeat(64),
+    ]);
+    const loud = payloads.get('a'.repeat(64)),
+      silent = payloads.get('c'.repeat(64));
+    assert.ok(loud && silent);
+    assert.deepEqual(loud.reasons, ['minimum_breach', 'score_worsened']);
+    assert.equal(loud.aps.sound, 'default');
+    assert.equal(Object.hasOwn(silent.aps, 'sound'), false);
+    assert.deepEqual(silent, {
+      ...loud,
+      aps: { alert: loud.aps.alert, 'thread-id': ride.id },
+    });
+    await monitor(h, ride.id);
+    assert.equal(
+      first((await notifications(h, ride.id)).notifications).devicesAccepted,
+      2,
+    );
+    assert.equal(
+      first((await notifications(h, ride.id)).notifications).devicesPending,
+      0,
+    );
+  },
+);
+
+for (const combined of [false, true]) {
+  run(
+    `evening forecast respects device switches and permits either switch for combined reasons (${combined})`,
+    async (h) => {
+      const ride = await seed(h);
+      await register(h, 'a'.repeat(64), crypto.randomUUID(), {
+        rideAlerts: false,
+        finalForecast: true,
+        sound: true,
+      });
+      await register(h, 'b'.repeat(64), crypto.randomUUID(), {
+        rideAlerts: true,
+        finalForecast: false,
+        sound: true,
+      });
+      await register(h, 'c'.repeat(64), crypto.randomUUID(), noDeviceAlerts);
+      const at = '2026-10-09T17:00:00.000Z'; // 18:00 Europe/London.
+      await h.restart({ TEST_NOW: at, APNS_CONFIG_JSON: config });
+      const payloads = new Map<string, DeliveredMessage>();
+      h.use(
+        metOffice(({ request }) =>
+          HttpResponse.json(hourlyForecast(request, { modelRunDate: at })),
+        ),
+        http.post(
+          'https://api.sandbox.push.apple.com/3/device/:token',
+          async ({ request, params }) => {
+            payloads.set(
+              String(params.token),
+              (await request.json()) as DeliveredMessage,
+            );
+            return new HttpResponse(null, { status: 200 });
+          },
+        ),
+      );
+      const refreshed = await h.send(`/tracked-rides/${ride.id}/refresh`, {
+        method: 'POST',
+      });
+      assert.equal(refreshed.status, 200);
+      const fresh = (await json<{ ride: Ride }>(refreshed)).ride;
+      await change(h, fresh, combined ? -6 : 0);
+      await monitor(h, ride.id);
+      assert.deepEqual(
+        [...payloads.keys()].sort(),
+        combined ? ['a'.repeat(64), 'b'.repeat(64)] : ['a'.repeat(64)],
+      );
+      const message = payloads.get('a'.repeat(64));
+      assert.ok(message);
+      assert.deepEqual(
+        message.reasons,
+        combined ? ['evening_summary', 'score_worsened'] : ['evening_summary'],
+      );
+      if (combined) assert.deepEqual(payloads.get('b'.repeat(64)), message);
+      await monitor(h, ride.id);
+      assert.equal((await notifications(h, ride.id)).notifications.length, 1);
+    },
+  );
+}
+
+run(
+  'all devices switched off advance the reference quietly and re-enabling does not replay old changes',
+  async (h) => {
+    const ride = await seed(h);
+    const id = await register(
+      h,
+      'a'.repeat(64),
+      crypto.randomUUID(),
+      noDeviceAlerts,
+    );
+    await h.restart({ APNS_CONFIG_JSON: config });
+    const payloads: DeliveredMessage[] = [];
+    h.use(
+      metOffice(),
+      http.post(
+        'https://api.sandbox.push.apple.com/3/device/:token',
+        async ({ request }) => {
+          payloads.push((await request.json()) as DeliveredMessage);
+          return new HttpResponse(null, { status: 200 });
+        },
+      ),
+    );
+    await change(h, ride, -6);
+    await monitor(h, ride.id);
+    const state = await monitorState(h, ride.id);
+    assert.ok(state?.state_json);
+    assert.equal(
+      (JSON.parse(state.state_json) as MonitorState).reference.score,
+      ride.baseline.pick.candidate.score - 6,
+    );
+    assert.deepEqual((await notifications(h, ride.id)).notifications, []);
+    await setDeviceAlerts(h, id, allDeviceAlerts);
+    await h.restart();
+    await monitor(h, ride.id);
+    assert.equal(payloads.length, 0);
+    // A new rain crossing is still eligible immediately, even within cooldown.
+    await change(h, ride, -6, (s) => {
+      for (const hour of s.pick.candidate.rideHours)
+        if (hour.conditions)
+          hour.conditions.maximumPrecipitationProbability = 0.5;
+    });
+    await monitor(h, ride.id);
+    assert.deepEqual(first(payloads).reasons, ['rain_likely']);
+  },
+);
+
+run(
+  'disabled pending deliveries are consumed during backoff without pretending transport acceptance',
+  async (h) => {
+    const ride = await seed(h);
+    const id = await register(h);
+    await change(h, ride, -6);
+    await monitor(h, ride.id); // Missing credentials leaves a retry.
+    assert.equal(
+      first((await notifications(h, ride.id)).notifications).devicesPending,
+      1,
+    );
+    await setDeviceAlerts(h, id, noDeviceAlerts);
+    // PATCH itself leaves the pending attempt intact.
+    assert.equal(
+      first((await notifications(h, ride.id)).notifications).devicesPending,
+      1,
+    );
+    await monitor(h, ride.id); // No clock advance; retry is not yet due.
+    const event = first((await notifications(h, ride.id)).notifications);
+    assert.equal(event.devicesPending, 0);
+    assert.equal(event.devicesAccepted, 0);
+    assert.equal(event.status, 'superseded');
+    await setDeviceAlerts(h, id, allDeviceAlerts);
+    await h.restart({
+      TEST_NOW: '2026-10-09T12:15:00.000Z',
+      APNS_CONFIG_JSON: config,
+    });
+    await monitor(h, ride.id); // No APNs handler: any replay fails teardown.
+    assert.equal((await notifications(h, ride.id)).notifications.length, 1);
+  },
+);
+
+for (const switchAllOff of [false, true]) {
+  run(
+    `switches are re-read during delivery; only enabled failures retry (all off: ${switchAllOff})`,
+    async (h) => {
+      const ride = await seed(h);
+      const firstId = '00000000-0000-4000-8000-000000000001';
+      const secondId = '00000000-0000-4000-8000-000000000002';
+      await register(h, 'a'.repeat(64), firstId);
+      await register(h, 'b'.repeat(64), secondId);
+      await h.restart({ APNS_CONFIG_JSON: config });
+      const db = await h.runtime.getD1Database('ROUTES_DB');
+      const sends: string[] = [];
+      let fail = true;
+      let release = () => {},
+        entered = () => {};
+      const wait = new Promise<void>((r) => {
+        release = r;
+      });
+      const started = new Promise<void>((r) => {
+        entered = r;
+      });
+      h.use(
+        metOffice(),
+        http.post(
+          'https://api.sandbox.push.apple.com/3/device/:token',
+          async ({ request, params }) => {
+            sends.push(String(params.token));
+            if (fail) {
+              entered();
+              await wait;
+              return new HttpResponse(null, { status: 503 });
+            }
+            assert.equal(
+              Object.hasOwn(
+                ((await request.json()) as DeliveredMessage).aps,
+                'sound',
+              ),
+              false,
+            );
+            return new HttpResponse(null, { status: 200 });
+          },
+        ),
+      );
+      await change(h, ride, -6);
+      const pending = monitor(h, ride.id);
+      await started;
+      try {
+        await setDeviceAlerts(h, secondId, noDeviceAlerts);
+        if (switchAllOff) await setDeviceAlerts(h, firstId, noDeviceAlerts);
+      } finally {
+        release();
+      }
+      await pending;
+      assert.deepEqual(sends, ['a'.repeat(64)]);
+      assert.equal(
+        first((await notifications(h, ride.id)).notifications).devicesPending,
+        switchAllOff ? 0 : 1,
+      );
+      const state = await monitorState(h, ride.id);
+      assert.ok(state?.state_json);
+      assert.equal(
+        (JSON.parse(state.state_json) as MonitorState).reference.score,
+        ride.baseline.pick.candidate.score - (switchAllOff ? 6 : 0),
+      );
+      assert.equal(
+        (
+          await db
+            .prepare('SELECT status FROM push_deliveries WHERE device_id = ?')
+            .bind(secondId)
+            .first<{ status: string }>()
+        )?.status,
+        'cancelled',
+      );
+      await setDeviceAlerts(h, firstId, { ...allDeviceAlerts, sound: false });
+      await setDeviceAlerts(h, secondId, allDeviceAlerts);
+      fail = false;
+      await h.restart({ TEST_NOW: '2026-10-09T12:15:00.000Z' });
+      await monitor(h, ride.id);
+      assert.deepEqual(
+        sends,
+        switchAllOff ? ['a'.repeat(64)] : ['a'.repeat(64), 'a'.repeat(64)],
+      );
+      assert.equal(
+        first((await notifications(h, ride.id)).notifications).devicesAccepted,
+        switchAllOff ? 0 : 1,
+      );
+    },
+  );
+}
+run(
+  'a disabled evening forecast is consumed once and is not replayed when enabled later',
+  async (h) => {
+    const ride = await seed(h);
+    const id = await register(h, 'a'.repeat(64), crypto.randomUUID(), {
+      ...allDeviceAlerts,
+      finalForecast: false,
+    });
+    const at = '2026-10-09T17:00:00.000Z';
+    await h.restart({ TEST_NOW: at, APNS_CONFIG_JSON: config });
+    h.use(
+      metOffice(({ request }) =>
+        HttpResponse.json(hourlyForecast(request, { modelRunDate: at })),
+      ),
+    );
+    await monitor(h, ride.id);
+    const state = await monitorState(h, ride.id);
+    assert.ok(state?.state_json);
+    assert.equal(
+      (JSON.parse(state.state_json) as MonitorState).summaryDone,
+      true,
+    );
+    await setDeviceAlerts(h, id, allDeviceAlerts);
+    await h.restart();
+    await monitor(h, ride.id);
+    assert.deepEqual((await notifications(h, ride.id)).notifications, []);
+  },
+);
 run(
   'device registration is authenticated, owner-scoped, bounded, rotates tokens and never exposes them',
   async (h) => {

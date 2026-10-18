@@ -10,6 +10,7 @@ import type { Env } from '../types.ts';
 import { createD1UserStore } from '../users/model.ts';
 import { activePause, readPause } from '../users/pause.ts';
 import { type Device, sendPush } from './apns.ts';
+import { allowsDeviceAlert, devicePayload } from './device-alerts.ts';
 import { pushPayload } from './message.ts';
 import {
   type Alert,
@@ -349,6 +350,31 @@ export const monitorRide = async (
       await cancelPending(db, owner, plan, token);
       event = null;
     }
+    const registeredDevices = () =>
+      db
+        .prepare(
+          'SELECT * FROM push_devices WHERE owner_id = ? ORDER BY id LIMIT 20',
+        )
+        .bind(owner)
+        .all<Device>();
+    const allSwitchedOff = (devices: Device[], alert: Alert) =>
+      devices.length > 0 &&
+      !devices.some((device) => allowsDeviceAlert(device, alert.reasons));
+    const handleQuietly = async (alert: Alert) => {
+      // Save first: if cancellation is interrupted, the next check sees the
+      // advanced reference and cancels the old event instead of replaying it.
+      // This is an opt-out, not a transport acceptance in the delivery audit.
+      await saveState(
+        acceptAlert(state, alert, now().toISOString()),
+        current ? revision : null,
+      );
+      await cancelPending(db, owner, plan, token);
+    };
+    const devices = result.alert ? (await registeredDevices()).results : [];
+    if (result.alert && allSwitchedOff(devices, result.alert)) {
+      await handleQuietly(result.alert);
+      return;
+    }
     // Coalesce unsent changes to the current decision. A confirmed APNs acceptance
     // advances the reference once; a failed device never makes other devices repeat it.
     if (
@@ -356,13 +382,7 @@ export const monitorRide = async (
       (!event || event.decision_json !== JSON.stringify(result.alert))
     ) {
       await cancelPending(db, owner, plan, token);
-      const devices = await db
-        .prepare(
-          'SELECT * FROM push_devices WHERE owner_id = ? ORDER BY id LIMIT 20',
-        )
-        .bind(owner)
-        .all<Device>();
-      if (devices.results.length) {
+      if (devices.length) {
         const id = crypto.randomUUID();
         const expires = current
           ? ([
@@ -408,7 +428,7 @@ export const monitorRide = async (
               plan,
               now().toISOString(),
             ),
-          ...devices.results.map((d) =>
+          ...devices.map((d) =>
             db
               .prepare(`INSERT INTO push_deliveries(notification_id,device_id,device_version,apns_id,next_attempt_at)
             SELECT ?,?,?,?,? WHERE EXISTS (SELECT 1 FROM tracking_notifications WHERE id = ?)`)
@@ -432,19 +452,16 @@ export const monitorRide = async (
       event = null;
     }
     if (!event) return;
+    const alert = JSON.parse(event.decision_json) as Alert;
     const deliveries = await db
       .prepare(`SELECT d.*,p.* FROM push_deliveries d JOIN push_devices p ON p.id = d.device_id
-      WHERE d.notification_id = ? AND d.status = 'pending' AND d.next_attempt_at <= ? AND p.owner_id = ? AND p.version = d.device_version LIMIT 20`)
-      .bind(event.id, now().toISOString(), owner)
-      .all<Device & { apns_id: string; attempts: number }>();
+      WHERE d.notification_id = ? AND d.status = 'pending' AND p.owner_id = ? AND p.version = d.device_version LIMIT 20`)
+      .bind(event.id, owner)
+      .all<
+        Device & { apns_id: string; attempts: number; next_attempt_at: string }
+      >();
     for (const device of deliveries.results) {
       const live = await getTracking(db, owner, plan);
-      const registered = await db
-        .prepare(
-          'SELECT 1 FROM push_devices WHERE id = ? AND owner_id = ? AND version = ?',
-        )
-        .bind(device.id, owner, device.version)
-        .first();
       if (
         !(await held()) ||
         activePause(await readPause(db, owner), now()) ||
@@ -457,15 +474,32 @@ export const monitorRide = async (
         (!event.assessment_id && snapshotFor(live, now().toISOString()))
       )
         return;
+      // Switch edits do not change registration versions. Read them again for
+      // every send, including when an earlier device's request was in flight.
+      const registered = await db
+        .prepare(
+          'SELECT * FROM push_devices WHERE id = ? AND owner_id = ? AND version = ?',
+        )
+        .bind(device.id, owner, device.version)
+        .first<Device>();
       if (!registered) continue;
+      if (!allowsDeviceAlert(registered, alert.reasons)) {
+        await db
+          .prepare(`UPDATE push_deliveries SET status = 'cancelled',reason = 'device_alerts_disabled'
+            WHERE notification_id = ? AND device_id = ? AND device_version = ? AND status = 'pending'`)
+          .bind(event.id, device.id, device.version)
+          .run();
+        continue;
+      }
+      if (device.next_attempt_at > now().toISOString()) continue;
       const sent = await sendPush(
         env,
-        device,
+        registered,
         {
           id: device.apns_id,
           planId: plan,
           expiresAt: event.expires_at,
-          payload: event.payload_json,
+          payload: devicePayload(registered, event.payload_json),
         },
         now(),
       );
@@ -481,7 +515,7 @@ export const monitorRide = async (
       // ambiguous network failure may still duplicate a push; APNs isn't transactional.
       const acceptedState =
         sent.status === 'accepted' && !event.accepted_at
-          ? acceptAlert(state, JSON.parse(event.decision_json) as Alert, at)
+          ? acceptAlert(state, alert, at)
           : state;
       const statements = [
         db
@@ -543,6 +577,15 @@ export const monitorRide = async (
         state = acceptedState;
         event.accepted_at ??= at;
       }
+    }
+    // The last eligible device may have been switched off during fan-out.
+    // Keep failed enabled devices retryable, and preserve the no-device case.
+    if (
+      !event.accepted_at &&
+      allSwitchedOff((await registeredDevices()).results, alert)
+    ) {
+      await handleQuietly(alert);
+      return;
     }
     await db
       .prepare(`UPDATE tracking_notifications SET status = 'failed' WHERE id = ? AND status = 'pending'

@@ -108,7 +108,9 @@ Content-Type: application/json
   "token": "<APNs hexadecimal token>",
   "environment": "sandbox",
   "topic": "com.danbarclay.rideon",
-  "platform": "ios"
+  "platform": "macos",
+  "scope": "tracked_rides",
+  "alerts": { "rideAlerts": true, "finalForecast": true, "sound": false }
 }
 ```
 
@@ -117,12 +119,14 @@ Content-Type: application/json
 A conflicting installation/token belonging to another registration, or a 21st device, returns `409 DEVICE_REGISTRATION_CONFLICT`. Unregister the old installation while still signed in before signing out or changing accounts. The backend does not transfer another account's device through registration.
 
 - `GET /push-devices` returns owner-scoped public device metadata and capabilities.
+- `GET /push-devices/config` includes `deviceAlerts: true` when the native switches below are supported.
+- `PATCH /push-devices/{installationUUID}` updates the native installation's alert switches without a token.
 - `DELETE /push-devices/{installationUUID}` idempotently unregisters the owner's installation and cancels pending deliveries. Delete it on sign-out or notification opt-out.
 - `GET /tracked-rides/{id}/notifications?limit=20&cursor=...` returns paginated event history: `id`, `createdAt`, `expiresAt`, `acceptedAt`, `status`, `devicesAccepted`, `devicesPending` and `decision`. Limit 1–50; use the returned opaque cursor. Foreign plans return 404. This read does not fetch weather or send pushes.
 
 Event statuses are `pending`, `accepted`, `superseded`, `cancelled`, or `failed`. `accepted` means at least one push-service acceptance; other devices may still be pending. Decision fields include reasons, score/delta, new/recovered/remaining minimums, the qualifying alternative and last-success time. Per-device attempts and transport reason codes remain operational D1 records.
 
-An Apple alert has standard sound and thread grouping by plan. No critical/time-sensitive entitlement is required. Custom payload fields:
+An Apple alert has standard sound unless this device's `sound` is false, and always retains thread grouping by plan. No critical/time-sensitive entitlement is required. Custom payload fields:
 
 ```json
 {
@@ -135,6 +139,48 @@ An Apple alert has standard sound and thread grouping by plan. No critical/time-
 ```
 
 On a tap, authenticate and fetch `/tracked-rides/{trackedRideId}`. Treat the push as a prompt to read the current plan, not authoritative current weather. Handle stopped, erased and already-departed plans. The app must combine notification permission, successful device registration and the server capabilities before promising push delivery.
+
+### Per-device alert choices (v0.39.0)
+
+PUT optionally accepts the strict `alerts` object shown above; PATCH requires
+the strict body `{"alerts":{"rideAlerts":true,"finalForecast":true,"sound":false}}`.
+All three fields must be booleans; unknown keys or missing fields return 400.
+All false keeps the installation registered but suppresses its tracked-ride
+notifications. PATCH is owner-scoped and native-only: unknown, foreign or
+Web Push installations return `404 DEVICE_NOT_FOUND`.
+
+PUT and PATCH return the same `{device, deliveryConfigured}` shape. Public
+`device` metadata includes `alerts`; GET's device list also includes
+`registeredAt`. For a new registration, omitted alerts default to all true.
+Migration `0020` gives existing devices those same legacy defaults without
+changing their tokens or versions. Re-registering without alerts preserves
+stored choices. Safari explicitly sends its local Sound-off default.
+
+| Switch | Reasons or payload it controls |
+| --- | --- |
+| `rideAlerts` | All reasons except `evening_summary`: score changes, minimum breaches/recoveries, `rain_likely`, `feels_cold`, `better_option`, `unavailable` and `available_again`. |
+| `finalForecast` | `evening_summary` (18:00 local time the preceding day). |
+| `sound` | Omit `aps.sound` for this device when false; preserve the alert copy, thread ID and other fields. |
+
+Combined messages send when **any** reason is enabled for the device, with
+unchanged copy. These choices apply only to tracked-ride delivery. Per-ride
+triggers still determine which reasons exist, and account pause still suppresses
+everything. Chrome's Web Push registration and delivery are unchanged.
+
+Switch edits do not increment the registration version or cancel deliveries
+inside PUT/PATCH. Monitoring re-reads the settings for each device before its
+send, including retries and changes while another device's request is in flight.
+It cancels disabled attempts even while they are waiting for retry backoff.
+An APNs request already in flight cannot be recalled.
+
+If there is at least one registered device and every device is switched off for
+the event, monitoring applies the same reference/cooldown/summary transition as
+acceptance, quietly. Re-enabling cannot replay the handled change. No new
+notification event is created for an initially suppressed decision; an existing
+pending event becomes superseded and its remaining deliveries are cancelled.
+This does not record a false transport acceptance. Enabled devices that fail
+retain their independent retries and failure behavior. No registered devices
+retains the previous behavior and does not advance the notification reference.
 
 ## Deployment and operation
 
@@ -181,7 +227,7 @@ Both transports open `https://api.ride-on.cc/notifications/open#ride=<plan UUID>
 
 ### Browser registration and capabilities
 
-`GET /push-devices/config` returns `webPush: {configured, publicKey}`, `apns: {sandbox, production}` and `automaticChecks`. Only the public VAPID key is exposed. Tracking/device capabilities add `notificationTransports: {apns, webPush}`; the legacy `notifications` flag retains its APNs meaning.
+`GET /push-devices/config` returns `webPush: {configured, publicKey}`, `apns: {sandbox, production}`, `automaticChecks` and `deviceAlerts: true` (v0.39.0). Only the public VAPID key is exposed. Tracking/device capabilities add `notificationTransports: {apns, webPush}`; the legacy `notifications` flag retains its APNs meaning.
 
 ```json
 {

@@ -6,6 +6,11 @@ import { FINAL_FORECAST_LOCAL_TIME } from '../tracking/alerts.ts';
 import { getTracking, trackingNotFound } from '../tracking/store.ts';
 import type { Bindings, Env } from '../types.ts';
 import { PUSH_TOPIC, pushConfig } from './apns.ts';
+import {
+  type DeviceAlertColumns,
+  deviceAlerts,
+  deviceAlertsSchema,
+} from './device-alerts.ts';
 import { subscriptionSchema, webPushConfig } from './web-push.ts';
 
 export const monitoringCapabilities = (env: Env) => ({
@@ -35,6 +40,7 @@ const nativeRegistrationSchema = z.strictObject({
   topic: z.literal(PUSH_TOPIC),
   platform: z.enum(['ios', 'macos']),
   scope: z.enum(['all', 'tracked_rides']).default('all'),
+  alerts: deviceAlertsSchema.optional(),
 });
 const registrationSchema = z.union([
   nativeRegistrationSchema,
@@ -44,6 +50,32 @@ const registrationSchema = z.union([
     subscription: subscriptionSchema,
   }),
 ]);
+type PublicDeviceRow = DeviceAlertColumns & {
+  id: string;
+  environment: 'sandbox' | 'production';
+  topic: string;
+  platform: string;
+  transport: string;
+  scope: string;
+};
+const publicDeviceColumns =
+  'id,environment,topic,platform,transport,scope,ride_alerts,final_forecast,sound';
+const publicDevice = ({
+  ride_alerts,
+  final_forecast,
+  sound,
+  ...device
+}: PublicDeviceRow) => ({
+  ...device,
+  alerts: deviceAlerts({ ride_alerts, final_forecast, sound }),
+});
+const deviceResponse = (env: Env, device: PublicDeviceRow) => ({
+  device: publicDevice(device),
+  deliveryConfigured:
+    device.transport === 'web_push'
+      ? !!webPushConfig(env)
+      : !!pushConfig(env)[device.environment],
+});
 export const notificationRoutes = (now: () => Date) => {
   const app = new Hono<Bindings>();
   app.get('/push-devices/config', (c) =>
@@ -57,6 +89,7 @@ export const notificationRoutes = (now: () => Date) => {
         production: !!pushConfig(c.env).production,
       },
       automaticChecks: c.env.RIDE_MONITORING === 'enabled',
+      deviceAlerts: true,
     }),
   );
   app.put('/push-devices/:id', async (c) => {
@@ -109,14 +142,18 @@ export const notificationRoutes = (now: () => Date) => {
     }
     const owner = c.get('ownerId'),
       db = c.env.ROUTES_DB;
+    const alerts = 'alerts' in parsed ? parsed.alerts : undefined;
     const result = await db
-      .prepare(`INSERT INTO push_devices(id,owner_id,token,environment,topic,platform,registered_at,transport,subscription_json,scope)
-      SELECT ?,?,?,?,?,?,?,?,?,? WHERE
+      .prepare(`INSERT INTO push_devices(id,owner_id,token,environment,topic,platform,registered_at,transport,subscription_json,scope,ride_alerts,final_forecast,sound)
+      SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE
       NOT EXISTS (SELECT 1 FROM push_devices WHERE id = ? AND owner_id <> ?)
       AND NOT EXISTS (SELECT 1 FROM push_devices WHERE environment = ? AND topic = ? AND token = ? AND id <> ?)
       AND ((SELECT COUNT(*) FROM push_devices WHERE owner_id = ?) < 20 OR EXISTS (SELECT 1 FROM push_devices WHERE id = ? AND owner_id = ?))
       ON CONFLICT(id) DO UPDATE SET token = excluded.token, environment = excluded.environment, topic = excluded.topic,
       platform = excluded.platform, registered_at = excluded.registered_at, transport = excluded.transport, subscription_json = excluded.subscription_json, scope = excluded.scope,
+      ride_alerts = CASE WHEN ? THEN excluded.ride_alerts ELSE push_devices.ride_alerts END,
+      final_forecast = CASE WHEN ? THEN excluded.final_forecast ELSE push_devices.final_forecast END,
+      sound = CASE WHEN ? THEN excluded.sound ELSE push_devices.sound END,
       version = push_devices.version + CASE WHEN push_devices.token <> excluded.token OR push_devices.environment <> excluded.environment OR push_devices.topic <> excluded.topic OR push_devices.transport <> excluded.transport OR push_devices.scope <> excluded.scope OR COALESCE(push_devices.subscription_json,'') <> COALESCE(excluded.subscription_json,'') THEN 1 ELSE 0 END
       WHERE push_devices.owner_id = excluded.owner_id`)
       .bind(
@@ -130,6 +167,9 @@ export const notificationRoutes = (now: () => Date) => {
         input.transport,
         input.subscription,
         input.scope,
+        Number(alerts?.rideAlerts ?? true),
+        Number(alerts?.finalForecast ?? true),
+        Number(alerts?.sound ?? true),
         id,
         owner,
         input.environment,
@@ -139,6 +179,9 @@ export const notificationRoutes = (now: () => Date) => {
         owner,
         id,
         owner,
+        Number(!!alerts),
+        Number(!!alerts),
+        Number(!!alerts),
       )
       .run();
     if (!result.meta.changes)
@@ -153,29 +196,46 @@ export const notificationRoutes = (now: () => Date) => {
       AND device_version <> (SELECT version FROM push_devices WHERE id = ?)`)
       .bind(id, id)
       .run();
-    return c.json({
-      device: {
+    const device = await db
+      .prepare(
+        `SELECT ${publicDeviceColumns} FROM push_devices WHERE id = ? AND owner_id = ?`,
+      )
+      .bind(id, owner)
+      .first<PublicDeviceRow>();
+    if (!device)
+      throw new AppError(404, 'DEVICE_NOT_FOUND', 'Device not found.');
+    return c.json(deviceResponse(c.env, device));
+  });
+  app.patch('/push-devices/:id', async (c) => {
+    const id = validateInput(z.uuid(), c.req.param('id'));
+    const { alerts } = await readJsonBody(
+      c,
+      z.strictObject({ alerts: deviceAlertsSchema }),
+    );
+    const device = await c.env.ROUTES_DB.prepare(`
+      UPDATE push_devices SET ride_alerts = ?,final_forecast = ?,sound = ?
+      WHERE id = ? AND owner_id = ? AND transport = 'apns'
+      RETURNING ${publicDeviceColumns}`)
+      .bind(
+        Number(alerts.rideAlerts),
+        Number(alerts.finalForecast),
+        Number(alerts.sound),
         id,
-        environment: input.environment,
-        topic: input.topic,
-        platform: input.platform,
-        transport: input.transport,
-        scope: input.scope,
-      },
-      deliveryConfigured:
-        input.transport === 'web_push'
-          ? !!webPushConfig(c.env)
-          : !!pushConfig(c.env)[input.environment],
-    });
+        c.get('ownerId'),
+      )
+      .first<PublicDeviceRow>();
+    if (!device)
+      throw new AppError(404, 'DEVICE_NOT_FOUND', 'Device not found.');
+    return c.json(deviceResponse(c.env, device));
   });
   app.get('/push-devices', async (c) => {
     const devices = await c.env.ROUTES_DB.prepare(
-      'SELECT id,environment,topic,platform,transport,scope,registered_at AS registeredAt FROM push_devices WHERE owner_id = ? ORDER BY id LIMIT 20',
+      `SELECT ${publicDeviceColumns},registered_at AS registeredAt FROM push_devices WHERE owner_id = ? ORDER BY id LIMIT 20`,
     )
       .bind(c.get('ownerId'))
-      .all();
+      .all<PublicDeviceRow>();
     return c.json({
-      devices: devices.results,
+      devices: devices.results.map(publicDevice),
       capabilities: monitoringCapabilities(c.env),
     });
   });
