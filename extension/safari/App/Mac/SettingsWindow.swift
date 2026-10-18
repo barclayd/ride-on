@@ -85,8 +85,9 @@
         ForEach(Pane.allCases) { pane in
           Label {
             HStack {
-              Text(pane.title)
-              Spacer()
+              // Never truncated: the fixed 200pt column leaves room for it at every sidebar icon size.
+              Text(pane.title).fixedSize()
+              Spacer(minLength: 4)
               if needsAttention(pane) {
                 Circle()
                   .fill(.orange)
