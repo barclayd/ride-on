@@ -29,7 +29,7 @@ test('health identifies the deployed build without authentication or weather cal
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect((await response.json()) as Record<string, unknown>).toEqual({
       ok: true,
-      version: '0.39.0',
+      version: '0.40.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: tag || null,
     });
@@ -117,6 +117,7 @@ const setup = () => {
     },
     providers: { fixture: provider },
     scoreBaselines: async () => new Map(),
+    activeTracking: async () => null,
     cache: {
       get: async (key) => cache.get(key) ?? null,
       put: async (key, value) => {

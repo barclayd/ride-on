@@ -1,6 +1,6 @@
 # Ride On API MVP
 
-API v0.39.0 adds [per-device notification switches](#device-alerts-v0390) for the Safari companion: ride updates, the evening forecast and sound. Combined messages send if any reason is enabled; outages and recovery follow Ride alerts. Scoring stays `comfort-v0.17`.
+API v0.40.0 keeps the tracked route's recommendation on its fixed departure, suggests better times on that route and supports editing its alert switches without replacing the plan. See [fixed departures](#fixed-departures-v0400) and [alert edits](#edit-tracked-ride-alerts-v0400). Per-device switches from v0.39.0 remain unchanged. Scoring stays `comfort-v0.17`.
 
 API v0.38.0 adds per-ride alert switches, a 50% rain warning, feels-like cold warnings, and an 18:00 local final forecast. ±5-point score alerts and maximum-temperature alerts remain independent of the per-ride switches. Scoring stays `comfort-v0.17`. See [the tracked-ride contract](#tracked-ride-alerts-v0380).
 
@@ -921,6 +921,8 @@ The response includes:
 | `best.departureAt`, `best.finishAt` | Suggested start and estimated finish. |
 | `best.score`, `best.weatherScore`, `best.factors` | Combined ride score, original weather-only score and temperature/wind/dryness/clear-sky/sunshine/climbing/distance factors. These are not probabilities. |
 | `best.scoreChange` | v0.36 persistent last change in the rounded Conditions score for this owner, shortlisted route and plan; null until a change is observed. See below. |
+| `trackedDeparture` | v0.40 marker on the active tracked route only: plan ID, exact departure, current finish, assessment status and nullable unavailable reason. Its top-level `best` stays on that departure. See below. |
+| `betterDeparture` | On the tracked entry, a qualifying better time inside the current search, with a recommendation reference and no score-change badge; otherwise null. |
 | `best.recommendationPriority`, `best.tailwindOpportunity` | v0.27 ordering value (0–105) and separate opportunity explanation/points. Keep showing `score` for Conditions; see [contract](tailwind-opportunity.md). |
 | `best.windStretches` | Contiguous wind sections with route bounds, ride times, wind effect/direction/speed and estimated maximum adverse gust. Also on alternatives, partial assessments, day winners and next-window winners. See below. |
 | `best.temperatureAlongRide` | Ten-minute air/feels-like/usual temperature tuples, provenance and nullable monthly climate comparison. Also on alternatives, partial assessments, day winners and next-window winners. |
@@ -943,6 +945,54 @@ same rule. A high score never erases a failed standard.
 change that conclusion. If another route/departure lacks evidence, or a month
 rule is unresolved, return `unknown` instead. No feasible departure is distinct
 from bad weather. Missing data never becomes zero rain or zero wind.
+
+### Fixed departures (v0.40.0)
+
+When the account has an active, not-yet-departed plan and its route is requested,
+`POST /recommendations` fixes that route's top-level `best` to the accepted
+departure, even outside the requested dates or riding window. It assesses the
+current route with this request's effective preferences, overrides and provider.
+The full candidate and its tracking reference remain available.
+
+```json
+{
+  "trackedDeparture": {
+    "trackedRideId": "<plan UUID>",
+    "departureAt": "2026-10-20T09:30:00.000Z",
+    "finishAt": "2026-10-20T11:15:00.000Z",
+    "status": "assessed",
+    "reasonCode": null
+  },
+  "betterDeparture": null
+}
+```
+
+If the fixed slot cannot be assessed, `best` and `betterDeparture` are null,
+`status` is `unavailable`, and `reasonCode` is `forecast_unavailable`,
+`pinned_departure_no_longer_fits`, `route_unavailable` or `missing_elevation`.
+The marker retains the slot and current estimated finish. No other departure
+replaces it. A deleted tracked route can still return this unavailable entry;
+other missing route IDs retain the ordinary 404 behavior.
+
+Ranking order, `recommendation`, `minimumStandardsStatus`, route verdict and
+coverage counts treat the fixed departure as that route's only candidate.
+`days[]` previews and `alternatives[]` retain the normal search results.
+`weather.refreshAt` also covers the fixed slot. Inactive, departed and foreign
+plans never pin a result, and an unrequested tracked route is not added.
+
+`betterDeparture` is the same route's best fully assessed candidate inside
+the current request's dates/window, under ordinary ranking rules. It must be a
+different future departure, meet all configured minimums (or have none), and
+score at least five Conditions points more, or resolve the pin's failed minimums.
+It has the full candidate shape and a `recommendationRef`, without `scoreChange`.
+Unknown fixed-slot conditions never establish a better option.
+
+Move alerts uses that reference with the existing replacement POST and the
+current plan's triggers. Undo uses the former pin's reference. A pinned reference
+outside the search remains trackable until departure; its comparison scope keeps
+the request's dates/window plus that exact departure. Background monitoring uses
+the accepted scope and saved preferences; a later search or override only affects
+the tile until the rider moves alerts.
 
 ### Temperature timing and forecast details (v0.23.0)
 
@@ -1065,7 +1115,10 @@ rounded score keeps the reference, badge and timestamp. Every later change of
 at least one rounded point replaces the badge and reference. A reversal such as
 84 → 70 → 84 therefore ends with `{from: 70, to: 84, by: 14, ...}`. Each route is
 independent, and its overall best is compared even when the winner moves to
-another departure or day. Daily previews and alternatives do not receive this
+another departure or day. For the route with alerts, v0.40.0 compares the fixed
+departure instead. Fixing, moving or releasing it quietly rebases the reference
+and retains the last badge, even if the chosen slot happens to stay the same.
+Daily previews, alternatives and `betterDeparture` do not receive this
 field or create additional plans.
 
 Changes to effective preferences, speed, departure step, timezone, algorithm,
@@ -1729,10 +1782,46 @@ See [delivery details](ride-monitoring.md#per-device-alert-choices-v0390).
 
 Both alert objects are strict. All four values must be booleans, with at least one `true`; invalid create bodies return `400 VALIDATION`. Malformed JSON retains `400 BAD_REQUEST`. Omitted `alerts` and plans created before this release use all four triggers. A missing wind/cold limit does not invalidate a choice; that reason cannot fire until its limit exists. Limits come from the same resolved preferences as the current assessment.
 
-Every returned ride, including list summaries, detail, create and refresh responses, contains `alerts: {triggers: {rain, wind, cold, betterTime}}`. Choices belong to the account's plan and survive restarts and reads from other signed-in devices. Repeated creates of the same active route/departure preserve its existing choices; idempotency keys include explicit choices. The optional PATCH in brief v11 is deferred: stop tracking and create a new plan to change choices.
+Every returned ride, including list summaries, detail, create and refresh responses, contains `alerts: {triggers: {rain, wind, cold, betterTime}}`. Choices belong to the account's plan and survive restarts and reads from other signed-in devices. Repeated creates of the same active route/departure preserve its existing choices; idempotency keys include explicit choices. Since v0.40.0, use PATCH below to edit these choices in place.
 
 Tracking capabilities add `alertTriggers: true` and `finalForecastLocalTime: "18:00"`. They describe API support even when automatic monitoring or a delivery transport is disabled. Existing transport, device-permission and registration requirements still apply. Clients send choices only when `alertTriggers` is true and use the returned time in the dialog (older servers fall back to 19:00).
 
 `rain` gates the fixed 50% warning and configured rain-probability/intensity breaches and recoveries. `wind` gates gust limits. `cold` gates feels-like comfort warnings and minimum-temperature limits. `betterTime` gates better-option notices. ±5-point score changes, maximum-temperature breaches/recoveries, summaries and outage/recovery notices remain independent. Details, re-arming and cooldown behavior are in [ride monitoring](ride-monitoring.md#per-ride-alert-choices-v0380).
 
 Apply migration `0019_tracking_alerts.sql` before deploying this version. Existing baselines, monitoring state, delivery history and scoring are preserved.
+
+## Edit tracked-ride alerts (v0.40.0)
+
+```http
+PATCH /tracked-rides/{id}
+Content-Type: application/json
+
+{
+  "expectedTrackingVersion": 7,
+  "alerts": {
+    "triggers": { "rain": true, "wind": false, "cold": true, "betterTime": true }
+  }
+}
+```
+
+The strict body requires a nonnegative integer account version and all four
+boolean triggers, with at least one enabled. Invalid bodies return
+`400 VALIDATION`; malformed JSON remains `400 BAD_REQUEST`.
+
+Success returns `{ride, trackingVersion, activeTrackedRideId}`, as on GET.
+A changed choice increments the account tracking version and the ride version,
+while retaining the departure, baseline, latest comparison, monitoring state
+and notification reference. A matching retry returns 200 without checking or
+bumping the supplied version. Disabled reasons keep their references current
+through ordinary monitoring, so re-enabling does not replay observed changes.
+
+| Error | Meaning |
+| --- | --- |
+| `409 TRACKING_VERSION_CONFLICT` | A distinct edit used a stale account version; reload current tracking. |
+| `409 TRACKING_INACTIVE` | The plan is stopped, replaced, expired or departed, even for matching retries. |
+| `404 TRACKED_RIDE_NOT_FOUND` | The ID is unknown or belongs to another owner. |
+
+`GET /tracked-rides` and each ride's `capabilities` now include
+`fixedDeparture: true` and `alertEdits: true`. These indicate support for the
+fixed tile, better-slot suggestion and in-place switches, independently of
+monitoring configuration or notification permission. No new migration is needed.

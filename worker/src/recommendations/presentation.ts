@@ -4,6 +4,12 @@ export type DailyResult = ReturnType<typeof recommendRides>;
 export type RouteResult = DailyResult['unranked'][number];
 export const verdictFor = (route: RouteResult) => {
   const best = route.best;
+  if (!best && route.issues.includes('route-unavailable'))
+    return {
+      status: 'incomplete',
+      code: 'route_unavailable',
+      reason: 'This route is no longer available.',
+    };
   if (!best)
     return route.status === 'no_feasible_departure'
       ? {

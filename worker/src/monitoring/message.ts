@@ -58,11 +58,13 @@ export const pushPayload = (
       const time = new Intl.DateTimeFormat('en-GB', {
         timeZone: plan.timeZone,
         weekday: 'short',
+        day: 'numeric',
+        month: 'short',
         hour: '2-digit',
         minute: '2-digit',
       }).format(new Date(alert.alternative.departureAt));
       parts.push(
-        `${alert.alternative.routeName.slice(0, 100)} at ${time} is now the best recommended option (${alert.alternative.score}/100).`,
+        `A better time for ${alert.alternative.routeName.slice(0, 100)}: ${time} scores ${alert.alternative.score}.`,
       );
     }
   }

@@ -11,14 +11,25 @@ Except while the account is paused, all active tracked rides, including existing
 | Conditions score | At least ±5 points, in either direction | Applies |
 | New minimum breach | A previously satisfied configured minimum now fails; combine simultaneous breaches | Bypassed |
 | Recovery of a minimum | Report each recovered minimum and remaining failures; unknown data is not recovery | Applies |
-| Better option | Fully assessed best route/departure in the original scope, meeting all minimums, ≥5 Conditions points better **or** resolving the tracked ride's failed minimums | Applies |
+| Better time | Fully assessed best departure on the tracked route in the original scope, meeting all minimums, ≥5 Conditions points better **or** resolving the tracked ride's failed minimums | Applies |
 | Rain becomes likely | Any ride hour reaches 50% from below; re-arms when all ride hours are below 50% | Bypassed |
 | Feels cold | Lowest feels-like temperature along the ride falls below `comfortMinC`, with air-temperature fallback | Bypassed |
 | Evening summary | 18:00 the evening before, in the tracked ride's time zone, even unchanged; skip plans first tracked after that time | Bypassed |
 | Assessment unavailable | One notice after one hour without a current assessment, when departure is within 24 hours | Bypassed |
 | Assessment available again | One recovery after a delivered availability notice, combined with current qualifying changes | Bypassed |
 
-There are **no quiet hours**. A qualifying best option may be the same ride at another departure or another shortlisted route; copy names the new best option. Incomplete comparison coverage cannot establish a new best option. A small ranking shuffle alone is silent. The plan never switches automatically.
+There are **no quiet hours**. Since v0.40.0, `better_option` only suggests another
+departure on the tracked route, even when a different route wins overall. Copy
+names the ride and local slot, for example “A better time for Hilly Loop:
+Tue 20 Oct, 10:00 scores 82”. Incomplete comparison coverage cannot establish a
+new best option. Another route winning or a small ranking shuffle stays silent.
+The plan never switches automatically.
+
+Dan confirmed the v13 scope: the recommendation tile's `betterDeparture` uses
+the current request's dates/window and temporary overrides, while monitoring
+retains the accepted dates/window and saved preferences. Both share the same
+same-route, five-point-or-resolved-minimum rule. Move alerts creates a new plan
+with the current search scope; editing the search alone does not.
 
 The first score comparison uses the accepted Conditions score. After either push service accepts a notification containing current conditions, its score becomes the separate notification reference: 80 → 74 alerts, 72 stays quiet, 68 alerts once the gap permits. The original accepted baseline remains immutable. The reference also retains notified minimum failures and the suggested option. Separately observed minimum transitions detect a fresh breach even when an intervening recovery was held by the cooldown. Simultaneous events combine into one message and reset the reference to the conditions that message contains. The cooldown is measured from the first transport acceptance, not queueing or a failed attempt. APNs acceptance means Apple accepted delivery, not that a device displayed it or the user read it.
 
@@ -47,7 +58,7 @@ The fixed rain warning uses the highest local precipitation probability in the c
 
 Both new warnings bypass the three-hour gap, combine with all other reasons due, and retry only while the evidence remains current. Acceptance advances the reference as usual; a failed delivery does not consume a warning. When a trigger is off, its reference and observed transitions continue updating without moving the independent score reference or replaying old changes. Notifications name the ride; rain copy gives the highest hourly probability and local time, while cold copy gives the limit and minimum in the rider's saved C/F units.
 
-Choices are stored when creating a plan and returned on every ride read; older rides default to all on. See [request validation and capabilities](api.md#tracked-ride-alerts-v0380). The optional trigger-edit PATCH is not part of this release. Apply migration `0019` before deploying v0.38.0; it preserves baseline and monitor state.
+Choices are stored when creating a plan and returned on every ride read; older rides default to all on. See [request validation and capabilities](api.md#tracked-ride-alerts-v0380). Since v0.40.0, [PATCH edits those choices](api.md#edit-tracked-ride-alerts-v0400) while preserving the baseline, monitoring state and notification reference. Pending decisions are recomputed from the current switches before delivery. Apply migration `0019` before deploying v0.38.0; v0.40.0 requires no new migration.
 
 ### Account pauses
 

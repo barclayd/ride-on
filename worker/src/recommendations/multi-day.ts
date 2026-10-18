@@ -213,6 +213,8 @@ export const daySummary = (
     availabilityBasis: 'required_windows_for_feasible_routes',
     until,
     daylight:
+      Number.isFinite(daylightStart) &&
+      Number.isFinite(daylightEnd) &&
       daylightStart < daylightEnd
         ? {
             sunrise: new Date(daylightStart).toISOString(),

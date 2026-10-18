@@ -3,6 +3,9 @@
 Against API **0.38.0**, algorithm **comfort-v0.17**. No scoring or algorithm change.
 Only the ranking of the route with alerts changes.
 
+**Implemented in API 0.40.0**, following the v0.39.0 device switches. The
+algorithm remains `comfort-v0.17`; no new database migration is required.
+
 Design handoff v11 (30c, 30d) fixes the tile of a ride with alerts on the day and time
 the rider set alerts for:
 
@@ -229,14 +232,13 @@ Done in the extension's fixed-time PR, all behind `fixedDeparture`:
 
 Once the API ships, the extension needs no further change.
 
-## Open questions
+## Confirmed decisions
 
-1. **`better_option` scope:** only the tracked route (§2, proposed), or keep other
-   routes?
-2. **Which window:** the tile's `betterDeparture` uses the current request's window,
-   while monitoring uses the plan's original scope. They differ once the rider edits
-   their window. Proposal: accept that. The notification follows the plan, and Move
-   alerts makes a new plan with the current window.
-3. **Inputs:** the tile scores the pinned departure with the request's overrides, while
-   monitoring uses saved preferences. This is the same split as today's tracked
-   ride. Proposal: accept it.
+Dan confirmed all three on 18 October 2026:
+
+1. **`better_option` scope:** only other departures on the tracked route.
+2. **Which window:** the tile uses the current request's dates/window, while
+   monitoring keeps the plan's original scope. Move alerts makes a new plan
+   with the current window.
+3. **Inputs:** the tile uses the request's temporary overrides; background
+   monitoring continues using saved preferences.

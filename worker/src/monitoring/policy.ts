@@ -1,12 +1,12 @@
 import { Temporal } from '@js-temporal/polyfill';
-import { orderDepartures } from '../recommendations/engine.ts';
 import {
   type AlertTriggers,
   allAlertTriggers,
   FINAL_FORECAST_LOCAL_TIME,
   standardEnabled,
 } from '../tracking/alerts.ts';
-import { digest, type Pick, type Snapshot } from '../tracking/model.ts';
+import { betterDeparture } from '../tracking/departures.ts';
+import { digest, type RouteBest, type Snapshot } from '../tracking/model.ts';
 import { alertConditions } from './conditions.ts';
 
 export const INTERVAL_MS = 15 * 60_000;
@@ -48,22 +48,21 @@ export type Alert = {
   rain?: { probability: number; at: string } | null;
   cold?: { minimumC: number; limitC: number } | null;
 };
-const keyFor = (pick: Pick) => `${pick.routeId}/${pick.candidate.departureAt}`;
+const keyFor = (pick: RouteBest) =>
+  `${pick.routeId}/${pick.candidate.departureAt}`;
 export const qualifyingAlternative = (snapshot: Snapshot, at: string) => {
   const { context, pick } = snapshot;
-  const best = context.best;
+  const best = context.routeBests
+    ? context.routeBests.find((r) => r.routeId === pick.routeId)
+    : context.best;
   if (
     !context.coverageComplete ||
     !context.weather.refreshAt ||
     context.weather.refreshAt <= at ||
     !best ||
     best.candidate.departureAt <= at ||
-    keyFor(best) === keyFor(pick) ||
-    (orderDepartures(best.candidate, pick.candidate) ||
-      best.routeId.localeCompare(pick.routeId)) >= 0 ||
-    !['meets', 'not_configured'].includes(best.candidate.standards.status) ||
-    (best.candidate.score - pick.candidate.score < 5 &&
-      pick.candidate.standards.status !== 'below')
+    best.routeId !== pick.routeId ||
+    !betterDeparture(pick.candidate, best.candidate, at)
   )
     return null;
   return best;
@@ -74,6 +73,7 @@ export const referenceFor = async (
 ): Promise<Reference> => ({
   contextKey: await digest({
     inputs: snapshot.context.inputs,
+    pinnedInput: snapshot.context.pinnedInput,
     routes: snapshot.context.routes,
     history: snapshot.context.history,
     algorithm: snapshot.context.algorithmVersion,

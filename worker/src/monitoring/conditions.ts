@@ -31,8 +31,8 @@ export const alertConditions = (snapshot: Snapshot) => {
           )
         ? false
         : null;
-  const limitC =
-    snapshot.context.inputs[0]?.preferences.temperature?.comfortMinC;
+  const limitC = (snapshot.context.inputs[0] ?? snapshot.context.pinnedInput)
+    ?.preferences.temperature?.comfortMinC;
   const points = candidate.temperatureAlongRide?.points;
   const readings = points?.length
     ? points
