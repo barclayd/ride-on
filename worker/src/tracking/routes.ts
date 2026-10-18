@@ -49,7 +49,11 @@ export const trackingRoutes = (
   const app = new Hono<Bindings>();
   app.post('/tracked-rides', async (c) => {
     const key = validateInput(z.uuid(), c.req.header('Idempotency-Key'));
-    const input = await readJsonBody(c, createTrackingSchema);
+    const input = validateInput(
+      createTrackingSchema,
+      await readJsonBody(c, z.unknown()),
+      'VALIDATION',
+    );
     const owner = c.get('ownerId');
     const result = await createTracking(
       c.env.ROUTES_DB,
@@ -149,6 +153,7 @@ export const trackingRoutes = (
           endedReason: ride.endedReason,
           createdAt: ride.createdAt,
           version: ride.version,
+          alerts: ride.alerts,
           originalScore: ride.baseline.pick.candidate.score,
           refresh: ride.refresh,
         };

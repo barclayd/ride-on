@@ -12,7 +12,9 @@ Except while the account is paused, all active tracked rides, including existing
 | New minimum breach | A previously satisfied configured minimum now fails; combine simultaneous breaches | Bypassed |
 | Recovery of a minimum | Report each recovered minimum and remaining failures; unknown data is not recovery | Applies |
 | Better option | Fully assessed best route/departure in the original scope, meeting all minimums, ≥5 Conditions points better **or** resolving the tracked ride's failed minimums | Applies |
-| Evening summary | 19:00 the evening before, in the tracked ride's time zone, even unchanged; skip plans first tracked after that time | Bypassed |
+| Rain becomes likely | Any ride hour reaches 50% from below; re-arms when all ride hours are below 50% | Bypassed |
+| Feels cold | Lowest feels-like temperature along the ride falls below `comfortMinC`, with air-temperature fallback | Bypassed |
+| Evening summary | 18:00 the evening before, in the tracked ride's time zone, even unchanged; skip plans first tracked after that time | Bypassed |
 | Assessment unavailable | One notice after one hour without a current assessment, when departure is within 24 hours | Bypassed |
 | Assessment available again | One recovery after a delivered availability notice, combined with current qualifying changes | Bypassed |
 
@@ -24,12 +26,33 @@ Preference, course, history, scoring-version and weather-source changes quietly 
 
 Pending changes are recomputed against the current assessment. Withdrawn changes are cancelled; newer assessments supersede obsolete unsent deliveries. A retry is allowed only while the plan is active, before departure, with the same inputs, current assessment and current device registration. A push already accepted by Apple cannot be recalled if the rider subsequently stops the plan.
 
-At summary time, an unavailable assessment produces an explicit availability message with the last successful check when known. It counts as the outage notice; recovery follows once current assessments resume. No-device accounts keep their assessment current but cannot receive pushes or advance the last-notified reference. An eligible summary may retry after 19:00 until departure, with current content; it is never replayed after departure. Outage/summary state only counts as notified after a push-service acceptance.
+At summary time, an unavailable assessment produces an explicit availability message with the last successful check when known. It counts as the outage notice; recovery follows once current assessments resume. No-device accounts keep their assessment current but cannot receive pushes or advance the last-notified score reference. Disabled reasons still update their own reference quietly. An eligible summary may retry after 18:00 until departure, with current content; it is never replayed after departure. Outage/summary state only counts as notified after a push-service acceptance.
+
+### Per-ride alert choices (v0.38.0)
+
+[Brief v11](extension-api-brief-v11.md) is implemented with Dan's confirmed decisions: retain ±5-point score alerts, always send maximum-temperature breaches/recoveries, warn for rain at **50%**, and move the final forecast to **18:00 local time**. The algorithm remains `comfort-v0.17`.
+
+| Switch | Gated reasons |
+| --- | --- |
+| `rain` | `rain_likely`; `minimum_breach` / `minimum_recovery` for `maximumPrecipitationProbability` and `maximumPrecipitationRateMmH` |
+| `wind` | `minimum_breach` / `minimum_recovery` for `maximumGustKph` |
+| `cold` | `feels_cold`; `minimum_breach` / `minimum_recovery` for `minimumTemperatureC` (the resolved `minimumTemperature` preference) |
+| `betterTime` | `better_option` |
+
+`score_improved`, `score_worsened`, `maximumTemperatureC` breaches/recoveries, `evening_summary`, `unavailable` and `available_again` ignore these switches. Account pause still suppresses every alert. Disabled triggers also suppress their failure/alternative copy in other notices.
+
+The fixed rain warning uses the highest local precipitation probability in the chosen candidate's `rideHours`, restricted to departure–finish. It is not a whole-ride probability and does not replace the rider's configured rain limits. `rain_likely` fires when an assessed hour reaches **0.5**, from a reference with every hour below 0.5. All hours returning below 0.5 re-arm it, even during the cooldown.
+
+`feels_cold` uses the lowest value in `temperatureAlongRide.points`, choosing feels-like temperature at each point and falling back to its air temperature. Older candidates without that series use their air-temperature minimum. It fires strictly below `temperature.comfortMinC` and re-arms at or above that floor. Without a configured comfort minimum it stays quiet. Missing evidence cannot prove a recovery or re-arm either warning. Existing monitor references without these fields initialise them quietly on their first current assessment.
+
+Both new warnings bypass the three-hour gap, combine with all other reasons due, and retry only while the evidence remains current. Acceptance advances the reference as usual; a failed delivery does not consume a warning. When a trigger is off, its reference and observed transitions continue updating without moving the independent score reference or replaying old changes. Notifications name the ride; rain copy gives the highest hourly probability and local time, while cold copy gives the limit and minimum in the rider's saved C/F units.
+
+Choices are stored when creating a plan and returned on every ride read; older rides default to all on. See [request validation and capabilities](api.md#tracked-ride-alerts-v0380). The optional trigger-edit PATCH is not part of this release. Apply migration `0019` before deploying v0.38.0; it preserves baseline and monitor state.
 
 ### Account pauses
 
 API v0.34.0 implements the [pause contract](api.md#pause). An account pause
-suppresses **every** monitoring alert: score changes, minimum breaches/recoveries,
+suppresses **every** monitoring alert: score changes, minimum breaches/recoveries, rain/cold warnings,
 better options, evening summaries, forecast outages and recovery notices. It
 cancels all unsent device deliveries, including the remaining devices of a
 partially accepted event. An APNs request already in flight or accepted cannot be
@@ -65,7 +88,7 @@ The dispatcher processes up to 500 due plans per tick in indexed pages of 50. Th
 
 Forecast retrieval preserves the existing 3/6/12-hour policy for today/tomorrow/later, with earlier provider expiry/model-age constraints. Checks reuse valid cached weather. Local midnight can tighten the age limit. Current saved input revisions are checked every tick; input changes and manual refreshes are evaluated at the next tick. Failed assessments retry at subsequent ticks. An ordinary delayed alert is evaluated again after the gap; stale weather is never sent as current.
 
-There is no exact-time delivery guarantee: scheduled checks, queue time, provider response time and APNs delivery add latency. In particular, 19:00 means the first eligible tick/consumer run at or after that local time.
+There is no exact-time delivery guarantee: scheduled checks, queue time, provider response time and APNs delivery add latency. In particular, 18:00 means the first eligible tick/consumer run at or after that local time.
 
 Each event has a per-device APNs ID, a plan collapse ID and an expiry no later than its assessment or departure. Confirmed accepted devices do not repeat on another device's retry. Retry delays start at 15 minutes and back off to one hour. Network failures, 429, 5xx and credential failures retry within validity; terminal payload errors are retained as failed. Invalid/unregistered tokens are retired only if their registration version and Apple's invalidation timestamp still match. Tokens rotated during a send are protected. Token deletion retains delivery audit counts; plan erasure removes its events and deliveries.
 

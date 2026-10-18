@@ -6,6 +6,7 @@ import { AppError } from './errors.ts';
 export const validateInput = <Schema extends z.ZodType>(
   schema: Schema,
   raw: unknown,
+  errorCode = 'BAD_REQUEST',
 ): z.output<Schema> => {
   const result = schema.safeParse(raw);
   if (!result.success) {
@@ -14,7 +15,7 @@ export const validateInput = <Schema extends z.ZodType>(
     const message = issue
       ? `${path ? `"${path}" ` : ''}${issue.message}`
       : 'Request body failed validation';
-    throw new AppError(400, 'BAD_REQUEST', message);
+    throw new AppError(400, errorCode, message);
   }
   return result.data;
 };
