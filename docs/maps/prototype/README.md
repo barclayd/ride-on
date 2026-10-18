@@ -68,6 +68,12 @@ The screenshots were taken with the Chrome DevTools MCP server. The method, so n
 4. `analysis/pair2.py ct.png ml.png out.jpg 350 1`. cycle.travel's map still lays out as if the sidebar
    were there, so its features sit 350 device px to the right of ours; the script crops that off.
 
+**Running the MCP.** `~/.mcp.json` runs `chrome-devtools-mcp --autoConnect`, which attaches to Dan's own
+Chrome: open your own tabs with `new_page`, never navigate his. A Claude Code background job may fail to
+attach ("Could not find DevToolsActivePort": macOS privacy controls stop the daemon reading Chrome's port
+file); a foreground terminal session attaches fine. The MCP only reads and writes files inside the
+session's workspace roots, so pass `capture/*.js` to `evaluate_script` inline.
+
 **Headless prototype captures.** `bun capture/ml-headless.mjs <outDir> [view ...]` captures the prototype
 for the ten comparison views in headless Chrome, with no MCP needed. Headless Chrome renders colours
 slightly differently from a display tab, and cycle.travel returns 403 to it, so cycle.travel's side still

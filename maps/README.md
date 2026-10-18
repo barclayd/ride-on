@@ -20,6 +20,7 @@ requests, one tile or directory at a time.
 | Key | Contents | Size | Source |
 |---|---|---|---|
 | `basemap-gb-20261017.pmtiles` | Protomaps basemap, z0–15, GB bbox `-8.7,49.8,1.9,60.9` | 3,005,193,777 bytes | `pmtiles extract https://build.protomaps.com/20261017.pmtiles` (tiles v4.15.2) |
+| `cycling-gb-20261017.pmtiles` | Cycling overlay, z6–14 ([layers](tiles/README.md)) | 125,501,621 bytes | `maps/tiles/build.sh` on Geofabrik's 17 October 2026 GB extract with batch D's profile (PR #271); main's profile rebuilds it byte for byte |
 
 - **Keys are dated and immutable.** Never overwrite one: apps may be reading it, and the objects carry
   `Cache-Control: public, max-age=31536000, immutable`. Publish a new key and point the style at it, then
