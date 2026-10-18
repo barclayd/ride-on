@@ -11,5 +11,8 @@
   "dependencies": {
     "maplibre-gl": "6.11.2",
     "pmtiles": "4.5.0"
+  },
+  "devDependencies": {
+    "playwright-core": "1.49.1"
   }
 }

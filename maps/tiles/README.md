@@ -20,13 +20,14 @@ restart at every OSM way join.
 
 ### `routes`
 
-Every way on a `route=bicycle` relation with `network` `icn`, `ncn`, `rcn` or `lcn`.
+Every way on a `route=bicycle` relation with `network` `icn`, `ncn`, `rcn` or `lcn`, except relations tagged
+`state=proposed` or `construction`: cycle.travel doesn't draw London's planned Quietways and Cycleways.
 
 | Attribute | |
 |---|---|
 | `network` | The highest network the way is on: `icn` > `ncn` > `rcn` > `lcn`. Only EuroVelo (`ref` starting `EV`, or `cycle_network=EuroVelo`) counts as `icn`; other `icn` routes, like the Avenue Verte, count as `ncn`, as cycle.travel dots them |
 | `rank` | That network as a number: 4 icn, 3 ncn, 2 rcn, 1 lcn |
-| `minz` | The lowest zoom any of the way's routes shows from: icn and ncn 6, rcn 10, lcn 13. London's TfL routes (`cycle_network=GB:London…`, tagged rcn) 11 with a ref, 13 without |
+| `minz` | The lowest zoom any of the way's routes shows from: icn and ncn 6, rcn 10, lcn 13. London's TfL routes (`cycle_network=GB:London…`, tagged rcn) 12 with a ref, 13 without |
 
 Zooms: from `floor(minz)` to 14. The style filters on `minz` for the half zoom.
 
@@ -42,7 +43,7 @@ One line per way and signed route, for the repeater badges along it.
 
 Only refs of up to two capital letters and three digits (`4`, `C34`, `CS8`, `EV2`), never lcn, a bare
 `C` or named trails. A route split into several relations with the same network and ref gives one line.
-Zooms 11–14.
+Zooms 11–14, or 12–14 for London's, which show with their dots.
 
 ### `paths`
 
@@ -52,12 +53,13 @@ Zooms 11–14.
 | `bridge` | `true` on bridges |
 
 Rideable: `highway=cycleway` or `bridleway`, or a path, footway, pedestrian way or track with
-`bicycle=yes/designated/permissive`, unless `bicycle=no` or `access=private/no`. With no `surface`,
-cycleways and urban paths count as paved, bridleways and tracks (other than `tracktype=grade1`) as
-unpaved. `foot` is every other footway, path, steps or track, except pavements, crossings and private
+`bicycle=yes/designated/permissive`, unless `bicycle=no` or `access=private/no`. With no `surface`, a
+`tracktype` other than `grade1` means unpaved; otherwise cycleways, pedestrian ways and paths or footways
+with `bicycle=yes/designated` count as paved, bridleways, tracks and `bicycle=permissive` paths and
+footways as unpaved. `foot` is every other footway, path, steps or track, except pavements, crossings and private
 ways; bridleways with `bicycle=no/dismount` are `foot` too. No tunnels or areas.
 
-Zooms: `p` and `u` 12–14, `foot` 14.
+Zooms: `p` and `u` 11–14 (cycle.travel draws them from its z12), `foot` 14.
 
 ### `cycle_lanes`
 
@@ -70,6 +72,20 @@ Painted lanes on roads, from `cycleway:left`, `cycleway:right`, then `cycleway:b
 | `bus` | `true` when neither side is a plain cycle lane |
 
 Zooms 12–14. Not styled yet (plan WS1.3).
+
+### `low_roads`
+
+The roads and railways cycle.travel draws at zooms our basemap tiles don't carry them at: lanes and streets
+(`highway=unclassified`, `residential` or `living_street`, not private) below the basemap's z12, and main
+lines (`railway=rail` without `service` or an industrial, military or test `usage`) below its z11. Route dots
+need the lanes under them. No tunnels or areas.
+
+| Attribute | |
+|---|---|
+| `kind` | `minor` or `rail` |
+| `kind_detail` | Minor roads only: the `highway` value, as in the basemap's `roads`. The style draws unclassified lanes much bolder than streets, as cycle.travel does |
+
+Zooms: `minor` 10–11 (at cycle.travel's z10, our 9, only tertiary roads show, and the basemap has those), `rail` 8–10. Every way is kept however short: lanes are split at every junction.
 
 ### `pois`
 
@@ -121,8 +137,9 @@ Name the file `cycling-gb-<YYYYMMDD>.pmtiles` with the extract's date: Geofabrik
 planetiler records it in the file's metadata (`pmtiles show <file>`, `planetiler:osm:osmosisreplicationtime`). Keys on R2 are immutable, so a new extract is a new
 name.
 
-The 17 October 2026 UK extract (2.3 GB) builds in 2 min 1 s on an M4 Max to 104 MB: 153,185 tiles, the
-largest 47 KB (30 KB gzipped). Planetiler skips two POIs whose multipolygons are broken in OSM.
+The 17 October 2026 UK extract (2.3 GB) builds in 1 min 42 s on an M4 Max to 126 MB: 152,850 tiles, the
+largest 215 KB (167 KB gzipped), central London at z10, nearly all `low_roads`. Before `low_roads` it was
+104 MB with a largest tile of 47 KB. Planetiler skips two POIs whose multipolygons are broken in OSM.
 
 ## Test
 
@@ -133,7 +150,7 @@ docker run --rm -v "$PWD/maps/tiles":/src -v ~/.m2:/root/.m2 -w /src \
   maven:3.9-eclipse-temurin-21 mvn -B -q test
 ```
 
-107 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
+139 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
 `CyclingProfileTest` when a rule changes.
 
 ## Publish

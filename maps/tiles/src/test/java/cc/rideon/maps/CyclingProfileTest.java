@@ -71,6 +71,8 @@ class CyclingProfileTest {
     assertEquals(new CyclingProfile.Route(1, "icn", "EV2", false, true), relation("network=icn ref=EV2"));
     assertEquals(new CyclingProfile.Route(1, "icn", "", false, true), relation("network=icn cycle_network=EuroVelo"));
     assertNull(relation("network=mtb ref=4"));
+    assertNull(relation("network=rcn state=proposed"));
+    assertNull(relation("network=lcn ref=C state=construction"));
     assertNull(relation(""));
     assertNull(profile.preprocessOsmRelation(new OsmElement.Relation(1, tags("type=route route=hiking network=ncn"),
       List.of())));
@@ -81,7 +83,7 @@ class CyclingProfileTest {
     "network=icn ref=EV2, 6",
     "network=ncn ref=4, 6",
     "network=rcn ref=7, 10",
-    "network=rcn ref=C9 cycle_network=GB:London:Cycleways, 11",
+    "network=rcn ref=C9 cycle_network=GB:London:Cycleways, 12",
     "network=rcn cycle_network=GB:London, 13",
     "network=lcn ref=LCN, 13",
   })
@@ -120,17 +122,19 @@ class CyclingProfileTest {
 
   @ParameterizedTest
   @CsvSource({
-    "network=icn ref=EV2, eu, 2, true",
-    "network=icn ref=12, eu, 12, false",
-    "network=ncn ref=4, red, 4, false",
-    "network=rcn ref=CS7, blue, CS7, false",
-    "network=rcn ref=Q1, blue, Q1, false",
+    "network=icn ref=EV2, eu, 2, true, 11",
+    "network=icn ref=12, eu, 12, false, 11",
+    "network=ncn ref=4, red, 4, false, 11",
+    "network=rcn ref=CS7, blue, CS7, false, 11",
+    "network=rcn ref=Q1, blue, Q1, false, 11",
+    // London's badges wait for its dots.
+    "network=rcn ref=C9 cycle_network=GB:London:Cycleways, blue, C9, false, 12",
   })
-  void signedRoutesGetABadge(String pairs, String badge, String label, boolean ev) {
+  void signedRoutesGetABadge(String pairs, String badge, String label, boolean ev, int minzoom) {
     var badges = layer(way("highway=residential", relation(pairs)), "route_badges");
     assertEquals(1, badges.size());
     assertEquals(Map.of("badge", badge, "label", label, "ev", ev), badges.getFirst().getAttrsAtZoom(14));
-    assertEquals(11, badges.getFirst().getMinZoom());
+    assertEquals(minzoom, badges.getFirst().getMinZoom());
   }
 
   @ParameterizedTest
@@ -159,16 +163,30 @@ class CyclingProfileTest {
     "highway=cycleway, p",
     "highway=cycleway surface=asphalt, p",
     "highway=path bicycle=designated, p",
+    "highway=path bicycle=yes, p",
     "highway=footway bicycle=yes surface=paving_stones, p",
+    "highway=footway bicycle=permissive surface=asphalt, p",
     "highway=pedestrian bicycle=permissive, p",
+    "highway=bridleway tracktype=grade1, p",
     "highway=track bicycle=yes tracktype=grade1, p",
     "highway=footway footway=sidewalk bicycle=designated, p",
+    // Private drives and estate roads open to bikes, as cycle.travel draws them around Wix and Domsey Chase.
+    "highway=service access=private bicycle=yes, p",
+    "highway=service access=no bicycle=permissive, p",
+    "highway=service access=private bicycle=yes surface=gravel, u",
+    "highway=track access=private bicycle=yes, u",
+    "highway=cycleway access=private bicycle=designated, p",
     // Unpaved and rideable.
     "highway=cycleway surface=gravel, u",
     "highway=bridleway, u",
     "highway=bridleway surface=asphalt, p",
     "highway=track bicycle=designated, u",
     "highway=path bicycle=designated surface=compacted, u",
+    // Permissive paths and footways, as cycle.travel draws Middlewick and High Woods in Colchester.
+    "highway=path bicycle=permissive, u",
+    "highway=footway bicycle=permissive, u",
+    "highway=path bicycle=yes tracktype=grade2, u",
+    "highway=cycleway tracktype=grade3, u",
     // Footpaths.
     "highway=footway, foot",
     "highway=path, foot",
@@ -185,6 +203,9 @@ class CyclingProfileTest {
     "highway=cycleway bicycle=no, null",
     "highway=pedestrian, null",
     "highway=residential, null",
+    "highway=service, null",
+    "highway=service bicycle=yes, null",
+    "highway=service access=private, null",
     "building=yes, null",
   })
   void pathClass(String pairs, String expected) {
@@ -195,7 +216,7 @@ class CyclingProfileTest {
   void pathsCarryBridgesAndSkipTunnelsAndAreas() {
     var bridge = layer(way("highway=cycleway bridge=yes"), "paths").getFirst();
     assertEquals(Map.of("class", "p", "bridge", true), bridge.getAttrsAtZoom(14));
-    assertEquals(12, bridge.getMinZoom());
+    assertEquals(11, bridge.getMinZoom());
     assertEquals(Map.of("class", "foot"), layer(way("highway=footway bridge=no"), "paths").getFirst()
       .getAttrsAtZoom(14));
     assertEquals(14, layer(way("highway=footway"), "paths").getFirst().getMinZoom());
@@ -220,6 +241,40 @@ class CyclingProfileTest {
   void cycleLanes(String pairs, String side, Boolean bus) {
     var lane = CyclingProfile.cycleLane(WithTags.from(tags(pairs)));
     assertEquals(side == null ? null : Map.of("side", side, "bus", bus), lane);
+  }
+
+  @ParameterizedTest
+  @CsvSource(nullValues = "null", value = {
+    "highway=unclassified, minor",
+    "highway=residential, minor",
+    "highway=living_street, minor",
+    "highway=residential access=private, null",
+    "highway=unclassified tunnel=yes, null",
+    "highway=unclassified tunnel=no, minor",
+    "highway=living_street area=yes, null",
+    "highway=tertiary, null",
+    "highway=service, null",
+    "railway=rail, rail",
+    "railway=rail usage=main, rail",
+    "railway=rail service=siding, null",
+    "railway=rail usage=industrial, null",
+    "railway=rail tunnel=yes, null",
+    "railway=subway, null",
+  })
+  void lowRoad(String pairs, String expected) {
+    assertEquals(expected, CyclingProfile.lowRoad(WithTags.from(tags(pairs))));
+  }
+
+  @Test
+  void lowRoadsFillTheZoomsBelowTheBasemaps() {
+    var lane = layer(way("highway=unclassified"), "low_roads").getFirst();
+    assertEquals(Map.of("kind", "minor", "kind_detail", "unclassified"), lane.getAttrsAtZoom(10));
+    assertEquals(10, lane.getMinZoom());
+    assertEquals(11, lane.getMaxZoom());
+    var rail = layer(way("railway=rail"), "low_roads").getFirst();
+    assertEquals(Map.of("kind", "rail"), rail.getAttrsAtZoom(10));
+    assertEquals(8, rail.getMinZoom());
+    assertEquals(10, rail.getMaxZoom());
   }
 
   @Test

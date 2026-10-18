@@ -53,6 +53,8 @@ const key = {
   // Stations too: their dot samples exactly as a #dd4c18 swatch does.
   station: '#dd4c18',
   footpath: '#99bb2e',
+  // Unclassified roads: white with this casing.
+  laneCasing: '#444444',
   // The key's gravel cycleway: the unpaved dashes sample as #8b451e, next to it.
   unpaved: '#8b4513',
   halo: '#ffffff',
@@ -81,8 +83,20 @@ const sampled = {
   rail: '#9a9a99',
   casing: '#a3a3a3',
   majorCasingLow: '#b8aea8',
-  majorCasingHigh: '#7a7a7a',
+  // A/B road casings from cycle.travel's z13 (our 12): one near-black device pixel, sampled at Colchester z13–17. A
+  // zoom out they're dark grey (majorCasingZ11).
+  majorCasing: '#060606',
   minorLow: '#b9b9b9',
+  // Residential streets at cycle.travel's z14 (our 13): still a solid grey line, lighter than a zoom out, where they
+  // take laneLow. Solved against our own casing and minorLow on the same display as the Putney capture.
+  streetZ13: '#a9a9a9',
+  // cycle.travel's z10 (our 9), sampled over London: tertiary roads and railways in a lighter grey than a zoom in, A
+  // roads paler and B roads deeper than its key.
+  greyZ9: '#ababab',
+  primaryZ9: '#f1d0c0',
+  secondaryZ9: '#f3ca94',
+  // Unclassified lanes below cycle.travel's z12 (our 11), sampled at Brookland.
+  laneLow: '#9a9a9a',
   text: '#222222',
   subtext: '#4a4a4a',
   town: '#242423',
@@ -111,6 +125,12 @@ const ct = {
   // captured 3–12/255 darker than shot() predicts. Each draws to within 1/255 of cycle.travel's capture.
   // Motorways draw far paler than the key's swatch: this is their fill at cycle.travel's z10–15.
   motorwayPale: '#bed9e7',
+  // Trunk roads too draw far paler than the key's swatch, at every zoom: #d3d8c5 in each comparison capture, where
+  // the key's colour captures 7–10/255 darker than drawn. Solved from that offset; check it on a P3 display.
+  trunkPale: '#d9decd',
+  // A/B casings at cycle.travel's z12 (our 11) in the country: a dark grey device pixel, lighter than the near-black
+  // from its z13. Solved from ours capturing about 30/255 lighter than drawn (the pixel is partly covered).
+  majorCasingZ11: '#2e2e2e',
 }
 
 const flavour = {
@@ -182,50 +202,71 @@ const flavour = {
 // A layer of Ride On's cycling overlay (maps/tiles): routes, route_badges, paths, cycle_lanes, pois.
 const cycling = (layer: string) => ({ source: 'cycling', 'source-layer': layer })
 
-// Road fill by OSM class, from cycle.travel's key.
-const roadColour = [
-  'match',
-  ['get', 'kind_detail'],
-  'trunk',
-  ct.trunk,
-  'primary',
-  ct.primary,
-  'secondary',
-  ct.secondary,
-  'tertiary',
-  ct.tertiary,
-  ct.tertiary,
-]
 const kd = ['get', 'kind_detail']
-const byClass = (big: number, mid: number, small: number) => [
-  'match',
-  kd,
-  ['trunk', 'primary'],
-  big,
-  'secondary',
-  mid,
-  small,
+// cycle.travel draws tertiary roads as it does unclassified lanes (below), only cream: a grey line up to its z11 (our
+// 10), then a wide fill with a dark casing. At its z10 (our 9) they're the only minor roads it draws.
+const tertiary = ['==', kd, 'tertiary']
+// Road fill by OSM class, from cycle.travel's key.
+const keyColour = ['match', kd, 'trunk', ct.trunkPale, 'primary', ct.primary, 'secondary', ct.secondary, ct.tertiary]
+const roadColour = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  9,
+  ['case', tertiary, ct.greyZ9, ['match', kd, 'primary', ct.primaryZ9, 'secondary', ct.secondaryZ9, keyColour]],
+  10,
+  ['case', tertiary, ct.laneLow, keyColour],
+  11,
+  keyColour,
 ]
-// cycle.travel keeps A/B roads readable as colour well before the minor network appears.
+// cycle.travel draws trunk, A and B roads at one width, readable as colour well before the minor network appears:
+// 2.5px from its z11 (our 10), 4px from its z13, and no wider up to its last zoom, z17 (our 16). Tertiary roads reach
+// the same 4px by then. Past that, ours keep growing. [zoom, A/B, tertiary]
+const majorStops = [
+  [7, 0.4, 0.4],
+  [9, 1, 0.9],
+  [10, 2.5, 0.9],
+  [11, 2.6, 2.3],
+  [12, 3.9, 2.9],
+  [13, 4, 3.75],
+  [16, 4, 4],
+  [18, 9, 8],
+]
 const majorWidth = [
   'interpolate',
   ['exponential', 1.6],
   ['zoom'],
-  7,
-  0.4,
-  9,
-  1,
-  10,
-  byClass(2.2, 1.6, 1),
-  12,
-  byClass(3.2, 2.6, 2),
-  15,
-  byClass(6, 5, 4),
-  18,
-  byClass(16, 14, 12),
+  ...majorStops.flatMap(([zoom, major, minor]) => [zoom, ['case', tertiary, minor, major]]),
 ]
-const majorCasing = ['interpolate', ['linear'], ['zoom'], 9, 0, 9.5, 0.5, 12, 0.8, 16, 1.2]
-const casingColour = ['interpolate', ['linear'], ['zoom'], 10, ct.majorCasingLow, 14, ct.majorCasingHigh]
+// [zoom, A/B, tertiary]: an A/B casing is a 0.5px hairline from cycle.travel's z11 (our 10); tertiary casings follow
+// the lanes', on the same linear ramps.
+const majorCasingStops = [
+  [9, 0, 0],
+  [9.5, 0.5, 0],
+  [10, 0.5, 0],
+  [11, 0.5, 0.5],
+  [12.5, 0.5, 0.57],
+  [13, 0.5, 0.6],
+  [16, 0.5, 1],
+  [18, 1, 1],
+]
+const majorCasing = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  ...majorCasingStops.flatMap(([zoom, major, minor]) => [zoom, ['case', tertiary, minor, major]]),
+]
+const casingColour = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  9,
+  ['case', tertiary, ct.laneCasing, ct.majorCasingLow],
+  11,
+  ['case', tertiary, ct.laneCasing, ct.majorCasingZ11],
+  12,
+  ['case', tertiary, ct.laneCasing, ct.majorCasing],
+]
 // Motorways: pale blue, wider than A roads from our z9, with a thin casing that darkens from faint grey to black.
 const motorwayWidth = ['interpolate', ['exponential', 1.6], ['zoom'], 6, 0.6, 9, 1.6, 11, 3, 12, 4.8, 15, 7, 18, 15]
 const motorwayCasing = {
@@ -234,14 +275,65 @@ const motorwayCasing = {
   'line-color': ['interpolate', ['linear'], ['zoom'], 9, '#9aa0a4', 11, '#000000', 12, '#151719'],
 }
 const railway = ['all', ['==', ['get', 'kind'], 'rail'], ['!', ['has', 'is_tunnel']]]
-const railStops = [6, 0.4, 9, 2.5, 10, 2.9, 12, 3.25, 14, 4, 18, 8]
+const railStops = [6, 0.4, 9, 2.5, 10, 2.9, 12, 3.5, 14, 3.5, 18, 8]
+const railColour = ['interpolate', ['linear'], ['zoom'], 9, ct.greyZ9, 10, ct.rail]
 const railWidth = [
   'interpolate',
   ['exponential', 1.6],
   ['zoom'],
   ...railStops.map((v, i) => (i % 2 ? ['case', ['has', 'service'], v / 2, v] : v)),
 ]
-const minorWidth = ['interpolate', ['exponential', 1.6], ['zoom'], 10, 0.3, 12, 0.7, 13, 1.3, 15, 2.5, 18, 11]
+// cycle.travel draws unclassified lanes as its key does, white with a dark casing, nearly as wide as an A road from
+// its z12 (our 11), and as a solid grey line below that, from its z11 (our 10). Residential streets stay a solid grey
+// line, about 1px from our z12, until cycle.travel's z15 (our 14) gives them a white fill and a casing.
+const lane = ['==', kd, 'unclassified']
+// [zoom, lane, street]
+const minorStops = [
+  [10, 0.9, 0.3],
+  [11, 2.3, 0.45],
+  [12, 2.9, 1.1],
+  [13, 3.75, 1.15],
+  [15, 5, 2.5],
+  [18, 12, 11],
+]
+const minorWidth = [
+  'interpolate',
+  ['exponential', 1.6],
+  ['zoom'],
+  ...minorStops.flatMap(([zoom, laneWidth, streetWidth]) => [zoom, ['case', lane, laneWidth, streetWidth]]),
+]
+const minorColour = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  10,
+  ['case', lane, ct.laneLow, ct.minorLow],
+  11,
+  ['case', lane, '#ffffff', ct.minorLow],
+  12,
+  ['case', lane, '#ffffff', ct.laneLow],
+  13,
+  ['case', lane, '#ffffff', ct.streetZ13],
+  14,
+  '#ffffff',
+]
+const minorCasing = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  10,
+  0,
+  11,
+  ['case', lane, 0.5, 0],
+  12.5,
+  ['case', lane, 0.57, 0],
+  13,
+  ['case', lane, 0.6, 0],
+  14,
+  0.73,
+  16,
+  1,
+]
 
 // Name-ending shortening as cycle.travel does it: only Street and Road; Lane, Way, Place, Hill… stay whole.
 const abbreviate = (name: Expression) => [
@@ -353,18 +445,34 @@ const basemap = (): Layer[] =>
       if (l.id === 'roads_rail') {
         delete paint['line-dasharray']
         l.filter = railway
-        Object.assign(paint, { 'line-opacity': 1, 'line-color': ct.rail, 'line-width': railWidth })
+        Object.assign(paint, { 'line-opacity': 1, 'line-color': railColour, 'line-width': railWidth })
       }
-      if (l.id === 'roads_minor')
-        Object.assign(paint, {
-          'line-width': minorWidth,
-          'line-color': ['interpolate', ['linear'], ['zoom'], 11, ct.minorLow, 13, '#ffffff'],
-        })
+      if (['roads_minor', 'roads_bridges_minor'].includes(l.id))
+        Object.assign(paint, { 'line-width': minorWidth, 'line-color': minorColour })
       if (l.id === 'roads_minor_casing')
         Object.assign(paint, {
           'line-gap-width': minorWidth,
-          'line-width': ['interpolate', ['linear'], ['zoom'], 12.5, 0, 13, 0.6, 16, 1],
+          'line-width': minorCasing,
+          'line-color': ['case', lane, ct.laneCasing, paint['line-color']],
         })
+      // Bridges and tunnels keep their own casings, but at the road's width.
+      if (l.id === 'roads_bridges_minor_casing')
+        Object.assign(paint, {
+          'line-gap-width': minorWidth,
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            12,
+            ['case', lane, 0.57, 0],
+            13,
+            ['case', lane, 0.6, 0],
+            14,
+            0.8,
+          ],
+        })
+      if (l.id === 'roads_tunnels_minor') paint['line-width'] = minorWidth
+      if (l.id === 'roads_tunnels_minor_casing') paint['line-gap-width'] = minorWidth
       // cycle.travel draws paths itself (cycleways red/white, footpaths green dashes), so the plain path layer
       // only keeps "other".
       if (l.id === 'roads_other')
@@ -685,38 +793,51 @@ const paths: Layer[] = [
     filter: pathClass('foot'),
     paint: { 'line-color': ct.footpath, 'line-width': width([14, 1.2, 18, 2.4]), 'line-dasharray': [1.7, 4.4] },
   },
-  // Measured off cycle.travel @2x screenshots: ~1px wide, dashes ~5px long every ~8px at its z13–15.
+  // Measured off cycle.travel @2x screenshots: ~1px wide, dashes ~5px long every ~8px at its z13–15, and thinner
+  // (~1.2 device px, dashes ~3.7px every ~6px) at its z12–13.
   {
     id: 'ct_unpaved',
     type: 'line',
     ...cycling('paths'),
-    minzoom: 12,
+    minzoom: 11,
     filter: pathClass('u'),
     paint: {
       'line-color': ct.unpaved,
-      'line-width': width([12, 0.95, 15, 1.1, 18, 2]),
+      'line-width': width([11, 0.6, 13, 0.65, 15, 1.1, 18, 2]),
       'line-dasharray': [5.5, 2.5],
     },
   },
+  // cycle.travel draws paved paths the same width from its z12 to z15 (our 11–14): ~7 device px of red with ~3 of
+  // white inside, in a ~1.5px white halo (cyclewayHalo, under the road fills).
   {
     id: 'ct_cycleways_casing',
     type: 'line',
     ...cycling('paths'),
-    minzoom: 12,
+    minzoom: 11,
     filter: pathClass('p'),
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': ct.cycleway, 'line-width': width([12, 2.2, 15, 4.5, 18, 10]) },
+    paint: { 'line-color': ct.cycleway, 'line-width': width([11, 3.4, 14, 3.5, 15, 4.5, 18, 10]) },
   },
   {
     id: 'ct_cycleways',
     type: 'line',
     ...cycling('paths'),
-    minzoom: 12,
+    minzoom: 11,
     filter: pathClass('p'),
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#ffffff', 'line-width': width([12, 0.9, 15, 2.2, 18, 6]) },
+    paint: { 'line-color': '#ffffff', 'line-width': width([11, 1.5, 14, 1.6, 15, 2.2, 18, 6]) },
   },
 ]
+// cycle.travel paints the halo in its casing pass, so a cycleway beside a road never covers the road's fill.
+const cyclewayHalo: Layer = {
+  id: 'ct_cycleways_halo',
+  type: 'line',
+  ...cycling('paths'),
+  minzoom: 11,
+  filter: pathClass('p'),
+  layout: { 'line-cap': 'round', 'line-join': 'round' },
+  paint: { 'line-color': '#ffffff', 'line-width': width([11, 4.9, 14, 5, 15, 6, 18, 12]) },
+}
 
 // Cycle network relations (the overlay's routes layer), drawn as cycle.travel's dotted lines: dot icons placed along
 // each route (src/dots.ts), local under regional under national under EuroVelo. Each overlay way carries its
@@ -882,9 +1003,48 @@ const railCore: Layer = {
   filter: ['all', railway, ['!', ['has', 'service']]],
   paint: {
     'line-color': '#ffffff',
-    'line-width': width([9, 0.5, 10, 1, 12, 2.25, 14, 3, 18, 6]),
+    'line-width': width([9, 1, 12, 2.25, 14, 2.25, 18, 6]),
     'line-dasharray': ['step', ['zoom'], ['literal', [5.5, 5.5]], 11, ['literal', [4, 4]]],
   },
+}
+
+// Our basemap tiles carry lanes and streets only from z12 and railways from z11, but cycle.travel draws them from its
+// z11 and z9 (our 10 and 8), and route dots need the lanes under them. The overlay's low_roads fills in below, painted
+// as the basemap's.
+const lowKind = (kind: string) => ['==', ['get', 'kind'], kind]
+const lowMinor: Layer = {
+  id: 'ct_low_minor',
+  type: 'line',
+  ...cycling('low_roads'),
+  minzoom: 10,
+  maxzoom: 12,
+  filter: lowKind('minor'),
+  paint: { 'line-color': minorColour, 'line-width': minorWidth },
+}
+// Only lanes have a casing below our z12.5.
+const lowMinorCasing: Layer = {
+  id: 'ct_low_minor_casing',
+  type: 'line',
+  ...cycling('low_roads'),
+  minzoom: 10,
+  maxzoom: 12,
+  filter: lane,
+  paint: { 'line-color': ct.laneCasing, 'line-gap-width': minorWidth, 'line-width': minorCasing },
+}
+const lowRail: Layer = {
+  id: 'ct_low_rail',
+  type: 'line',
+  ...cycling('low_roads'),
+  maxzoom: 11,
+  filter: lowKind('rail'),
+  paint: { 'line-color': railColour, 'line-width': railWidth },
+}
+const lowRailCore: Layer = {
+  ...railCore,
+  ...cycling('low_roads'),
+  id: 'ct_low_rail_core',
+  maxzoom: 11,
+  filter: lowKind('rail'),
 }
 
 const attribution = '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -899,8 +1059,11 @@ export const buildStyle = (target: Target): StyleSpecification => {
   all.splice(at('landuse_park'), 0, urban, greens)
   all.splice(at('landuse_park') + 1, 0, pitches)
   all.splice(at('buildings') + 1, 0, ...military)
-  all.splice(at('roads_rail'), 0, ...paths)
-  all.splice(at('roads_rail') + 1, 0, railCore)
+  all.splice(at('roads_minor_casing') + 1, 0, lowMinorCasing)
+  all.splice(at('roads_other'), 0, cyclewayHalo)
+  all.splice(at('roads_minor') + 1, 0, lowMinor)
+  all.splice(at('roads_rail'), 0, ...paths, lowRail)
+  all.splice(at('roads_rail') + 1, 0, railCore, lowRailCore)
   all.splice(at('roads_labels_minor'), 0, ...routes, stations)
   all.splice(at('roads_labels_major') + 1, 0, roadRefs)
   // Later layers win label collisions: badges beat POI icons, which beat point labels; EuroVelo beats national

@@ -49,17 +49,21 @@ public class CyclingProfile implements Profile {
 
     /**
      * cycle.travel shows regional routes from its z11 (our 10). It holds back London's TfL network (tagged rcn) until
-     * you zoom into the city, and its unsigned parts (no C/Q number) plus local routes until street level.
+     * its z13 (our 12), where the signed routes (C/Q/CS numbers) appear across the city, and its unsigned parts plus
+     * local routes until street level.
      */
     double minzoom() {
       return switch (network) {
         case "lcn" -> 13;
-        case "rcn" -> london ? (ref.isEmpty() ? 13 : 11) : 10;
+        case "rcn" -> london ? (ref.isEmpty() ? 13 : 12) : 10;
         default -> 6;
       };
     }
 
-    /** The repeater badge this route shows, or null: only short signed numbers, no "(16)", named trails or bare "C". */
+    /**
+     * The repeater badge this route shows, or null: only short signed numbers, no "(16)", named trails or bare "C".
+     * Badges start at z11, or with the route's dots if those come later (London's).
+     */
     Badge badge() {
       if (network.equals("lcn") || ref.isEmpty() || ref.equals("C") || !BADGE_REF.matcher(ref).matches()) {
         return null;
@@ -67,11 +71,11 @@ public class CyclingProfile implements Profile {
       // cycle.travel: EuroVelo/icn in a starred navy square, national in red, regional (London C/Q/CS) in blue.
       boolean eu = network.equals("icn");
       return new Badge(eu ? "eu" : network.equals("ncn") ? "red" : "blue", eu ? ref.replaceFirst("^EV", "") : ref,
-        ref.startsWith("EV"));
+        ref.startsWith("EV"), Math.max(11, (int) Math.ceil(minzoom())));
     }
   }
 
-  record Badge(String badge, String label, boolean ev) {}
+  record Badge(String badge, String label, boolean ev, int minzoom) {}
 
   static final Pattern BADGE_REF = Pattern.compile("[A-Z]{0,2}\\d{0,3}");
 
@@ -100,10 +104,16 @@ public class CyclingProfile implements Profile {
   static final List<String> NOT_LANDMARKS = List.of("amenity", "place", "highway", "leisure", "shop");
   static final Pattern ELEVATION = Pattern.compile("^\\s*(-?\\d+(?:\\.\\d+)?)");
 
+  /**
+   * Bicycle route relations on the four networks, except routes that aren't open yet: cycle.travel doesn't draw London's
+   * proposed Quietways and Cycleways (a quarter of its TfL relations), which would cover Roehampton and Southfields in
+   * blue dots.
+   */
   @Override
   public List<OsmRelationInfo> preprocessOsmRelation(OsmElement.Relation relation) {
     String network = relation.getString("network", "");
-    if (relation.hasTag("route", "bicycle") && NETWORKS.indexOf(network) > 0) {
+    if (relation.hasTag("route", "bicycle") && NETWORKS.indexOf(network) > 0 &&
+      !relation.hasTag("state", "proposed", "construction", "under_construction")) {
       String ref = relation.getString("ref", "").trim();
       return List.of(new Route(relation.id(), network, ref,
         relation.getString("cycle_network", "").startsWith("GB:London"),
@@ -118,6 +128,7 @@ public class CyclingProfile implements Profile {
       routes(feature, features);
       paths(feature, features);
       cycleLanes(feature, features);
+      lowRoads(feature, features);
     }
     pois(feature, features);
   }
@@ -158,7 +169,7 @@ public class CyclingProfile implements Profile {
         .setAttr("badge", badge.badge())
         .setAttr("label", badge.label())
         .setAttr("ev", badge.ev())
-        .setMinZoom(11)
+        .setMinZoom(badge.minzoom())
         .setMinPixelSize(0)
         .setBufferPixels(BADGE_BUFFER);
     }
@@ -169,8 +180,12 @@ public class CyclingProfile implements Profile {
   /**
    * cycle.travel's path rule, checked against its tiles over Richmond Park: paved paths you can ride draw red and white
    * ({@code p}), unpaved ones (gravel cycleways, bridleways) brown dashes ({@code u}), and other footpaths, including
-   * bridleways closed to bikes, green dashes ({@code foot}). With no surface tag, cycleways and urban path types count
-   * as paved, bridleways and tracks as unpaved. Returns null for ways not drawn as paths.
+   * bridleways closed to bikes, green dashes ({@code foot}). With no surface tag, a tracktype other than grade1 means
+   * unpaved; otherwise cycleways, urban path types and paths open to bikes by right or designation count as paved,
+   * bridleways, tracks and {@code bicycle=permissive} paths and footways as unpaved. Over Colchester (Middlewick, High
+   * Woods) cycle.travel draws 97–100% of untagged permissive paths brown, in woods, fields, parks and towns alike, and
+   * most untagged {@code bicycle=yes} paths red. A bicycle tag overrides a private access tag, so private drives and
+   * estate roads open to bikes draw as paths too. Returns null for ways not drawn as paths.
    */
   static String pathClass(WithTags way) {
     String highway = way.getString("highway", "");
@@ -178,9 +193,11 @@ public class CyclingProfile implements Profile {
     if (highway.equals("bridleway") && (bicycle.equals("no") || bicycle.equals("dismount"))) {
       return "foot";
     }
-    boolean closed = bicycle.equals("no") || way.hasTag("access", "private", "no");
-    boolean rideable =
-      highway.equals("cycleway") || highway.equals("bridleway") || (OFFROAD.contains(highway) && BIKE.contains(bicycle));
+    boolean bikes = BIKE.contains(bicycle);
+    boolean privateWay = way.hasTag("access", "private", "no");
+    boolean closed = bicycle.equals("no") || (privateWay && !bikes);
+    boolean rideable = highway.equals("cycleway") || highway.equals("bridleway") ||
+      (OFFROAD.contains(highway) && bikes) || (highway.equals("service") && privateWay && bikes);
     if (closed || !rideable) {
       // As the basemap: no pavements or crossings, and private paths only from z15.
       boolean footpath = FOOT.contains(highway) && !way.hasTag("footway", "sidewalk", "crossing") &&
@@ -188,8 +205,19 @@ public class CyclingProfile implements Profile {
       return footpath ? "foot" : null;
     }
     String surface = way.getString("surface");
-    boolean paved = surface != null ? PAVED.contains(surface) :
-      highway.equals("track") ? way.hasTag("tracktype", "grade1") : !highway.equals("bridleway");
+    String tracktype = way.getString("tracktype");
+    boolean paved;
+    if (surface != null) {
+      paved = PAVED.contains(surface);
+    } else if (tracktype != null) {
+      paved = tracktype.equals("grade1");
+    } else {
+      paved = switch (highway) {
+        case "track", "bridleway" -> false;
+        case "path", "footway" -> !bicycle.equals("permissive");
+        default -> true;
+      };
+    }
     return paved ? "p" : "u";
   }
 
@@ -202,7 +230,7 @@ public class CyclingProfile implements Profile {
     features.line("paths")
       .setAttr("class", pathClass)
       .setAttr("bridge", way.hasTag("bridge") && !way.hasTag("bridge", "no") ? true : null)
-      .setMinZoom(pathClass.equals("foot") ? 14 : 12)
+      .setMinZoom(pathClass.equals("foot") ? 14 : 11)
       .setMinPixelSize(0);
   }
 
@@ -223,6 +251,40 @@ public class CyclingProfile implements Profile {
     String side = left != null && right != null ? "both" : left != null ? "left" : "right";
     boolean bus = !"lane".equals(left) && !"lane".equals(right);
     return Map.of("side", side, "bus", bus);
+  }
+
+  /**
+   * The roads and railways cycle.travel draws below the zooms our basemap tiles carry them from: lanes and streets
+   * ({@code minor}) from its z11 (our 10; the basemap's start at z12; at its z10 only tertiary roads show, which the
+   * basemap has), and main lines ({@code rail}) from its z9 (our 8; the basemap's at z11). Route dots need the lanes
+   * under them. Returns null for anything else. Minor roads carry their {@code highway} value as {@code kind_detail},
+   * as the basemap's do, because cycle.travel draws unclassified lanes much bolder than streets.
+   */
+  static String lowRoad(WithTags way) {
+    if ((way.hasTag("tunnel") && !way.hasTag("tunnel", "no")) || way.hasTag("area", "yes")) {
+      return null;
+    }
+    if (way.hasTag("highway", "unclassified", "residential", "living_street")) {
+      return way.hasTag("access", "private", "no") ? null : "minor";
+    }
+    boolean mainLine = !way.hasTag("service") && !way.hasTag("usage", "industrial", "military", "test");
+    return way.hasTag("railway", "rail") && mainLine ? "rail" : null;
+  }
+
+  static final int LOW_ROADS_MAXZOOM = 11;
+
+  private void lowRoads(SourceFeature way, FeatureCollector features) {
+    String kind = lowRoad(way);
+    if (kind != null) {
+      boolean rail = kind.equals("rail");
+      features.line("low_roads")
+        .setAttr("kind", kind)
+        .setAttr("kind_detail", rail ? null : way.getString("highway"))
+        .setMinZoom(rail ? 8 : 10)
+        .setMaxZoom(rail ? LOW_ROADS_MAXZOOM - 1 : LOW_ROADS_MAXZOOM)
+        // Lanes are split into short ways at every junction: keep them all, however short.
+        .setMinPixelSize(0);
+    }
   }
 
   /** "lane", "bus" or null for one side, falling back to {@code cycleway:both} and then {@code cycleway}. */
