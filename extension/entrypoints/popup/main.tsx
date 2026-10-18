@@ -195,8 +195,13 @@ const BackToPage = () => {
   );
 };
 
-const hour = (h: number) => `${String(h).padStart(2, '0')}:00`;
-const HOURS = Array.from({ length: 17 }, (_, i) => i + 5);
+// Quarter-hour times from 05:00 to 21:00; a window stays at least an hour long.
+const clockAt = (m: number) =>
+  `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const minutesOf = (time: string) =>
+  Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+const TIMES = Array.from({ length: 65 }, (_, i) => clockAt(300 + i * 15));
+const GAP = 60;
 const decimal = (time: string) =>
   Number(time.slice(0, 2)) + Number(time.slice(3)) / 60;
 const pct = (h: number) =>
@@ -476,18 +481,19 @@ const WhenTab = ({ view }: { view: View }) => {
               Earliest start
               <select
                 class="ro-select"
-                value={Number(time.start.slice(0, 2))}
+                value={time.start}
                 onChange={(e) => {
-                  const start = Number(e.currentTarget.value);
-                  const end = Math.max(decimal(time.end), start + 1);
-                  set({
-                    time: { ...time, start: hour(start), end: hour(end) },
-                  });
+                  const start = e.currentTarget.value;
+                  const end = Math.max(
+                    minutesOf(time.end),
+                    minutesOf(start) + GAP,
+                  );
+                  set({ time: { ...time, start, end: clockAt(end) } });
                 }}
               >
-                {HOURS.slice(0, -1).map((h) => (
-                  <option key={h} value={h}>
-                    {hour(h)}
+                {TIMES.filter((t) => minutesOf(t) <= 21 * 60 - GAP).map((t) => (
+                  <option key={t} value={t}>
+                    {t}
                   </option>
                 ))}
               </select>
@@ -496,18 +502,19 @@ const WhenTab = ({ view }: { view: View }) => {
               Latest finish
               <select
                 class="ro-select"
-                value={Number(time.end.slice(0, 2))}
+                value={time.end}
                 onChange={(e) => {
-                  const end = Number(e.currentTarget.value);
-                  const start = Math.min(decimal(time.start), end - 1);
-                  set({
-                    time: { ...time, start: hour(start), end: hour(end) },
-                  });
+                  const end = e.currentTarget.value;
+                  const start = Math.min(
+                    minutesOf(time.start),
+                    minutesOf(end) - GAP,
+                  );
+                  set({ time: { ...time, start: clockAt(start), end } });
                 }}
               >
-                {HOURS.slice(1).map((h) => (
-                  <option key={h} value={h}>
-                    {hour(h)}
+                {TIMES.filter((t) => minutesOf(t) >= 5 * 60 + GAP).map((t) => (
+                  <option key={t} value={t}>
+                    {t}
                   </option>
                 ))}
               </select>

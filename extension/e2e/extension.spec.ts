@@ -1712,6 +1712,29 @@ test('When tab: Days and Time visible; custom times re-query', async ({
   await expect
     .poll(() => recCalls().at(-1)?.body.riding)
     .toEqual({ window: { start: '08:00', end: '14:00' } });
+  // Quarter-hour steps; a later start pushes the finish to keep an hour's ride.
+  const start = page.getByLabel('Earliest start');
+  const finish = page.getByLabel('Latest finish');
+  await expect(start.locator('option')).toHaveCount(61);
+  await expect(start.locator('option').first()).toHaveText('05:00');
+  await expect(start.locator('option').last()).toHaveText('20:00');
+  await expect(finish.locator('option').first()).toHaveText('06:00');
+  await expect(finish.locator('option').last()).toHaveText('21:00');
+  await start.selectOption('08:15');
+  await expect
+    .poll(() => recCalls().at(-1)?.body.riding)
+    .toEqual({ window: { start: '08:15', end: '14:00' } });
+  await finish.selectOption('08:45');
+  await expect
+    .poll(() => recCalls().at(-1)?.body.riding)
+    .toEqual({ window: { start: '07:45', end: '08:45' } });
+  await expect(
+    page.locator('.ro-card-head:has(.ro-label:text-is("Time")) .ro-value'),
+  ).toHaveText('07:45–08:45');
+  await start.selectOption('13:30');
+  await expect
+    .poll(() => recCalls().at(-1)?.body.riding)
+    .toEqual({ window: { start: '13:30', end: '14:30' } });
   await page.getByRole('button', { name: 'Save as my default window' }).click();
   await expect(
     page.getByRole('button', { name: 'Saved as your default window' }),
