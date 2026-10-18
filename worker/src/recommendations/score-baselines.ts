@@ -2,6 +2,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { climateSource } from '../climate/seasonal.ts';
 import type { Route } from '../routes/model.ts';
 import { ALGORITHM_VERSION } from './engine.ts';
+import { fingerprint } from './fingerprint.ts';
 import type { RecommendationInput } from './input.ts';
 import type { DailyResult } from './presentation.ts';
 
@@ -70,27 +71,6 @@ export const createScoreBaselineStore =
       ]),
     );
   };
-
-const canonical = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value !== null && typeof value === 'object')
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, item]) => [key, canonical(item)]),
-    );
-  return value;
-};
-const fingerprint = async (value: unknown) =>
-  Array.from(
-    new Uint8Array(
-      await crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode(JSON.stringify(canonical(value))),
-      ),
-    ),
-    (byte) => byte.toString(16).padStart(2, '0'),
-  ).join('');
 
 /** Enrich only daily best candidates. Alternatives are not comparisons of that
  * day's best score. Multi-day summaries retain the same candidate objects. */

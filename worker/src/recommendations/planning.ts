@@ -15,7 +15,7 @@ export const ridingWindowSchema = z.union([
 export const planningDaysSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('preset'),
-    preset: z.enum(['today', 'tomorrow', 'weekend', 'next']),
+    preset: z.enum(['today', 'tomorrow', 'weekend', 'next', 'next-five-days']),
   }),
   z
     .strictObject({
@@ -97,7 +97,10 @@ export const resolvePlanningDays = (
     start = end = today.add({ days: 1 });
   else if (days.kind === 'preset' && days.preset === 'next')
     end = today.add({ days: 4 });
-  else if (days.kind === 'preset' && days.preset === 'weekend') {
+  else if (days.kind === 'preset' && days.preset === 'next-five-days') {
+    start = today.add({ days: 1 });
+    end = today.add({ days: 5 });
+  } else if (days.kind === 'preset' && days.preset === 'weekend') {
     start =
       today.dayOfWeek === 7
         ? today
