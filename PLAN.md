@@ -452,7 +452,7 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 A cycle.travel-style map in place of Apple Maps. [`docs/maps/README.md`](docs/maps/README.md) has
 the plan, the four workstreams and the PR order.
 - [x] Plan, style reference, browser prototype and comparison screenshots (#223)
-- [x] Design-system entries (`CycleMap`, §2–§4) and default answers to the open decisions (WS4a)
+- [x] Design-system entries (`CycleMap`, §2–§4) and default answers to the open decisions (WS4a, #225)
 - [ ] Map data: GB basemap on R2, cycling overlay, terrain, scheduled rebuilds (WS1)
 - [ ] Style for MapLibre Native: glyphs, sprite, colour fix, known gaps, 3× tuning (WS2)
 - [ ] App: MapLibre spike, `CycleMap`, Routes map Cycle look, snapshots, attribution, macOS (WS3)
