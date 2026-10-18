@@ -13,6 +13,7 @@ import {
   enablePush,
   installPushHandlers,
   pushStatus,
+  SignedOutInApp,
 } from '../lib/push';
 import {
   DEFAULT_PLANNING,
@@ -725,7 +726,8 @@ const updatePushStatus = async () => {
   try {
     const push = await pushStatus();
     await update((state) => (state.user?.id === owner ? { push } : {}));
-  } catch {
+  } catch (error) {
+    if (error instanceof SignedOutInApp) return signOutLocally();
     await update(() => ({
       push: {
         enabled: false,
@@ -1085,6 +1087,24 @@ export default defineBackground(() => {
     })),
   );
   revive().catch(() => {});
+  // Safari: the Ride On app's Sign Out reaches a running extension at once. Otherwise the
+  // extension finds out on its next check-in (updatePushStatus) or API call (a 401).
+  if (import.meta.env.SAFARI)
+    try {
+      browser.runtime
+        .connectNative('com.danbarclay.rideon')
+        .onMessage.addListener(
+          async (message: { name?: string; userInfo?: { owner?: string } }) => {
+            const { user } = await readState();
+            if (
+              message.name === 'signOut' &&
+              user &&
+              message.userInfo?.owner === user.id
+            )
+              await signOutLocally();
+          },
+        );
+    } catch {}
   // Alarms may not outlive a browser restart or an update, so each wake sets it again.
   armResume().catch(() => {});
   // Made once: setting it again on every wake would restart its day.
@@ -1106,9 +1126,14 @@ export default defineBackground(() => {
     (message: Message, sender, sendResponse) => {
       if (
         ['enablePush', 'disablePush'].includes(message.type) &&
-        sender.url !== browser.runtime.getURL('/popup.html')
+        (import.meta.env.SAFARI ||
+          sender.url !== browser.runtime.getURL('/popup.html'))
       ) {
-        sendResponse({ error: 'Manage notifications in Ride On Preferences.' });
+        sendResponse({
+          error: import.meta.env.SAFARI
+            ? 'Turn on notifications in the Ride On app.'
+            : 'Manage notifications in Ride On Preferences.',
+        });
         return false;
       }
       handle(message).then(

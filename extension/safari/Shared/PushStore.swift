@@ -4,10 +4,25 @@ import UserNotifications
 
 /// Shared only by the signed companion app and its Safari extension. Never use shared defaults for sessions.
 enum PushStore {
+  /// The extension's signed-in account, shared on sign-in so the app can show it and sign out.
+  /// `enabled` means this device should be registered for ride alerts.
   struct Link: Codable, Sendable {
     var owner: String
     var token: String
     var enabled = false
+    var email: String?
+  }
+  /// The Mac app's notification switches. They belong to this device, not the account.
+  struct Alerts: Codable, Equatable, Sendable {
+    var rideAlerts = true
+    var finalForecast = true
+    var sound = false
+    var any: Bool { rideAlerts || finalForecast }
+  }
+  /// Left by the app's Sign Out for the extension, which signs out when it next checks in.
+  struct SignOut: Codable, Sendable {
+    var owner: String
+    var token: String
   }
   struct Receipt: Codable, Sendable {
     var owner: String
@@ -80,8 +95,9 @@ enum PushStore {
     init(_ message: String) { self.message = message }
     var errorDescription: String? { message }
   }
-  static func request(_ path: String, method: String, link: Link, body: [String: String]? = nil)
-    async throws -> Data
+  static func request(
+    _ path: String, method: String, link: Link, body: (any Encodable & Sendable)? = nil
+  ) async throws -> Data
   {
     var request = URLRequest(url: api.appendingPathComponent(path))
     request.httpMethod = method
@@ -117,13 +133,18 @@ enum PushStore {
         as? String,
       ["sandbox", "production"].contains(environment)
     else { throw Failure("Push delivery is not configured in this build.") }
+    struct Body: Encodable, Sendable {
+      var token, environment, topic, platform, scope: String
+      var alerts: Alerts?
+    }
     let id = try installationID()
+    // The API rejects unknown fields, so the switches go only once it says it can apply them.
+    let alerts: Alerts? = try await deviceAlerts(link) ? read("alerts") ?? Alerts() : nil
     let data = try await request(
       "push-devices/\(id)", method: "PUT", link: link,
-      body: [
-        "token": deviceToken, "environment": environment, "topic": "com.danbarclay.rideon",
-        "platform": platform, "scope": "tracked_rides",
-      ])
+      body: Body(
+        token: deviceToken, environment: environment, topic: "com.danbarclay.rideon",
+        platform: platform, scope: "tracked_rides", alerts: alerts))
     struct Registration: Decodable { var deliveryConfigured: Bool }
     let result = try JSONDecoder().decode(Registration.self, from: data)
     let current: Link? = try read("link")
@@ -138,21 +159,42 @@ enum PushStore {
         owner: link.owner, deviceToken: deviceToken, configured: result.deliveryConfigured,
         environment: environment))
   }
-  static func unlink() async throws {
+  /// API 0.39 (docs/extension-api-brief-v12.md) applies the switches for each device.
+  static func deviceAlerts(_ link: Link) async throws -> Bool {
+    struct Configuration: Decodable { var deviceAlerts: Bool? }
+    let data = try await request("push-devices/config", method: "GET", link: link)
+    return try JSONDecoder().decode(Configuration.self, from: data).deviceAlerts == true
+  }
+  /// Sends changed switches to a registered device. Before API 0.39 they stay on this device.
+  static func update(_ alerts: Alerts) async throws {
+    guard let link: Link = try read("link"), link.enabled,
+      let receipt: Receipt = try read("receipt"), receipt.owner == link.owner,
+      try await deviceAlerts(link)
+    else { return }
+    struct Body: Encodable, Sendable { var alerts: Alerts }
+    _ = try await request(
+      "push-devices/\(installationID())", method: "PATCH", link: link, body: Body(alerts: alerts))
+  }
+  /// Stops alerts to this device. The account stays shared.
+  static func unregister() async throws {
     guard var link: Link = try read("link") else { return }
     link.enabled = false
     try write("link", link)
     try remove("receipt")
     UNUserNotificationCenter.current().removeAllDeliveredNotifications()
     _ = try await request("push-devices/\(installationID())", method: "DELETE", link: link)
-    try remove("link")
+  }
+  /// Signing out: stops alerts and forgets the account, even when the API can't be reached.
+  static func unlink() async throws {
+    defer { try? remove("link") }
+    try await unregister()
   }
   static func status() async throws -> [String: String] {
     let id = try installationID()
     guard let link: Link = try read("link") else {
       return [
         "installationId": id, "status": "off",
-        "message": "Enable notifications in the Safari extension first.",
+        "message": "Sign in to Ride On in Safari first.",
       ]
     }
     let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -160,6 +202,12 @@ enum PushStore {
       return [
         "installationId": id, "status": "blocked",
         "message": "Allow Ride On notifications in system settings.",
+      ]
+    }
+    if !link.enabled {
+      return [
+        "installationId": id, "status": "off",
+        "message": "Notifications are off on this device.",
       ]
     }
     let receipt: Receipt? = try read("receipt")

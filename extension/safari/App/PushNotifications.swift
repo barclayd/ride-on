@@ -10,10 +10,12 @@ import UserNotifications
 @MainActor @Observable
 final class PushNotifications {
   static let shared = PushNotifications()
-  var message = "Enable notifications in Ride On’s Safari extension, then finish setup here."
+  var message = "Sign in to Ride On in Safari, then turn on notifications here."
   var ready = false
   var optedIn = false
   var busy = false
+  /// The last registration failure, shown under the Mac app's switches.
+  var failure: String?
   func refresh() async {
     do {
       if let link: PushStore.Link = try PushStore.read("link"), link.enabled {
@@ -23,7 +25,7 @@ final class PushNotifications {
         {
           registerWithApple()
         } else if settings.authorizationStatus == .denied {
-          try await PushStore.unlink()
+          try await PushStore.unregister()
         }
       }
       optedIn = (try PushStore.read("link", as: PushStore.Link.self))?.enabled == true
@@ -40,8 +42,7 @@ final class PushNotifications {
     defer { busy = false }
     do {
       guard var link: PushStore.Link = try PushStore.read("link") else {
-        throw PushStore.Failure(
-          "In Safari, open Ride On → Preferences → Enable notifications first.")
+        throw PushStore.Failure("Sign in to Ride On in Safari first.")
       }
       let allowed = try await UNUserNotificationCenter.current().requestAuthorization(options: [
         .alert, .sound, .badge,
@@ -64,7 +65,7 @@ final class PushNotifications {
     busy = true
     defer { busy = false }
     do {
-      try await PushStore.unlink()
+      try await PushStore.unregister()
       #if os(iOS)
         UIApplication.shared.unregisterForRemoteNotifications()
       #else
@@ -91,6 +92,7 @@ final class PushNotifications {
     do {
       let token = data.map { String(format: "%02x", $0) }.joined()
       try await PushStore.register(deviceToken: token)
+      failure = nil
       optedIn = (try PushStore.read("link", as: PushStore.Link.self))?.enabled == true
       let status = try await PushStore.status()
       message = status["message"] ?? message
@@ -99,6 +101,7 @@ final class PushNotifications {
       message =
         (error as? PushStore.Failure)?.message
         ?? "Could not connect notification delivery. Check setup in Safari and try again."
+      failure = message
     }
   }
   func openRide(_ id: String?) {
@@ -108,7 +111,7 @@ final class PushNotifications {
     #if os(iOS)
       UIApplication.shared.open(url)
     #else
-      NSWorkspace.shared.open(url)
+      openInSafari(url)
     #endif
   }
 }
@@ -150,7 +153,10 @@ final class NotificationAppDelegate: NSObject, PlatformAppDelegate, UNUserNotifi
       _ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
       PushNotifications.shared.message = "Apple notification registration failed. Please try again."
+      PushNotifications.shared.failure = PushNotifications.shared.message
     }
+    // Like Apple's Safari extension template: closing the window quits.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
   #endif
   nonisolated func userNotificationCenter(
     _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
@@ -163,6 +169,23 @@ final class NotificationAppDelegate: NSObject, PlatformAppDelegate, UNUserNotifi
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
     let enabled = (try? PushStore.read("link", as: PushStore.Link.self))?.enabled == true
-    completionHandler(enabled ? [.banner, .sound, .list] : [])
+    #if os(macOS)
+      let sound = (try? PushStore.read("alerts", as: PushStore.Alerts.self))?.sound == true
+    #else
+      let sound = true
+    #endif
+    completionHandler(enabled ? sound ? [.banner, .sound, .list] : [.banner, .list] : [])
   }
 }
+
+#if os(macOS)
+  /// Ride On runs in Safari, so its links open there even when another browser is the default.
+  @MainActor func openInSafari(_ url: URL) {
+    if let safari = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Safari") {
+      NSWorkspace.shared.open(
+        [url], withApplicationAt: safari, configuration: NSWorkspace.OpenConfiguration())
+    } else {
+      NSWorkspace.shared.open(url)
+    }
+  }
+#endif

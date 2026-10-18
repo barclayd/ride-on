@@ -27,7 +27,10 @@ type NativeStatus = {
   status: PushStatus['status'];
   message: string;
   error?: string;
+  signOut?: boolean; // the Ride On app signed this session out
 };
+/** The Ride On app signed out; the extension follows. */
+export class SignedOutInApp extends Error {}
 const native = async (message: object): Promise<NativeStatus> => {
   const result = await browser.runtime.sendNativeMessage(
     'com.danbarclay.rideon',
@@ -46,16 +49,32 @@ const keyBytes = (key: string) =>
 export const notificationURL = (id: string) =>
   `${API_URL}/notifications/open#ride=${encodeURIComponent(id)}`;
 
+// The app's sidebar shows the email; fetched once for each account.
+const accountEmail = async (owner: string) => {
+  const saved = await getSecret<{ owner: string; email: string | null }>(
+    'account-email',
+  );
+  if (saved?.owner === owner) return saved.email;
+  const me = await api<{ user: { email?: string | null } }>('/auth/me');
+  const email = me.user.email ?? null;
+  await setSecret('account-email', { owner, email });
+  return email;
+};
+
 export const pushStatus = async (): Promise<PushStatus> => {
   if (import.meta.env.SAFARI) {
-    const saved = await getSecret<Registration>('push-registration');
+    // Safari: the Ride On app owns notifications. Checking in shares the account with it.
     const state = await readState();
-    if (!saved || saved.owner !== state.user?.id) return PUSH_OFF;
+    const token = await getToken();
+    if (!state.user || !token) return PUSH_OFF;
     const result = await native({
-      type: 'status',
+      type: 'account',
       owner: state.user.id,
-      token: await getToken(),
+      token,
+      email: await accountEmail(state.user.id).catch(() => null),
+      apiURL: API_URL,
     });
+    if (result.signOut) throw new SignedOutInApp();
     return {
       enabled: result.enabled,
       status: result.status,
@@ -105,24 +124,8 @@ const enable = async (): Promise<PushStatus> => {
   const state = await readState();
   if (!state.user || !(await getToken()))
     throw new Error('Sign in before enabling notifications.');
-  if (import.meta.env.SAFARI) {
-    const result = await native({
-      type: 'link',
-      owner: state.user.id,
-      token: await getToken(),
-      apiURL: API_URL,
-    });
-    await setSecret('push-registration', {
-      id: result.installationId,
-      owner: state.user.id,
-      enabled: true,
-    } satisfies Registration);
-    return {
-      enabled: result.enabled,
-      status: result.status,
-      message: result.message,
-    };
-  }
+  if (import.meta.env.SAFARI)
+    throw new Error('Turn on notifications in the Ride On app.');
   if (!(await browser.permissions.contains({ permissions: ['notifications'] })))
     throw new Error('Allow notifications to continue.');
   const config = await api<{
@@ -177,28 +180,26 @@ const enable = async (): Promise<PushStatus> => {
   return pushStatus();
 };
 const disable = async () => {
+  if (import.meta.env.SAFARI) {
+    // Signed out: the app stops this device's alerts and forgets the account.
+    await setSecret('push-registration', null); // ponytail: from builds before the app owned it
+    await setSecret('account-email', null);
+    await native({ type: 'account' }).catch(() => {});
+    return PUSH_OFF;
+  }
   const saved = await getSecret<Registration>('push-registration');
   // Disable local presentation first, even if offline. Retain the ID until server cleanup succeeds.
   if (saved) await setSecret('push-registration', { ...saved, enabled: false });
-  if (import.meta.env.SAFARI) {
-    if (saved)
-      await native({
-        type: 'unlink',
-        owner: saved.owner,
-        token: await getToken(),
-      });
-  } else {
-    await self.registration.pushManager
-      .getSubscription()
-      .then((subscription) => subscription?.unsubscribe())
-      .catch(() => {});
-    const visible = (await browser.notifications?.getAll()) ?? {};
-    await Promise.all(
-      Object.keys(visible)
-        .filter((id) => id.startsWith('ride-on:'))
-        .map((id) => browser.notifications.clear(id)),
-    );
-  }
+  await self.registration.pushManager
+    .getSubscription()
+    .then((subscription) => subscription?.unsubscribe())
+    .catch(() => {});
+  const visible = (await browser.notifications?.getAll()) ?? {};
+  await Promise.all(
+    Object.keys(visible)
+      .filter((id) => id.startsWith('ride-on:'))
+      .map((id) => browser.notifications.clear(id)),
+  );
   if (saved) await api(`/push-devices/${saved.id}`, { method: 'DELETE' });
   await setSecret('push-registration', null);
   return PUSH_OFF;
