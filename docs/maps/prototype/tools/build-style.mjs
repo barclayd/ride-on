@@ -43,6 +43,9 @@ const flavour = {
   regular: 'Montserrat Regular', bold: 'Montserrat SemiBold', italic: 'Montserrat Italic',
 }
 
+// A layer of Ride On's cycling overlay (maps/tiles): routes, route_badges, paths, cycle_lanes, pois.
+const cycling = (layer) => ({ source: 'cycling', 'source-layer': layer })
+
 // Road fill by OSM class, from cycle.travel's key.
 const roadColour = ['match', ['get', 'kind_detail'], 'trunk', ct.trunk, 'primary', ct.primary, 'secondary', ct.secondary, 'tertiary', ct.tertiary, ct.tertiary]
 const montserrat = (w) => ['literal', [`Montserrat ${w}`]]
@@ -123,7 +126,6 @@ const base = layers('basemap', flavour, { lang: 'en' })
     return l
   })
 
-const path = (detail) => ['all', ['==', ['get', 'kind'], 'path'], ['in', ['get', 'kind_detail'], ['literal', detail]], ['!', ['has', 'is_tunnel']]]
 const width = (stops) => ['interpolate', ['exponential', 1.5], ['zoom'], ...stops]
 // A/B road numbers: small grey italics from cycle.travel's z11 (our 10).
 const roadRefs = { id: 'ct_road_refs', type: 'symbol', source: 'basemap', 'source-layer': 'roads', minzoom: 10,
@@ -149,39 +151,34 @@ const labels = [
   { id: 'ct_parks', type: 'symbol', source: 'basemap', 'source-layer': 'pois', minzoom: 14,
     filter: poiKind(['park', 'garden', 'nature_reserve', 'wood', 'forest', 'golf_course']),
     layout: { ...pointLabel(11.5, 'Medium Italic'), 'symbol-sort-key': ['get', 'min_zoom'] }, paint: halo(shot('#3c6633')) },
-  // Protomaps only ships hills from tile z14, so these come from Overpass (natural=peak|hill).
-  { id: 'ct_peaks', type: 'symbol', source: 'pois', minzoom: 12, filter: ['==', ['get', 'kind'], 'peak'],
+  // Protomaps only ships hills from tile z14, so these come from the cycling overlay (natural=peak|hill).
+  { id: 'ct_peaks', type: 'symbol', ...cycling('pois'), minzoom: 12, filter: ['==', ['get', 'kind'], 'peak'],
     layout: pointLabel(11, 'Medium Italic', 6), paint: halo(shot('#754634')) },
   // Above or below the dot, sliding to a corner when that's taken (Charing Cross beside LONDON).
-  { id: 'ct_stations_label', type: 'symbol', source: 'pois', minzoom: 14, filter: ['==', ['get', 'kind'], 'station'],
+  { id: 'ct_stations_label', type: 'symbol', ...cycling('pois'), minzoom: 14, filter: ['==', ['get', 'kind'], 'station'],
     layout: { ...pointLabel(11, 'SemiBold', 8), 'text-variable-anchor': ['top', 'bottom', 'bottom-right', 'bottom-left', 'top-right', 'top-left'], 'text-radial-offset': 0.6 }, paint: halo(shot('#cd562d')) },
 ]
 // National Rail stations as cycle.travel's orange dot. At its z11–12 it shows only a handful (no rule we can copy),
 // so ours start with the full set at its z13 (our 12).
-const stations = { id: 'ct_stations', type: 'circle', source: 'pois', minzoom: 12, filter: ['==', ['get', 'kind'], 'station'],
+const stations = { id: 'ct_stations', type: 'circle', ...cycling('pois'), minzoom: 12, filter: ['==', ['get', 'kind'], 'station'],
   paint: { 'circle-color': shot('#cd562d'), 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2.2, 14, 2.6], 'circle-stroke-color': '#000000', 'circle-stroke-width': 0.9 } }
-// Cycle paths come from our own OSM extract (data/paths.geojson), which keeps the surface and bicycle tags the
-// basemap drops: c is 'p' (paved, red and white), 'u' (unpaved, brown dashes) or 'f' (bridleway closed to bikes).
-const pathClass = (c) => ['==', ['get', 'c'], c]
+// Paths come from the cycling overlay (maps/tiles), which keeps the surface and bicycle tags the basemap drops:
+// class is 'p' (paved, red and white), 'u' (unpaved, brown dashes) or 'foot' (other footpaths, green dashes).
+const pathClass = (c) => ['==', ['get', 'class'], c]
 // ~1.2px wide, 2px dashes every 7.3px at cycle.travel's z15.
 const footpathPaint = { 'line-color': ct.footpath, 'line-width': width([14, 1.2, 18, 2.4]), 'line-dasharray': [1.7, 4.4] }
 const paths = [
-  { id: 'ct_footpaths', type: 'line', source: 'basemap', 'source-layer': 'roads', minzoom: 14, filter: path(['footway', 'path', 'steps', 'track']),
-    paint: footpathPaint },
-  { id: 'ct_footpaths_bridleway', type: 'line', source: 'paths', minzoom: 14, filter: pathClass('f'), paint: footpathPaint },
-  // Unpaved paths that are also basemap footpaths would show green dots between the brown dashes, so blank them first.
-  { id: 'ct_unpaved_knockout', type: 'line', source: 'paths', minzoom: 14, filter: ['all', pathClass('u'), ['==', ['get', 'k'], 1]],
-    paint: { 'line-color': ct.land, 'line-width': width([14, 1.6, 18, 3]) } },
+  { id: 'ct_footpaths', type: 'line', ...cycling('paths'), minzoom: 14, filter: pathClass('foot'), paint: footpathPaint },
   // Measured off cycle.travel @2x screenshots: ~1px wide, dashes ~5px long every ~8px at its z13–15.
-  { id: 'ct_unpaved', type: 'line', source: 'paths', minzoom: 12, filter: pathClass('u'),
+  { id: 'ct_unpaved', type: 'line', ...cycling('paths'), minzoom: 12, filter: pathClass('u'),
     paint: { 'line-color': shot('#834a21'), 'line-width': width([12, 0.95, 15, 1.1, 18, 2]), 'line-dasharray': [5.5, 2.5] } },
-  { id: 'ct_cycleways_casing', type: 'line', source: 'paths', minzoom: 12, filter: pathClass('p'),
+  { id: 'ct_cycleways_casing', type: 'line', ...cycling('paths'), minzoom: 12, filter: pathClass('p'),
     layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ct.cycleway, 'line-width': width([12, 2.2, 15, 4.5, 18, 10]) } },
-  { id: 'ct_cycleways', type: 'line', source: 'paths', minzoom: 12, filter: pathClass('p'),
+  { id: 'ct_cycleways', type: 'line', ...cycling('paths'), minzoom: 12, filter: pathClass('p'),
     layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': width([12, 0.9, 15, 2.2, 18, 6]) } },
 ]
 
-// Cycle network relations (OSM via Overpass), drawn as cycle.travel's dotted lines: [colour, 5px, dash 0.1/9, round cap].
+// Cycle network relations (the overlay's routes layer), drawn as cycle.travel's dotted lines: [colour, 5px, dash 0.1/9, round cap].
 const net = ['get', 'network']
 const minzoomFor = ['get', 'minz']
 const visible = ['>=', ['zoom'], minzoomFor]
@@ -191,10 +188,10 @@ const dotStops = [6, 3.5, 8, 5, 10, 6.5, 12, 7, 14, 7, 18, 8.5]
 const dotWidth = width(dotStops)
 const dotGap = (scale = 1) => ['step', ['zoom'], ['literal', [0, 2.3 / scale]], 11, ['literal', [0, 2.6 / scale]], 13, ['literal', [0, 2.9 / scale]]]
 const routes = [
-  { id: 'ct_routes_eurovelo_ring', type: 'line', source: 'routes', filter: ['all', ['==', net, 'icn'], visible],
+  { id: 'ct_routes_eurovelo_ring', type: 'line', ...cycling('routes'), filter: ['all', ['==', net, 'icn'], visible],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: { 'line-color': ct.eurovelo, 'line-opacity': 0.85, 'line-width': width(dotStops.map((v, i) => (i % 2 ? v * 1.4 : v))), 'line-dasharray': dotGap(1.4) } },
-  { id: 'ct_routes', type: 'line', source: 'routes', filter: visible,
+  { id: 'ct_routes', type: 'line', ...cycling('routes'), filter: visible,
     layout: { 'line-cap': 'round', 'line-join': 'round', 'line-sort-key': ['get', 'rank'] },
     paint: { 'line-color': ['match', net, 'icn', ct.ncn, 'ncn', ct.ncn, 'rcn', ct.rcn, ct.lcn], 'line-opacity': ['step', ['zoom'], ['match', net, 'rcn', 0.45, 0.62], 11, 0.62], 'line-width': dotWidth, 'line-dasharray': dotGap() } },
 ]
@@ -211,13 +208,13 @@ const badgeLayout = (extra) => ({ 'symbol-placement': 'line', 'symbol-spacing': 
   'text-keep-upright': false, 'text-padding': 2, 'icon-padding': 2, ...extra })
 const fit = { 'icon-text-fit': 'both', 'icon-text-fit-padding': [1, 4.5, 0.5, 4.5] }
 const badges = [
-  { id: 'ct_route_badges_rcn', type: 'symbol', source: 'shields', minzoom: 11, filter: ['==', badge, 'blue'],
+  { id: 'ct_route_badges_rcn', type: 'symbol', ...cycling('route_badges'), minzoom: 11, filter: ['==', badge, 'blue'],
     layout: badgeLayout({ ...fit, 'icon-image': 'badge-blue' }), paint: { 'text-color': '#ffffff' } },
-  { id: 'ct_route_badges', type: 'symbol', source: 'shields', minzoom: 11, filter: ['==', badge, 'red'],
+  { id: 'ct_route_badges', type: 'symbol', ...cycling('route_badges'), minzoom: 11, filter: ['==', badge, 'red'],
     layout: badgeLayout({ ...fit, 'icon-image': 'badge-red' }), paint: { 'text-color': '#ffffff' } },
-  { id: 'ct_route_badges_icn', type: 'symbol', source: 'shields', minzoom: 12, filter: ['all', ['==', badge, 'eu'], ['!', ['get', 'ev']]],
+  { id: 'ct_route_badges_icn', type: 'symbol', ...cycling('route_badges'), minzoom: 12, filter: ['all', ['==', badge, 'eu'], ['!', ['get', 'ev']]],
     layout: badgeLayout({ ...fit, 'icon-image': 'badge-red' }), paint: { 'text-color': '#ffffff' } },
-  { id: 'ct_route_badges_eu', type: 'symbol', source: 'shields', minzoom: 11, maxzoom: 12, filter: ['==', badge, 'eu'],
+  { id: 'ct_route_badges_eu', type: 'symbol', ...cycling('route_badges'), minzoom: 11, maxzoom: 12, filter: ['==', badge, 'eu'],
     layout: badgeLayout({ 'icon-image': 'badge-eu', 'symbol-spacing': 220, 'text-size': 7.5 }), paint: { 'text-color': '#ffffff' } },
 ]
 
@@ -253,10 +250,7 @@ const style = {
   },
   sources: {
     basemap: { type: 'vector', url: `pmtiles://${origin}/world.pmtiles`, attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> · <a href="https://protomaps.com">Protomaps</a>' },
-    paths: { type: 'geojson', data: `${origin}/data/paths.geojson`, tolerance: 0.4, buffer: 16 },
-    routes: { type: 'geojson', data: `${origin}/data/routes.geojson`, tolerance: 0.6, buffer: 32 },
-    shields: { type: 'geojson', data: `${origin}/data/shields.geojson`, tolerance: 0.6, buffer: 64 },
-    pois: { type: 'geojson', data: `${origin}/data/pois.geojson`, buffer: 32 },
+    cycling: { type: 'vector', url: `pmtiles://${origin}/data/cycling.pmtiles`, attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>' },
   },
   layers: all,
 }

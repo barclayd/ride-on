@@ -1,0 +1,135 @@
+# Cycling overlay
+
+A [planetiler](https://github.com/onthegomap/planetiler) profile that builds Ride On's cycling overlay:
+the cycle routes, route badges, cycle paths, cycle lanes and POIs that the cycle map draws over the
+Protomaps basemap. One PMTiles file, z0–14, from an OpenStreetMap extract. The plan is
+[`docs/maps/README.md`](../../docs/maps/README.md) (WS1.2); why each rule is what it is is in the
+[style spec](../../docs/maps/cycle-travel-style.md).
+
+| File | What |
+|---|---|
+| `src/main/java/cc/rideon/maps/CyclingProfile.java` | The profile: every rule below |
+| `src/test/java/cc/rideon/maps/CyclingProfileTest.java` | Unit tests per rule, plus an end-to-end build of planetiler's Monaco extract |
+| `build.sh` | Tests, then builds a PMTiles file, in Docker |
+| `pom.xml` | planetiler-core 0.10.2, Java 21 |
+
+## Layers
+
+Zooms are MapLibre zooms (cycle.travel's zoom − 1). Lines are merged per tile, so a route's dots don't
+restart at every OSM way join.
+
+### `routes`
+
+Every way on a `route=bicycle` relation with `network` `icn`, `ncn`, `rcn` or `lcn`.
+
+| Attribute | |
+|---|---|
+| `network` | The highest network the way is on: `icn` > `ncn` > `rcn` > `lcn` |
+| `rank` | That network as a number: 4 icn, 3 ncn, 2 rcn, 1 lcn |
+| `minz` | The lowest zoom any of the way's routes shows from: icn and ncn 6, rcn 8.5, lcn 13. London's TfL routes (`cycle_network=GB:London…`, tagged rcn) 11 with a ref, 13 without |
+
+Zooms: from `floor(minz)` to 14. The style filters on `minz` for the half zoom.
+
+### `route_badges`
+
+One line per way and signed route, for the repeater badges along it.
+
+| Attribute | |
+|---|---|
+| `badge` | `red` (ncn), `blue` (rcn, including London's C, Q and CS) or `eu` (icn) |
+| `label` | The ref, without a leading `EV` for EuroVelo |
+| `ev` | `true` when the ref started with `EV` |
+
+Only refs of up to two capital letters and three digits (`4`, `C34`, `CS8`, `EV2`), never lcn, a bare
+`C` or named trails. A route split into several relations with the same network and ref gives one line.
+Zooms 11–14.
+
+### `paths`
+
+| Attribute | |
+|---|---|
+| `class` | `p` paved and rideable (red and white), `u` unpaved and rideable (brown dashes), `foot` any other footpath (green dashes) |
+| `bridge` | `true` on bridges |
+
+Rideable: `highway=cycleway` or `bridleway`, or a path, footway, pedestrian way or track with
+`bicycle=yes/designated/permissive`, unless `bicycle=no` or `access=private/no`. With no `surface`,
+cycleways and urban paths count as paved, bridleways and tracks (other than `tracktype=grade1`) as
+unpaved. `foot` is every other footway, path, steps or track, except pavements, crossings and private
+ways; bridleways with `bicycle=no/dismount` are `foot` too. No tunnels or areas.
+
+Zooms: `p` and `u` 12–14, `foot` 14.
+
+### `cycle_lanes`
+
+Painted lanes on roads, from `cycleway:left`, `cycleway:right`, then `cycleway:both`, then `cycleway`:
+`lane` or `opposite_lane` is a lane, `share_busway` or `opposite_share_busway` a shared bus lane.
+
+| Attribute | |
+|---|---|
+| `side` | `left`, `right` or `both` |
+| `bus` | `true` when neither side is a plain cycle lane |
+
+Zooms 12–14. Not styled yet (plan WS1.3).
+
+### `pois`
+
+Points, or a point inside the area for mapped buildings and car parks.
+
+| `kind` | From | Zooms |
+|---|---|---|
+| `station` | Named `railway=station`, not Underground, tram, light rail or heritage | 12–14 |
+| `peak` | Named `natural=peak` or `hill` nodes; `ele` in whole metres | 12–14 |
+| `cafe`, `pub`, `toilets`, `drinking_water`, `bicycle_parking`, `parking` | `amenity=*` | 14 |
+| `bicycle_shop` | `shop=bicycle` | 14 |
+| `camp_site`, `viewpoint` | `tourism=*` | 14 |
+
+`name` when tagged. Private POIs are skipped. Only stations and peaks are styled so far.
+
+## Build
+
+Needs Docker with at least 8 GB of memory (Docker Desktop → Settings → Resources); no local Java. From
+the repo root:
+
+```
+curl -L --create-dirs -O --output-dir maps/tiles/data \
+  https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf
+maps/tiles/build.sh maps/tiles/data/united-kingdom-latest.osm.pbf maps/tiles/data/cycling-gb-YYYYMMDD.pmtiles
+```
+
+`build.sh` runs the tests, then planetiler, in `maven:3.9-eclipse-temurin-21`. Maven's cache is
+`~/.m2` (or `$M2_CACHE`). Extra arguments go to planetiler (e.g. `--bounds=-0.6,51.2,0.3,51.7` for a
+quick London-only build). `data/` and `target/` are gitignored.
+
+Name the file `cycling-gb-<YYYYMMDD>.pmtiles` with the extract's date: Geofabrik's page shows it, and
+planetiler records it in the file's metadata (`pmtiles show <file>`, `planetiler:osm:osmosisreplicationtime`). Keys on R2 are immutable, so a new extract is a new
+name.
+
+The 17 October 2026 UK extract (2.3 GB) builds in 1 min 54 s on an M4 Max to 102 MB: 153,185 tiles, the
+largest 39 KB (24 KB gzipped). Planetiler skips two POIs whose multipolygons are broken in OSM.
+
+## Test
+
+`build.sh` runs them first. On their own:
+
+```
+docker run --rm -v "$PWD/maps/tiles":/src -v ~/.m2:/root/.m2 -w /src \
+  maven:3.9-eclipse-temurin-21 mvn -B -q test
+```
+
+82 tests; they run in under 2 seconds once Maven has its cache. Add a case to the matching table in
+`CyclingProfileTest` when a rule changes.
+
+## Publish
+
+`../hosting/publish.sh <file>` uploads to the `ride-on-maps` R2 bucket, served from
+`https://maps.ride-on.cc/<file>` (WS1.1). Run one publish at a time: each deploys and then deletes the
+same temporary upload Worker. Then bump the `cycling` source URL in the style.
+
+## Links
+
+- Plan: [`docs/maps/README.md`](../../docs/maps/README.md)
+- Style spec: [`docs/maps/cycle-travel-style.md`](../../docs/maps/cycle-travel-style.md)
+- Prototype that reads the overlay: [`docs/maps/prototype/`](../../docs/maps/prototype/README.md)
+- planetiler: https://github.com/onthegomap/planetiler
+- Geofabrik UK extract: https://download.geofabrik.de/europe/united-kingdom.html
+- PMTiles: https://github.com/protomaps/PMTiles

@@ -1,6 +1,0 @@
-[out:json][timeout:180];
-(
-  nwr["railway"="station"]["name"](50.70,-1.40,52.10,1.00);
-  node["natural"~"^(peak|hill)$"]["name"](50.70,-1.40,52.10,1.00);
-);
-out center tags;
