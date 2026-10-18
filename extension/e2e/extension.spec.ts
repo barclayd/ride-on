@@ -1262,6 +1262,11 @@ test('alerts fix the time: the tile keeps it, and says what we are tracking', as
   await expect(tracked.locator('.ro-tracked-slot')).toContainText(
     `${at.day} · ${at.dep} → ~${at.fin}`,
   );
+  await expect(tracked.locator('.ro-tracked-head')).toHaveText('Alerts on×');
+  await expect(tracked.locator('.ro-tracked-part > span')).toHaveText([
+    'Notifications sent if',
+    'Scheduled notifications',
+  ]);
   // Only the switches that are on.
   await expect(tracked.locator('ul li')).toHaveText([
     'Rain becomes likely',
