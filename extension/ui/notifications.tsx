@@ -22,8 +22,6 @@ export const Notifications = ({ state }: { state: State }) => {
         type: enable ? 'enablePush' : 'disablePush',
       });
       if (result.error) throw new Error(result.error);
-      if (enable && import.meta.env.SAFARI)
-        location.href = 'rideon-notifications://enable';
     } catch (error) {
       setError(
         error instanceof Error
@@ -34,6 +32,22 @@ export const Notifications = ({ state }: { state: State }) => {
       setBusy(false);
     }
   };
+  // Safari: the Ride On app shares this sign-in and owns this device's alert switches.
+  if (import.meta.env.SAFARI)
+    return (
+      <section class="ro-card ro-col" aria-label="Notifications">
+        <span class="ro-label">Notifications</span>
+        <p>{state.push.message}</p>
+        <a href="rideon-notifications://notifications">Open Ride On</a>
+        <button
+          type="button"
+          class="ro-edit"
+          onClick={() => send({ type: 'pushStatus' })}
+        >
+          Check setup
+        </button>
+      </section>
+    );
   return (
     <section class="ro-card ro-col" aria-label="Notifications">
       <span class="ro-label">Notifications</span>
@@ -57,14 +71,6 @@ export const Notifications = ({ state }: { state: State }) => {
         >
           Turn off on this device
         </button>
-      )}
-      {import.meta.env.SAFARI && (
-        <p>
-          Finish setup in the Ride On app, then return here.{' '}
-          {state.push.status !== 'off' && (
-            <a href="rideon-notifications://enable">Open Ride On app</a>
-          )}
-        </p>
       )}
       <button
         type="button"
@@ -136,7 +142,9 @@ export const TrackedRideSummary = ({ state }: { state: State }) => {
       {error && <p role="alert">{error}</p>}
       {state.push.status !== 'ready' && !ride.refresh.closed && (
         <span>
-          Enable notifications in Preferences to receive alerts on this device.
+          {import.meta.env.SAFARI
+            ? 'Turn on notifications in the Ride On app to get alerts on this device.'
+            : 'Enable notifications in Preferences to receive alerts on this device.'}
         </span>
       )}
     </section>

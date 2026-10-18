@@ -559,9 +559,10 @@ export const useTracking = (view: View | null) => {
       if (!ask) return;
       if (!panel) return send({ type: 'openPopup', tab: 'prefs' });
       if (allowed === false) return;
-      const enabled = await send({ type: 'enablePush' });
-      if (!enabled.error && import.meta.env.SAFARI)
-        location.href = 'rideon-notifications://enable';
+      // Safari: this device's alert switches live in the Ride On app.
+      if (import.meta.env.SAFARI)
+        location.href = 'rideon-notifications://notifications';
+      else await send({ type: 'enablePush' });
     },
     // Change alerts: the 29c dialog again, with this ride's switches; saving keeps the slot.
     change: (card: Card) => {

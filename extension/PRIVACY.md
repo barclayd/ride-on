@@ -36,9 +36,11 @@ To score your routes, the Ride On API sends route coordinates and times to its w
 Your session token and notification registration are kept in the extension's private storage,
 separate from webpage data. Settings, recent rides and recommendations, and cached tracking and
 pause status are kept in extension storage. The account's tracked plan and pause also live on
-the server. Safari's companion app and extension share the notification session and registration
-in their private Apple Keychain group. Signing out removes the extension's session token and
-disables its notification link. Notification links contain a plan identifier, not credentials;
+the server. While you're signed in, Safari's extension shares your session and email address with
+the Ride On companion app on the same device, in their private Apple Keychain group, so the app
+can show who is signed in, manage notifications and sign you out. The app's notification switches
+are kept there too. Signing out in either removes the shared session and email and disables the
+notification link. Notification links contain a plan identifier, not credentials;
 the browser asks you to sign in before showing the plan.
 
 ## What it doesn't do

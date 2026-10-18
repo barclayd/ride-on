@@ -32,7 +32,12 @@ Builds target `https://api.ride-on.cc`; set `WXT_API_URL` to point elsewhere.
 
 Safari extensions ship inside an app: `safari/` is an XcodeGen project whose `RideOnExtension`
 target runs `bun run build:safari` and copies `.output/safari-mv3` into the extension bundle. The
-`RideOn` app explains how to turn the extension on and delivers APNs ride notifications. It has the main app's identity
+`RideOn` app finishes setup and delivers APNs ride notifications. On macOS it's one System
+Settings-style window (handoff Safari v1, 1c; `safari/App/Mac/`): **General** shows whether Safari
+runs the extension (`SFSafariExtensionManager`, rechecked whenever the app comes forward) and the
+signed-in account, with **Sign Out**; **Notifications** holds this Mac's Ride alerts, Final forecast
+and Sound switches; **Help** lists the setup steps. On iOS it's a one-screen guide with **Enable
+notifications**. It has the main app's identity
 (`com.danbarclay.rideon`, extension `com.danbarclay.rideon.Extension`), so these targets move into
 `app/project.yml` when the full app ships as an update to the same App Store record.
 
@@ -60,7 +65,7 @@ The bell pins the displayed departure for your account. An off bell opens the al
 
 Once `GET /tracked-rides` advertises `capabilities.fixedDeparture` ([brief v13](../docs/extension-api-brief-v13.md)), alerts fix the ride's day and time (handoff v11, 30c/30d). The dialog shows the time as a pill and says it will stay put. The tile then keeps that departure instead of moving to the route's best one, and shows it as a pill. The pill, or the bell, opens **What we're tracking**: the time, the switches that are on and when the rider will hear from us. On the Journeys page's phone layout it opens as a card at the bottom. It closes on ×, Escape, a click outside or focus leaving, and focus goes back to what opened it. From there, **Change alerts** reopens the dialog to edit the switches on the same plan (`PATCH /tracked-rides/{id}`, only with `capabilities.alertEdits`), and **Turn off alerts** stops the plan with Undo. When the API finds a better departure on the same route, the tile offers it under the pill with **Move alerts**, which tracks it with the same switches, with Undo. When the forecast can't score the fixed time, the tile keeps it without a score. Until the API advertises `fixedDeparture`, all of this stays off.
 
-Chrome 121+ requests its optional notifications permission and subscribes to Web Push. Safari links to the containing app through native messaging; open that app and press **Enable notifications** to finish. Taps open the latest tracked ride in the browser, with sign-in if needed. See [monitoring and push delivery](../docs/ride-monitoring.md#chrome-and-safari-delivery-api-v0370) for the policy, API, secure shared Keychain, server configuration and signing environments. Apple push needs a separate APNs key; WeatherKit credentials do not enable it.
+Chrome 121+ requests its optional notifications permission and subscribes to Web Push. Safari can't ask for notifications itself, so the containing app owns them. While signed in, the extension checks in with the app over native messaging (`{type: 'account'}` with the owner, session token and email; production builds only), and the app registers the device for APNs. On Safari, Preferences and the alerts dialog's confirm open the app (`rideon-notifications://notifications`): on macOS turn on a switch under **Notifications**, on iOS press **Enable notifications**. The Mac switches go to the API with the registration once `GET /push-devices/config` advertises `deviceAlerts` (API 0.39, [brief v12](../docs/extension-api-brief-v12.md)), and later changes `PATCH` it. The Mac app's **Sign Out** unregisters the Mac, ends the session (`POST /api/auth/sign-out`) and signs the extension out: at once over `SFSafariApplication.dispatchMessage` if it's running, otherwise at its next check-in (a `sign-out` request in the shared Keychain) or on its next API call (401). Taps open the latest tracked ride in the browser, with sign-in if needed. See [monitoring and push delivery](../docs/ride-monitoring.md#chrome-and-safari-delivery-api-v0370) for the policy, API, secure shared Keychain, server configuration and signing environments. Apple push needs a separate APNs key; WeatherKit credentials do not enable it.
 
 ## Test
 
