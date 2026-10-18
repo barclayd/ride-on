@@ -1289,7 +1289,11 @@ export const RouteTile = (props: {
         />
       )}
       {open === rainId && rain && <RainPanel id={rainId} rain={rain} />}
-      {!blank && <Notes card={card} />}
+      {!blank && (
+        <div class="ro-notes">
+          <Notes card={card} />
+        </div>
+      )}
       {blank || card.score !== null ? (
         <Meter
           score={card.score}
