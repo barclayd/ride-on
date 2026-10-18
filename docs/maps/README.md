@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 (basemap on R2) uploading; WS2 in progress: 2.1 and 2.3 done, the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 (basemap on R2) uploading; WS2 in progress: 2.1, 2.2 and 2.3 done, the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -214,8 +214,14 @@ writes the prototype's `style.json`. Both read the dated `https://maps.ride-on.c
 font stack has its glyphs, and fails if the committed app style is stale. The prototype now uses it, and
 its own builder, woff2 fonts and strava-stitch basemap proxy are gone.
 
-**2.2 Colours.** Use map-key values as they are and fix the screenshot inverse; values are in the
-style spec's [palette](cycle-travel-style.md#palette). Re-take the comparisons.
+**2.2 Colours.** Done: map-key colours are drawn as they are (cycleway, roads, footpath, stations, gravel
+`#8b4513`), and screenshot samples go through a corrected `shot()` (sRGB curves around the fitted matrix,
+tested in `maps/style/test/shot.test.ts`). Water was re-sampled (`#b3c9cf`). The comparisons were
+re-taken and checked pixel by pixel where both maps draw the same feature: key colours now capture
+identically to cycle.travel's, urban at z13+ exactly, the other fills within 1–3/255. What still differs
+is coverage, not colour (lighter parks, buildings, scrub), now in the style spec's
+[known gaps](cycle-travel-style.md#known-gaps). Method and values: [colour
+sampling](cycle-travel-style.md#colour-sampling) and [palette](cycle-travel-style.md#palette).
 
 **2.3 Glyphs.** Done: MapLibre Native supports `font-faces` from 6.18.0 but can't omit `glyphs`
 ([#165](https://github.com/maplibre/maplibre-native/issues/165)), so both targets use glyph PBFs.
@@ -454,8 +460,8 @@ fine for comparison.
 
 ## Comparison screenshots
 
-cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). Re-taken in WS1.2
-with the prototype on the planetiler overlay; the notes below still hold.
+cycle.travel left, prototype right; 4116×1600, DPR 2. Zooms are MapLibre (ct = +1). Re-taken in WS2.2
+with the corrected colours, on the planetiler overlay; the notes below still hold.
 
 | View | What to look at |
 |---|---|
@@ -463,7 +469,7 @@ with the prototype on the planetiler overlay; the notes below still hold.
 | [London, z11](screenshots/cmp-london-z11.jpg) (51.48, −0.17) | cycle.travel shows a dense net of thin red cycleways and lanes; ours start at z12. Too many saturated blue London rcn dots and C badges vs its few thin lavender lines. It shows more minor streets |
 | [Putney, z13](screenshots/cmp-putney-z13.jpg) (51.462, −0.215) | Badges (4, 20, C34, CS8, AV) and lcn teal match in place. We draw blue rcn across Roehampton and Southfields that cycle.travel doesn't. It has POI icons, bolder railways and a beige Thames foreshore |
 | [Westminster, z14](screenshots/cmp-westminster-z14.jpg) (51.5005, −0.128) | Street labels, LONDON spacing, Charing Cross, Q and C3 dots match. We stack heavy dark red NCN 4 + AV dots along the Albert Embankment; we name extra landmarks; cycle.travel shows bike-parking and toilet icons and red-outlined pedestrian areas |
-| [Richmond Park, z13](screenshots/cmp-richmond-park-z13.jpg) (51.4455, −0.2665) | NCN 4 on red-and-white paths and brown unpaved dashes match. Our lcn is heavier; C30 is lavender there, blue here; extra rcn around Roehampton; it has toilet, café and parking icons; our built-up fill looks pinker |
+| [Richmond Park, z13](screenshots/cmp-richmond-park-z13.jpg) (51.4455, −0.2665) | NCN 4 on red-and-white paths and brown unpaved dashes match. Our lcn is heavier; C30 is lavender there, blue here; extra rcn around Roehampton; it has toilet, café and parking icons; our built-up fill looks pinker and our park fill darker |
 | [Surrey Hills, z12](screenshots/cmp-surrey-hills-z12.jpg) (51.245, −0.33) | NCN 22 matches. cycle.travel has hillshade and contours; draws rcn as thin lavender lines with small dots; shows POI icons and bold railways; doesn't label farms and hamlets. Our brown dashes are heavier |
 
 ## Links
