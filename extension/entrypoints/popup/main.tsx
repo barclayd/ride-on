@@ -357,7 +357,6 @@ const WhenTab = ({ view }: { view: View }) => {
   const dim = { 'data-dim': !!view.paused, inert: !!view.paused };
   return (
     <>
-      <PauseCard view={view} />
       <section {...dim} class="ro-card ro-dims">
         <Days view={view} set={set} />
         {view.banners.includes('provider') && (
@@ -1464,6 +1463,7 @@ const PrefsTab = ({ view }: { view: View }) => {
           options={['km/h', 'mph']}
         />
       </section>
+      <PauseCard view={view} />
       <button
         type="button"
         class="ro-sign-out"

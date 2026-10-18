@@ -1458,7 +1458,7 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   await expect(page.locator('.ro-ride').first()).toContainText('Hilly Loop');
   expect(recCalls()).toHaveLength(1);
 
-  await page.getByRole('tab', { name: 'When' }).click();
+  await page.getByRole('tab', { name: 'Preferences' }).click();
   const card = page.locator('.ro-pause');
   const toggle = card.getByRole('switch', { name: 'Pause Ride On' });
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -1474,10 +1474,6 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   await expect(pill).toHaveText(
     `Paused until ${weekday(day(7))} ${dayOfMonth(day(7))}`,
   );
-  const dims = page.locator('.ro-dims');
-  await expect(dims).toHaveCount(3);
-  for (const dim of await dims.all())
-    await expect(dim).toHaveCSS('opacity', '0.45');
   await card.getByRole('button', { name: 'After 3 days' }).click();
   await expect(card).toContainText(`Back on ${shortDate(day(3))}.`);
   await expect(pill).toHaveText(
@@ -1507,6 +1503,15 @@ test('pausing hides forecasts until Ride On turns back on', async ({
     .poll(() => worker.evaluate("chrome.alarms.get('resume')"))
     .toBeUndefined();
   await expectPanelFits(page);
+  await page.screenshot({ path: test.info().outputPath('prefs-paused.png') });
+
+  // The When tab keeps the rider's days and times, greyed out.
+  await page.getByRole('tab', { name: 'When' }).click();
+  await expect(card).toHaveCount(0);
+  const dims = page.locator('.ro-dims');
+  await expect(dims).toHaveCount(3);
+  for (const dim of await dims.all())
+    await expect(dim).toHaveCSS('opacity', '0.45');
   await page.screenshot({ path: test.info().outputPath('when-paused.png') });
 
   // The Rides tab has the status line and no cards; reopening asks for no forecasts.
@@ -1531,8 +1536,9 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   expect(recCalls()).toHaveLength(2);
   await expect.poll(pauseCalls).toEqual([day(7), day(3), null, 'DELETE']);
   await page.getByRole('tab', { name: 'When' }).click();
-  await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await expect(dims.first()).toHaveCSS('opacity', '1');
+  await page.getByRole('tab', { name: 'Preferences' }).click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
 
   // A write that fails puts the switch back and says so.
   pauseDown = true;
