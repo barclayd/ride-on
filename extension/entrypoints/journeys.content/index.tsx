@@ -35,9 +35,13 @@ type Row = {
   tags: HTMLElement;
 };
 
-// Styles that must live on the page itself: host layout and the tracked-row edge.
+// Styles that must live on the page itself: host layout and the tracked-row edge. cycle.travel lines
+// its rows up on the text baseline, which puts the name at the top of a row the chip makes taller;
+// every row centres instead, and the chip slot keeps the chip's height (without the page's tall line
+// height) so rows match with or without one.
 const PAGE_CSS = `ride-on-module{display:block}
-ride-on-chip{flex:none;align-self:center}
+li.journey_row{align-items:center}
+ride-on-chip{flex:none;display:flex;align-items:center;min-height:26px;line-height:0}
 li.journey_row[data-ride-on-tracked]{box-shadow:inset 3px 0 0 #8bc61f}
 ride-on-tags{display:none}
 li.journey_row[data-ride-on-ridden] .journey_name{flex:0 1 auto}
@@ -347,7 +351,7 @@ const Page = ({ rows }: { rows: Row[] }) => {
           routeId ? (
             <button
               type="button"
-              class="ro-chip ro-tracked"
+              class="ro-chip ro-chip-tracked"
               data-state={
                 !blank && card && CHIP_STATES.has(card.state)
                   ? card.state
