@@ -144,7 +144,7 @@ you). When its days roll, that's a quiet rebase (§2).
 6. A route removed from the shortlist and added again starts at null.
 7. Two devices asking at the same moment get the same change, recorded once.
 
-## 7. Extension follow-up (after this ships)
+## 7. Extension follow-up (done)
 
 - Show `best.scoreChange` on the meter, and remove the local comparison in
   `Ranked` (`seen`, `ro-seen`). The reorder animation stays.

@@ -1562,16 +1562,10 @@ a.ro-name:hover {
   font: 700 10.5px var(--ro-sans);
   background: #eef4e2;
   color: #3a4520;
-  animation: ro-delta 0.4s ease-out;
 }
 .ro-delta[data-down="true"] {
   background: #fbefe2;
   color: #8a4b17;
-}
-@keyframes ro-delta {
-  from {
-    opacity: 0;
-  }
 }
 .ro-meter > div {
   height: 6px;
