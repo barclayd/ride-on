@@ -2277,6 +2277,33 @@ const fakeCycleTravel = (context: BrowserContext) =>
     ),
   ]);
 
+test('Journeys page: signed out, Sign in opens the popup in a tab when the browser refuses', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await fakeCycleTravel(context);
+  // As in Safari, or Chrome without a focused window.
+  await worker.evaluate(
+    `chrome.action.openPopup = () => Promise.reject(new Error('it is not implemented'))`,
+  );
+  const page = await context.newPage();
+  await page.goto('https://cycle.travel/user/journeys');
+  await expect(page.locator('ride-on-module .ro-strip')).toContainText(
+    'Sign in to Ride On to track rides',
+  );
+  const opened = context.waitForEvent('page');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  const popup = await opened;
+  expect(popup.url()).toBe(`chrome-extension://${extensionId}/popup.html`);
+  await expect(
+    popup.getByRole('button', { name: 'Continue with Google' }),
+  ).toBeVisible();
+  // A card in the middle of the tab, not the popup's corner.
+  const panel = await box(popup, '.ro-panel');
+  expect(panel.x).toBeGreaterThan(0);
+});
+
 test('Journeys page: Tracked routes, window button, row chips and + Track', async ({
   context,
   worker,
