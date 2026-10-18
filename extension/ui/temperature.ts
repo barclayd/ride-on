@@ -171,21 +171,26 @@ export const temperaturePanel = (
       new Date(Math.round((departure + m * 60_000) / 600_000) * 600_000),
       timeZone,
     );
-  const phrase = (r: Run) =>
-    r.zone === 'in'
-      ? 'in your range'
+  // The first part names the rider's preferred range; the rest refer back to it.
+  const phrase = (r: Run, first: boolean) => {
+    const range = first ? ' than your preferred range' : '';
+    return r.zone === 'in'
+      ? first
+        ? 'in your preferred range'
+        : 'in range'
       : r.zone === 'cool'
-        ? `cooler than your range (down to ${t(r.min)})`
-        : `warmer than your range (up to ${t(r.max)})`;
+        ? `cooler${range} (down to ${t(r.min)})`
+        : `warmer${range} (up to ${t(r.max)})`;
+  };
   const headline =
     runs.length === 1
       ? runs[0].zone === 'in'
-        ? 'Feels in your range the whole ride'
-        : `Feels ${runs[0].zone === 'cool' ? 'cooler' : 'warmer'} than your range the whole ride, ${span(judged.map((p) => p.c))}`
+        ? 'Feels in your preferred range the whole ride'
+        : `Feels ${runs[0].zone === 'cool' ? 'cooler' : 'warmer'} than your preferred range the whole ride, ${span(judged.map((p) => p.c))}`
       : `Feels ${runs
           .map(
             (r, i) =>
-              `${phrase(r)}${i < runs.length - 1 ? ` until about ${time(r.end)}` : ' to the finish'}`,
+              `${phrase(r, i === 0)}${i < runs.length - 1 ? ` until about ${time(r.end)}` : ' to the finish'}`,
           )
           .join(', then ')}`;
   const inRange = runs
@@ -254,6 +259,6 @@ export const temperaturePanel = (
     mark,
     from: clock(b.departureAt, timeZone),
     to: `~${clock(b.finishAt, timeZone)}`,
-    range: `Your range ${degrees(lo, u)}–${degrees(hi, u)}${u.temperature}`,
+    range: `Your preferred range ${degrees(lo, u)}–${degrees(hi, u)}${u.temperature}`,
   };
 };

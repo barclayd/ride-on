@@ -71,7 +71,7 @@ test('a ride that starts cool says until when, and draws both lines on a 5° gri
     label:
       'Temperature 9–18°C, feels like 6–18°C. Show temperature along the ride',
     headline:
-      'Feels cooler than your range (down to 6°C) until about 09:30, then in your range to the finish',
+      'Feels cooler than your preferred range (down to 6°C) until about 09:30, then in range to the finish',
     tone: 'even',
     // Feels like 6° and the range's 20° make it 5–25°.
     high: { y: 25, label: '20°' },
@@ -84,7 +84,7 @@ test('a ride that starts cool says until when, and draws both lines on a 5° gri
     ],
     from: '08:30',
     to: '~12:55',
-    range: 'Your range 10–20°C',
+    range: 'Your preferred range 10–20°C',
     mark: { x: 0, y: 95, cool: true },
   });
   expect(t?.air).toBe('M0 80 L22.64 65 L45.28 55 L67.92 45 L90.57 35 L100 35');
@@ -190,7 +190,7 @@ test('fractional offsets from the API, as at the finish and the extremes, are fi
     range(5, 20),
   );
   expect(t).toMatchObject({
-    headline: 'Feels in your range the whole ride',
+    headline: 'Feels in your preferred range the whole ride',
     tone: 'even',
     label:
       'Temperature 9–10°C, feels like 6–7°C. Show temperature along the ride',
@@ -228,7 +228,7 @@ test('feeling warm the whole ride is amber, with the warmest point marked', () =
   );
   expect(t).toMatchObject({
     warn: true,
-    headline: 'Feels warmer than your range the whole ride, 15–22°C',
+    headline: 'Feels warmer than your preferred range the whole ride, 15–22°C',
     tone: 'warm',
     mark: { x: 94.74, y: 12, cool: false },
   });
@@ -246,7 +246,7 @@ test('feeling cool the whole ride is the headline, in the cool tone', () => {
     range(12, 20),
   );
   expect(t).toMatchObject({
-    headline: 'Feels cooler than your range the whole ride, 9–10°C',
+    headline: 'Feels cooler than your preferred range the whole ride, 9–10°C',
     tone: 'cool',
   });
 });
@@ -264,7 +264,7 @@ test('crossings under 10 minutes are ignored', () => {
     undefined,
     range(10, 20),
   );
-  expect(t?.headline).toBe('Feels in your range the whole ride');
+  expect(t?.headline).toBe('Feels in your preferred range the whole ride');
   expect(t?.mark).toBeNull();
 });
 
@@ -282,7 +282,7 @@ test('three spells name each, with times to the nearest 10 minutes', () => {
     range(10, 20),
   );
   expect(t?.headline).toBe(
-    'Feels cooler than your range (down to 6°C) until about 09:00, then in your range until about 10:50, then warmer than your range (up to 24°C) to the finish',
+    'Feels cooler than your preferred range (down to 6°C) until about 09:00, then in range until about 10:50, then warmer (up to 24°C) to the finish',
   );
 });
 
@@ -302,7 +302,9 @@ test('without feels like it judges on air and drops the dashed line and the mark
     label: 'Temperature 9–18°C. Show temperature along the ride',
   });
   expect(
-    t?.headline.startsWith('Feels cooler than your range (down to 9°C)'),
+    t?.headline.startsWith(
+      'Feels cooler than your preferred range (down to 9°C)',
+    ),
   ).toBe(true);
 });
 
@@ -330,7 +332,7 @@ test('Fahrenheit on a 10° grid', () => {
   );
   expect(t).toMatchObject({
     headline:
-      'Feels cooler than your range (down to 43°F) until about 09:30, then in your range to the finish',
+      'Feels cooler than your preferred range (down to 43°F) until about 09:30, then in range to the finish',
     high: { y: 6.67, label: '68°' },
     low: { y: 66.67, label: '50°' },
     // 43–68°F gives 40–70°F; 50° and 70° give way to the range edges.
@@ -338,7 +340,7 @@ test('Fahrenheit on a 10° grid', () => {
       { y: 100, label: '40°' },
       { y: 33.33, label: '60°' },
     ],
-    range: 'Your range 50–68°F',
+    range: 'Your preferred range 50–68°F',
     usual: { sub: 'Usual for 08:30–12:55 in October: 46–64°F' },
   });
 });
