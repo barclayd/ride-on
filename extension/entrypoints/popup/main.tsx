@@ -2,6 +2,7 @@ import { Fragment, render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import { API_URL } from '../../lib/api';
+import type { PushStatus } from '../../lib/push';
 import {
   type Message,
   type Planning,
@@ -74,7 +75,6 @@ import {
   windowName,
   windowWhen,
 } from '../../ui/format';
-import { Notifications } from '../../ui/notifications';
 import '../../ui/tokens.css';
 
 const TABS: [Tab, string][] = [
@@ -319,8 +319,8 @@ const PauseCard = ({ view }: { view: View }) => {
           : null;
   return (
     <section class="ro-card ro-pause" data-paused={!!paused}>
-      <div class="ro-pause-top">
-        <div class="ro-pause-text">
+      <div class="ro-setting">
+        <div class="ro-setting-text">
           <span>Pause Ride On</span>
           <span>
             Hide forecasts, scores and alerts. Your rides stay listed.
@@ -367,6 +367,59 @@ const PauseCard = ({ view }: { view: View }) => {
               : 'Stays paused until you switch it off here.'}
           </span>
         </div>
+      )}
+    </section>
+  );
+};
+
+// Alerts on this device. Chrome needs no prompt; Safari's Ride On app asks macOS and registers the device.
+const NotificationsCard = ({ push }: { push: PushStatus }) => {
+  // The switch moves at once: Safari's app takes a moment to answer.
+  const [want, setWant] = useState<boolean | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  // On once turned on here, while it still works or is finishing setup; reconnecting turns it on again.
+  const on =
+    push.status === 'ready' ||
+    push.status === 'unavailable' ||
+    (push.status === 'off' && push.enabled);
+  const shown = want ?? on;
+  const toggle = async () => {
+    setFailed(null);
+    setWant(!shown);
+    const result = await send({
+      type: shown ? 'disablePush' : 'enablePush',
+    }).catch(() => ({ error: 'Could not update notifications.' }));
+    setFailed(result.error ?? null);
+    setWant(null);
+  };
+  // The switch already says on or off; anything else needs a word.
+  const note =
+    push.status !== 'ready' && (push.status !== 'off' || push.enabled)
+      ? push.message
+      : null;
+  return (
+    <section class="ro-card ro-notify" aria-label="Notifications">
+      <div class="ro-setting">
+        <div class="ro-setting-text">
+          <span>Notifications</span>
+          <span>
+            Alerts for your tracked rides on this device. Rides stay tracked
+            when they're off.
+          </span>
+        </div>
+        <Switch
+          on={shown}
+          label="Notifications"
+          disabled={want !== null}
+          onClick={toggle}
+        />
+      </div>
+      {failed ? (
+        <span class="ro-pause-error" role="alert">
+          {failed}
+        </span>
+      ) : (
+        note && <span class="ro-setting-note">{note}</span>
       )}
     </section>
   );
@@ -838,13 +891,19 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
   );
 };
 
-const Switch = (props: { on: boolean; label: string; onClick: () => void }) => (
+const Switch = (props: {
+  on: boolean;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) => (
   <button
     type="button"
     class="ro-switch"
     role="switch"
     aria-checked={props.on}
     aria-label={props.label}
+    disabled={props.disabled}
     onClick={props.onClick}
   >
     <span />
@@ -1214,7 +1273,6 @@ const PrefsTab = ({ view }: { view: View }) => {
     edit({ floorMonthsC: months.map((v, j) => (j === i ? value : v)) });
   return (
     <>
-      <Notifications state={view.state} />
       <DistanceCard view={view} />
       <RecentlyRiddenCard view={view} />
       <section class="ro-card">
@@ -1500,6 +1558,7 @@ const PrefsTab = ({ view }: { view: View }) => {
         />
       </section>
       <PauseCard view={view} />
+      <NotificationsCard push={view.state.push} />
       <button
         type="button"
         class="ro-sign-out"
