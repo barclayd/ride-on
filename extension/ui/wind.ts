@@ -251,11 +251,9 @@ export const windPanel = (
   const legend = present.map(([effect, t]) => ({
     effect,
     name: NAMES[effect],
-    speed:
-      effect === 'light'
-        ? `under ${speed(NAMED_WIND_KPH, u)}`
-        : speed(t.kph / t.share, u),
-    share: present.length === 1 ? 'Throughout' : approx(t.share),
+    // Light wind needs no speed, and one effect needs no share: the bar shows it all the way.
+    speed: effect === 'light' ? '' : speed(t.kph / t.share, u),
+    share: present.length === 1 ? '' : approx(t.share),
   }));
   const sketch =
     outline && b.windStretches?.length
@@ -337,7 +335,7 @@ export type WindSketch = {
   wind: {
     lines: string[]; // "From SW", then "then W" when it turns
     speed: string;
-    needle: number | null; // the bearing the wind blows toward, null when it's light all the way
+    needle: number | null; // the bearing the wind blows toward, null when calm or variable
   };
   sentence: string; // for screen readers; the drawing is hidden from them
 };
@@ -499,25 +497,28 @@ export const windSketch = (
     };
   });
   // A compass needle pointing where the wind blows; the words name where it comes from, and where it turns.
-  const named = stretches.filter(
+  // Light wind all the way still has a direction, unless the API finds it calm or variable.
+  const directed = stretches.filter(
     (s) =>
-      s.effect !== 'light' &&
       s.windFromDegrees !== null &&
       (s.toM - s.fromM) / (stretches.at(-1)?.toM ?? 1) >= SHORT,
   );
-  const from = [
-    ...new Set(named.map((s) => compass(s.windFromDegrees as number))),
-  ];
+  const named = directed.filter((s) => s.effect !== 'light');
   const mean = meanDirection(
-    named.map((s) => ({
+    (named.length ? named : directed).map((s) => ({
       degrees: s.windFromDegrees as number,
       weight: s.toM - s.fromM,
     })),
   );
+  const from = named.length
+    ? [...new Set(named.map((s) => compass(s.windFromDegrees as number)))]
+    : mean === null
+      ? []
+      : [compass(mean)];
   const needle = mean === null ? null : round1((mean + 180) % 360);
-  const lines = !from.length
-    ? ['Light wind']
-    : [`From ${from[0]}`, ...(from[1] ? [`then ${from[1]}`] : [])];
+  const lines = named.length
+    ? [`From ${from[0]}`, ...(from[1] ? [`then ${from[1]}`] : [])]
+    : ['Light wind', ...(from[0] ? [`from ${from[0]}`] : [])];
   // Start and finish labels sit left of their dot, else right, clear of the wind key and route.
   const taken: Box[] = [KEY];
   // The route, sampled every 2px. Text over the haloed line reads; text over text doesn't, so
@@ -619,12 +620,15 @@ export const windSketch = (
         l.effect !== all[i - 1].effect,
     )
     .slice(0, 4);
+  const headings = from.map((p) => HEADINGS[POINTS.indexOf(p)]).join(', then ');
   const sentence = `Heads ${legs
     .map((l) => `${l.heading} ${l.effect}`)
     .join(', then ')}. ${
-    from.length
-      ? `Wind from the ${from.map((p) => HEADINGS[POINTS.indexOf(p)]).join(', then ')}.`
-      : 'Light wind.'
+    named.length
+      ? `Wind from the ${headings}.`
+      : from.length
+        ? `Light wind from the ${headings}.`
+        : 'Light wind.'
   }`;
   return {
     casing: pointsAttr(pts),

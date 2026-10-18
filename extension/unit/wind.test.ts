@@ -289,7 +289,7 @@ test('a thousand short stretches stay in the bar; the sketch draws a few long ru
   expect(w.blocks.every((b) => b.label === '')).toBe(true);
 });
 
-test('light wind gets its own row, and one effect reads throughout', () => {
+test('light wind gets its own row, without a speed, and one effect needs no share', () => {
   const w = windPanel(
     ride({
       windStretches: [
@@ -304,8 +304,8 @@ test('light wind gets its own row, and one effect reads throughout', () => {
     {
       effect: 'light',
       name: 'Light wind',
-      speed: 'under 10 km/h',
-      share: 'Throughout',
+      speed: '',
+      share: '',
     },
   ]);
 });
@@ -384,4 +384,15 @@ test('a one-way ride gets a finish, labels clear of the wind key, and the wind t
   expect(calm?.wind.lines).toEqual(['Light wind']);
   expect(calm?.wind.needle).toBeNull();
   expect(calm?.runs).toEqual([{ effect: 'light', points: expect.any(String) }]);
+  // Light all the way, but from the south-west: the needle still points north-east.
+  const light = windSketch(
+    oneWay,
+    [stretch(0, 16000, 'light', 225, { averageWindSpeedKph: 9 })],
+    ride(),
+  );
+  expect(light?.wind.lines).toEqual(['Light wind', 'from SW']);
+  expect(light?.wind.needle).toBe(45);
+  expect(light?.sentence).toBe(
+    'Heads north-east in light wind. Light wind from the south-west.',
+  );
 });
