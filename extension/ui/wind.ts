@@ -9,14 +9,7 @@ import type {
   WindEffect,
   WindStretch,
 } from '../lib/types';
-import {
-  approx,
-  clock,
-  METRIC,
-  NAMED_WIND_KPH,
-  speed,
-  type Units,
-} from './format';
+import { approx, METRIC, NAMED_WIND_KPH, speed, type Units } from './format';
 
 const EFFECTS = ['tailwind', 'crosswind', 'headwind'] as const;
 const NAMES: Record<WindEffect, string> = {
@@ -42,14 +35,10 @@ export const compass = (degrees: number) => POINTS[sector(degrees)];
 
 // A part of the ride in ride order: a wind stretch, or a ride hour when the API sends none.
 type Span = {
-  from: number; // share of the distance before it
   share: number;
   effect: WindEffect;
   degrees: number | null;
   kph: number;
-  adverse: number | null; // the largest gust against the rider
-  start: string;
-  end: string;
   // How much of it each effect covers: an hour can mix them, a stretch can't.
   parts: Partial<Record<WindEffect, number>>;
 };
@@ -74,21 +63,11 @@ const partsOf = (c: Conditions): Span['parts'] => {
       ? { ...f }
       : { [effectOf(c)]: 1 };
 };
-const fromSummary = (
-  c: Conditions,
-  start: string,
-  end: string,
-  from: number,
-  share: number,
-): Span => ({
-  from,
+const fromSummary = (c: Conditions, share: number): Span => ({
   share,
   effect: effectOf(c),
   degrees: c.windFromDegrees ?? null,
   kph: c.averageWindSpeedKph,
-  adverse: c.gustExposure?.maximumAdverseKph ?? null,
-  start,
-  end,
   parts: partsOf(c),
 });
 
@@ -97,28 +76,20 @@ const spansOf = (b: Departure): Span[] => {
   const metres = stretches.at(-1)?.toM ?? 0;
   if (metres > 0)
     return stretches.map((s) => ({
-      from: s.fromM / metres,
       share: (s.toM - s.fromM) / metres,
       effect: s.effect,
       degrees: s.windFromDegrees,
       kph: s.averageWindSpeedKph,
-      adverse: s.maximumAdverseGustKph,
-      start: s.startAt,
-      end: s.endAt,
       parts: { [s.effect]: 1 },
     }));
   const hours = (b.rideHours ?? []).flatMap((h) =>
     h.conditions?.distanceKm ? [{ ...h, conditions: h.conditions }] : [],
   );
   const km = hours.reduce((sum, h) => sum + (h.conditions.distanceKm ?? 0), 0);
-  if (!km) return [fromSummary(b.conditions, b.departureAt, b.finishAt, 0, 1)];
-  let from = 0;
-  return hours.map((h) => {
-    const share = (h.conditions.distanceKm ?? 0) / km;
-    const span = fromSummary(h.conditions, h.start, h.end, from, share);
-    from += share;
-    return span;
-  });
+  if (!km) return [fromSummary(b.conditions, 1)];
+  return hours.map((h) =>
+    fromSummary(h.conditions, (h.conditions.distanceKm ?? 0) / km),
+  );
 };
 
 // ponytail: a compass letter needs about a tenth of the bar to fit.
@@ -130,7 +101,7 @@ export type WindLegend = {
   speed: string;
   share: string;
 };
-export type WindGusts = { warn: boolean; title: string; text: string };
+export type WindGusts = { warn: boolean; title: string };
 export type WindPanel = {
   blocks: WindBlock[];
   legend: WindLegend[];
@@ -138,86 +109,27 @@ export type WindPanel = {
   sketch: WindSketch | null;
 };
 
-const PHRASES: Record<WindEffect, string> = {
-  headwind: 'Into your face',
-  crosswind: 'From the side',
-  tailwind: 'From behind',
-  light: 'In light wind',
-};
-
+// The peak gust, amber past your comfort (held to the gusts against you when the API knows them)
+// or your limit.
 const gustsRow = (
   c: Conditions,
-  spans: Span[],
-  tailShare: number,
-  roundTrip: boolean | null,
   u: Units,
   prefs: Partial<Preferences>,
-  timeZone: string,
 ): WindGusts | null => {
   const peak = c.maximumGustKph;
   if (peak === undefined) return null;
   const comfort = prefs.wind?.comfortableGustKph ?? 35;
   const limit = prefs.minimumStandards?.maximumGustKph;
   const adverse = c.gustExposure?.maximumAdverseKph;
-  const overLimit = limit !== undefined && peak > limit;
-  const overComfort = (adverse ?? peak) > comfort;
-  const title = `Gusts up to ${speed(peak, u)}`;
-  if (!overLimit && !overComfort)
-    return {
-      warn: false,
-      title,
-      text: `${tailShare > 0.5 ? 'Mostly behind you, so they help. ' : ''}${
-        adverse === undefined
-          ? `Within your ${speed(comfort, u)} comfort.`
-          : adverse < 1
-            ? 'None against you.'
-            : `At most ${speed(adverse, u)} against you.`
-      }`,
-    };
-  // Name the stretch when the gusts past comfort fall in one place: calmer gaps under 5% of
-  // the ride (the API keeps short stretches) don't split it.
-  const over = spans.filter((s) => s.adverse !== null && s.adverse > comfort);
-  const together = over.every(
-    (s, i) =>
-      i === 0 || s.from - (over[i - 1].from + over[i - 1].share) < SHORT,
-  );
-  let where = '';
-  if (overComfort && over.length && together) {
-    const run = over;
-    const end = run[run.length - 1];
-    const worst = run.reduce((a, b) =>
-      (b.adverse ?? 0) > (a.adverse ?? 0) ? b : a,
-    );
-    const from = run[0].from;
-    const to = end.from + end.share;
-    const part =
-      from >= 0.5
-        ? roundTrip
-          ? ' on the way back'
-          : ' late in the ride'
-        : to <= 0.5
-          ? roundTrip
-            ? ' on the way out'
-            : ' early in the ride'
-          : '';
-    where = `${PHRASES[worst.effect]}${part}, ${clock(run[0].start, timeZone)}–${clock(end.end, timeZone)}. `;
-  } else if (adverse !== undefined && adverse >= 1)
-    where = `Up to ${speed(adverse, u)} against you. `;
   return {
-    warn: true,
-    title,
-    text: `${where}${
-      overLimit
-        ? `Over your ${speed(limit, u)} limit.`
-        : `Over your ${speed(comfort, u)} comfort.`
-    }`,
+    warn: (limit !== undefined && peak > limit) || (adverse ?? peak) > comfort,
+    title: `Gusts up to ${speed(peak, u)}`,
   };
 };
 
 export const windPanel = (
   b: Departure,
   outline: Outline | null,
-  timeZone: string,
   u: Units = METRIC,
   prefs: Partial<Preferences> = {},
 ): WindPanel => {
@@ -262,15 +174,7 @@ export const windPanel = (
   return {
     blocks: blocks.map(({ point: _, ...block }) => block),
     legend,
-    gusts: gustsRow(
-      b.conditions,
-      spans,
-      totals.get('tailwind')?.share ?? 0,
-      outline ? roundTripOf(outline) : null,
-      u,
-      prefs,
-      timeZone,
-    ),
+    gusts: gustsRow(b.conditions, u, prefs),
     sketch,
   };
 };

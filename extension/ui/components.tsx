@@ -1500,7 +1500,6 @@ const WindPanel = (props: {
   const wind = windPanel(
     best,
     props.outline,
-    view.timeZone,
     view.state.units,
     view.state.user?.settings.preferences,
   );
@@ -1556,10 +1555,7 @@ const WindPanel = (props: {
       {wind.gusts && (
         <div class="ro-gusts" data-warn={wind.gusts.warn}>
           <Icon name="wind" size={14} weight={1.6} />
-          <div>
-            <b>{wind.gusts.title}</b>
-            <span>{wind.gusts.text}</span>
-          </div>
+          <b>{wind.gusts.title}</b>
         </div>
       )}
     </div>

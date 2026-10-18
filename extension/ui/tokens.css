@@ -1569,28 +1569,18 @@ a.ro-name:hover {
 }
 .ro-gusts {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 7px;
   border-top: 1px solid #e3e7dc;
   padding-top: 8px;
 }
 .ro-gusts svg {
   flex: none;
-  margin-top: 1px;
   color: var(--ro-olive-700);
-}
-.ro-gusts > div {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
 }
 .ro-gusts b {
   font: 600 12px / 16px var(--ro-sans);
   color: var(--ro-ink);
-}
-.ro-gusts span {
-  font: 500 12px / 16px var(--ro-serif);
-  color: var(--ro-muted);
 }
 .ro-gusts[data-warn="true"] {
   border-top: none;
@@ -1601,8 +1591,7 @@ a.ro-name:hover {
 .ro-gusts[data-warn="true"] svg {
   color: #b4692a;
 }
-.ro-gusts[data-warn="true"] b,
-.ro-gusts[data-warn="true"] span {
+.ro-gusts[data-warn="true"] b {
   color: var(--ro-warn-fg);
 }
 .ro-meter {

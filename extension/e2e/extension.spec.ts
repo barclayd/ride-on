@@ -1561,7 +1561,7 @@ test('reopening reuses fresh scores; a stale forecast or the refresh button rank
   expect(recCalls()).toHaveLength(4);
 });
 
-test('gust comfort saves separately; the wind dropdown says where the gusts are', async ({
+test('gust comfort saves separately; the wind dropdown marks gusts past it', async ({
   context,
   worker,
   extensionId,
@@ -1573,10 +1573,8 @@ test('gust comfort saves separately; the wind dropdown says where the gusts are'
   // Into the wind on the way home, past the default 35 km/h comfort: amber.
   const gusts = card.locator('.ro-gusts');
   await expect(gusts).toHaveAttribute('data-warn', 'true');
-  await expect(gusts.locator('b')).toHaveText('Gusts up to 48 km/h');
-  await expect(gusts.locator('span')).toHaveText(
-    /^Into your face on the way back, \d\d:\d\d–\d\d:\d\d\. Over your 35 km\/h comfort\.$/,
-  );
+  // Just the peak: no sentence under it.
+  await expect(gusts).toHaveText('Gusts up to 48 km/h');
   await expectPanelFits(page);
   await page.screenshot({ path: test.info().outputPath('wind-dropdown.png') });
   await page.getByRole('tab', { name: 'Preferences' }).click();
@@ -2836,10 +2834,7 @@ test('Preferences: Units switch temperature and wind everywhere, locally', async
   await expect(module.locator('.ro-wind li').first()).toHaveText(
     'Tailwind9 mph~60%',
   );
-  await expect(module.locator('.ro-gusts b')).toHaveText('Gusts up to 30 mph');
-  await expect(module.locator('.ro-gusts span')).toContainText(
-    'Over your 22 mph comfort.',
-  );
+  await expect(module.locator('.ro-gusts')).toHaveText('Gusts up to 30 mph');
 });
 
 test('Journeys page: a passed window asks for new dates, then rescores', async ({
