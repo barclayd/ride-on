@@ -130,7 +130,7 @@ const Dialog = ({ view, tracking }: { view: View; tracking: Tracking }) => {
           </div>
         )}
         <div class="ro-alerts-when">
-          <span>Tell me if</span>
+          <span>Notifications sent if</span>
           <ul>
             {rows.map((row) => (
               <li key={row.key}>
