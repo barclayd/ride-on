@@ -1575,7 +1575,8 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   const back = await openPopup(context, extensionId);
   await expect(back.locator('.ro-ride').first()).toContainText('Hilly Loop');
   await expect(back.locator('.ro-paused')).toHaveCount(0);
-  expect(recCalls()).toHaveLength(rides + 1);
+  // The kept rides can show before the fresh ranking lands.
+  await expect.poll(() => recCalls().length).toBe(rides + 1);
   // A daily read catches changes with the panel closed.
   expect(
     await worker.evaluate(
