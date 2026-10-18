@@ -1064,12 +1064,7 @@ a.ro-name:hover {
   gap: 9px;
   background: #f5f7f1;
   border-radius: 8px;
-  padding: 10px 12px 12px;
-}
-.ro-temp > b,
-.ro-rain > b {
-  font: 600 12px var(--ro-sans);
-  color: var(--ro-olive-ink);
+  padding: 12px;
 }
 .ro-rain p {
   margin: 0;
@@ -1352,12 +1347,7 @@ a.ro-name:hover {
   gap: 8px;
   background: #f5f7f1;
   border-radius: 8px;
-  padding: 10px 12px 12px;
-}
-.ro-sky > b,
-.ro-wind > b {
-  font: 600 12px var(--ro-sans);
-  color: var(--ro-olive-ink);
+  padding: 12px;
 }
 .ro-sky-bar {
   display: flex;

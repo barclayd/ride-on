@@ -2485,9 +2485,9 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await sky.click();
   await expect(sky).toHaveAttribute('aria-expanded', 'true');
   const timeline = module.locator('.ro-sky');
-  await expect(timeline.locator('b')).toHaveText(
-    'Expected conditions along the ride',
-  );
+  await expect(timeline).toBeVisible();
+  // No heading in the dropdowns: the chip just opened says what it is.
+  await expect(timeline).not.toContainText('along the ride');
   await expect(timeline.locator('.ro-sky-bar span')).toHaveCount(4);
   await expect(timeline.locator('li')).toHaveText([
     'Sunny~20%',
@@ -2499,7 +2499,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(timeline).toBeHidden();
   await expect(module.locator('[aria-expanded="true"]')).toHaveCount(1);
   const along = module.locator('.ro-wind');
-  await expect(along.locator('b').first()).toHaveText('Wind along the ride');
+  await expect(along).not.toContainText('along the ride');
   await expect(along.locator('.ro-wind-bar span')).toHaveText(['SW', 'W', 'W']);
   await expect(along.locator('li')).toHaveText([
     'Tailwind15 km/h~60%',
@@ -2537,7 +2537,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(pointer).not.toHaveAttribute('transform', first ?? '');
   await expect(pointer).toHaveCount(1);
   await module.screenshot({ path: test.info().outputPath('wind.png') });
-  await along.locator('b').first().hover();
+  await along.locator('.ro-gusts').hover();
   await expect(pointer).toHaveCount(0);
   await wind.click();
   await expect(along).toBeHidden();
@@ -2545,7 +2545,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   // Temperature along the ride (24a): when it feels outside the range, then the chart against usual.
   await temp.click();
   const warmth = module.locator('.ro-temp');
-  await expect(warmth.locator('b')).toHaveText('Temperature along the ride');
+  await expect(warmth).not.toContainText('along the ride');
   await expect(warmth.locator('.ro-temp-head strong')).toHaveText(
     /^Feels cooler than your range \(down to 6°C\) until about \d\d:\d0, then in your range to the finish$/,
   );
@@ -2584,7 +2584,7 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
   await expect(warmth).toBeHidden();
   await expect(temp).toHaveAttribute('aria-expanded', 'false');
   const wet = module.locator('.ro-rain');
-  await expect(wet.locator('b').first()).toHaveText('Rain along the ride');
+  await expect(wet).not.toContainText('along the ride');
   await expect(wet.locator('strong')).toHaveText(
     /^Drizzle possible from about \d\d:\d\d$/,
   );
