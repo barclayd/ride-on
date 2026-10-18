@@ -2041,6 +2041,10 @@ a.ro-name:hover {
   font: 500 12px / 1.45 var(--ro-serif);
   color: var(--ro-olive-900);
 }
+.ro-pause-error {
+  font: 500 12px / 1.45 var(--ro-serif);
+  color: var(--ro-warn-fg);
+}
 /* Days and Time keep their values, greyed out, while paused. */
 .ro-dims {
   transition: opacity 0.2s;

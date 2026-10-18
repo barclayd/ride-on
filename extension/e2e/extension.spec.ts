@@ -16,6 +16,7 @@ import {
   applyPatch,
   datesLabel,
   dayOfMonth,
+  instant,
   longWeekday,
   newest,
   planningDates,
@@ -76,6 +77,7 @@ let sunshineUncertain: boolean;
 let replays: Map<string, Ride>;
 let scores: Record<string, number>; // a route's score, in place of 84 then 44
 let freshFor: number; // hours until the forecast behind the scores goes stale
+let pauseDown: boolean; // pause writes fail
 
 const reset = () => {
   calls = [];
@@ -84,10 +86,12 @@ const reset = () => {
   replays = new Map();
   scores = {};
   freshFor = 3;
+  pauseDown = false;
   user = {
     id: 'u1',
     version: 1,
     displayName: 'Test Rider',
+    pause: null,
     weatherProviderId: 'met-office',
     preferenceLevels: { sunshine: 'nice', rain: 'light-ok' },
     settings: {
@@ -483,7 +487,35 @@ const recommendations = (body: any) => {
 
 const handle = (method: string, url: URL, body: any): [number, unknown] => {
   const key = `${method} ${url.pathname}`;
-  if (key === 'GET /users/me') return [200, { user }];
+  // At its return instant the API reads as on, without a write.
+  if (key === 'GET /users/me')
+    return [
+      200,
+      {
+        user:
+          user.pause?.resumesAt &&
+          Date.parse(user.pause.resumesAt) <= Date.now()
+            ? { ...user, pause: null }
+            : user,
+      },
+    ];
+  if (key === 'PUT /users/me/pause' || key === 'DELETE /users/me/pause') {
+    if (pauseDown)
+      return [503, { error: { code: 'UNAVAILABLE', message: 'x' } }];
+    user = {
+      ...user,
+      pause:
+        method === 'DELETE'
+          ? null
+          : {
+              until: body.until,
+              resumesAt:
+                body.until && instant(body.until, '00:00', 'Europe/London'),
+              pausedAt: user.pause?.pausedAt ?? new Date().toISOString(),
+            },
+    };
+    return [200, { user }];
+  }
   if (key === 'PATCH /users/me') {
     if (body.expectedVersion !== user.version)
       return [409, { error: { code: 'USER_VERSION_CONFLICT', message: 'x' } }];
@@ -617,6 +649,11 @@ base.afterAll(
 base.beforeEach(reset);
 
 const recCalls = () => calls.filter((c) => c.path === '/recommendations');
+// What reached the profile: each PUT's until, or DELETE.
+const pauseCalls = () =>
+  calls
+    .filter((c) => c.path === '/users/me/pause')
+    .map((c) => (c.method === 'DELETE' ? 'DELETE' : c.body.until));
 const rideCalls = (method: string) =>
   calls.filter(
     (c) =>
@@ -1464,6 +1501,8 @@ test('pausing hides forecasts until Ride On turns back on', async ({
     'Stays paused until you switch it off here.',
   );
   await expect(pill).toHaveText('Paused');
+  // Each choice is saved on the profile, so the rider's other devices follow.
+  await expect.poll(pauseCalls).toEqual([day(7), day(3), null]);
   await expect
     .poll(() => worker.evaluate("chrome.alarms.get('resume')"))
     .toBeUndefined();
@@ -1490,9 +1529,53 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   await expect(page.locator('.ro-ride').first()).toContainText('Hilly Loop');
   await expect(pill).toHaveCount(0);
   expect(recCalls()).toHaveLength(2);
+  await expect.poll(pauseCalls).toEqual([day(7), day(3), null, 'DELETE']);
   await page.getByRole('tab', { name: 'When' }).click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await expect(dims.first()).toHaveCSS('opacity', '1');
+
+  // A write that fails puts the switch back and says so.
+  pauseDown = true;
+  await toggle.click();
+  await expect(card.locator('.ro-pause-error')).toHaveText(
+    "Couldn't save that. Check your connection and try again.",
+  );
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(pill).toHaveCount(0);
+  pauseDown = false;
+  await toggle.click();
+  await expect(card.locator('.ro-pause-error')).toHaveCount(0);
+  await toggle.click(); // back on
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(() => pauseCalls().at(-1)).toBe('DELETE');
+  await expect.poll(() => recCalls().length).toBe(3); // back on: fresh scores
+
+  // Paused on another device: opening the panel shows it, with no forecasts.
+  const rides = recCalls().length;
+  user.pause = {
+    until: day(3),
+    resumesAt: instant(day(3), '00:00', 'Europe/London'),
+    pausedAt: new Date().toISOString(),
+  };
+  const other = await openPopup(context, extensionId);
+  await expect(other.locator('.ro-paused')).toContainText(
+    `Ride On is paused until ${shortDate(day(3))}.`,
+  );
+  await other.waitForTimeout(300);
+  expect(recCalls()).toHaveLength(rides);
+  await other.close();
+  // Turned back on there: fresh scores here.
+  user.pause = null;
+  const back = await openPopup(context, extensionId);
+  await expect(back.locator('.ro-ride').first()).toContainText('Hilly Loop');
+  await expect(back.locator('.ro-paused')).toHaveCount(0);
+  expect(recCalls()).toHaveLength(rides + 1);
+  // A daily read catches changes with the panel closed.
+  expect(
+    await worker.evaluate(
+      "chrome.alarms.get('sync').then((alarm) => alarm?.periodInMinutes)",
+    ),
+  ).toBe(24 * 60);
 });
 
 test('History, recent roads and removal with undo', async ({
@@ -2047,10 +2130,15 @@ test('Journeys page: paused, tiles show name and distance until turned back on',
 }) => {
   routes.r102 = coast();
   selection.routeIds = ['r101', 'r102'];
+  // Paused on the profile, from another device.
+  user.pause = {
+    until: day(7),
+    resumesAt: instant(day(7), '00:00', 'Europe/London'),
+    pausedAt: new Date().toISOString(),
+  };
   await signIn(worker);
-  const pause = { until: day(7), resumesAt: `${day(7)}T00:00:00.000Z` };
   await worker.evaluate(
-    `chrome.storage.local.set({ state: { pause: ${JSON.stringify(pause)}, alertRouteId: 'r102' } })`,
+    "chrome.storage.local.set({ state: { alertRouteId: 'r102' } })",
   );
   await fakeCycleTravel(context);
   const page = await context.newPage();
@@ -2098,6 +2186,8 @@ test('Journeys page: paused, tiles show name and distance until turned back on',
       ),
     )
     .toBe(null);
+  expect(pauseCalls()).toEqual(['DELETE']);
+  expect(user.pause).toBeNull();
 });
 
 // Safari injects content scripts again into open pages (on enable, on site access).
