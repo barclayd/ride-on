@@ -58,17 +58,17 @@
      "literal",
      [
       "recreation_ground",
-      "pitch",
       "grass",
       "meadow",
       "village_green",
       "garden",
       "dog_park",
-      "playground"
+      "playground",
+      "allotments"
      ]
     ]
    ],
-   "paint": {"fill-color": "#e0ecd6"}
+   "paint": {"fill-color": "#edf2e1"}
   },
   {
    "id": "landuse_park",
@@ -77,94 +77,49 @@
    "source-layer": "landuse",
    "filter": [
     "in",
-    "kind",
-    "national_park",
-    "park",
-    "cemetery",
-    "protected_area",
-    "nature_reserve",
-    "forest",
-    "golf_course",
-    "wood",
-    "scrub",
-    "grassland",
-    "grass",
-    "glacier",
-    "sand",
-    "military",
-    "naval_base",
-    "airfield"
+    ["get", "kind"],
+    [
+     "literal",
+     [
+      "national_park",
+      "park",
+      "protected_area",
+      "nature_reserve",
+      "cemetery",
+      "golf_course",
+      "wood",
+      "forest",
+      "glacier",
+      "sand"
+     ]
+    ]
    ],
    "paint": {
     "fill-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0, 11, 1],
     "fill-color": [
-     "case",
-     [
-      "in",
-      ["get", "kind"],
-      [
-       "literal",
-       [
-        "national_park",
-        "park",
-        "cemetery",
-        "protected_area",
-        "nature_reserve",
-        "forest",
-        "golf_course"
-       ]
-      ]
-     ],
-     "#d5e8cf",
-     ["==", ["get", "kind"], "wood"],
-     "#cfe4c6",
-     ["in", ["get", "kind"], ["literal", ["scrub", "grassland", "grass"]]],
-     "#e0ecd6",
-     ["==", ["get", "kind"], "glacier"],
+     "match",
+     ["get", "kind"],
+     ["wood", "forest"],
+     "#d2e5c9",
+     "golf_course",
+     "#e0efd7",
+     "cemetery",
+     "#d6ded3",
+     "glacier",
      "#ffffff",
-     ["==", ["get", "kind"], "sand"],
+     "sand",
      "#f2ecd2",
-     [
-      "in",
-      ["get", "kind"],
-      ["literal", ["military", "naval_base", "airfield"]]
-     ],
-     "#d5e8cf",
-     "#edf2e1"
+     "#e9f2d9"
     ]
    }
   },
   {
-   "id": "landuse_urban_green",
+   "id": "ct_pitches",
    "type": "fill",
    "source": "basemap",
    "source-layer": "landuse",
-   "filter": ["in", "kind", "allotments", "village_green", "playground"],
-   "paint": {"fill-color": "#d5e8cf", "fill-opacity": 0.7}
-  },
-  {
-   "id": "landuse_hospital",
-   "type": "fill",
-   "source": "basemap",
-   "source-layer": "landuse",
-   "filter": ["==", "kind", "hospital"],
-   "paint": {"fill-color": "#ebdedb"}
-  },
-  {
-   "id": "landuse_industrial",
-   "type": "fill",
-   "source": "basemap",
-   "source-layer": "landuse",
-   "filter": ["==", "kind", "industrial"],
-   "paint": {"fill-color": "#e3dfdc"}
-  },
-  {
-   "id": "landuse_school",
-   "type": "fill",
-   "source": "basemap",
-   "source-layer": "landuse",
-   "filter": ["in", "kind", "school", "university", "college"],
-   "paint": {"fill-color": "#ebe6d6"}
+   "filter": ["==", ["get", "kind"], "pitch"],
+   "paint": {"fill-color": "#dbeed3"}
   },
   {
    "id": "landuse_beach",
@@ -180,7 +135,7 @@
    "source": "basemap",
    "source-layer": "landuse",
    "filter": ["in", "kind", "zoo"],
-   "paint": {"fill-color": "#d5e8cf"}
+   "paint": {"fill-color": "#e9f2d9"}
   },
   {
    "id": "landuse_aerodrome",
@@ -286,7 +241,7 @@
    "source": "basemap",
    "source-layer": "landuse",
    "filter": ["in", "kind", "pedestrian", "dam"],
-   "paint": {"fill-color": "#eeeeea"}
+   "paint": {"fill-color": "#fcfbf5"}
   },
   {
    "id": "landuse_pier",
@@ -667,7 +622,43 @@
    "source": "basemap",
    "source-layer": "buildings",
    "filter": ["in", "kind", "building", "building_part"],
-   "paint": {"fill-color": "#dad2cf", "fill-opacity": 0.5}
+   "paint": {
+    "fill-color": ["step", ["zoom"], "#dde0d0", 11, "#e4e9d8", 13, "#e9e4e4"],
+    "fill-opacity": 1,
+    "fill-outline-color": "#d3cbc8"
+   }
+  },
+  {
+   "id": "ct_military_band",
+   "type": "line",
+   "source": "basemap",
+   "source-layer": "landuse",
+   "minzoom": 13,
+   "filter": [
+    "in",
+    ["get", "kind"],
+    ["literal", ["military", "naval_base", "airfield"]]
+   ],
+   "layout": {"line-join": "miter"},
+   "paint": {
+    "line-color": "#f01914",
+    "line-opacity": 0.22,
+    "line-width": 7,
+    "line-offset": 3.5
+   }
+  },
+  {
+   "id": "ct_military",
+   "type": "line",
+   "source": "basemap",
+   "source-layer": "landuse",
+   "minzoom": 13,
+   "filter": [
+    "in",
+    ["get", "kind"],
+    ["literal", ["military", "naval_base", "airfield"]]
+   ],
+   "paint": {"line-color": "#f4373e", "line-width": 1}
   },
   {
    "id": "roads_pier",

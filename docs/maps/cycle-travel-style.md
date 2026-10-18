@@ -91,11 +91,16 @@ ones. "Draws" is what `style.ts` draws: the key value as it is, or `shot()` of t
 | urban, below z11 | sampled | `#dde0d0` | `#dde0d0` |
 | urban, z11–13 | sampled | `#e5e9d8` | `#e4e9d8` |
 | urban, z13 up | sampled | `#e8e4e4` | `#e9e4e4` |
-| park | sampled | `#d8e7cf` | `#d5e8cf` |
-| wood | sampled | `#d2e3c6` | `#cfe4c6` |
-| scrub, grass, pitches | sampled | `#e2ecd6` | `#e0ecd6` |
+| park (re-sampled in WS2.5) | sampled | `#eaf2d9` | `#e9f2d9` |
+| wood (WS2.5) | sampled | `#d5e4c9` | `#d2e5c9` |
+| golf course (WS2.5) | sampled | `#e2efd7` | `#e0efd7` |
+| cemetery (WS2.5) | sampled | `#d7ded3` | `#d6ded3` |
+| pitch (WS2.5) | sampled | `#deedd3` | `#dbeed3` |
+| pedestrian area (WS2.5) | sampled | `#fcfbf5` | `#fcfbf5` |
 | water | sampled | `#b3c9cf` (re-sampled in WS2.2) | `#aecacf` |
-| building | sampled | `#d9d2cf` | `#dad2cf` |
+| building edge (WS2.5; the fill is urban) | sampled | `#d2cbc8` | `#d3cbc8` |
+| military edge (WS2.5) | sampled | `#e44c43` | `#f4373e` |
+| military band (WS2.5) | solved | `#ebc5b6` over land | `#f01914` at 22% |
 | railway | sampled | `#9a9a99` | `#9a9a99` |
 | minor road casing | sampled | `#a3a3a3` | `#a3a3a3` |
 | major road casing, z10 | sampled | `#b8aea8` | `#baada8` |
@@ -126,17 +131,33 @@ ones. "Draws" is what `style.ts` draws: the key value as it is, or `shot()` of t
 | route dots | key | ncn `#ff0000`, rcn `#0000ff`, lcn `#008b8b` | same, with opacity |
 | EuroVelo ring | by eye | – | `#00559d` |
 
-Unsampled Protomaps flavour slots (hospital, school, industrial, beach…) are set by eye in
-`style.ts`'s `flavour` object.
+The military band is the one colour solved rather than sampled: the page blends drawn colours, so the
+band's red is worked out from `shot()` of its capture and of the land under it, and drawn as it is.
+
+Unsampled Protomaps flavour slots (beach, aerodrome, pier…) are set by eye in `style.ts`'s `flavour`
+object.
 
 ## Land and land use
 
 - Background and earth: land colour.
 - Built-up land use (`residential`, `commercial`, `retail`, `railway`, `industrial`): one fill that steps
   with zoom, grey-green → paler green at z11 → pinkish grey at z13 (layer `ct_urban`).
-- Grass-like land use (`recreation_ground`, `pitch`, `grass`, `meadow`, `village_green`, `garden`,
-  `dog_park`, `playground`): scrub colour (`ct_greens`).
-- Parks, woods, scrub: Protomaps' own `landuse_*` layers with cycle.travel's colours.
+- Buildings: the same built-up fill, opaque, with a faint `#d3cbc8` edge, so blocks read as one. (The
+  `#e3e2d9` fill that used to cover 16% of our Westminster view was Protomaps' half-opaque buildings over
+  land.)
+- Grass-like land use (`recreation_ground`, `grass`, `meadow`, `village_green`, `garden`, `dog_park`,
+  `playground`, `allotments`): land colour over the built-up fill (`ct_greens`). cycle.travel shows them
+  as bare land, even inside residential areas.
+- Pitches: their own green (`ct_pitches`), above parks so they show inside them.
+- Parks, woods, golf courses, cemeteries, nature reserves: Protomaps' `landuse_park` layer, filtered to
+  those kinds, with cycle.travel's colours. Scrub, grass and grassland aren't filled.
+- Pedestrian areas: cream.
+- Military land (`military`, `naval_base`, `airfield`) from z13: not filled, but a 1px red edge with a
+  7px pale red band just inside (`ct_military_band`, `ct_military`). The band is a line with a positive
+  `line-offset`, which falls inside polygons because vector tiles wind outer rings clockwise; its joins
+  are mitred, since round joins overlap at every vertex and show darker.
+- Schools, hospitals and industrial land have no fill of their own: Protomaps' `landuse_school`,
+  `landuse_hospital`, `landuse_industrial` and `landuse_urban_green` layers are dropped.
 - Protomaps' `landcover` layer is dropped: cycle.travel has no low-zoom land cover.
 - **Missing:** hillshade and contours. cycle.travel shades hills at every zoom we compared and draws
   contours from about z12. Plan WS1.
@@ -410,7 +431,8 @@ and what doesn't, except for the gaps below.
 Bottom to top, as `style.ts` splices them into Protomaps' `light` layers:
 
 1. Protomaps background, earth, water, land use… with `ct_urban` and `ct_greens` inserted just before
-   `landuse_park`.
+   `landuse_park`, `ct_pitches` just after it, and `ct_military_band`, `ct_military` just after
+   `buildings`.
 2. Protomaps roads, with `ct_footpaths`, `ct_unpaved`, `ct_cycleways_casing`, `ct_cycleways` just
    before `roads_rail`.
 3. `ct_routes_eurovelo_ring`, `ct_routes`, `ct_stations` just before `roads_labels_minor`, so route dots
@@ -471,11 +493,17 @@ From the six comparisons in `screenshots/`. Tick them off in WS2.
 - [ ] No farm or hamlet labels in rural areas at z12
 - [ ] Station subset at z10–11
 - [ ] Knockout shade inside parks
-- [ ] Pedestrian areas outlined in red at street level
+- [x] Pedestrian areas outlined in red at street level: these were military land (Horse Guards, Wellington
+  Barracks), now outlined (WS2.5)
 - [x] Colours: stop running key values through `shot()`; fix the curve (above). WS2.2
-- [ ] Park fill lighter: Richmond Park captures as `#eaf2d9` on cycle.travel, against our park `#d8e7cf`
-- [ ] Buildings at z14: 72% of the pixels we fill as building in the Westminster view are plain urban
-  (`#e8e4e4`) on cycle.travel
-- [ ] Scrub and grass: cycle.travel shows land colour where we fill them
-- [ ] Find what draws the `#e3e2d9` fill that covers 16% of our Westminster view
+- [x] Park fill lighter: Richmond Park captures as `#eaf2d9` on cycle.travel, against our park `#d8e7cf`
+  (WS2.5, with wood, golf, cemetery, pitch and pedestrian re-sampled too)
+- [x] Buildings at z14: 72% of the pixels we fill as building in the Westminster view are plain urban
+  (`#e8e4e4`) on cycle.travel (WS2.5: buildings take the urban fill)
+- [x] Scrub and grass: cycle.travel shows land colour where we fill them (WS2.5)
+- [x] Find what draws the `#e3e2d9` fill that covers 16% of our Westminster view (WS2.5: Protomaps'
+  half-opaque buildings over land)
+- [ ] Built-up land with no land-use polygon in Protomaps' tiles: 20% of the land we leave bare in Richmond
+  and 41% in Westminster is built-up on cycle.travel. Not yet traced: Protomaps may drop small `landuse`
+  polygons, or cycle.travel may fill from other tags. WS1 data
 - [ ] Re-check every size at 3× on an iPhone (all tuning was at 2× in Chrome)

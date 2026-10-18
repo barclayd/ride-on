@@ -62,12 +62,20 @@ const sampled = {
   urban: '#dde0d0',
   urbanMid: '#e5e9d8',
   urbanHigh: '#e8e4e4',
-  park: '#d8e7cf',
-  wood: '#d2e3c6',
-  scrub: '#e2ecd6',
+  // Re-sampled in WS2.5 under our park, wood, golf, cemetery, pitch and pedestrian fills in Richmond and
+  // Westminster at cycle.travel's z14–16.
+  park: '#eaf2d9',
+  wood: '#d5e4c9',
+  golf: '#e2efd7',
+  cemetery: '#d7ded3',
+  pitch: '#deedd3',
+  pedestrian: '#fcfbf5',
   // Re-sampled in WS2.2: cycle.travel's colour under our water in every comparison view that has water.
   water: '#b3c9cf',
-  building: '#d9d2cf',
+  // Buildings are filled as built-up land; only this faint edge shows them.
+  building: '#d2cbc8',
+  // Military land's red edge.
+  military: '#e44c43',
   rail: '#9a9a99',
   casing: '#a3a3a3',
   majorCasingLow: '#b8aea8',
@@ -98,6 +106,9 @@ const ct = {
   rcn: '#0000ff',
   lcn: '#008b8b',
   eurovelo: '#00559d',
+  // The pale band inside military land's edge: this red at 22%, solved after shot() from the band's capture over
+  // land, since the page blends drawn colours, not captured ones.
+  militaryBand: '#f01914',
 }
 
 const flavour = {
@@ -108,20 +119,13 @@ const flavour = {
   park_b: ct.park,
   wood_a: ct.wood,
   wood_b: ct.wood,
-  scrub_a: ct.scrub,
-  scrub_b: ct.scrub,
-  hospital: '#ebdedb',
-  school: '#ebe6d6',
-  industrial: '#e3dfdc',
-  pedestrian: '#eeeeea',
+  pedestrian: ct.pedestrian,
   zoo: ct.park,
-  military: '#e3dfdc',
   aerodrome: '#e0e2da',
   beach: '#f2ecd2',
   sand: '#f2ecd2',
   glacier: '#ffffff',
   water: ct.water,
-  buildings: ct.building,
   pier: '#e6e6e6',
   minor_a: ct.minor,
   minor_b: ct.minor,
@@ -242,7 +246,52 @@ const abbreviate = (name: Expression) => [
   ],
 ]
 
-const dropped = new Set(['pois', 'roads_shields', 'roads_oneway', 'address_label', 'landcover'])
+// cycle.travel doesn't fill schools or hospitals: they show the land or built-up fill beneath. Allotments, village
+// greens and playgrounds are bare land (ct_greens), and industrial land is built-up (ct_urban).
+const dropped = new Set([
+  'pois',
+  'roads_shields',
+  'roads_oneway',
+  'address_label',
+  'landcover',
+  'landuse_urban_green',
+  'landuse_hospital',
+  'landuse_industrial',
+  'landuse_school',
+])
+
+// cycle.travel's built-up fill steps with its tile zoom: grey-green, then paler green at its z12–13, then pinkish
+// grey. Buildings take it too.
+const urbanFill = ['step', ['zoom'], ct.urban, 11, ct.urbanMid, 13, ct.urbanHigh]
+// Protomaps' landuse_park kinds that cycle.travel fills. It leaves scrub, grass and grassland as the land beneath,
+// and outlines military land instead (ct_military).
+const parkKinds = [
+  'national_park',
+  'park',
+  'protected_area',
+  'nature_reserve',
+  'cemetery',
+  'golf_course',
+  'wood',
+  'forest',
+  'glacier',
+  'sand',
+]
+const parkFill = [
+  'match',
+  ['get', 'kind'],
+  ['wood', 'forest'],
+  ct.wood,
+  'golf_course',
+  ct.golf,
+  'cemetery',
+  ct.cemetery,
+  'glacier',
+  '#ffffff',
+  'sand',
+  '#f2ecd2',
+  ct.park,
+]
 
 /** Protomaps' `light` layers, recoloured and retuned. */
 const basemap = (): Layer[] =>
@@ -252,6 +301,13 @@ const basemap = (): Layer[] =>
       const layout = l.layout ?? {}
       const paint = l.paint ?? {}
       for (const k of Object.keys(layout)) if (k.startsWith('icon-')) delete layout[k]
+      if (l.id === 'landuse_park') {
+        l.filter = ['in', ['get', 'kind'], ['literal', parkKinds]]
+        paint['fill-color'] = parkFill
+      }
+      // cycle.travel fills buildings as built-up land, so blocks read as one, with a faint edge.
+      if (l.id === 'buildings')
+        Object.assign(paint, { 'fill-color': urbanFill, 'fill-opacity': 1, 'fill-outline-color': ct.building })
       if (['roads_major', 'roads_bridges_major', 'roads_tunnels_major'].includes(l.id))
         Object.assign(paint, { 'line-color': roadColour, 'line-width': majorWidth })
       if (
@@ -685,10 +741,10 @@ const urban: Layer = {
   source: 'basemap',
   'source-layer': 'landuse',
   filter: ['in', ['get', 'kind'], ['literal', ['residential', 'commercial', 'retail', 'railway', 'industrial']]],
-  // cycle.travel's built-up fill steps with its tile zoom: grey-green, then paler green at its z12–13, then
-  // pinkish grey.
-  paint: { 'fill-color': ['step', ['zoom'], ct.urban, 11, ct.urbanMid, 13, ct.urbanHigh] },
+  paint: { 'fill-color': urbanFill },
 }
+// cycle.travel shows grass, gardens and the like as bare land even inside built-up land, so they're filled with the
+// land colour over ct_urban.
 const greens: Layer = {
   id: 'ct_greens',
   type: 'fill',
@@ -697,10 +753,48 @@ const greens: Layer = {
   filter: [
     'in',
     ['get', 'kind'],
-    ['literal', ['recreation_ground', 'pitch', 'grass', 'meadow', 'village_green', 'garden', 'dog_park', 'playground']],
+    [
+      'literal',
+      ['recreation_ground', 'grass', 'meadow', 'village_green', 'garden', 'dog_park', 'playground', 'allotments'],
+    ],
   ],
-  paint: { 'fill-color': ct.scrub },
+  paint: { 'fill-color': ct.land },
 }
+// Pitches are cycle.travel's only filled sports or garden land use; above the parks, so they show inside them.
+const pitches: Layer = {
+  id: 'ct_pitches',
+  type: 'fill',
+  source: 'basemap',
+  'source-layer': 'landuse',
+  filter: ['==', ['get', 'kind'], 'pitch'],
+  paint: { 'fill-color': ct.pitch },
+}
+// Military land, as cycle.travel draws it at street level: a 1px red edge with a 7px pale red band just inside. Its
+// lowest zoom for these is unchecked; ours is 13.
+// Positive offsets go right of the ring, which is inside for vector tiles' clockwise outer rings.
+const militaryKinds = ['in', ['get', 'kind'], ['literal', ['military', 'naval_base', 'airfield']]]
+const military: Layer[] = [
+  {
+    id: 'ct_military_band',
+    type: 'line',
+    source: 'basemap',
+    'source-layer': 'landuse',
+    minzoom: 13,
+    filter: militaryKinds,
+    // Mitred: round joins on an offset line overlap at every vertex, and the overlaps show darker.
+    layout: { 'line-join': 'miter' },
+    paint: { 'line-color': ct.militaryBand, 'line-opacity': 0.22, 'line-width': 7, 'line-offset': 3.5 },
+  },
+  {
+    id: 'ct_military',
+    type: 'line',
+    source: 'basemap',
+    'source-layer': 'landuse',
+    minzoom: 13,
+    filter: militaryKinds,
+    paint: { 'line-color': ct.military, 'line-width': 1 },
+  },
+]
 
 const attribution = '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
 
@@ -712,6 +806,8 @@ export const buildStyle = (target: Target): StyleSpecification => {
     return index
   }
   all.splice(at('landuse_park'), 0, urban, greens)
+  all.splice(at('landuse_park') + 1, 0, pitches)
+  all.splice(at('buildings') + 1, 0, ...military)
   all.splice(at('roads_rail'), 0, ...paths)
   all.splice(at('roads_labels_minor'), 0, ...routes, stations)
   all.splice(at('roads_labels_major') + 1, 0, roadRefs)
