@@ -24,14 +24,21 @@ import {
   clock,
   conditionChips,
   dayMonth,
+  localDate,
   ridden,
   shortDate,
   skyChip,
   viewOf,
+  weekday,
 } from './format';
 import { type Rain, rainPanel } from './rain';
 import { type TemperaturePanel, temperaturePanel } from './temperature';
-import { asksPermission } from './triggers';
+import {
+  alertTimeline,
+  asksPermission,
+  SUMMARY_TIME,
+  triggerRows,
+} from './triggers';
 import { DIAL, SKETCH, type WindSketch, windPanel } from './wind';
 
 export const iconUrl = () => browser.runtime.getURL('/ride-on-icon.png');
@@ -334,14 +341,20 @@ const Notes = ({ card }: { card: Card }) => (
 // Edit mode and Undo message; which rides are tracked, and which has alerts, is shared state.
 type Said = { text: string; undo?: () => void; at: number };
 export type Tracking = ReturnType<typeof useTracking>;
-// The alerts dialog (v10, 29c), and the bell that opened it, which gets focus back.
-type Asking = { card: Card; from: HTMLElement | null };
+// The alerts dialog (v10, 29c), and the bell that opened it, which gets focus back. Change alerts
+// (v11, 30c) opens it again for the ride that has them.
+type Asking = { card: Card; from: HTMLElement | null; change?: boolean };
+// What we're tracking (30c), and the pill or bell that opened it.
+type Peek = { routeId: string; from: HTMLElement | null };
+// The day and time a ride with alerts stays on (docs/extension-api-brief-v13.md).
+export type FixedSlot = { departureAt: string; finishAt: string };
 
-// Alerts on, against whatever has them now.
+// Alerts on, against whatever has them now. With the time fixed, the tile shows the departure at once.
 const startAlerts = async (
   routeId: string,
   recommendationRef: string,
   triggers?: AlertTriggers,
+  departure?: Departure,
 ) => {
   const { tracker } = await readState();
   return send({
@@ -349,6 +362,7 @@ const startAlerts = async (
     routeId,
     recommendationRef,
     triggers,
+    departure,
     expectedTrackingVersion: tracker.version,
     replaceTrackedRideId: tracker.ride?.id ?? null,
   });
@@ -370,6 +384,8 @@ export const useTracking = (view: View | null) => {
   const [shown, setShown] = useState(false);
   const [held, setHeld] = useState(false); // the pointer or focus is on the message
   const [asking, setAsking] = useState<Asking | null>(null);
+  const [peek, setPeek] = useState<Peek | null>(null);
+  const [moving, setMoving] = useState(false);
   const routeIds = view?.state.selection?.routeIds ?? [];
   const wanted = view?.state.alertRouteId ?? null;
   const alert = wanted;
@@ -387,6 +403,31 @@ export const useTracking = (view: View | null) => {
     asking?.from?.focus();
     setAsking(null);
   };
+  // Once the API keeps it (fixedDeparture), the ride with alerts stays on its day and time: the pinned
+  // departure, or the marker's when the forecast can't score it.
+  const slot = (card: Card): FixedSlot | null => {
+    if (!tracker?.fixed || active?.routeId !== card.routeId) return null;
+    if (card.best?.departureAt === active.departureAt) return card.best;
+    if (card.fixed?.departureAt === active.departureAt) return card.fixed;
+    return null;
+  };
+  // Closing puts focus back on the pill or bell, unless the rider has moved on.
+  const unpeek = (focus = true) => {
+    if (focus) peek?.from?.focus();
+    setPeek(null);
+  };
+  // Focus goes on to the tile's pill, or its bell once alerts are off, as the button it was on goes.
+  // The page or the Journeys page's shadow root: taken while the button is still on it.
+  const rootOf = (at: Element | null | undefined) =>
+    at?.getRootNode() as Document | ShadowRoot | undefined;
+  const refocus = (
+    root: Document | ShadowRoot | undefined,
+    routeId: string,
+    what: string,
+  ) =>
+    root
+      ?.querySelector<HTMLElement>(`[data-route="${routeId}"] ${what}`)
+      ?.focus();
   // Six seconds, held while the rider is on it; a new message starts the count again.
   useEffect(() => {
     if (!said || held) return;
@@ -415,9 +456,25 @@ export const useTracking = (view: View | null) => {
     asking,
     movingFrom,
     close,
+    slot,
+    fixed: tracker?.fixed === true,
+    edits: tracker?.edits === true,
+    peeking: peek?.routeId ?? null,
+    unpeek,
+    moving,
+    peekAt: (card: Card, from: HTMLElement | null) =>
+      setPeek(
+        peek?.routeId === card.routeId ? null : { routeId: card.routeId, from },
+      ),
     // The selected recommendation pins the departure. An off bell asks which alerts first (29c);
-    // an on bell turns them off straight away.
+    // an on bell turns them off straight away, or with the time fixed shows what we're tracking (30c).
     bell: async (card: Card, from: HTMLElement | null) => {
+      if (slot(card))
+        return setPeek(
+          peek?.routeId === card.routeId
+            ? null
+            : { routeId: card.routeId, from },
+        );
       if (!tracker?.ready || tracker.error)
         return say('Refresh to check your tracked ride first.');
       const ref = card.best?.recommendationRef;
@@ -446,6 +503,18 @@ export const useTracking = (view: View | null) => {
     // a page can't ask for the extension, so it opens the panel's Preferences after saving.
     confirm: async (triggers: AlertTriggers) => {
       const card = asking?.card;
+      if (asking?.change && card) {
+        close();
+        const { tracker: now } = await readState();
+        if (!now.ride) return;
+        const result = await send({
+          type: 'setTriggers',
+          trackedRideId: now.ride.id,
+          triggers,
+          expectedTrackingVersion: now.version,
+        });
+        return say(result.error ?? `Alerts updated for ${card.name}`);
+      }
       const ref = card?.best?.recommendationRef;
       if (!view || !card || !ref) return;
       const moving = movingFrom(card);
@@ -493,6 +562,56 @@ export const useTracking = (view: View | null) => {
       const enabled = await send({ type: 'enablePush' });
       if (!enabled.error && import.meta.env.SAFARI)
         location.href = 'rideon-notifications://enable';
+    },
+    // Change alerts: the 29c dialog again, with this ride's switches; saving keeps the slot.
+    change: (card: Card) => {
+      const from = peek?.from ?? null;
+      setPeek(null);
+      setAsking({ card, from, change: true });
+    },
+    // Turn off alerts: as an on bell does without a fixed time. The tile moves on the next refresh.
+    turnOff: async (card: Card) => {
+      const ref = card.best?.recommendationRef;
+      const departure = card.best ?? undefined;
+      const triggers = view?.state.triggers[card.routeId];
+      refocus(rootOf(peek?.from), card.routeId, '.ro-bell');
+      setPeek(null);
+      const result = await stopAlerts(card.routeId);
+      if (result.error) return say(result.error);
+      say(
+        `Alerts off for ${card.name}`,
+        ref
+          ? () =>
+              startAlerts(card.routeId, ref, triggers, departure).then(failed)
+          : undefined,
+      );
+    },
+    // Move alerts (30c §4): a new plan on the better departure, with the same switches. Undo moves
+    // them back while the old departure's reference is still good.
+    move: async (card: Card, from: HTMLElement) => {
+      const better = card.better;
+      const ref = better?.recommendationRef;
+      if (!view || !better || !ref || moving) return;
+      const back = card.best;
+      const backRef = back?.recommendationRef;
+      const triggers = view.state.triggers[card.routeId];
+      const root = rootOf(from);
+      setMoving(true);
+      const result = await startAlerts(
+        card.routeId,
+        ref,
+        triggers,
+        better,
+      ).finally(() => setMoving(false));
+      if (result.error) return say(result.error);
+      refocus(root, card.routeId, '.ro-fixed');
+      say(
+        `Alerts moved to ${weekday(better.date)} ${clock(better.departureAt, view.timeZone)}`,
+        back && backRef
+          ? () =>
+              startAlerts(card.routeId, backRef, triggers, back).then(failed)
+          : undefined,
+      );
     },
     remove: (card: Card) => {
       const index = routeIds.indexOf(card.routeId);
@@ -608,6 +727,23 @@ const TileAction = (props: {
         ×
       </button>
     );
+  // With the time fixed (30c) the bell shows what we're tracking instead of turning alerts off.
+  if (!props.disabled && tracking.slot(card))
+    return (
+      <button
+        type="button"
+        class="ro-bell"
+        data-fixed
+        data-peek
+        aria-haspopup="dialog"
+        aria-expanded={tracking.peeking === card.routeId}
+        aria-label={`Alerts on for ${card.name}. What we're tracking`}
+        title="Alerts on. See what we're tracking"
+        onClick={(event) => tracking.bell(card, event.currentTarget)}
+      >
+        <BellIcon />
+      </button>
+    );
   const on =
     tracking.alert === card.routeId &&
     tracking.departureAt === card.best?.departureAt;
@@ -627,6 +763,200 @@ const TileAction = (props: {
     >
       <BellIcon />
     </button>
+  );
+};
+
+// The fixed time on a ride with alerts (30c §1): a pill that opens what we're tracking, and under it a
+// better departure when the API finds one (§4).
+const FixedTime = (props: {
+  view: View;
+  card: Card;
+  slot: FixedSlot;
+  tracking: Tracking;
+}) => {
+  const { view, card, slot, tracking } = props;
+  const open = tracking.peeking === card.routeId;
+  const when = slotText(slot, view.timeZone);
+  const better = card.better;
+  return (
+    <div class="ro-fixed-row">
+      <div class="ro-fixed-anchor">
+        <button
+          type="button"
+          class="ro-fixed"
+          data-peek
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label={`Alerts on for ${when.day}, ${when.dep} to ${when.fin}. What we're tracking for ${card.name}`}
+          onClick={(event) => tracking.peekAt(card, event.currentTarget)}
+        >
+          <BellIcon size={15} />
+          <span>{when.day}</span>
+          <b aria-hidden="true">·</b>
+          <span>{`${when.dep} → ~${when.fin}`}</span>
+          <Icon name="chevron" size={12} />
+        </button>
+        {open && (
+          <Tracked view={view} card={card} slot={slot} tracking={tracking} />
+        )}
+      </div>
+      {better && (
+        <div class="ro-better">
+          <span>
+            {`Better: ${shortDate(better.date)} · ${clock(better.departureAt, view.timeZone)} → ~${clock(better.finishAt, view.timeZone)} scores ${Math.round(better.score)}`}
+          </span>
+          <button
+            type="button"
+            aria-disabled={tracking.moving || undefined}
+            onClick={(event) => tracking.move(card, event.currentTarget)}
+          >
+            Move alerts
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const slotText = (slot: FixedSlot, timeZone: string) => ({
+  day: shortDate(localDate(slot.departureAt, timeZone)),
+  dep: clock(slot.departureAt, timeZone),
+  fin: clock(slot.finishAt, timeZone),
+});
+
+// What we're tracking (30c §3): a popover under the pill, on a phone a card at the bottom. It closes on
+// ×, Escape, a click outside or focus moving away, and focus goes back to what opened it.
+const Tracked = (props: {
+  view: View;
+  card: Card;
+  slot: FixedSlot;
+  tracking: Tracking;
+}) => {
+  const { view, card, slot, tracking } = props;
+  const { state, timeZone } = view;
+  const box = useRef<HTMLDivElement>(null);
+  const when = slotText(slot, timeZone);
+  const triggers = state.triggers[card.routeId];
+  const rows = triggerRows(
+    state.user?.settings.preferences,
+    state.units,
+  ).filter((row) => triggers?.[row.key] !== false);
+  const steps = alertTimeline(
+    slot.departureAt,
+    timeZone,
+    new Date(),
+    state.tracker.summaryTime ?? SUMMARY_TIME,
+  );
+  // Its pill and bell toggle it themselves.
+  const ours = (node: EventTarget | null) =>
+    node instanceof Element &&
+    (box.current?.contains(node) ||
+      node.closest(`[data-route="${card.routeId}"] [data-peek]`) !== null);
+  useEffect(() => {
+    box.current?.focus();
+    const down = (event: PointerEvent) => {
+      if (!event.composedPath().some(ours)) tracking.unpeek(false);
+    };
+    document.addEventListener('pointerdown', down, true);
+    return () => document.removeEventListener('pointerdown', down, true);
+  }, []);
+  return (
+    <div
+      ref={box}
+      class="ro-tracked"
+      role="dialog"
+      aria-label={`Alerts for ${card.name}`}
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        event.stopPropagation();
+        tracking.unpeek();
+      }}
+      onFocusOut={(event) => {
+        if (event.relatedTarget && !ours(event.relatedTarget))
+          tracking.unpeek(false);
+      }}
+    >
+      <div class="ro-tracked-head">
+        <div>
+          <span>
+            <BellIcon size={12} />
+            Alerts on
+          </span>
+          <span>What we're tracking</span>
+        </div>
+        <button
+          type="button"
+          class="ro-tracked-close"
+          aria-label="Close"
+          onClick={() => tracking.unpeek()}
+        >
+          ×
+        </button>
+      </div>
+      <div class="ro-tracked-slot">
+        <span>{`${when.day} · ${when.dep} → ~${when.fin}`}</span>
+        <span>
+          This time is fixed while alerts are on. The tile won't move to another
+          day or time.
+        </span>
+      </div>
+      <div class="ro-tracked-part">
+        <span>Tell me if</span>
+        <ul>
+          {rows.map((row) => (
+            <li key={row.key}>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke={row.colour}
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d={row.path} />
+              </svg>
+              {row.label}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="ro-tracked-part">
+        <span>When you'll hear from us</span>
+        <ol>
+          {steps.map((step) => (
+            <li key={step.text}>
+              <i aria-hidden="true" style={{ background: step.dot }} />
+              <span>
+                <b>{step.at}</b>
+                <span>{step.text}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div class="ro-tracked-actions">
+        {tracking.edits && (
+          <button
+            type="button"
+            class="ro-tracked-change"
+            onClick={() => tracking.change(card)}
+          >
+            Change alerts
+          </button>
+        )}
+        <button
+          type="button"
+          class="ro-tracked-off"
+          onClick={() => tracking.turnOff(card)}
+        >
+          Turn off alerts
+        </button>
+      </div>
+    </div>
   );
 };
 
@@ -757,6 +1087,7 @@ export const RouteTile = (props: {
   const windId = `ro-wind-${card.routeId}`;
   const rainId = `ro-rain-${card.routeId}`;
   const drop = { open, toggle };
+  const fixed = blank ? null : tracking.slot(card);
   // Paused (handoff v6 §4): name and distance in the plain style; Edit still removes it.
   if (view.paused)
     return (
@@ -793,6 +1124,7 @@ export const RouteTile = (props: {
       data-state={card.state}
       data-route={card.routeId}
       data-blank={blank}
+      data-peeking={tracking.peeking === card.routeId || undefined}
       style={{ '--ro-i': props.index }}
     >
       {!panel && (
@@ -838,27 +1170,31 @@ export const RouteTile = (props: {
           <Icon name="route" size={15} />
           {card.km} km
         </span>
-        <Slot class="ro-when">
-          {card.best ? (
-            <span>
-              <Icon name="clock" size={15} />
-              {dated && (
-                <>
-                  {shortDate(card.best.date)}
-                  <b aria-hidden="true">·</b>
-                </>
-              )}
-              {`${clock(card.best.departureAt, view.timeZone)} → ~${clock(card.best.finishAt, view.timeZone)}`}
-            </span>
-          ) : (
-            card.duration && (
+        {fixed ? (
+          <FixedTime view={view} card={card} slot={fixed} tracking={tracking} />
+        ) : (
+          <Slot class="ro-when">
+            {card.best ? (
               <span>
                 <Icon name="clock" size={15} />
-                {card.duration}
+                {dated && (
+                  <>
+                    {shortDate(card.best.date)}
+                    <b aria-hidden="true">·</b>
+                  </>
+                )}
+                {`${clock(card.best.departureAt, view.timeZone)} → ~${clock(card.best.finishAt, view.timeZone)}`}
               </span>
-            )
-          )}
-        </Slot>
+            ) : (
+              card.duration && (
+                <span>
+                  <Icon name="clock" size={15} />
+                  {card.duration}
+                </span>
+              )
+            )}
+          </Slot>
+        )}
       </div>
       <div class="ro-rule" />
       <Slot class="ro-conditions">

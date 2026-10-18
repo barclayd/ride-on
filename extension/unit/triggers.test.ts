@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import type { PushStatus } from '../lib/push';
 import { regionUnits } from '../ui/format';
 import {
+  alertTimeline,
   asksPermission,
   confirmLabel,
   timingLine,
@@ -64,6 +65,31 @@ test('the API can move the final forecast', () => {
   expect(timingLine(DEPARTURE, LONDON, now, '19:00')).toStartWith(
     'Plus the final forecast at 19:00',
   );
+});
+
+test('what we are tracking lists from now, the final forecast and the stop', () => {
+  const steps = alertTimeline(
+    DEPARTURE,
+    LONDON,
+    new Date('2026-10-16T12:00:00Z'),
+  );
+  expect(steps.map((step) => [step.at, step.text])).toEqual([
+    ['From now', 'Only when something changes'],
+    ['Fri 16 Oct, 18:00', 'Final forecast for the ride'],
+    ['Sat 17 Oct, 08:30', 'Alerts stop when you leave'],
+  ]);
+});
+
+test('once the final forecast is sent the timeline drops it', () => {
+  const steps = alertTimeline(
+    DEPARTURE,
+    LONDON,
+    new Date('2026-10-16T18:30:00Z'),
+  );
+  expect(steps.map((step) => step.text)).toEqual([
+    'Only when something changes',
+    'Alerts stop when you leave',
+  ]);
 });
 
 test('the button says what it will do', () => {

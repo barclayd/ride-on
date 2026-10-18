@@ -5,6 +5,7 @@ export type TrackedRide = {
   id: string;
   routeId: string;
   departureAt: string;
+  finishAt?: string;
   timeZone: string;
   state: 'active' | 'inactive';
   endedReason: string | null;
@@ -29,6 +30,9 @@ export type Tracker = {
   // From the API's capabilities; absent before brief v11.
   triggers?: boolean; // it takes the rider's triggers with a tracked ride
   summaryTime?: string; // local time of the evening-before forecast
+  // docs/extension-api-brief-v13.md: rankings keep the tracked departure, and switches can change.
+  fixed?: boolean;
+  edits?: boolean;
 };
 export const loadTracker = async (): Promise<Tracker> => {
   const list = await api<{
@@ -37,6 +41,8 @@ export const loadTracker = async (): Promise<Tracker> => {
     capabilities?: {
       alertTriggers?: boolean;
       finalForecastLocalTime?: string;
+      fixedDeparture?: boolean;
+      alertEdits?: boolean;
     };
   }>('/tracked-rides');
   const ride = list.activeTrackedRideId
@@ -53,6 +59,8 @@ export const loadTracker = async (): Promise<Tracker> => {
     error: null,
     triggers: list.capabilities?.alertTriggers === true,
     summaryTime: list.capabilities?.finalForecastLocalTime,
+    fixed: list.capabilities?.fixedDeparture === true,
+    edits: list.capabilities?.alertEdits === true,
   };
 };
 // Persist the action key before sending, so a service-worker restart cannot duplicate it.
@@ -83,5 +91,18 @@ export const saveTrackedRide = async (
     headers: { 'Idempotency-Key': action.key },
   });
   await setSecret('track-action', null);
+  return loadTracker();
+};
+
+// Change alerts keeps the plan, its departure and what monitoring has seen (brief v13 §3).
+export const saveTriggers = async (
+  id: string,
+  version: number,
+  triggers: AlertTriggers,
+) => {
+  await api(`/tracked-rides/${id}`, {
+    method: 'PATCH',
+    body: { expectedTrackingVersion: version, alerts: { triggers } },
+  });
   return loadTracker();
 };

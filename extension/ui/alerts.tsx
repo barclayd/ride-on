@@ -1,8 +1,9 @@
-// The alerts dialog (handoff v10, 29c): an off bell asks which changes to hear about first.
+// The alerts dialog (handoff v10, 29c): an off bell asks which changes to hear about first. Once the
+// API keeps the time fixed (v11, 30d) it says so, and Change alerts (30c) opens it to edit the switches.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { AlertTriggers } from '../lib/types';
 import { BellIcon, type Tracking, type View } from './components';
-import { clock, shortDate } from './format';
+import { clock, localDate, shortDate } from './format';
 import {
   ALL_TRIGGERS,
   asksPermission,
@@ -20,8 +21,10 @@ export const AlertsDialog = (props: { view: View; tracking: Tracking }) =>
 const Dialog = ({ view, tracking }: { view: View; tracking: Tracking }) => {
   const { state, timeZone } = view;
   // biome-ignore lint/style/noNonNullAssertion: AlertsDialog renders it only while asking
-  const { card } = tracking.asking!;
+  const { card, change } = tracking.asking!;
   const best = card.best;
+  // Changing keeps the fixed time, even one the forecast can't score now.
+  const slot = change ? tracking.slot(card) : best;
   const [triggers, setTriggers] = useState<AlertTriggers>(
     () => state.triggers[card.routeId] ?? ALL_TRIGGERS,
   );
@@ -30,11 +33,13 @@ const Dialog = ({ view, tracking }: { view: View; tracking: Tracking }) => {
   useEffect(() => {
     primary.current?.focus();
   }, []);
-  if (!best) return null;
+  if (!slot) return null;
   const rows = triggerRows(state.user?.settings.preferences, state.units);
   const on = rows.filter((row) => triggers[row.key]).length;
-  const moving = tracking.movingFrom(card);
-  const score = card.score ?? Math.round(best.score);
+  const moving = change ? null : tracking.movingFrom(card);
+  const score = card.score ?? (best && Math.round(best.score));
+  const fixed = tracking.fixed;
+  const when = `${shortDate(localDate(slot.departureAt, timeZone))} · ${clock(slot.departureAt, timeZone)} → ~${clock(slot.finishAt, timeZone)}`;
   // Focus stays in the dialog; Escape closes it.
   const keys = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
@@ -65,7 +70,11 @@ const Dialog = ({ view, tracking }: { view: View; tracking: Tracking }) => {
             <BellIcon size={20} />
           </span>
           <div>
-            <span id="ro-alerts-title">Get alerts for this ride</span>
+            <span id="ro-alerts-title">
+              {change
+                ? 'Change alerts for this ride'
+                : 'Get alerts for this ride'}
+            </span>
             <span>
               We keep checking the forecast and tell you if anything changes
               before you leave.
@@ -80,21 +89,36 @@ const Dialog = ({ view, tracking }: { view: View; tracking: Tracking }) => {
             ×
           </button>
         </div>
-        <div class="ro-alerts-ride">
+        <div class="ro-alerts-ride" data-fixed={fixed || undefined}>
           <div>
-            <span>{card.name}</span>
-            <span>
-              {`${shortDate(best.date)} · ${clock(best.departureAt, timeZone)} → ~${clock(best.finishAt, timeZone)}`}
-            </span>
+            <div>
+              <span>{card.name}</span>
+              {fixed ? (
+                <span class="ro-alerts-fixed">
+                  <BellIcon size={12} />
+                  {when}
+                </span>
+              ) : (
+                <span>{when}</span>
+              )}
+            </div>
+            {score !== null && (
+              <div class="ro-alerts-score">
+                <span>
+                  <strong>{score}</strong>/100
+                </span>
+                <span class="ro-alerts-bar">
+                  <span style={{ width: `${score}%` }} />
+                </span>
+              </div>
+            )}
           </div>
-          <div>
-            <span>
-              <strong>{score}</strong>/100
-            </span>
-            <span class="ro-alerts-bar">
-              <span style={{ width: `${score}%` }} />
-            </span>
-          </div>
+          {fixed && !change && (
+            <p>
+              Alerts lock this day and time. The tile stops moving to the best
+              time, and we'll tell you if a better one opens up.
+            </p>
+          )}
         </div>
         {moving && (
           <div class="ro-alerts-move">
@@ -140,13 +164,13 @@ const Dialog = ({ view, tracking }: { view: View; tracking: Tracking }) => {
         </div>
         <p>
           {timingLine(
-            best.departureAt,
+            slot.departureAt,
             timeZone,
             new Date(),
             state.tracker.summaryTime ?? SUMMARY_TIME,
           )}
         </p>
-        {asksPermission(state.push) && (
+        {!change && asksPermission(state.push) && (
           <p>Your browser will ask you to allow notifications from Ride On.</p>
         )}
         <div class="ro-alerts-actions">
@@ -157,7 +181,8 @@ const Dialog = ({ view, tracking }: { view: View; tracking: Tracking }) => {
             aria-disabled={on === 0 || undefined}
             onClick={() => on > 0 && tracking.confirm(triggers)}
           >
-            {confirmLabel(on, !!moving)}
+            {fixed && !change && on > 0 && <BellIcon size={14} />}
+            {change && on > 0 ? 'Save alerts' : confirmLabel(on, !!moving)}
           </button>
           <button
             type="button"
