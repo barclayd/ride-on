@@ -111,7 +111,7 @@ const hourly = ride({
 });
 
 test('ride hours make the bar, the legend and the gusts until stretches arrive', () => {
-  const w = windPanel(hourly, null, 'UTC', METRIC, comfort(35));
+  const w = windPanel(hourly, null, METRIC, comfort(35));
   expect(w.blocks.map(({ effect, label }) => [effect, label])).toEqual([
     ['tailwind', 'SW'],
     ['crosswind', 'W'],
@@ -124,12 +124,8 @@ test('ride hours make the bar, the legend and the gusts until stretches arrive',
     { effect: 'headwind', name: 'Headwind', speed: '15 km/h', share: '~30%' },
     { effect: 'tailwind', name: 'Tailwind', speed: '15 km/h', share: '~25%' },
   ]);
-  // Only the last hour's gusts pass comfort, so the row says where and when.
-  expect(w.gusts).toEqual({
-    warn: true,
-    title: 'Gusts up to 45 km/h',
-    text: 'Into your face late in the ride, 10:30–11:30. Over your 35 km/h comfort.',
-  });
+  // The last hour's gusts against the rider pass comfort.
+  expect(w.gusts).toEqual({ warn: true, title: 'Gusts up to 45 km/h' });
   expect(w.sketch).toBeNull();
 });
 
@@ -138,12 +134,11 @@ test('neighbouring hours with the same effect and direction share a block', () =
   const w = windPanel(
     ride({ rideHours: [first, { ...first, start: second.start }] }),
     null,
-    'UTC',
   );
   expect(w.blocks).toEqual([{ effect: 'tailwind', share: 1, label: 'SW' }]);
 });
 
-test('gusts that help read neutral; gusts against you or past the limit read amber', () => {
+test('gusts within comfort read neutral; gusts against you past comfort, or past the limit, read amber', () => {
   const behind = ride({
     conditions: C({
       maximumGustKph: 48,
@@ -151,32 +146,9 @@ test('gusts that help read neutral; gusts against you or past the limit read amb
       windDistanceFractions: { tailwind: 0.7, crosswind: 0.2, headwind: 0.1 },
     }),
   });
-  const w = windPanel(behind, null, 'UTC', METRIC, comfort(35));
-  expect(w.gusts).toEqual({
-    warn: false,
-    title: 'Gusts up to 48 km/h',
-    text: 'Mostly behind you, so they help.',
-  });
-  // Within comfort, the title's peak is enough: no "at most" against you.
-  expect(
-    windPanel(
-      ride({
-        conditions: C({
-          maximumGustKph: 30,
-          gustExposure: against(12),
-          windDistanceFractions: {
-            tailwind: 0.2,
-            crosswind: 0.5,
-            headwind: 0.3,
-          },
-        }),
-      }),
-      null,
-      'UTC',
-      METRIC,
-      comfort(35),
-    ).gusts,
-  ).toEqual({ warn: false, title: 'Gusts up to 30 km/h', text: '' });
+  const w = windPanel(behind, null, METRIC, comfort(35));
+  // A 48 km/h peak, but only 12 km/h of it against the rider.
+  expect(w.gusts).toEqual({ warn: false, title: 'Gusts up to 48 km/h' });
   expect(w.legend.map((l) => l.share)).toEqual(['~70%', '~20%', '~10%']);
   // No direction from the API: no compass letter in the bar.
   expect(w.blocks).toEqual([{ effect: 'tailwind', share: 1, label: '' }]);
@@ -185,23 +157,16 @@ test('gusts that help read neutral; gusts against you or past the limit read amb
     windPanel(
       behind,
       null,
-      'UTC',
       METRIC,
       comfort(35, { minimumStandards: { maximumGustKph: 40 } }),
     ).gusts,
-  ).toEqual({
-    warn: true,
-    title: 'Gusts up to 48 km/h',
-    text: 'Up to 12 km/h against you. Over your 40 km/h limit.',
-  });
+  ).toEqual({ warn: true, title: 'Gusts up to 48 km/h' });
   // No exposure estimate: the peak itself is held to comfort.
-  const calm = ride({
-    conditions: C({ maximumGustKph: 30, averageTailwindKph: 0 }),
+  const gusty = ride({
+    conditions: C({ maximumGustKph: 40, averageTailwindKph: 0 }),
   });
-  expect(windPanel(calm, null, 'UTC', METRIC, comfort(35)).gusts?.text).toBe(
-    'Within your 35 km/h comfort.',
-  );
-  expect(windPanel(ride(), null, 'UTC').gusts).toBeNull();
+  expect(windPanel(gusty, null, METRIC, comfort(35)).gusts?.warn).toBe(true);
+  expect(windPanel(ride(), null).gusts).toBeNull();
 });
 
 // An out-and-back due north and home again, the wind from the south: behind on the way out.
@@ -225,12 +190,12 @@ const outAndBackWind = [
   }),
 ];
 
-test('wind stretches place each effect exactly and say on which leg the gusts are', () => {
+test('wind stretches place each effect exactly', () => {
   const b = ride({
     conditions: C({ maximumGustKph: 41, gustExposure: against(41) }),
     windStretches: outAndBackWind,
   });
-  const w = windPanel(b, outAndBack, 'UTC', METRIC, comfort(35));
+  const w = windPanel(b, outAndBack, METRIC, comfort(35));
   expect(w.blocks.map(({ effect, label }) => [effect, label])).toEqual([
     ['tailwind', 'S'],
     ['crosswind', ''],
@@ -241,15 +206,11 @@ test('wind stretches place each effect exactly and say on which leg the gusts ar
     ['Headwind', '18 km/h', '~50%'],
     ['Crosswind', '18 km/h', '<5%'],
   ]);
-  expect(w.gusts?.text).toBe(
-    'Into your face on the way back, 10:00–11:00. Over your 35 km/h comfort.',
-  );
+  expect(w.gusts).toEqual({ warn: true, title: 'Gusts up to 41 km/h' });
   expect(w.sketch).not.toBeNull();
   // No outline, or no stretches: no sketch.
-  expect(windPanel(b, null, 'UTC').sketch).toBeNull();
-  expect(
-    windPanel({ ...b, windStretches: [] }, outAndBack, 'UTC').sketch,
-  ).toBeNull();
+  expect(windPanel(b, null).sketch).toBeNull();
+  expect(windPanel({ ...b, windStretches: [] }, outAndBack).sketch).toBeNull();
 });
 
 test('the sketch colours each part of the route by the wind over most of it', () => {
@@ -267,29 +228,8 @@ test('the sketch colours each part of the route by the wind over most of it', ()
   const s = windSketch(outAndBack, mixed, ride());
   expect(s?.runs.map((r) => r.effect)).toEqual(['tailwind', 'headwind']);
   expect(
-    windPanel(ride({ windStretches: mixed }), outAndBack, 'UTC').blocks,
+    windPanel(ride({ windStretches: mixed }), outAndBack).blocks,
   ).toHaveLength(8);
-});
-
-test('gusts split by a short calmer stretch still read as one place', () => {
-  const b = ride({
-    conditions: C({ maximumGustKph: 44, gustExposure: against(44) }),
-    windStretches: [
-      stretch(0, 11120, 'tailwind', 180),
-      stretch(11120, 16000, 'headwind', 180, {
-        startAt: at('10:00'),
-        maximumAdverseGustKph: 41,
-      }),
-      stretch(16000, 16500, 'crosswind', 250, { maximumAdverseGustKph: 20 }),
-      stretch(16500, 22240, 'headwind', 180, {
-        endAt: at('11:00'),
-        maximumAdverseGustKph: 44,
-      }),
-    ],
-  });
-  expect(windPanel(b, outAndBack, 'UTC', METRIC, comfort(35)).gusts?.text).toBe(
-    'Into your face on the way back, 10:00–11:00. Over your 35 km/h comfort.',
-  );
 });
 
 test('a thousand short stretches stay in the bar; the sketch draws a few long runs', () => {
@@ -304,7 +244,7 @@ test('a thousand short stretches stay in the bar; the sketch draws a few long ru
   const s = windSketch(outAndBack, many, ride());
   expect(s?.runs.length).toBeLessThanOrEqual(20);
   expect(s?.sentence.split(', then ').length).toBeLessThanOrEqual(4);
-  const w = windPanel(ride({ windStretches: many }), outAndBack, 'UTC');
+  const w = windPanel(ride({ windStretches: many }), outAndBack);
   expect(w.blocks).toHaveLength(1000);
   expect(w.blocks.every((b) => b.label === '')).toBe(true);
 });
@@ -317,7 +257,6 @@ test('light wind gets its own row, without a speed, and one effect needs no shar
       ],
     }),
     null,
-    'UTC',
   );
   expect(w.blocks).toEqual([{ effect: 'light', share: 1, label: '' }]);
   expect(w.legend).toEqual([
