@@ -139,7 +139,12 @@ enum PushStore {
     }
     let id = try installationID()
     // The API rejects unknown fields, so the switches go only once it says it can apply them.
-    let alerts: Alerts? = try await deviceAlerts(link) ? read("alerts") ?? Alerts() : nil
+    // Only the Mac has switches; iOS keeps the API's all-on default, sound included.
+    #if os(macOS)
+      let alerts: Alerts? = try await deviceAlerts(link) ? read("alerts") ?? Alerts() : nil
+    #else
+      let alerts: Alerts? = nil
+    #endif
     let data = try await request(
       "push-devices/\(id)", method: "PUT", link: link,
       body: Body(
