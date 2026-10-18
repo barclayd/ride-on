@@ -1,10 +1,10 @@
 # Extension API brief v6: sky shares that survive a forecast gap
 
-Against API **0.39.0**, algorithm **comfort-v0.17**. For the API agent. First
+Against API **0.40.0**, algorithm **comfort-v0.17**. For the API agent. First
 proposed against 0.27.0 and still not implemented; refreshed on 18 October 2026
 for the current worker. Additive: no scoring, ranking or algorithm-version change.
-Ship it as the next minor: **0.40.0**, or **0.41.0** if
-[brief v13](extension-api-brief-v13.md) ships first. The two are independent.
+Ship it as the next minor: **0.41.0** ([brief v13](extension-api-brief-v13.md)
+shipped as 0.40.0).
 
 Design handoff v4 (sunshine wording) adds a sky chip and an "Expected conditions
 along the ride" timeline to the Journeys tiles and the popup's Rides cards. Each

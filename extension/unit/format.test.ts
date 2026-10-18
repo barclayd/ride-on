@@ -470,6 +470,47 @@ test('banners, flags, recent roads and rides that cannot be scored', () => {
     reason: 'Your window, 08:00–10:00, allows 2h 00m.',
   });
 
+  // The time alerts fixed (API 0.40.0) says why it can't be scored.
+  const pinned = (
+    reasonCode: 'pinned_departure_no_longer_fits' | 'route_unavailable',
+  ) =>
+    buildResults(
+      ['a'],
+      {},
+      recs(
+        'not_configured',
+        [],
+        [
+          result('a', null, {
+            verdict:
+              reasonCode === 'route_unavailable'
+                ? { status: 'incomplete', code: 'route_unavailable' }
+                : { status: 'doesnt_fit', code: 'no_feasible_departure' },
+            trackedDeparture: {
+              trackedRideId: 't1',
+              departureAt: '2026-10-14T16:00:00Z',
+              finishAt: '2026-10-14T18:00:00Z',
+              status: 'unavailable',
+              reasonCode,
+            },
+          }),
+        ],
+      ),
+      [days[0]],
+      TZ,
+    ).cards[0];
+  expect(pinned('pinned_departure_no_longer_fits')).toMatchObject({
+    state: 'nofit',
+    chip: "Doesn't fit daylight",
+    duration: 'Estimated ride time 2h 00m',
+    reason: 'Leaving at 17:00, the ride no longer fits in daylight.',
+  });
+  expect(pinned('route_unavailable')).toMatchObject({
+    state: 'incomplete',
+    chip: 'Route unavailable',
+    reason: "Can't be assessed. This route is no longer available.",
+  });
+
   // No answer yet: only days beyond the forecast read as incomplete.
   expect(buildResults(['a'], {}, null, [days[3]], TZ).cards[0]).toMatchObject({
     state: 'incomplete',

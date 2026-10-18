@@ -669,6 +669,27 @@ export const buildResults = (
           b.recentRides.penaltyPoints > 0,
       };
     }
+    // The time alerts fixed (API 0.40.0), when the API can't score it, says why.
+    const pin =
+      r.trackedDeparture?.status === 'unavailable' ? r.trackedDeparture : null;
+    if (pin?.reasonCode === 'pinned_departure_no_longer_fits')
+      return {
+        ...base,
+        state: 'nofit',
+        chip: "Doesn't fit daylight",
+        duration: `Estimated ride time ${duration(r.estimatedDurationMinutes)}`,
+        reason: `Leaving at ${clock(pin.departureAt, timeZone)}, the ride no longer fits in daylight.`,
+      };
+    if (
+      pin?.reasonCode === 'route_unavailable' ||
+      r.verdict.code === 'route_unavailable'
+    )
+      return {
+        ...base,
+        state: 'incomplete',
+        chip: 'Route unavailable',
+        reason: "Can't be assessed. This route is no longer available.",
+      };
     if (state === 'nofit') {
       const w = r.effectiveWindow;
       return {

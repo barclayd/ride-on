@@ -314,7 +314,7 @@ export type RouteResult = {
   departuresUnknown: number;
   departuresStandardsUnknown: number;
   best: Departure | null;
-  // docs/extension-api-brief-v13.md: the ride with alerts keeps its departure; absent before it ships.
+  // The ride with alerts keeps its departure (API 0.40.0, docs/extension-api-brief-v13.md).
   trackedDeparture?: TrackedDeparture | null;
   betterDeparture?: Departure | null; // 5+ points better in the window, for Move alerts
   issues: string[];
@@ -329,7 +329,12 @@ export type TrackedDeparture = {
   departureAt: string;
   finishAt: string;
   status: 'assessed' | 'unavailable'; // unavailable: best is null, shown without a score
-  reasonCode?: string | null;
+  reasonCode?:
+    | 'forecast_unavailable'
+    | 'pinned_departure_no_longer_fits'
+    | 'route_unavailable'
+    | 'missing_elevation'
+    | null;
 };
 export type StandardsStatus =
   | 'not_configured'

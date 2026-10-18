@@ -30,6 +30,7 @@ import {
   loadTracker,
   saveTrackedRide,
   saveTriggers,
+  TRACKING_ERRORS,
   type Tracker,
 } from '../lib/tracking';
 import {
@@ -104,7 +105,8 @@ const signedIn = async (signing: Promise<boolean>) => {
 };
 
 const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : 'Something went wrong.';
+  (error instanceof ApiError && TRACKING_ERRORS[error.code]) ||
+  (error instanceof Error ? error.message : 'Something went wrong.');
 
 const isConflict = (error: unknown) =>
   error instanceof ApiError && error.status === 409;
