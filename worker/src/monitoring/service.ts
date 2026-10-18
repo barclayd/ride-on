@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ALGORITHM_VERSION } from '../recommendations/engine.ts';
 import { forecastRefreshSeconds } from '../recommendations/freshness.ts';
 import { createD1RouteStore } from '../routes/store.ts';
+import { readAlerts } from '../tracking/alerts.ts';
 import { digest, type Snapshot } from '../tracking/model.ts';
 import { refreshTracking } from '../tracking/refresh.ts';
 import { getTracking, type TrackingRow } from '../tracking/store.ts';
@@ -313,6 +314,7 @@ export const monitorRide = async (
     const result = await decide({
       state,
       current,
+      triggers: readAlerts(row.alerts_json).triggers,
       at: now().toISOString(),
       departure: row.departure_at,
       createdAt: row.created_at,
@@ -378,6 +380,8 @@ export const monitorRide = async (
                 ?.name ?? 'Your ride',
             departureAt: row.departure_at,
             timeZone: row.time_zone,
+            temperatureUnit:
+              current?.context.inputs[0]?.units?.temperature ?? 'C',
           },
           id,
         );

@@ -932,3 +932,86 @@ integration(
     }
   },
 );
+
+integration(
+  'alert choices validate strictly, persist across reads and restart, and preserve defaults and idempotency',
+  async (h) => {
+    const route = await setup(h);
+    const rec = await recommend(h, [route.id]);
+    const ref = first(rec.rankings).best.recommendationRef;
+    const request = (alerts: unknown, key = crypto.randomUUID()) =>
+      h.send('/tracked-rides', {
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify({
+          recommendationRef: ref,
+          expectedTrackingVersion: 0,
+          alerts,
+        }),
+      });
+    const all = { rain: true, wind: true, cold: true, betterTime: true };
+    for (const alerts of [
+      null,
+      {},
+      { triggers: {} },
+      { triggers: { ...all, rain: 'yes' } },
+      { triggers: { rain: true, wind: true, cold: true } },
+      { triggers: { ...all, score: true } },
+      { triggers: all, extra: true },
+      {
+        triggers: { rain: false, wind: false, cold: false, betterTime: false },
+      },
+    ]) {
+      const response = await request(alerts);
+      assert.equal(response.status, 400);
+      assert.equal(
+        (await json<{ error: { code: string } }>(response)).error.code,
+        'VALIDATION',
+      );
+    }
+    const alerts = {
+      triggers: { rain: false, wind: true, cold: true, betterTime: false },
+    };
+    const key = crypto.randomUUID();
+    const response = await request(alerts, key);
+    assert.equal(response.status, 201);
+    const created = await json<Mutation>(response);
+    assert.deepEqual(created.ride.alerts, alerts);
+    assert.equal(created.ride.capabilities.alertTriggers, true);
+    assert.equal(created.ride.capabilities.finalForecastLocalTime, '18:00');
+    await h.restart();
+    const detail = await json<Mutation>(
+      await h.send(`/tracked-rides/${created.ride.id}`),
+    );
+    assert.deepEqual(detail.ride.alerts, alerts);
+    const list = await json<{
+      rides: Ride[];
+      capabilities: Ride['capabilities'];
+    }>(await h.send('/tracked-rides'));
+    assert.deepEqual(first(list.rides).alerts, alerts);
+    assert.equal(list.capabilities.alertTriggers, true);
+    assert.equal(list.capabilities.finalForecastLocalTime, '18:00');
+    const replay = await json<Mutation>(await request(alerts, key));
+    assert.equal(replay.replayed, true);
+    assert.deepEqual(replay.ride.alerts, alerts);
+    assert.equal((await request({ triggers: all }, key)).status, 409);
+    // A repeated create is not an edit of an active plan's choices.
+    assert.deepEqual(
+      (await json<Mutation>(await request({ triggers: all }))).ride.alerts,
+      alerts,
+    );
+    assert.equal(
+      (await h.send(`/tracked-rides/${created.ride.id}`, { token: BOB_TOKEN }))
+        .status,
+      404,
+    );
+    await h.send(`/tracked-rides/${created.ride.id}`, { method: 'DELETE' });
+    const account = await json<{ trackingVersion: number }>(
+      await h.send('/tracked-rides'),
+    );
+    const defaulted = await json<Mutation>(
+      await track(h, ref, account.trackingVersion),
+    );
+    assert.deepEqual(defaulted.ride.alerts, { triggers: all });
+    assert.deepEqual(defaulted.ride.baseline, created.ride.baseline);
+  },
+);

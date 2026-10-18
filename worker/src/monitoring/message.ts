@@ -16,6 +16,7 @@ export const pushPayload = (
     routeName: string;
     departureAt: string;
     timeZone: string;
+    temperatureUnit?: 'C' | 'F';
   },
   eventId: string,
 ) => {
@@ -30,6 +31,23 @@ export const pushPayload = (
     parts.push(
       `${plan.routeName.slice(0, 100)}: Conditions ${alert.score}/100${alert.scoreDelta && Math.abs(alert.scoreDelta) >= 5 ? ` (${alert.scoreDelta > 0 ? '+' : ''}${alert.scoreDelta})` : ''}.`,
     );
+    if (alert.reasons.includes('rain_likely') && alert.rain) {
+      const time = new Intl.DateTimeFormat('en-GB', {
+        timeZone: plan.timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(alert.rain.at));
+      parts.push(
+        `Rain is now likely on ${plan.routeName.slice(0, 100)} (${Math.round(alert.rain.probability * 100)}% at ${time}).`,
+      );
+    }
+    if (alert.reasons.includes('feels_cold') && alert.cold) {
+      const degrees = (celsius: number) =>
+        `${Math.round(plan.temperatureUnit === 'F' ? (celsius * 9) / 5 + 32 : celsius)}°${plan.temperatureUnit ?? 'C'}`;
+      parts.push(
+        `${plan.routeName.slice(0, 100)} will feel colder than ${degrees(alert.cold.limitC)} (down to ${degrees(alert.cold.minimumC)}).`,
+      );
+    }
     if (alert.newlyFailing.length)
       parts.push(`Newly below your limits: ${names(alert.newlyFailing)}.`);
     if (alert.recovered.length)

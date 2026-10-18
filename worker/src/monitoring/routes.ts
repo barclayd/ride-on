@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { AppError } from '../errors.ts';
 import { readJsonBody, validateInput } from '../request.ts';
+import { FINAL_FORECAST_LOCAL_TIME } from '../tracking/alerts.ts';
 import { getTracking, trackingNotFound } from '../tracking/store.ts';
 import type { Bindings, Env } from '../types.ts';
 import { PUSH_TOPIC, pushConfig } from './apns.ts';
@@ -15,6 +16,8 @@ export const monitoringCapabilities = (env: Env) => ({
     webPush: env.RIDE_MONITORING === 'enabled' && !!webPushConfig(env),
   },
   maximumActiveRides: 1,
+  alertTriggers: true,
+  finalForecastLocalTime: FINAL_FORECAST_LOCAL_TIME,
   manualRefresh: true,
   automaticChecks: env.RIDE_MONITORING === 'enabled',
   notifications:

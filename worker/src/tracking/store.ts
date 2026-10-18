@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AppError } from '../errors.ts';
+import { alertsSchema, readAlerts } from './alerts.ts';
 import { compareTracking } from './comparison.ts';
 import { boundedJson, capabilities, digest, type Snapshot } from './model.ts';
 
@@ -11,6 +12,7 @@ export const createTrackingSchema = z.strictObject({
     .min(0)
     .max(Number.MAX_SAFE_INTEGER - 2),
   replaceTrackedRideId: z.uuid().nullable().default(null),
+  alerts: alertsSchema.optional(),
 });
 export type TrackingRow = {
   owner_id: string;
@@ -25,6 +27,7 @@ export type TrackingRow = {
   ended_reason: string | null;
   version: number;
   baseline_json: string;
+  alerts_json: string;
   latest_id: string | null;
   latest_json: string | null;
   last_attempt_at: string | null;
@@ -65,6 +68,8 @@ export const publicTracking = (
   row: TrackingRow,
   now: string,
   features: {
+    alertTriggers: boolean;
+    finalForecastLocalTime: string;
     maximumActiveRides: number;
     manualRefresh: boolean;
     automaticChecks: boolean;
@@ -96,6 +101,7 @@ export const publicTracking = (
     endedAt: expired ? row.finish_at : row.ended_at,
     endedReason: expired ? 'expired' : row.ended_reason,
     version: row.version,
+    alerts: readAlerts(row.alerts_json),
     baseline,
     latestAssessment: latest,
     latestAssessmentKind: latest
@@ -253,8 +259,8 @@ export const createTracking = async (
     );
     statements.push(
       db
-        .prepare(`INSERT INTO tracked_rides(owner_id,id,route_id,departure_at,finish_at,time_zone,created_at,state,baseline_json)
-      SELECT ?,?,?,?,?,?,?,'active',? WHERE ${guard}`)
+        .prepare(`INSERT INTO tracked_rides(owner_id,id,route_id,departure_at,finish_at,time_zone,created_at,state,baseline_json,alerts_json)
+      SELECT ?,?,?,?,?,?,?,'active',?,? WHERE ${guard}`)
         .bind(
           owner,
           id,
@@ -264,6 +270,7 @@ export const createTracking = async (
           baseline.context.inputs[0]?.timeZone ?? 'UTC',
           now,
           boundedJson(baseline, 1_000_000),
+          JSON.stringify(input.alerts ?? readAlerts(null)),
           owner,
           token,
         ),

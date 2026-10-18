@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test';
+import { alertConditions } from '../src/monitoring/conditions.ts';
+import { pushPayload } from '../src/monitoring/message.ts';
 import {
   acceptAlert,
   decide,
@@ -7,6 +9,7 @@ import {
   qualifyingAlternative,
   summaryAt,
 } from '../src/monitoring/policy.ts';
+import { allAlertTriggers } from '../src/tracking/alerts.ts';
 import type { Snapshot } from '../src/tracking/model.ts';
 import { trackingSnapshot } from './fixtures/tracking.ts';
 
@@ -194,24 +197,33 @@ test('one outage after an hour within 24 hours, then one recovery; missing data 
     ).alert,
   ).toBeNull();
 });
-test('19:00 summary handles DST, late enrollment, outages, coalescing, no quiet hours and departure closure', async () => {
+test('18:00 summary handles DST, late enrollment, outages, coalescing, no quiet hours and departure closure', async () => {
   expect(summaryAt('2026-10-25T09:00:00.000Z', 'Europe/London')).toBe(
-    '2026-10-24T18:00:00.000Z',
+    '2026-10-24T17:00:00.000Z',
   );
   expect(summaryAt('2026-10-26T09:00:00.000Z', 'Europe/London')).toBe(
-    '2026-10-25T19:00:00.000Z',
+    '2026-10-25T18:00:00.000Z',
   );
   const snapshot = await trackingSnapshot(),
     state = await initialState(snapshot, at);
-  state.lastNotifiedAt = '2026-10-09T17:00:00.000Z';
-  const time = '2026-10-09T18:00:00.000Z';
+  expect(summaryAt('2026-03-29T09:00:00.000Z', 'Europe/London')).toBe(
+    '2026-03-28T18:00:00.000Z',
+  );
+  expect(summaryAt('2026-03-30T09:00:00.000Z', 'Europe/London')).toBe(
+    '2026-03-29T17:00:00.000Z',
+  );
+  state.lastNotifiedAt = '2026-10-09T16:00:00.000Z';
+  const time = '2026-10-09T17:00:00.000Z';
+  expect(
+    (await check(state, snapshot, '2026-10-09T16:59:59.000Z')).alert,
+  ).toBeNull();
   expect((await check(state, snapshot, time)).alert?.reasons).toEqual([
     'evening_summary',
   ]);
   expect(
     (
       await check(state, snapshot, time, {
-        createdAt: '2026-10-09T18:00:01.000Z',
+        createdAt: '2026-10-09T17:00:01.000Z',
       })
     ).alert,
   ).toBeNull();
@@ -269,4 +281,244 @@ test('a minimum that clears and breaches again bypasses cooldown even if the rec
     '2026-10-09T12:30:00.000Z',
   );
   expect(again.alert?.reasons).toEqual(['minimum_breach']);
+});
+
+const weather = (
+  snapshot: Snapshot,
+  probability: number,
+  air = 12,
+  feels: number | null = 12,
+) => {
+  snapshot.pick.candidate.rideHours = [
+    {
+      start: snapshot.pick.candidate.departureAt,
+      end: snapshot.pick.candidate.finishAt,
+      conditions: {
+        ...snapshot.pick.candidate.conditions,
+        maximumPrecipitationProbability: probability,
+      },
+    },
+  ];
+  snapshot.pick.candidate.temperatureAlongRide.points = [[0, air, feels, null]];
+};
+const calm = async () => {
+  const snapshot = await trackingSnapshot();
+  must(snapshot.context.inputs[0]).preferences.temperature.comfortMinC = 10;
+  weather(snapshot, 0.49);
+  return snapshot;
+};
+
+test('rain warns at 50%, bypasses cooldown, retries until accepted and re-arms below 50%', async () => {
+  const snapshot = await calm();
+  let state = await initialState(snapshot, at);
+  state.lastNotifiedAt = at;
+  expect((await check(state, snapshot)).alert).toBeNull();
+  weather(snapshot, 0.5);
+  const first = await check(state, snapshot);
+  expect(first.alert?.reasons).toEqual(['rain_likely']);
+  expect(first.alert?.rain?.probability).toBe(0.5);
+  expect((await check(first.state, snapshot)).alert?.reasons).toEqual([
+    'rain_likely',
+  ]);
+  state = acceptAlert(first.state, must(first.alert), at);
+  expect((await check(state, snapshot)).alert).toBeNull();
+  weather(snapshot, 0.49);
+  const clear = await check(state, snapshot);
+  expect(clear.alert).toBeNull();
+  weather(snapshot, 0.7);
+  expect((await check(clear.state, snapshot)).alert?.reasons).toEqual([
+    'rain_likely',
+  ]);
+});
+
+test('rain uses any ride hour and ignores evidence outside the ride', async () => {
+  const snapshot = await calm();
+  const state = await initialState(snapshot, at);
+  const hour = must(snapshot.pick.candidate.rideHours[0]);
+  snapshot.pick.candidate.rideHours.push({
+    ...hour,
+    conditions: {
+      ...must(hour.conditions),
+      maximumPrecipitationProbability: 0.7,
+    },
+  });
+  expect((await check(state, snapshot)).alert?.rain?.probability).toBe(0.7);
+  must(snapshot.pick.candidate.rideHours[1]).start =
+    snapshot.pick.candidate.finishAt;
+  expect((await check(state, snapshot)).alert).toBeNull();
+});
+
+test('cold uses the lowest feels like, falls back per point to air, and re-arms at the comfort floor', async () => {
+  const snapshot = await calm();
+  let state = await initialState(snapshot, at);
+  state.lastNotifiedAt = at;
+  weather(snapshot, 0.49, 12, 10);
+  expect((await check(state, snapshot)).alert).toBeNull();
+  snapshot.pick.candidate.temperatureAlongRide.points.push([1, 12, 6, null]);
+  const cold = await check(state, snapshot);
+  expect(cold.alert?.reasons).toEqual(['feels_cold']);
+  expect(cold.alert?.cold).toEqual({ minimumC: 6, limitC: 10 });
+  state = acceptAlert(cold.state, must(cold.alert), at);
+  weather(snapshot, 0.49, 12, 10);
+  const clear = await check(state, snapshot);
+  weather(snapshot, 0.49, 9, null);
+  expect((await check(clear.state, snapshot)).alert?.cold?.minimumC).toBe(9);
+  // Missing limits can occur on historical snapshots; they are not zero degrees.
+  Reflect.deleteProperty(
+    must(snapshot.context.inputs[0]).preferences.temperature,
+    'comfortMinC',
+  );
+  expect(alertConditions(snapshot).feelsCold).toBeNull();
+  expect((await check(clear.state, snapshot)).alert).toBeNull();
+});
+
+test('unknown evidence and legacy monitor state do not fabricate crossings or re-arm warnings', async () => {
+  const snapshot = await calm();
+  let state = await initialState(snapshot, at);
+  weather(snapshot, 0.7, 12, 6);
+  const warning = await check(state, snapshot);
+  state = acceptAlert(warning.state, must(warning.alert), at);
+  must(snapshot.pick.candidate.rideHours[0]).conditions = null;
+  snapshot.pick.candidate.temperatureAlongRide.points = [[0, null, null, null]];
+  const unknown = await check(state, snapshot);
+  expect(unknown.alert).toBeNull();
+  weather(snapshot, 0.7, 12, 6);
+  expect((await check(unknown.state, snapshot)).alert).toBeNull();
+  delete state.reference.rainLikely;
+  delete state.reference.feelsCold;
+  const legacy = await check(state, snapshot);
+  expect(legacy.alert).toBeNull();
+  expect(legacy.state.reference.rainLikely).toBe(true);
+  expect(legacy.state.reference.feelsCold).toBe(true);
+});
+
+for (const [trigger, standards] of [
+  ['rain', ['maximumPrecipitationProbability', 'maximumPrecipitationRateMmH']],
+  ['wind', ['maximumGustKph']],
+  ['cold', ['minimumTemperatureC']],
+] as const) {
+  test(`${trigger} suppresses only its own breaches and recoveries and advances their reference`, async () => {
+    const snapshot = await calm();
+    const state = await initialState(snapshot, at);
+    const triggers = { ...allAlertTriggers, [trigger]: false };
+    failure(snapshot, [...standards, 'maximumTemperatureC']);
+    const breach = await check(state, snapshot, at, { triggers });
+    expect(breach.alert?.newlyFailing).toEqual(['maximumTemperatureC']);
+    expect(breach.alert?.remainingFailures).toEqual(['maximumTemperatureC']);
+    const accepted = acceptAlert(breach.state, must(breach.alert), at);
+    failure(snapshot, []);
+    const recovery = await check(
+      accepted,
+      snapshot,
+      '2026-10-09T15:00:00.000Z',
+      { triggers },
+    );
+    expect(recovery.alert?.recovered).toEqual(['maximumTemperatureC']);
+    expect(recovery.state.reference.failures).toEqual(['maximumTemperatureC']);
+  });
+}
+
+test('disabled reasons stay quiet, without replaying old weather when enabled', async () => {
+  const snapshot = await calm();
+  const state = await initialState(snapshot, at);
+  const triggers = { rain: false, wind: false, cold: false, betterTime: true };
+  weather(snapshot, 0.7, 12, 6);
+  failure(snapshot, [
+    'maximumGustKph',
+    'minimumTemperatureC',
+    'maximumPrecipitationProbability',
+  ]);
+  const quiet = await check(state, snapshot, at, { triggers });
+  expect(quiet.alert).toBeNull();
+  expect(quiet.state.reference.score).toBe(80);
+  expect((await check(quiet.state, snapshot)).alert).toBeNull();
+  weather(snapshot, 0.49);
+  failure(snapshot, []);
+  const cleared = await check(quiet.state, snapshot, at, { triggers });
+  expect((await check(cleared.state, snapshot)).alert).toBeNull();
+  weather(snapshot, 0.5, 12, 9);
+  expect((await check(cleared.state, snapshot)).alert?.reasons).toEqual([
+    'rain_likely',
+    'feels_cold',
+  ]);
+});
+
+test('betterTime gates alternatives and their copy but keeps independent score changes', async () => {
+  const snapshot = await calm();
+  const state = await initialState(snapshot, at);
+  const triggers = { ...allAlertTriggers, betterTime: false };
+  snapshot.context.best = {
+    routeId: 'other',
+    candidate: {
+      ...snapshot.pick.candidate,
+      score: 90,
+      recommendationPriority: 90,
+    },
+  };
+  const quiet = await check(state, snapshot, at, { triggers });
+  expect(quiet.alert).toBeNull();
+  expect((await check(quiet.state, snapshot)).alert).toBeNull();
+  for (const score of [75, 85]) {
+    snapshot.pick.candidate.score = score;
+    const change = await check(quiet.state, snapshot, at, { triggers });
+    expect(change.alert?.reasons).toEqual([
+      score < 80 ? 'score_worsened' : 'score_improved',
+    ]);
+    expect(change.alert?.alternative).toBeNull();
+  }
+});
+
+test('summary, outage and recovery ignore switches and combine due reasons', async () => {
+  const snapshot = await calm();
+  const state = await initialState(snapshot, at);
+  const triggers = { rain: false, wind: false, cold: false, betterTime: true };
+  const outage = await check(state, null, '2026-10-09T17:00:00.000Z', {
+    triggers,
+  });
+  expect(outage.alert?.reasons).toEqual(['evening_summary', 'unavailable']);
+  const accepted = acceptAlert(
+    outage.state,
+    must(outage.alert),
+    '2026-10-09T17:00:00.000Z',
+  );
+  expect(
+    (await check(accepted, snapshot, '2026-10-09T17:15:00.000Z', { triggers }))
+      .alert?.reasons,
+  ).toEqual(['available_again']);
+  weather(snapshot, 0.7, 12, 6);
+  snapshot.pick.candidate.score = 75;
+  state.lastNotifiedAt = '2026-10-09T16:00:00.000Z';
+  const combined = await check(state, snapshot, '2026-10-09T17:00:00.000Z');
+  expect(combined.alert?.reasons).toEqual([
+    'evening_summary',
+    'rain_likely',
+    'feels_cold',
+    'score_worsened',
+  ]);
+});
+
+test('warning copy names the ride, local rain time and the rider temperature units', async () => {
+  const snapshot = await calm();
+  const state = await initialState(snapshot, at);
+  weather(snapshot, 0.7, 12, 6);
+  const alert = must((await check(state, snapshot)).alert);
+  alert.rain = { probability: 0.7, at: '2026-10-10T09:00:00.000Z' };
+  const plan = {
+    id: 'plan',
+    routeName: 'Hilly Loop',
+    departureAt: snapshot.pick.candidate.departureAt,
+    timeZone: 'Europe/London',
+  };
+  const body = (temperatureUnit: 'C' | 'F') =>
+    JSON.parse(pushPayload(alert, { ...plan, temperatureUnit }, 'event')).aps
+      .alert.body;
+  expect(body('C')).toContain(
+    'Rain is now likely on Hilly Loop (70% at 10:00)',
+  );
+  expect(body('C')).toContain(
+    'Hilly Loop will feel colder than 10°C (down to 6°C)',
+  );
+  expect(body('F')).toContain(
+    'Hilly Loop will feel colder than 50°F (down to 43°F)',
+  );
 });

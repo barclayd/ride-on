@@ -1,6 +1,13 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { orderDepartures } from '../recommendations/engine.ts';
+import {
+  type AlertTriggers,
+  allAlertTriggers,
+  FINAL_FORECAST_LOCAL_TIME,
+  standardEnabled,
+} from '../tracking/alerts.ts';
 import { digest, type Pick, type Snapshot } from '../tracking/model.ts';
+import { alertConditions } from './conditions.ts';
 
 export const INTERVAL_MS = 15 * 60_000;
 export const COOLDOWN_MS = 3 * 3_600_000;
@@ -10,6 +17,9 @@ export type Reference = {
   failures: string[];
   standardsKnown: boolean;
   alternative: string | null;
+  // Optional while durable references created before v0.38.0 still exist.
+  rainLikely?: boolean | null;
+  feelsCold?: boolean | null;
 };
 export type MonitorState = {
   reference: Reference;
@@ -35,6 +45,8 @@ export type Alert = {
     score: number;
   } | null;
   lastSuccessAt: string | null;
+  rain?: { probability: number; at: string } | null;
+  cold?: { minimumC: number; limitC: number } | null;
 };
 const keyFor = (pick: Pick) => `${pick.routeId}/${pick.candidate.departureAt}`;
 export const qualifyingAlternative = (snapshot: Snapshot, at: string) => {
@@ -72,6 +84,8 @@ export const referenceFor = async (
     .map((f) => f.standard)
     .sort(),
   standardsKnown: snapshot.pick.candidate.standards.status !== 'unknown',
+  rainLikely: alertConditions(snapshot).rainLikely,
+  feelsCold: alertConditions(snapshot).feelsCold,
   alternative: (() => {
     const best = qualifyingAlternative(snapshot, at);
     return best ? keyFor(best) : null;
@@ -82,7 +96,7 @@ export const summaryAt = (departure: string, timeZone: string) =>
     .toZonedDateTimeISO(timeZone)
     .subtract({ days: 1 })
     .with({
-      hour: 19,
+      hour: Number(FINAL_FORECAST_LOCAL_TIME.split(':')[0]),
       minute: 0,
       second: 0,
       millisecond: 0,
@@ -115,9 +129,12 @@ export const decide = async (input: {
   timeZone: string;
   lastSuccessAt: string | null;
   staleSince: string | null;
+  triggers?: AlertTriggers;
 }) => {
   const { current, at, departure, createdAt, timeZone, lastSuccessAt } = input;
   const state = structuredClone(input.state);
+  const triggers = input.triggers ?? allAlertTriggers;
+  const enabled = (standard: string) => standardEnabled(standard, triggers);
   if (at >= departure) return { state, alert: null };
   const summaryDue = summaryAt(departure, timeZone);
   const summary =
@@ -157,13 +174,29 @@ export const decide = async (input: {
     state.pendingBreaches = [];
   }
   const before = state.reference;
+  // Disabled reasons follow current evidence quietly without moving the score
+  // reference. Unknown evidence never counts as recovery.
+  if (ref.standardsKnown) {
+    before.failures = [
+      ...before.failures.filter(enabled),
+      ...ref.failures.filter((standard) => !enabled(standard)),
+    ].sort();
+  }
+  for (const [field, on] of [
+    ['rainLikely', triggers.rain],
+    ['feelsCold', triggers.cold],
+  ] as const) {
+    if (!on || before[field] == null || ref[field] === false)
+      before[field] = ref[field];
+  }
+  if (!triggers.betterTime) before.alternative = ref.alternative;
   const delta = Math.round((ref.score - before.score) * 1000) / 1000;
   const crossed = state.observed.known
     ? ref.failures.filter((f) => !state.observed.failures.includes(f))
     : [];
   state.pendingBreaches = [
     ...new Set([...state.pendingBreaches, ...crossed]),
-  ].filter((f) => ref.failures.includes(f));
+  ].filter((f) => enabled(f) && ref.failures.includes(f));
   state.observed = { failures: ref.failures, known: ref.standardsKnown };
   const newlyFailing = state.pendingBreaches;
   if (!before.standardsKnown && ref.standardsKnown) {
@@ -171,7 +204,7 @@ export const decide = async (input: {
     state.reference.standardsKnown = true;
   }
   const recovered = ref.standardsKnown
-    ? before.failures.filter((f) => !ref.failures.includes(f))
+    ? before.failures.filter((f) => enabled(f) && !ref.failures.includes(f))
     : [];
   const gapOpen =
     !state.lastNotifiedAt ||
@@ -180,18 +213,35 @@ export const decide = async (input: {
   state.unavailableSince = null;
   if (recovery) reasons.push('available_again');
   if (newlyFailing.length) reasons.push('minimum_breach');
-  const canCombine = gapOpen || newlyFailing.length > 0 || summary || recovery;
+  const rainLikely =
+    triggers.rain && before.rainLikely === false && ref.rainLikely === true;
+  const feelsCold =
+    triggers.cold && before.feelsCold === false && ref.feelsCold === true;
+  if (rainLikely) reasons.push('rain_likely');
+  if (feelsCold) reasons.push('feels_cold');
+  const canCombine =
+    gapOpen ||
+    newlyFailing.length > 0 ||
+    rainLikely ||
+    feelsCold ||
+    summary ||
+    recovery;
   if (canCombine) {
     if (Math.abs(delta) >= 5)
       reasons.push(delta > 0 ? 'score_improved' : 'score_worsened');
     if (recovered.length) reasons.push('minimum_recovery');
-    if (ref.alternative && ref.alternative !== before.alternative)
+    if (
+      triggers.betterTime &&
+      ref.alternative &&
+      ref.alternative !== before.alternative
+    )
       reasons.push('better_option');
   }
   // Remember an option disappearing; if it later becomes useful again, it may alert again.
   if (!ref.alternative) state.reference.alternative = null;
   if (!reasons.length) return { state, alert: null };
   const alternative = qualifyingAlternative(current, at);
+  const conditions = alertConditions(current);
   return {
     state,
     alert: {
@@ -201,17 +251,20 @@ export const decide = async (input: {
       scoreDelta: delta,
       newlyFailing,
       recovered,
-      remainingFailures: ref.failures,
-      alternative: alternative
-        ? {
-            routeId: alternative.routeId,
-            routeName:
-              current.context.routes.find((r) => r.id === alternative.routeId)
-                ?.name ?? 'Another route',
-            departureAt: alternative.candidate.departureAt,
-            score: alternative.candidate.score,
-          }
-        : null,
+      remainingFailures: ref.failures.filter(enabled),
+      rain: rainLikely ? conditions.rain : null,
+      cold: feelsCold ? conditions.cold : null,
+      alternative:
+        triggers.betterTime && alternative
+          ? {
+              routeId: alternative.routeId,
+              routeName:
+                current.context.routes.find((r) => r.id === alternative.routeId)
+                  ?.name ?? 'Another route',
+              departureAt: alternative.candidate.departureAt,
+              score: alternative.candidate.score,
+            }
+          : null,
     } satisfies Alert,
   };
 };

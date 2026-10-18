@@ -1,5 +1,7 @@
 # Ride On API MVP
 
+API v0.38.0 adds per-ride alert switches, a 50% rain warning, feels-like cold warnings, and an 18:00 local final forecast. ±5-point score alerts and maximum-temperature alerts remain independent of the switches. Scoring stays `comfort-v0.17`. See [the tracked-ride contract](#tracked-ride-alerts-v0380).
+
 API v0.37.0 adds [Chrome Web Push and Safari companion delivery](ride-monitoring.md#chrome-and-safari-delivery-api-v0370), transport-specific readiness and an authenticated browser view for notification taps. Monitoring policy and scoring are unchanged.
 
 Implemented on 9 October, calibrated and first deployed on 10 October 2026. TypeScript, Hono and Cloudflare Workers;
@@ -1644,3 +1646,29 @@ weather locations or an invalid/out-of-range pause date (`PAUSE_DATE_OUT_OF_RANG
 `{ "error": { "code": "...", "message": "..." } }`. Weather/provider problems are
 represented in a successful assessment response with explicit unavailable data,
 not hidden behind a generic error or a fabricated best ride.
+
+
+## Tracked-ride alerts (v0.38.0)
+
+`POST /tracked-rides` accepts optional `alerts` alongside the existing recommendation reference, account version and replacement ID:
+
+```json
+{
+  "recommendationRef": "<server-issued UUID>",
+  "expectedTrackingVersion": 4,
+  "replaceTrackedRideId": null,
+  "alerts": {
+    "triggers": { "rain": true, "wind": false, "cold": true, "betterTime": true }
+  }
+}
+```
+
+Both alert objects are strict. All four values must be booleans, with at least one `true`; invalid create bodies return `400 VALIDATION`. Malformed JSON retains `400 BAD_REQUEST`. Omitted `alerts` and plans created before this release use all four triggers. A missing wind/cold limit does not invalidate a choice; that reason cannot fire until its limit exists. Limits come from the same resolved preferences as the current assessment.
+
+Every returned ride, including list summaries, detail, create and refresh responses, contains `alerts: {triggers: {rain, wind, cold, betterTime}}`. Choices belong to the account's plan and survive restarts and reads from other signed-in devices. Repeated creates of the same active route/departure preserve its existing choices; idempotency keys include explicit choices. The optional PATCH in brief v11 is deferred: stop tracking and create a new plan to change choices.
+
+Tracking capabilities add `alertTriggers: true` and `finalForecastLocalTime: "18:00"`. They describe API support even when automatic monitoring or a delivery transport is disabled. Existing transport, device-permission and registration requirements still apply. Clients send choices only when `alertTriggers` is true and use the returned time in the dialog (older servers fall back to 19:00).
+
+`rain` gates the fixed 50% warning and configured rain-probability/intensity breaches and recoveries. `wind` gates gust limits. `cold` gates feels-like comfort warnings and minimum-temperature limits. `betterTime` gates better-option notices. ±5-point score changes, maximum-temperature breaches/recoveries, summaries and outage/recovery notices remain independent. Details, re-arming and cooldown behavior are in [ride monitoring](ride-monitoring.md#per-ride-alert-choices-v0380).
+
+Apply migration `0019_tracking_alerts.sql` before deploying this version. Existing baselines, monitoring state, delivery history and scoring are preserved.

@@ -2,6 +2,7 @@ import type { RecommendationInput } from '../recommendations/input.ts';
 import type { DailyResult } from '../recommendations/presentation.ts';
 import type { evaluateComparisons } from '../recommendations/service.ts';
 import type { RouteRecord } from '../routes/store.ts';
+import { FINAL_FORECAST_LOCAL_TIME } from './alerts.ts';
 
 export type Evaluation = Awaited<ReturnType<typeof evaluateComparisons>>;
 export type Candidate = NonNullable<DailyResult['rankings'][number]['best']>;
@@ -32,6 +33,8 @@ export type TrackingContext = {
 };
 export type Snapshot = { context: TrackingContext; pick: Pick };
 export const capabilities = {
+  alertTriggers: true,
+  finalForecastLocalTime: FINAL_FORECAST_LOCAL_TIME,
   maximumActiveRides: 1,
   manualRefresh: true,
   automaticChecks: false,

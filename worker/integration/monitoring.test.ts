@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { decodeJwt, decodeProtectedHeader } from 'jose';
 import { HttpResponse, http } from 'msw/http';
 import type { MonitorState } from '../src/monitoring/policy.ts';
+import type { Alerts } from '../src/tracking/alerts.ts';
 import type { Snapshot } from '../src/tracking/model.ts';
 import { first, upload } from './client.ts';
 import { hourlyForecast, metOffice } from './fixtures.ts';
@@ -52,6 +53,7 @@ const seed = async (
   h: Harness,
   pauseUntil?: string | null,
   monitorInitially = true,
+  alerts?: Alerts,
 ) => {
   h.use(metOffice());
   assert.equal(
@@ -99,6 +101,7 @@ const seed = async (
       recommendationRef: first(rec.rankings).best.recommendationRef,
       expectedTrackingVersion: 0,
       replaceTrackedRideId: null,
+      alerts,
     }),
   });
   assert.equal(created.status, 201);
@@ -123,13 +126,19 @@ const register = async (
   assert.equal(response.status, 200);
   return id;
 };
-const change = async (h: Harness, ride: Ride, delta: number) => {
+const change = async (
+  h: Harness,
+  ride: Ride,
+  delta: number,
+  edit?: (snapshot: Snapshot) => void,
+) => {
   const db = await h.runtime.getD1Database('ROUTES_DB');
   const snapshot = structuredClone(ride.latestAssessment);
   snapshot.pick.candidate.score = ride.baseline.pick.candidate.score + delta;
   snapshot.pick.candidate.recommendationPriority =
     snapshot.pick.candidate.score;
   snapshot.context.best = snapshot.pick;
+  edit?.(snapshot);
   const id = crypto.randomUUID();
   await db.batch([
     db
@@ -1371,3 +1380,71 @@ run(
     assert.match(script.headers.get('content-type') ?? '', /javascript/);
   },
 );
+
+for (const enabled of [false, true]) {
+  run(
+    `scheduled monitoring respects stored weather switches (${enabled}) while preserving score alerts`,
+    async (h) => {
+      const ride = await seed(h, undefined, true, {
+        triggers: {
+          rain: enabled,
+          cold: enabled,
+          wind: enabled,
+          betterTime: true,
+        },
+      });
+      await register(h);
+      await h.restart({ APNS_CONFIG_JSON: config });
+      const payloads: {
+        reasons: string[];
+        aps: { alert: { body: string } };
+      }[] = [];
+      h.use(
+        metOffice(),
+        http.post(
+          'https://api.sandbox.push.apple.com/3/device/:token',
+          async ({ request }) => {
+            payloads.push((await request.json()) as (typeof payloads)[number]);
+            return new HttpResponse(null, { status: 200 });
+          },
+        ),
+      );
+      const warning = (snapshot: Snapshot) => {
+        for (const hour of snapshot.pick.candidate.rideHours) {
+          if (hour.conditions)
+            hour.conditions.maximumPrecipitationProbability = 0.5;
+        }
+        snapshot.pick.candidate.temperatureAlongRide.points = [
+          [0, 18, 6, null],
+        ];
+      };
+      await change(h, ride, 0, warning);
+      await monitor(h, ride.id);
+      assert.equal(payloads.length, enabled ? 1 : 0);
+      if (enabled) {
+        assert.deepEqual(first(payloads).reasons, [
+          'rain_likely',
+          'feels_cold',
+        ]);
+        assert.ok(first(payloads).aps.alert.body.includes('50%'));
+        assert.ok(first(payloads).aps.alert.body.includes('6°C'));
+      }
+      await h.restart();
+      await monitor(h, ride.id);
+      assert.equal(payloads.length, enabled ? 1 : 0);
+      if (!enabled) {
+        await change(h, ride, -5, warning);
+        await monitor(h, ride.id);
+        assert.deepEqual(first(payloads).reasons, ['score_worsened']);
+        assert.ok(
+          !first(payloads).aps.alert.body.includes('Rain is now likely'),
+        );
+        const saved = await monitorState(h, ride.id);
+        assert.ok(saved?.state_json);
+        const state = JSON.parse(saved.state_json) as MonitorState;
+        assert.equal(state.reference.rainLikely, true);
+        assert.equal(state.reference.feelsCold, true);
+      }
+    },
+  );
+}

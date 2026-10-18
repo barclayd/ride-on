@@ -1,6 +1,6 @@
 # Ride tracking API
 
-API v0.30.0. Scoring remains `comfort-v0.17`. Tracking saves **one active plan per account**, preserves the recommendation the rider accepted, and supports explicit refreshes plus [scheduled monitoring and Apple push delivery](ride-monitoring.md). Tracking is separate from completed rides (`/rides`).
+API v0.38.0. Scoring remains `comfort-v0.17`. Tracking saves **one active plan per account**, preserves the recommendation the rider accepted, and supports explicit refreshes plus [scheduled monitoring and Apple push delivery](ride-monitoring.md). Tracking is separate from completed rides (`/rides`).
 
 ## Client flow
 
@@ -34,9 +34,12 @@ Content-Type: application/json
 {
   "recommendationRef": "<server-issued UUID>",
   "expectedTrackingVersion": 0,
-  "replaceTrackedRideId": null
+  "replaceTrackedRideId": null,
+  "alerts": { "triggers": { "rain": true, "wind": true, "cold": true, "betterTime": true } }
 }
 ```
+
+`alerts` is optional; omission enables all four triggers, including on older plans. All four booleans are required when supplied, and at least one must be true. Choices are saved per plan. See [validation, capabilities and the trigger contract](api.md#tracked-ride-alerts-v0380).
 
 For replacement, use the active plan ID instead of `null`. This switches plans atomically: a database failure cannot stop the old plan without saving the replacement. The old plan becomes inactive with `endedReason: "replaced"`.
 
@@ -46,7 +49,7 @@ JSON responses contain `ride`, `outcome`, `replayed`, `replacedTrackedRideId`, `
 | --- | --- | --- |
 | New plan | 201 | `outcome: "created"` |
 | Replacement | 201 | `outcome: "replaced"` |
-| Same route/departure already active | 200 | `outcome: "existing"`; preserve its baseline and comparison |
+| Same route/departure already active | 200 | `outcome: "existing"`; preserve its baseline, comparison and alert choices |
 | Same action key and body | 200 | `replayed: true`; return that action's record in its **current** state |
 | Key reused with different body | 409 | `IDEMPOTENCY_CONFLICT` |
 | Stale account version or replacement ID | 409 | `TRACKING_VERSION_CONFLICT`; reload current tracking |
@@ -75,13 +78,14 @@ Foreign or absent records return `404 TRACKED_RIDE_NOT_FOUND` on detail, refresh
 
 - `id`, `routeId`, pinned `departureAt`, current estimated `finishAt`, original `timeZone`, `createdAt`, `version`.
 - `state: "active" | "inactive"`, `endedAt`, `endedReason: null | "stopped" | "replaced" | "expired"`.
+- `alerts: { triggers: { rain, wind, cold, betterTime } }`, also present on list summaries.
 - Immutable `baseline: { context, pick: { routeId, candidate } }`.
 - `latestAssessment`: the most recent successful snapshot, or `null`.
 - `latestAssessmentKind: "current" | "last_known" | null`.
 - `comparison`: current comparison, or `null` when the attempt failed, is in progress, or the pinned assessment has become stale.
 - `lastKnownComparison: { asOf, comparison } | null`, explicitly historical when current comparison is unavailable.
 - `refresh`: attempt/success timestamps and availability, described below.
-- `capabilities: { maximumActiveRides: 1, manualRefresh: true, automaticChecks: boolean, notifications: boolean }`. Automatic checks reflect the monitoring switch; notifications additionally require configured APNs credentials. Clients also need permission and a registered device. See [monitoring](ride-monitoring.md).
+- `capabilities: { maximumActiveRides: 1, manualRefresh: true, automaticChecks: boolean, notifications: boolean, alertTriggers: true, finalForecastLocalTime: "18:00" }`. Automatic checks reflect the monitoring switch; notifications additionally require configured APNs credentials. Clients also need permission and a registered device. See [monitoring](ride-monitoring.md).
 
 Each snapshot context stores schema/algorithm versions, generation time, original comparison inputs, route facts and versions/source hashes/geometry references, history context, provider-neutral weather provenance and attribution, comparison coverage and best-known ranking evidence. `pick.candidate` retains Conditions, recommendation priority, factor scores, conditions, standards and encounter-time evidence, ride hours, and route-scoped forecast details. No raw provider body or entire forecast horizon is stored.
 

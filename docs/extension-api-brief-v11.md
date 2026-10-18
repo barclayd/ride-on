@@ -8,7 +8,7 @@ alerts for a ride, they choose what to hear about:
 
 | Switch | Label in the extension | Rule (from the design) |
 | --- | --- | --- |
-| `rain` | Rain becomes likely | Any ride hour reaches a 60% chance of rain |
+| `rain` | Rain becomes likely | Any ride hour reaches a 50% chance of rain |
 | `wind` | Gusts pass your {n} km/h limit | Gusts above `minimumStandards.maximumGustKph` |
 | `cold` | It feels colder than your {n}° minimum | Feels like below `temperature.comfortMinC` |
 | `betterTime` | A better time or day opens up | A higher-scoring time or day appears |
@@ -86,7 +86,7 @@ Monitoring keeps its current reference, cooldown and combining rules
 
 | Trigger | Reasons it gates | Notes |
 | --- | --- | --- |
-| `rain` | New `rain_likely`; `minimum_breach` / `minimum_recovery` for `maximumPrecipitationProbability` and `maximumPrecipitationRateMmH` | `rain_likely`: some hour from departure to finish has `precipitationProbability ≥ 0.6`, and the reference had none. It re-arms once every hour is back below 0.6. |
+| `rain` | New `rain_likely`; `minimum_breach` / `minimum_recovery` for `maximumPrecipitationProbability` and `maximumPrecipitationRateMmH` | `rain_likely`: some hour from departure to finish has `precipitationProbability ≥ 0.5`, and the reference had none. It re-arms once every hour is back below 0.5. |
 | `wind` | `minimum_breach` / `minimum_recovery` for `maximumGustKph` | Already computed today. |
 | `cold` | New `feels_cold`; `minimum_breach` / `minimum_recovery` for `minimumTemperature` | `feels_cold`: the lowest feels like along the ride (the same series as `temperatureAlongRide`, falling back to air temperature) is below `comfortMinC`, and the reference wasn't. It re-arms when it's back at or above. |
 | `betterTime` | `better_option` | Unchanged rule (≥ 5 points better, meets standards, departs later than now). |
@@ -131,8 +131,9 @@ without a new plan, use:
 - It bumps `trackingVersion`.
 - It keeps the monitor state.
 
-Re-posting the same `recommendationRef` with `replaceTrackedRideId` works today,
-but it creates a new plan and resets monitoring.
+Re-posting the same active route/departure returns the existing plan and choices.
+Stop it first, then create a plan with a new action key to change choices;
+that creates a new baseline and resets monitoring.
 
 ## 7. Unchanged
 
@@ -151,7 +152,7 @@ but it creates a new plan and resets monitoring.
   - The `POST` and `GET` round trip, and old rides reading as all on.
   - Each trigger off suppresses its reasons, and only those. The summary and
     outage notices still send.
-  - `rain_likely` fires at 0.6 and not at 0.59, and re-arms after dropping
+  - `rain_likely` fires at 0.5 and not at 0.49, and re-arms after dropping
     below.
   - `feels_cold` uses feels like, falls back to air temperature, and doesn't fire
     without `comfortMinC`.
@@ -173,16 +174,27 @@ Done in the extension's alerts dialog PR:
 
 Once the API ships, the extension needs no further change.
 
-## Decisions for Dan
+## Confirmed decisions (18 October 2026)
+
+1. Keep `score_improved` and `score_worsened` alerts at ±5 points. They remain independent of the switches.
+2. Always send `maximumTemperatureC` breaches and recoveries.
+3. Use a fixed **50%** threshold for `rain_likely`; configured rain limits remain separate.
+4. Send the evening forecast at **18:00 local time**.
+
+The implementation is API v0.38.0. The optional PATCH endpoint in §6 is deferred;
+choices are set when a new plan is created. Reposting an already active
+route/departure returns the existing plan and its existing choices, as before.
+Stop that plan and track again to choose different triggers.
+
+### Original questions
 
 1. **Score changes:** should `score_improved` and `score_worsened` (±5 points)
    still send? 29c has no switch for them.
-   - Proposal: stop sending them on their own, but keep the score change in any
-     notification another reason triggers.
+   - Decision: keep sending them on their own, with the existing cooldown.
 2. **Max-temperature breach:** `maximumTemperatureC` has no switch.
    - Proposal: always send it, as today.
-3. **Rain threshold:** use the design's fixed 60%, or the rider's
+3. **Rain threshold:** use the design's fixed 50%, or the rider's
    `maximumPrecipitationProbability` when it's set?
-   - Proposal: use 60% for `rain_likely`. Breaches of the rider's own limit
+   - Proposal: use 50% for `rain_likely`. Breaches of the rider's own limit
      already map to `rain` (§4).
 4. **Summary time:** move it to 18:00 as the design says (§5)?
