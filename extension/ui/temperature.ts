@@ -1,4 +1,4 @@
-// "Temperature along the ride": the temperature chip's panel (handoff v7, 24a; axis v8, 26b). Pure,
+// "Temperature along the ride": the temperature chip's panel (handoff v7, 24a; chart v9, 26b). Pure,
 // like format.ts. Air and feels like over the ride against the rider's ideal range, with the month's
 // usual temperature behind them (docs/extension-api-brief-v9.md), on a scale that fits all of them.
 import type { Departure, Preferences, TemperaturePoint } from '../lib/types';
@@ -18,8 +18,6 @@ export type TemperatureEnd = {
   above: boolean;
   end: boolean;
 };
-// "Your range" sits in whichever third of the block leaves it furthest from the lines and tags.
-export type RangeSlot = 'left' | 'centre' | 'right';
 export type TemperaturePanel = {
   warn: boolean; // feels outside the range for over half the ride: the amber chip
   label: string; // the chip's aria-label
@@ -35,7 +33,6 @@ export type TemperaturePanel = {
   high: { y: number; label: string };
   low: { y: number; label: string };
   ticks: { y: number; label: string }[]; // gridlines, clear of the range edges
-  rangeLabel: { y: number; slot: RangeSlot } | null; // null when the block is too thin or crowded
   ends: TemperatureEnd[];
   mark: { x: number; y: number; cool: boolean } | null;
   from: string;
@@ -211,6 +208,7 @@ export const temperaturePanel = (
       end: i === 1,
     };
   });
+  // No label: the gridlines give its value.
   const mark = extreme && { x: x(extreme.m), y: y(extreme.c), cool };
   const month = usual && monthName(usual.month);
   let usualPanel: TemperaturePanel['usual'] = null;
@@ -228,31 +226,6 @@ export const temperaturePanel = (
         .join(' ')} Z`,
     };
   }
-  // "Your range": in the block's middle, in the third furthest from the lines, the tags and the marker.
-  const middle = (edges[0] + edges[1]) / 2;
-  const tags = ends.map((e) => ({
-    from: e.end ? 82 : 0,
-    to: e.end ? 100 : 18,
-    y: e.y + (e.above ? -7 : 7),
-  }));
-  if (mark) tags.push({ from: mark.x - 6, to: mark.x + 6, y: mark.y });
-  const slots = (
-    [
-      ['left', 2, 40],
-      ['centre', 30, 70],
-      ['right', 60, 98],
-    ] as const
-  ).map(([slot, from, to]) => {
-    let gap = Infinity;
-    for (let px = from; px <= to; px += 2)
-      for (const s of feels.length ? [air, feels] : [air])
-        gap = Math.min(gap, Math.abs(middle - y(at(s, (px / 100) * minutes))));
-    for (const tag of tags)
-      if (tag.to > from && tag.from < to)
-        gap = Math.min(gap, Math.abs(middle - tag.y));
-    return { slot, gap };
-  });
-  const roomiest = slots.reduce((a, b) => (b.gap > a.gap ? b : a));
   return {
     warn: inRange / minutes < 0.5,
     label: `Temperature ${span(air.map((p) => p.c))}${
@@ -266,10 +239,6 @@ export const temperaturePanel = (
     high: { y: y(hi), label: `${degrees(hi, u)}°` },
     low: { y: y(lo), label: `${degrees(lo, u)}°` },
     ticks,
-    rangeLabel:
-      edges[0] - edges[1] >= 14 && roomiest.gap >= 7
-        ? { y: +middle.toFixed(2), slot: roomiest.slot }
-        : null,
     ends,
     mark,
     from: clock(b.departureAt, timeZone),

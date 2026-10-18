@@ -916,29 +916,12 @@ const TemperatureChart = (props: { id: string; panel: TemperaturePanel }) => {
           {t.ticks.map((g) => (
             <i key={g.label} class="ro-temp-grid" style={{ top: `${g.y}%` }} />
           ))}
-          {t.usual && (
-            <svg
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              <path d={t.usual.band} class="ro-temp-band" />
-            </svg>
-          )}
-          {t.rangeLabel && (
-            <span
-              class="ro-temp-zone"
-              data-slot={t.rangeLabel.slot}
-              style={{ top: `${t.rangeLabel.y}%` }}
-            >
-              Your range
-            </span>
-          )}
           <svg
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
             aria-hidden="true"
           >
+            {t.usual && <path d={t.usual.band} class="ro-temp-band" />}
             {t.feels && <path d={t.feels} class="ro-temp-feels" />}
             <path d={t.air} class="ro-temp-air" />
           </svg>

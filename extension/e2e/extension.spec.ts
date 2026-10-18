@@ -1867,10 +1867,9 @@ test('Journeys page: Tracked routes, window button, row chips and + Track', asyn
     warmth.locator('.ro-temp-gutter span:not([data-edge])'),
   ).toHaveText(['5°', '15°', '25°']);
   await expect(warmth.locator('.ro-temp-grid')).toHaveCount(3);
-  await expect(warmth.locator('.ro-temp-zone')).toHaveText('Your range');
-  await expect(warmth.locator('.ro-temp-zone')).toHaveAttribute(
-    'data-slot',
-    'left',
+  // No text in the plot (26b): the block, its green edge labels and the legend say which is your range.
+  await expect(warmth.locator('.ro-temp-plot')).not.toContainText(
+    /your range|warmer|cooler/i,
   );
   // The coldest feels like is ringed, without a label.
   await expect(warmth.locator('.ro-temp-mark')).toHaveCount(1);
