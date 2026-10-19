@@ -357,7 +357,7 @@ which captured lighter: red `#d96f6c`, blue `#5eb1d9`.
 
 cycle.travel's tiles look like Montserrat for place names and Open Sans for small labels. **Dan chose
 Montserrat throughout**, so every label here is Montserrat (SIL OFL 1.1, glyph PBFs in the app's
-`RoutesUI/CycleMap/glyphs/`). Weights in use: Regular, Medium, SemiBold, Bold, Italic, Medium Italic.
+`SharedUI/CycleMap/glyphs/`). Weights in use: Regular, Medium, SemiBold, Bold, Italic, Medium Italic.
 
 The map is the only place Montserrat appears in the app. DESIGN-SYSTEM.md §4 says "SF Pro, system text
 styles only", so it needs a map exception (plan WS4). Map labels don't follow Dynamic Type; MapLibre has

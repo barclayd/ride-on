@@ -21,7 +21,7 @@ public struct RoutesView: View {
     @State private var query = ""
     @State private var detent = PanelDetent.medium
     @State private var camera: MapCameraPosition
-    @State private var look = MapLook.satellite
+    @State private var look = MapLook.initial
     @State private var carouselID: UUID?
     @State private var locationManager = CLLocationManager()
     @FocusState private var searching: Bool
@@ -103,15 +103,9 @@ public struct RoutesView: View {
 
     private static let sidePanelWidth: CGFloat = 380
 
-    /// The cycle map (the WS3.0 spike, `--cycle-map`, iOS only) instead of MapKit's imagery: light,
-    /// so nothing dims it and its controls take regular glass.
-    private var cycleMap: Bool {
-        #if os(iOS)
-        CycleMapSpike.isEnabled
-        #else
-        false
-        #endif
-    }
+    /// The cycle map instead of MapKit's imagery: light, so nothing dims it and its controls take
+    /// regular glass.
+    private var cycleMap: Bool { look == .cycle }
 
     // MARK: Map
 

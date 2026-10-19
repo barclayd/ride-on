@@ -4,7 +4,7 @@
 # src/style.ts; the tests check they do.
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
-dest=$here/../../app/Packages/Features/Sources/RoutesUI/CycleMap/glyphs
+dest=$here/../../app/Packages/Features/Sources/SharedUI/CycleMap/glyphs
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 

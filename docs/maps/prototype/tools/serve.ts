@@ -2,7 +2,7 @@
 // that the style reads: /glyphs/ (Montserrat glyph PBFs) and /sprite. The app's sprite is only `@2x`, drawn at 3×
 // with its pixelRatio in the index, so it's served for `/sprite` (1× screens) too.
 const root = process.argv[2]
-const app = new URL('../../../../app/Packages/Features/Sources/RoutesUI/CycleMap', import.meta.url).pathname
+const app = new URL('../../../../app/Packages/Features/Sources/SharedUI/CycleMap', import.meta.url).pathname
 const sprite = /^\/sprite(@2x)?\.(json|png)$/
 Bun.serve({
   port: 8787,

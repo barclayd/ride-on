@@ -139,6 +139,25 @@ final class RideOnUITests: XCTestCase {
         XCTAssertFalse(routeButton(in: app, startingWith: "Lea Valley Gravel").exists)
     }
 
+    /// The cycle map behind `--cycle-map` (docs/maps/README.md, WS3), on the fixture world's offline
+    /// style: drawn with its attribution, and swapped for MapKit from the style menu.
+    func testRoutesCycleMapShowsWithItsAttribution() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world", "--cycle-map"]
+        app.launch()
+
+        // `--cycle-map` opens on Routes.
+        let map = app.descendants(matching: .any)["cycle-map"]
+        XCTAssertTrue(map.waitForExistence(timeout: 5))
+        // SwiftUI's `Link`s are buttons to XCUITest.
+        XCTAssertTrue(app.buttons["Map data © OpenStreetMap contributors"].exists)
+        XCTAssertTrue(app.buttons["Protomaps"].exists)
+
+        app.buttons["Map style"].tap()
+        app.buttons["Satellite"].tap()
+        XCTAssertTrue(map.waitForNonExistence(timeout: 5))
+    }
+
     /// Shortlist cards and panel rows are buttons whose labels start with the route name.
     private func routeButton(in app: XCUIApplication, startingWith name: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch

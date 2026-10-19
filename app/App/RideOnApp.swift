@@ -162,7 +162,7 @@ struct RootView: View {
 }
 
 private struct TabRoot: View {
-    // `--cycle-map` (the WS3.0 spike, docs/maps/README.md) opens on the map it replaces.
+    // `--cycle-map` (docs/maps/README.md, WS3) opens on the Routes map, in its Cycle look.
     @State private var selection = ProcessInfo.processInfo.arguments.contains("--cycle-map") ? AppTab.routes : .rides
 
     var body: some View {

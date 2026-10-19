@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - "maps/style/**"
-      - "app/Packages/Features/Sources/RoutesUI/CycleMap/**"
+      - "app/Packages/Features/Sources/SharedUI/CycleMap/**"
       - ".github/workflows/maps-style.yml"
 
 jobs:

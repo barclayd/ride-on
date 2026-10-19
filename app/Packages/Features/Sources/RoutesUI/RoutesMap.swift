@@ -2,15 +2,30 @@ import SwiftUI
 import MapKit
 import Models
 import DesignSystem
+import SharedUI
 
 /// The map's look, from the map controls' style menu.
 enum MapLook: String, CaseIterable, Identifiable {
-    case satellite, hybrid, standard
+    /// cycle.travel's look, `CycleMap` (docs/maps/README.md, WS3.3).
+    case cycle, satellite, hybrid, standard
 
     var id: Self { self }
 
+    /// The looks the menu offers: Cycle only behind `--cycle-map`, and only on iOS until WS3.6.
+    static var offered: [MapLook] {
+        #if os(iOS)
+        CycleMap.isEnabled ? allCases : allCases.filter { $0 != .cycle }
+        #else
+        allCases.filter { $0 != .cycle }
+        #endif
+    }
+
+    /// Cycle where it's offered, satellite otherwise.
+    static var initial: MapLook { offered.first ?? .satellite }
+
     var title: String {
         switch self {
+        case .cycle: "Cycle"
         case .satellite: "Satellite"
         case .hybrid: "Hybrid"
         case .standard: "Standard"
@@ -19,9 +34,10 @@ enum MapLook: String, CaseIterable, Identifiable {
 
     var style: MapStyle {
         switch self {
+        // MapKit's stand-in where `CycleMap` isn't drawn.
+        case .cycle, .standard: .standard
         case .satellite: .imagery
         case .hybrid: .hybrid
-        case .standard: .standard
         }
     }
 }
@@ -45,12 +61,8 @@ struct RoutesMap: View {
         // drops back to system blue for `.accentColor` (see `RouteMap`).
         let accent = Color.accentColor.resolve(in: environment)
         #if os(iOS)
-        if CycleMapSpike.isEnabled {
-            GeometryReader { geometry in
-                CycleMapSpike(routes: routes, selected: selected, accent: UIColor(Color(accent)), frame: camera.rect,
-                              insets: geometry.safeAreaInsets, select: select)
-                    .ignoresSafeArea()
-            }
+        if look == .cycle {
+            cycleMap(accent: accent)
         } else {
             mapKit(accent: accent)
         }
@@ -58,6 +70,25 @@ struct RoutesMap: View {
         mapKit(accent: accent)
         #endif
     }
+
+    #if os(iOS)
+    private func cycleMap(accent: Color.Resolved) -> some View {
+        let lines = routes.filter { $0.id != selected?.id }.map { CycleMap.Line(id: $0.id, coordinates: $0.coordinates) }
+        let callout = selected.flatMap { selected in
+            calloutDetail.map { AnyView(RouteCallout(name: selected.name, detail: $0)) }
+        }
+        return CycleMap(lines: lines, selected: selected.map { CycleMap.Line(id: $0.id, coordinates: $0.coordinates) },
+                        tint: Color(accent), camera: cycleCamera, callout: callout,
+                        moved: { camera = .rect($0) }, select: select)
+    }
+
+    /// `camera` as `CycleMap` takes it: the user, a rect, or everything drawn.
+    private var cycleCamera: CycleMap.Camera {
+        if camera.followsUserLocation { return .userLocation }
+        if let rect = camera.rect { return .rect(rect) }
+        return .automatic
+    }
+    #endif
 
     private func mapKit(accent: Color.Resolved) -> some View {
         MapReader { proxy in
@@ -183,7 +214,7 @@ struct MapControls: View {
         VStack(spacing: 0) {
             Menu {
                 Picker("Map style", selection: $look) {
-                    ForEach(MapLook.allCases) { Text($0.title).tag($0) }
+                    ForEach(MapLook.offered) { Text($0.title).tag($0) }
                 }
             } label: {
                 Image(systemName: "square.2.layers.3d")
