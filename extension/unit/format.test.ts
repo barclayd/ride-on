@@ -419,6 +419,18 @@ test('banners, flags, recent roads and rides that cannot be scored', () => {
   });
   expect(none.cards[1]).toMatchObject({ flag: null, recent: false });
 
+  // Under 50 the pick is Not recommended, so neither flag shows.
+  for (const status of ['match_found', 'none_meet'] as const) {
+    const weak = buildResults(
+      ['a'],
+      {},
+      recs(status, [result('a', departure('2026-10-14T08:00:00Z', 37))]),
+      [days[0]],
+      TZ,
+    );
+    expect(weak.cards[0]).toMatchObject({ flag: null, score: 37 });
+  }
+
   const unknown = buildResults(
     ['a'],
     {},

@@ -76,13 +76,17 @@ const Tick = () => (
   </svg>
 );
 
+const CONFIRMED_MS = 4000;
+const FADE_MS = 300;
+
 const Page = ({ rows }: { rows: Row[] }) => {
   const view = useView(import.meta.env.SAFARI);
   const tracking = useTracking(view);
   const [busy, setBusy] = useState(new Set<string>());
   const [notice, setNotice] = useState<string | null>(null);
   const synced = useRef(false);
-  // Once the window has passed, picking new dates confirms in the strip until the page is next loaded.
+  // Once the window has passed, picking new dates confirms in the strip; it fades a few seconds after
+  // the new scores arrive.
   const passed = useRef(false);
   const asked = useRef<ComponentChildren>(null); // the expired half, frozen while it fades out
   const filled = useRef(false); // the new dates' scores have arrived
@@ -161,6 +165,21 @@ const Page = ({ rows }: { rows: Row[] }) => {
   // and Ranked moves the tiles into order.
   const blank =
     phase === 'expired' || (phase === 'confirmed' && !filled.current);
+  const [leaving, setLeaving] = useState(false);
+  const settled = phase === 'confirmed' && filled.current;
+  useEffect(() => {
+    if (!settled) return;
+    const fade = setTimeout(() => setLeaving(true), CONFIRMED_MS);
+    const gone = setTimeout(() => {
+      passed.current = false;
+      filled.current = false;
+      setLeaving(false);
+    }, CONFIRMED_MS + FADE_MS);
+    return () => {
+      clearTimeout(fade);
+      clearTimeout(gone);
+    };
+  }, [settled]);
 
   if (!view) return null;
   if (!signedIn)
@@ -288,7 +307,11 @@ const Page = ({ rows }: { rows: Row[] }) => {
       </div>
       {paused && <PausedLine view={view} />}
       {(phase === 'expired' || phase === 'confirmed') && (
-        <div class="ro-passed" data-phase={phase}>
+        <div
+          class="ro-passed"
+          data-phase={phase}
+          data-leaving={leaving || undefined}
+        >
           <div aria-hidden={phase !== 'expired'} inert={phase !== 'expired'}>
             {asked.current}
           </div>
