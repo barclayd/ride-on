@@ -213,7 +213,7 @@ their own layer (next section).
 - Station throats (Waterloo, Victoria) read heavier than cycle.travel's at z14: every platform track is
   drawn, half-width but still dense. Not addressed in WS2.5.
 - cycle.travel's hillshade greys its low zooms (the Downs at z9) where ours is flat land colour, so its
-  map reads darker even where the roads match. Hillshade is WS1.3.
+  map reads darker even where the roads match. Hillshade is WS1.4.
 
 ## Cycle paths and footpaths
 
@@ -247,9 +247,14 @@ need a knockout over a basemap footpath, which the prototype used to draw as a p
 | `ct_unpaved` | `u`, from z12, dash `[5.5, 2.5]`, width z12 0.95, z15 1.1, z18 2. Measured: ~1 px wide, ~5 px dashes every ~8 px at ct z13–15 |
 | `ct_footpaths` | `foot`, from z14, dash `[1.7, 4.4]`, width z14 1.2, z18 2.4. Measured: ~1.2 px wide, 2 px dashes every 7.3 px at ct z15 |
 
+**Cycle lanes** (WS1.3): the overlay's `cycle_lanes`, painted lanes and shared bus lanes on roads
+(`cycleway`, `cycleway:left|right|both` = `lane` or `share_busway`).
+
+| Layer | Rule |
+|---|---|
+| `ct_cycle_lanes` | From z14, `#AE2DE3`, width 2, dash `[0, 3]`, round caps: 2 px dots every 6 px at every zoom. Measured at ct z15–17 (Hills Rd, Bateman St, Kennington Park Rd); none at ct z14. One row along the middle of the road whichever side the lane is, bus lanes included, under the route dots |
+
 **Gaps:**
-- **Cycle lanes** (purple, `cycleway=lane`/`cycleway:left|right|both=lane` on roads) aren't drawn yet.
-  The overlay has them (`cycle_lanes`); WS2 styles them.
 - cycle.travel shows paths from ct z12 (our 11) in London as thin red lines; ours start at z12.
 - cycle.travel also outlines some pedestrian areas and cycle-permitted squares in red at street level.
 
@@ -574,7 +579,7 @@ From the ten comparisons in `screenshots/`. Tick them off in WS2.
   the rule is an approximation
 - [ ] Icons at one spot stack (Box Hill's café, toilets, water and Ps); cycle.travel spreads them out
 - [ ] More bike parking in London than cycle.travel shows (Putney at our z15)
-- [ ] Purple cycle lanes on roads (WS1 data)
+- [x] Purple cycle lanes on roads (WS1.3: `ct_cycle_lanes` from z14, bus lanes too)
 - [x] London rcn: far fewer lines (WS2.5: TfL routes from z12 with a C/Q/CS number, z13 without, and no
   proposed or under-construction routes)
 - [x] lcn dots lighter (WS2.5: also smaller and closer together, in their own layer)

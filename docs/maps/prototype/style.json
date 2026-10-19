@@ -2411,6 +2411,15 @@
    }
   },
   {
+   "id": "ct_cycle_lanes",
+   "type": "line",
+   "source": "cycling",
+   "source-layer": "cycle_lanes",
+   "minzoom": 14,
+   "layout": {"line-cap": "round", "line-join": "round"},
+   "paint": {"line-color": "#ae2de3", "line-width": 2, "line-dasharray": [0, 3]}
+  },
+  {
    "id": "ct_routes_lcn",
    "type": "symbol",
    "source": "cycling",

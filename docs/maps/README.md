@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3–1.4 next |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3 done: purple cycle lanes on roads; WS1.4 (terrain) next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -172,7 +172,7 @@ in `maps/tiles/README.md`):
 | `routes` | line | `network` (icn/ncn/rcn/lcn), `rank`, `minz` | 6–14 | Highest network per way, lowest `minz` of its routes: lcn 13, rcn 8.5, London rcn 11 with a C/Q ref and 13 without |
 | `route_badges` | line | `badge` (red/blue/eu), `label`, `ev` | 11–14 | One line per signed route; refs of up to two letters and three digits, no lcn |
 | `paths` | line | `class` (`p`/`u`/`foot`), `bridge` | 12–14, `foot` from 14 | The path rule in the style spec; `foot` is every other footway, path, steps or track except pavements, crossings and private ways |
-| `cycle_lanes` | line | `side` (left/right/both), `bus` | 12–14 | `cycleway`, `cycleway:both/left/right` = `lane` or `share_busway` on roads. Not styled yet (1.3) |
+| `cycle_lanes` | line | `side` (left/right/both), `bus` | 12–14 | `cycleway`, `cycleway:both/left/right` = `lane` or `share_busway` on roads. Styled in 1.3 (`ct_cycle_lanes`) |
 | `pois` | point | `kind`, `name`, `ele` (peaks), `crowd_500m`/`crowd_1km` (icons) | 12–14, new kinds from 14 | Stations and named peaks as before, plus cafe, pub, toilets, drinking_water, bicycle_parking, parking, bicycle_shop, camp_site, viewpoint. Icons (all but parking) styled in 2.4; the crowd counts thin them |
 
 | GB build, 17 October 2026 extract | |
@@ -191,7 +191,14 @@ in `maps/tiles/README.md`):
 - The style draws `ct_footpaths` from the overlay's `foot` class instead of the basemap's paths, so the
   unpaved knockout layer has gone.
 
-**1.3 Cycle lanes and POIs.** Data from 1.2's new layers; styling in WS2.
+**1.3 Cycle lanes and POIs.** Done, 19 October 2026. POIs were styled in 2.4b. `ct_cycle_lanes` draws the
+overlay's `cycle_lanes` as cycle.travel does, measured on Hills Rd and Bateman St in Cambridge and on
+Kennington Rd and Kennington Park Rd in London:
+- Key purple `#AE2DE3`, 2 px dots every 6 px (width 2, dash `[0, 3]`, round caps) at every zoom from our
+  z14 (ct z15); nothing at our z13, as at ct z14.
+- One row of dots along the middle of the road whichever side the lane is on, under the route dots.
+- Shared bus lanes look the same (Kennington Park Rd), so the style ignores `side` and `bus`.
+- Dashes, not symbol dots like the routes: at 2 px a dot cut at a vertex doesn't show.
 
 **1.4 Terrain.** cycle.travel shades hills and draws contours (see the Surrey Hills comparison).
 - DEM options: [Mapterhorn](https://mapterhorn.com) (open terrain tiles, already PMTiles), OS Terrain 50

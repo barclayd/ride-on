@@ -57,6 +57,7 @@ const key = {
   laneCasing: '#444444',
   // The key's gravel cycleway: the unpaved dashes sample as #8b451e, next to it.
   unpaved: '#8b4513',
+  cycleLane: '#ae2de3',
   halo: '#ffffff',
 }
 // Everything else was sampled off screenshots, which aren't the colours the page drew; shot() undoes the capture.
@@ -892,6 +893,18 @@ const cyclewayHalo: Layer = {
   paint: { 'line-color': '#ffffff', 'line-width': width([11, 4.9, 14, 5, 15, 6, 18, 12]) },
 }
 
+// Painted lanes and shared bus lanes on roads (the overlay's cycle_lanes), as cycle.travel draws both from its z15:
+// purple dots along the middle of the road whichever side the lane is on, 2px across every 6px at every zoom, under
+// the route dots. At 2px a dot cut by a vertex doesn't show, so these stay dashes.
+const cycleLanes: Layer = {
+  id: 'ct_cycle_lanes',
+  type: 'line',
+  ...cycling('cycle_lanes'),
+  minzoom: 14,
+  layout: { 'line-cap': 'round', 'line-join': 'round' },
+  paint: { 'line-color': key.cycleLane, 'line-width': 2, 'line-dasharray': [0, 3] },
+}
+
 // Cycle network relations (the overlay's routes layer), drawn as cycle.travel's dotted lines: dot icons placed along
 // each route (src/dots.ts), local under regional under national under EuroVelo. Each overlay way carries its
 // highest-ranked network, so dots of two networks never share a line.
@@ -1117,7 +1130,7 @@ export const buildStyle = (target: Target): StyleSpecification => {
   all.splice(at('roads_minor') + 1, 0, lowMinor)
   all.splice(at('roads_rail'), 0, ...paths, lowRail)
   all.splice(at('roads_rail') + 1, 0, railCore, lowRailCore)
-  all.splice(at('roads_labels_minor'), 0, ...routes, stations)
+  all.splice(at('roads_labels_minor'), 0, cycleLanes, ...routes, stations)
   all.splice(at('roads_labels_major') + 1, 0, roadRefs)
   // Later layers win label collisions: badges beat POI icons, which beat point labels; EuroVelo beats national
   // beats regional.
