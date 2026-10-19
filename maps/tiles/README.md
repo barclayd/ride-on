@@ -71,7 +71,8 @@ Painted lanes on roads, from `cycleway:left`, `cycleway:right`, then `cycleway:b
 | `side` | `left`, `right` or `both` |
 | `bus` | `true` when neither side is a plain cycle lane |
 
-Zooms 12–14. Not styled yet (plan WS1.3).
+Zooms 12–14. The style draws them from z14 (`ct_cycle_lanes`) and ignores `side` and `bus`: cycle.travel
+draws every lane, bus lanes too, as one row of dots along the road.
 
 ### `low_roads`
 
