@@ -17,17 +17,20 @@ Tile files are single [PMTiles](https://docs.protomaps.com/pmtiles/) archives in
 `https://maps.ride-on.cc/<key>` through an R2 custom domain. MapLibre reads them with HTTP Range
 requests, one tile or directory at a time.
 
-| Key | Contents | Size | Source |
+The style reads one archive per layer. The keys it reads now are `archives` in
+`maps/style/src/style.ts`.
+
+| Key | Contents | Size | Made by |
 |---|---|---|---|
-| `basemap-gb-20261017.pmtiles` | Protomaps basemap, z0–15, GB bbox `-8.7,49.8,1.9,60.9` | 3,005,193,777 bytes | `pmtiles extract https://build.protomaps.com/20261017.pmtiles` (tiles v4.15.2) |
-| `cycling-gb-20261017.pmtiles` | Cycling overlay, z6–14 ([layers](tiles/README.md)) | 125,501,621 bytes | `maps/tiles/build.sh` on Geofabrik's 17 October 2026 GB extract with batch D's profile (PR #271); main's profile rebuilds it byte for byte |
-| `terrain-gb-20261019.pmtiles` | Mapterhorn's DEM for hillshade, terrarium-encoded WebP, 512 px tiles, z0–12, GB bbox | 861,378,560 bytes | `pmtiles extract https://download.mapterhorn.com/planet.pmtiles terrain-gb-20261019.pmtiles --bbox=-8.7,49.8,1.9,60.9 --maxzoom=12` ([below](#terrain)) |
-| `contours-gb-20261019.pmtiles` | OS Terrain 50's 10 m contours, layer `contours` with `ele` (metres), z11–14 | 1,035,408,114 bytes | GDAL `ogr2ogr` from OS Terrain 50's GeoPackage ([below](#terrain)) |
+| `basemap-gb-<date>.pmtiles` | Protomaps basemap, z0–15, GB bbox `-8.7,49.8,1.9,60.9` | About 3.0 GB | `pmtiles extract` of Protomaps' daily world build ([below](#making-a-basemap-extract)): the [`maps-tiles` workflow](#scheduled-rebuilds) each quarter |
+| `cycling-gb-<date>.pmtiles` | Cycling overlay, z6–14 ([layers](tiles/README.md)) | About 126 MB | `maps/tiles/build.sh` on Geofabrik's GB extract: the [`maps-tiles` workflow](#scheduled-rebuilds) each month |
+| `terrain-gb-<date>.pmtiles` | Mapterhorn's DEM for hillshade, terrarium-encoded WebP, 512 px tiles, z0–12, GB bbox | 861 MB | `pmtiles extract` of Mapterhorn's planet, by hand ([below](#terrain)) |
+| `contours-gb-<date>.pmtiles` | OS Terrain 50's 10 m contours, layer `contours` with `ele` (metres), z11–14 | 1.04 GB | GDAL `ogr2ogr` from OS Terrain 50's GeoPackage, by hand ([below](#terrain)) |
 
 - **Keys are dated and immutable.** Never overwrite one: apps may be reading it, and the objects carry
   `Cache-Control: public, max-age=31536000, immutable`. Publish a new key and point the style at it, then
-  delete the old one once no app version still references it. `hosting/publish.sh` refuses a key that
-  already exists.
+  delete the old one once no app version still references it ([pruning](#pruning)). `hosting/publish.sh`
+  refuses a key that already exists.
 - **Naming:** `<layer>-<region>-<YYYYMMDD>.pmtiles`, where the date is the OpenStreetMap data's date:
   `basemap-gb-…`, then `cycling-gb-…` (WS1.2). `terrain-gb-…` and `contours-gb-…` (WS1.4) aren't from
   OpenStreetMap, so theirs is the date they were built. A rebuild from the same data (a changed profile,
@@ -139,5 +142,74 @@ Hillshade and contours (WS1.4) come from two sources, both licensed for the app:
   at its z12 (our z11); MapLibre overzooms z14. OS Terrain 50 is a 50 m grid, so its contours are smooth,
   much like cycle.travel's.
 
-Both change rarely (OS Terrain 50 is updated once a year), so they're rebuilt by hand, not by
-WS1.5's monthly job.
+Both change rarely (OS Terrain 50 is updated once a year), so they're rebuilt by hand, not by the
+[`maps-tiles` workflow](#scheduled-rebuilds).
+
+### Scheduled rebuilds
+
+`.github/workflows/maps-tiles.yml` (`maps-tiles`, WS1.5) keeps the OpenStreetMap layers fresh. It runs
+on the 3rd of each month at 04:23 UTC, once Geofabrik's extract of the 2nd is out:
+
+1. Builds main's cycling profile (`tiles/build.sh`) on Geofabrik's latest GB extract, named by the
+   extract's date. In January, April, July and October, or when asked, it also extracts Protomaps'
+   latest daily basemap, and stops if that build isn't tiles v4, which the style can't read.
+2. Points `archives` in `style/src/style.ts` at each build newer than the one the style reads, rebuilds
+   the app's and the prototype's styles and runs `bun run check`. If nothing is newer, it stops there.
+3. Publishes each new archive with `hosting/publish.sh`. A rerun skips a key its earlier attempt
+   uploaded: builds are reproducible, so that object holds the same bytes.
+4. Pushes `maps/tiles-<YYYYMMDD>` and opens a PR, "Point the cycle map at the <Month YYYY> tiles",
+   listing each archive's URL and size.
+
+A publishing run only runs on main, so it never publishes an unmerged profile.
+
+**Setup (once).**
+
+1. An R2 API token for the workflow, separate from anyone's own: Cloudflare dashboard → R2 → Manage
+   API tokens → Create API token, **Object Read & Write**, applied to the `ride-on-maps` bucket only.
+2. Its keys as repository secrets: `gh secret set R2_ACCESS_KEY_ID`, then
+   `gh secret set R2_SECRET_ACCESS_KEY` (each asks for the value). The workflow writes them into an `r2`
+   AWS CLI profile on the runner, as [above](#publishing-a-file). Without them a run fails in its first
+   step and says so.
+3. Settings → Actions → General → Workflow permissions: tick **Allow GitHub Actions to create and
+   approve pull requests**. Without it a run publishes and pushes its branch, then fails to open the PR;
+   open it from the branch by hand.
+
+**By hand.**
+
+```sh
+gh workflow run maps-tiles                    # the cycling overlay, now
+gh workflow run maps-tiles -f basemap=true    # and a fresh basemap
+gh workflow run maps-tiles -f publish=false   # build and check only: nothing on R2, no PR
+gh workflow run maps-tiles -f publish=false --ref <branch>   # the same for a branch's profile
+```
+
+**Before merging its PR.**
+
+- Close and reopen the PR so `maps-style` CI runs: a PR opened with the workflow's token doesn't start
+  other workflows. The job has already run `bun run check`.
+- Compare each archive's size in the PR with the last one's: from one month to the next they should barely move, and
+  a big drop means something went missing, such as a tag OpenStreetMap stopped using.
+- Look at the new tiles. On the PR's branch, the prototype reads them from R2 (`cd docs/maps/prototype
+  && bun run serve`): central London at z10–14, a rural National Cycle Network route, Box Hill. Check the
+  route dots and badges, paths, cycle lanes and POI icons. For a new basemap, also check labels, water
+  and buildings from z5 up, and Protomaps' changelog if the tiles' minor version moved
+  (`pmtiles show https://maps.ride-on.cc/<key>`).
+
+GitHub turns scheduled workflows off after 60 days without activity in the repository, and emails a
+warning first: `gh workflow enable maps-tiles` turns it back on.
+
+### Pruning
+
+App builds bundle their style, so a released app reads its keys for as long as it's installed. Keep at
+least the two builds of each layer before the current one, and before deleting a key, check no released
+app version reads it: `git log -S <key> -- maps/style/src/style.ts` shows when it was current. Old keys
+are deleted by hand:
+
+```sh
+aws --profile r2 --endpoint-url https://3343118697a4beccae42090c4520cd29.r2.cloudflarestorage.com \
+  s3 ls s3://ride-on-maps/
+aws --profile r2 --endpoint-url https://3343118697a4beccae42090c4520cd29.r2.cloudflarestorage.com \
+  s3 rm s3://ride-on-maps/<key>
+```
+
+They cost little to keep: a year of monthly overlays is about 1.5 GB, or about $0.02 a month.
