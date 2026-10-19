@@ -21,14 +21,17 @@ requests, one tile or directory at a time.
 |---|---|---|---|
 | `basemap-gb-20261017.pmtiles` | Protomaps basemap, z0–15, GB bbox `-8.7,49.8,1.9,60.9` | 3,005,193,777 bytes | `pmtiles extract https://build.protomaps.com/20261017.pmtiles` (tiles v4.15.2) |
 | `cycling-gb-20261017.pmtiles` | Cycling overlay, z6–14 ([layers](tiles/README.md)) | 125,501,621 bytes | `maps/tiles/build.sh` on Geofabrik's 17 October 2026 GB extract with batch D's profile (PR #271); main's profile rebuilds it byte for byte |
+| `terrain-gb-20261019.pmtiles` | Mapterhorn's DEM for hillshade, terrarium-encoded WebP, 512 px tiles, z0–12, GB bbox | 861,378,560 bytes | `pmtiles extract https://download.mapterhorn.com/planet.pmtiles terrain-gb-20261019.pmtiles --bbox=-8.7,49.8,1.9,60.9 --maxzoom=12` ([below](#terrain)) |
+| `contours-gb-20261019.pmtiles` | OS Terrain 50's 10 m contours, layer `contours` with `ele` (metres), z11–14 | 1,035,408,114 bytes | GDAL `ogr2ogr` from OS Terrain 50's GeoPackage ([below](#terrain)) |
 
 - **Keys are dated and immutable.** Never overwrite one: apps may be reading it, and the objects carry
   `Cache-Control: public, max-age=31536000, immutable`. Publish a new key and point the style at it, then
   delete the old one once no app version still references it. `hosting/publish.sh` refuses a key that
   already exists.
 - **Naming:** `<layer>-<region>-<YYYYMMDD>.pmtiles`, where the date is the OpenStreetMap data's date:
-  `basemap-gb-…`, then `cycling-gb-…` (WS1.2) and `terrain-gb-…` (WS1.4). A rebuild from the same data
-  (a changed profile, say) adds a counter: `cycling-gb-20261017-2.pmtiles`, then `-3`.
+  `basemap-gb-…`, then `cycling-gb-…` (WS1.2). `terrain-gb-…` and `contours-gb-…` (WS1.4) aren't from
+  OpenStreetMap, so theirs is the date they were built. A rebuild from the same data (a changed profile,
+  say) adds a counter: `cycling-gb-20261017-2.pmtiles`, then `-3`.
 - **Content type** `application/vnd.pmtiles`.
 - **CORS** (`hosting/cors.json`): GET and HEAD from any origin, `Range` allowed, `ETag`,
   `Content-Range`, `Content-Length` and `Accept-Ranges` exposed. The app doesn't need it; the browser
@@ -100,3 +103,41 @@ pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles basemap-gb-<YYYYM
 The extract reads only the tiles it needs from the ~139 GB world build (a few minutes). Check the build's
 tiles version against the `@protomaps/basemaps` version the style is built with
 (the prototype uses 5.7.2, which reads tiles v4).
+
+### Terrain
+
+Hillshade and contours (WS1.4) come from two sources, both licensed for the app:
+
+- **`terrain-gb-…`**: [Mapterhorn](https://mapterhorn.com)'s open DEM, already a PMTiles archive of
+  terrarium-encoded WebP tiles (512 px). Over GB it is built from the Environment Agency's, Scottish
+  Government's and Welsh Government's LiDAR (all OGL v3) and Copernicus GLO-30 at low zooms. The licence
+  asks for a link to [mapterhorn.com/attribution](https://mapterhorn.com/attribution), which lists them.
+
+  ```sh
+  pmtiles extract https://download.mapterhorn.com/planet.pmtiles terrain-gb-<YYYYMMDD>.pmtiles \
+    --bbox=-8.7,49.8,1.9,60.9 --maxzoom=12
+  ```
+
+  z12 is enough to shade the hills at every zoom the app shows; MapLibre overzooms it. Mapterhorn
+  goes deeper, but each zoom level multiplies the size by about four.
+- **`contours-gb-…`**: [OS Terrain 50](https://www.ordnancesurvey.co.uk/products/os-terrain-50)'s
+  10 m contour lines (OS OpenData, OGL v3: "Contains OS data © Crown copyright and database right
+  <year>"). The GeoPackage download (1.2 GB zipped, 3.5 GB unzipped) holds 1,012,647 lines in
+  `contour_line`, each with its height in `property_value`. GDAL writes PMTiles directly:
+
+  ```sh
+  curl -L -o terr50_gpkg_gb.zip \
+    'https://api.os.uk/downloads/v1/products/Terrain50/downloads?area=GB&format=GeoPackage&redirect'
+  unzip terr50_gpkg_gb.zip                                  # Data/terr50_gb.gpkg
+  docker run --rm -v "$PWD/Data":/d:ro -v "$PWD/out":/o ghcr.io/osgeo/gdal:ubuntu-small-3.11.4 \
+    ogr2ogr -f PMTiles /o/contours-gb-<YYYYMMDD>.pmtiles /d/terr50_gb.gpkg \
+    -dialect sqlite -sql "select geometry, cast(property_value as integer) as ele from contour_line" \
+    -nln contours -dsco MINZOOM=11 -dsco MAXZOOM=14 -dsco SIMPLIFICATION=0.5
+  ```
+
+  It runs on one core and took 30 minutes on an M4 Max (157,843 tiles). z11–14 because cycle.travel's contours start
+  at its z12 (our z11); MapLibre overzooms z14. OS Terrain 50 is a 50 m grid, so its contours are smooth,
+  much like cycle.travel's.
+
+Both change rarely (OS Terrain 50 is updated once a year), so they're rebuilt by hand, not by
+WS1.5's monthly job.

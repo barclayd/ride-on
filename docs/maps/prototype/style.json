@@ -11,6 +11,18 @@
    "type": "vector",
    "url": "pmtiles://https://maps.ride-on.cc/cycling-gb-20261017.pmtiles",
    "attribution": "© <a href=\"https://openstreetmap.org/copyright\">OpenStreetMap</a>"
+  },
+  "terrain": {
+   "type": "raster-dem",
+   "url": "pmtiles://https://maps.ride-on.cc/terrain-gb-20261019.pmtiles",
+   "encoding": "terrarium",
+   "tileSize": 512,
+   "attribution": "<a href=\"https://mapterhorn.com/attribution\">© Mapterhorn</a>"
+  },
+  "contours": {
+   "type": "vector",
+   "url": "pmtiles://https://maps.ride-on.cc/contours-gb-20261019.pmtiles",
+   "attribution": "Contains OS data © Crown copyright and database right 2026"
   }
  },
  "sprite": "http://localhost:8787/sprite",
@@ -195,6 +207,51 @@
    "source-layer": "landuse",
    "filter": ["any", ["in", "kind", "runway", "taxiway"]],
    "paint": {"fill-color": "#e9e9ed"}
+  },
+  {
+   "id": "ct_hillshade",
+   "type": "hillshade",
+   "source": "terrain",
+   "paint": {
+    "hillshade-shadow-color": "#4c4a3a",
+    "hillshade-highlight-color": "rgba(255, 255, 255, 0)",
+    "hillshade-accent-color": "rgba(76, 74, 58, 0.4)",
+    "hillshade-exaggeration": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     10,
+     0.35,
+     11,
+     0.3,
+     13,
+     0.36,
+     15,
+     0.4
+    ]
+   }
+  },
+  {
+   "id": "ct_contours",
+   "type": "line",
+   "source": "contours",
+   "source-layer": "contours",
+   "minzoom": 11,
+   "paint": {
+    "line-color": "#685838",
+    "line-width": 0.5,
+    "line-opacity": [
+     "interpolate",
+     ["linear"],
+     ["zoom"],
+     11,
+     0.2,
+     13,
+     0.5,
+     15,
+     0.65
+    ]
+   }
   },
   {
    "id": "water",
@@ -2125,6 +2182,41 @@
      15
     ]
    }
+  },
+  {
+   "id": "ct_contour_labels_20",
+   "type": "symbol",
+   "source": "contours",
+   "source-layer": "contours",
+   "minzoom": 13,
+   "maxzoom": 14,
+   "filter": ["==", ["%", ["get", "ele"], 20], 0],
+   "layout": {
+    "symbol-placement": "line",
+    "symbol-spacing": ["interpolate", ["linear"], ["zoom"], 14, 600, 15, 900],
+    "text-field": ["to-string", ["get", "ele"]],
+    "text-font": ["literal", ["Montserrat-Regular"]],
+    "text-size": 9,
+    "text-max-angle": 25
+   },
+   "paint": {"text-color": "#b0701b"}
+  },
+  {
+   "id": "ct_contour_labels",
+   "type": "symbol",
+   "source": "contours",
+   "source-layer": "contours",
+   "minzoom": 14,
+   "maxzoom": 24,
+   "layout": {
+    "symbol-placement": "line",
+    "symbol-spacing": ["interpolate", ["linear"], ["zoom"], 14, 600, 15, 900],
+    "text-field": ["to-string", ["get", "ele"]],
+    "text-font": ["literal", ["Montserrat-Regular"]],
+    "text-size": 9,
+    "text-max-angle": 25
+   },
+   "paint": {"text-color": "#b0701b"}
   },
   {
    "id": "water_waterway_label",

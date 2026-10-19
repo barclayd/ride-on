@@ -90,7 +90,8 @@ public struct CycleMap: View {
 
     /// The bundled style with `bundle://` pointed at the resource bundle: Native needs absolute glyph
     /// URLs, so the style is rewritten once into Caches. `-CycleMapTiles <url>` swaps the tile host,
-    /// e.g. `file:///…/tiles` for a folder holding local `basemap-gb-*.pmtiles` and `cycling-gb-*.pmtiles`.
+    /// e.g. `file:///…/tiles` for a folder holding local copies of the style's archives (`basemap-gb-*`,
+    /// `cycling-gb-*`, `terrain-gb-*` and `contours-gb-*.pmtiles`).
     static let styleURL: URL = {
         let directory = Bundle.module.url(forResource: "CycleMap", withExtension: nil)!
         var json = try! String(contentsOf: directory.appending(path: "style.json"), encoding: .utf8)
@@ -121,7 +122,9 @@ public struct CycleMap: View {
 }
 
 /// "© OpenStreetMap" and "Protomaps" (§2). On the live map each links to its terms, in the map's own
-/// light scheme; on a card's snapshot, which is a button, they're plain text in the card's white.
+/// light scheme, and the terrain's credits follow: Mapterhorn for the hillshade, Ordnance Survey's
+/// statement for the contours. On a card's snapshot, which is a button and has no terrain, they're
+/// plain text in the card's white.
 public struct CycleMapAttribution: View {
     public enum Placement { case map, card }
 
@@ -132,15 +135,26 @@ public struct CycleMapAttribution: View {
     }
 
     public var body: some View {
-        HStack(spacing: 10) {
-            switch placement {
-            case .map:
-                Link("© OpenStreetMap", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
-                    .accessibilityLabel("Map data © OpenStreetMap contributors")
-                Link("Protomaps", destination: URL(string: "https://protomaps.com")!)
-            case .card:
-                Text("© OpenStreetMap")
-                Text("Protomaps")
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 10) {
+                switch placement {
+                case .map:
+                    Link("© OpenStreetMap", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
+                        .accessibilityLabel("Map data © OpenStreetMap contributors")
+                    Link("Protomaps", destination: URL(string: "https://protomaps.com")!)
+                    Link("Mapterhorn", destination: URL(string: "https://mapterhorn.com/attribution")!)
+                        .accessibilityLabel("Terrain © Mapterhorn")
+                case .card:
+                    Text("© OpenStreetMap")
+                    Text("Protomaps")
+                }
+            }
+            if placement == .map {
+                // The Open Government Licence's attribution statement, as OS words it.
+                Link("Contains OS data © Crown copyright and database right 2026",
+                     destination: URL(string: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/")!)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
         .font(.caption2.weight(.medium))

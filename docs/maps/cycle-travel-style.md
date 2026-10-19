@@ -184,8 +184,23 @@ object.
 - Schools, hospitals and industrial land have no fill of their own: Protomaps' `landuse_school`,
   `landuse_hospital`, `landuse_industrial` and `landuse_urban_green` layers are dropped.
 - Protomaps' `landcover` layer is dropped: cycle.travel has no low-zoom land cover.
-- **Missing:** hillshade and contours. cycle.travel shades hills at every zoom we compared and draws
-  contours from about z12. Plan WS1.
+
+## Terrain
+
+Measured on cycle.travel at Box Hill and the Surrey Hills (ct z11–16) in WS1.4. Data and how it's made:
+[`maps/README.md`](../../maps/README.md#terrain).
+
+| | Rule |
+|---|---|
+| Hillshade (`ct_hillshade`) | Every zoom, from Mapterhorn's DEM (`terrain`, `raster-dem`, terrarium). Shadow `#4c4a3a`, no highlight, accent `rgba(76, 74, 58, 0.4)`: cycle.travel's scarps are soft grey, never black. Exaggeration 0.35 at z10, 0.3 at z11, 0.36 at z13, 0.4 at z15: lighter at z11, where Mapterhorn's detail and the new contours darken the scarps, and heavier close in, as cycle.travel's is at its z15–16 |
+| Contours (`ct_contours`) | Every 10 m from z11 (ct z12), OS Terrain 50 (`contours`, `ele` in metres). 0.5 px `#685838`, opacity 0.2 at z11, 0.5 at z13, 0.65 at z15 |
+| Contour labels | `#b0701b`, Montserrat Regular 9 px, along the line (`text-max-angle` 25). Every 20 m at z13 (`ct_contour_labels_20`, ct z14), every line from z14 (`ct_contour_labels`, ct z15). `symbol-spacing` 600 at z14, 900 at z15: about once a line per screen |
+| Order | Both under the water, so lakes and rivers stay clean, and over land use; the labels just under `water_waterway_label`, below every other label, so they give way |
+| Snapshots | No terrain: cards and thumbnails hide `ct_hillshade` and `ct_contour*`, as they hide labels |
+
+Gaps: cycle.travel's DEM is softer, so its slopes shade in broad bands where ours (LiDAR) shows every
+gully. Our vector contours are cut at tile edges, so long scarp lines carry a label per tile and repeat a
+little more often than cycle.travel's.
 
 ## Roads
 
@@ -212,8 +227,8 @@ their own layer (next section).
 - cycle.travel shows more minor streets than we do at z11–13 (Protomaps thins them).
 - Station throats (Waterloo, Victoria) read heavier than cycle.travel's at z14: every platform track is
   drawn, half-width but still dense. Not addressed in WS2.5.
-- cycle.travel's hillshade greys its low zooms (the Downs at z9) where ours is flat land colour, so its
-  map reads darker even where the roads match. Hillshade is WS1.4.
+- cycle.travel's hillshade greys its low zooms (the Downs at z9), so its map reads darker even where the
+  roads match. Ours has the same since WS1.4 ([Terrain](#terrain)).
 
 ## Cycle paths and footpaths
 
@@ -529,16 +544,17 @@ and what doesn't, except for the gaps below.
 Bottom to top, as `style.ts` splices them into Protomaps' `light` layers:
 
 1. Protomaps background, earth, water, land use… with `ct_urban` and `ct_greens` inserted just before
-   `landuse_park`, `ct_pitches` just after it, and `ct_military_band`, `ct_military` just after
-   `buildings`.
+   `landuse_park`, `ct_pitches` just after it, `ct_hillshade` and `ct_contours` just before `water`, and
+   `ct_military_band`, `ct_military` just after `buildings`.
 2. Protomaps roads, with `ct_footpaths`, `ct_unpaved`, `ct_cycleways_casing`, `ct_cycleways` just
    before `roads_rail`, and `ct_rail_core` just after it.
-3. `ct_routes_lcn`, `ct_routes_rcn`, `ct_routes`, `ct_routes_eurovelo`, `ct_stations` just before
-   `roads_labels_minor`, so route dots sit above every line and below every label.
-4. `ct_road_refs` just after `roads_labels_major`.
-5. `ct_landmarks`, `ct_localities`, `ct_parks`, `ct_peaks`, `ct_stations_label`, `ct_pois`, the four
+3. `ct_contour_labels_20` and `ct_contour_labels` just before `water_waterway_label`.
+4. `ct_cycle_lanes`, `ct_routes_lcn`, `ct_routes_rcn`, `ct_routes`, `ct_routes_eurovelo`, `ct_stations`
+   just before `roads_labels_minor`, so route dots sit above every line and below every label.
+5. `ct_road_refs` just after `roads_labels_major`.
+6. `ct_landmarks`, `ct_localities`, `ct_parks`, `ct_peaks`, `ct_stations_label`, `ct_pois`, the four
    badge layers, `places_villages` (z10–11) and `ct_stations_thinned`, just before `places_subplace`.
-6. Protomaps place labels on top.
+7. Protomaps place labels on top.
 
 ## Protomaps changes
 
@@ -569,7 +585,7 @@ them is dropped. The tests check every stack has its glyphs and every glyph dire
 
 From the ten comparisons in `screenshots/`. Tick them off in WS2.
 
-- [ ] Hillshade and contours (needs a DEM, WS1)
+- [x] Hillshade and contours (WS1.4, [Terrain](#terrain))
 - [x] POI icons: café, pub, toilets, water, bike parking, bike shop, campsite, viewpoint (WS2.4b; no car
   parks, as on cycle.travel)
 - [ ] POI kinds we don't draw: restaurant, convenience shop, museum, attraction, bike rental, hostel,
