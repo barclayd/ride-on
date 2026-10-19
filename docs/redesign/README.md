@@ -27,7 +27,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
-| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | 🟡 Being built behind `--cycle-map`: the Routes map's Cycle look, card and thumbnail snapshots, and cycle lanes on roads and terrain (hillshade, contours) done; the Mac stays on MapKit | #223, #225, #275, #276, #277, #278, #280 |
+| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The Routes map's default look on iOS, with snapshots on cards and thumbnails, cycle lanes, hillshade and contours; the Mac stays on MapKit. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
 
 Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
@@ -489,13 +489,14 @@ Build:
 |---|---|
 | <img src="screens/routes-library.png" width="300"> | <img src="screens/routes-history.png" width="300"> |
 
-A full-screen satellite map with a regular-glass panel floating over it, 8pt from the screen
-edges and 14pt above the tab bar. No navigation bar, and the tab bar never minimises here.
+A full-screen map, the cycle map on iOS and satellite on the Mac, with a regular-glass panel
+floating over it, 8pt from the screen edges and 14pt above the tab bar. No navigation bar, and the tab bar never minimises here.
 
 1. **Map** (`RoutesMap`): the other shortlisted routes in white, the selected one in the accent
    with a white casing and a start marker, and a callout over its northernmost point ("Hilly
    Loop 51 km"; from History, the ride's date: "Hilly Loop 29 Sep"). Tapping near a line selects
-   it. Top trailing: clear-glass Map Style menu (Satellite, Hybrid, Standard) and My Location.
+   it. Top trailing: the Map Style menu (Cycle on iOS, Satellite, Hybrid, Standard) and My Location,
+   in regular glass held light over the cycle map and clear glass over the others.
 2. **Panel** (`FloatingPanel`): medium detent 56% of the height, large up to the safe-area top.
    Drag the header (1:1, rubber-banded, momentum picks the detent), tap the grabber, or pull the
    content down at large to go back to medium. Focusing search goes to large.
@@ -552,18 +553,18 @@ Build:
 - The panel can't be grabbed mid-settle; a new drag starts from the detent.
 - The map uses flat `.imagery`/`.hybrid`/`.standard`; `elevation: .realistic` dropped the
   annotations and blurred the lines.
-- `--cycle-map` adds a Cycle look to the Map Style menu, first and selected at launch (iOS only; the
-  Mac keeps MapKit's three looks, [decision 2](../maps/README.md#open-decisions)):
-  `CycleMap`, MapLibre Native drawing the cycle map with the shortlist, the selected route's start
-  marker and callout, tap-to-select and its own attribution (OpenStreetMap, Protomaps, Mapterhorn and
-  the OS statement for the terrain)
-  ([WS3](../maps/README.md#ws3-app-integration-115-weeks)). Picking Satellite, Hybrid or Standard
-  goes back to MapKit. With the flag, shortlist cards and every route thumbnail (Routes rows, the
-  Rides list, Track a Ride) are cycle-map snapshots instead of satellite, without labels or terrain; the card
-  carries "© OpenStreetMap  Protomaps" under its stats, so its bottom padding drops from 30pt (clear
-  of MapKit's logo) to 4pt. The Rides hero stays satellite ([decision 3](../maps/README.md#open-decisions)). Over it the
-  status bar's glyphs are dark and the map controls light regular glass, in Dark Mode too, with no
-  dimming under the status bar; in Dark Mode the tab bar's labels are still white over the light map
+- On iOS the map opens in its Cycle look, first in the Map Style menu: `CycleMap`, MapLibre Native
+  drawing the cycle map with the shortlist, the selected route's start marker and callout,
+  tap-to-select and its own attribution (OpenStreetMap, Protomaps, Mapterhorn and the OS statement
+  for the terrain) ([WS3](../maps/README.md#ws3-app-integration-115-weeks)). Picking Satellite,
+  Hybrid or Standard goes back to MapKit; the Mac has only those three and opens on Satellite
+  ([decision 2](../maps/README.md#open-decisions)). On iOS shortlist cards and every route thumbnail
+  (Routes rows, the Rides list, Track a Ride) are cycle-map snapshots, without labels or terrain; the
+  card carries "© OpenStreetMap  Protomaps" under its stats, so its bottom padding is 4pt rather than
+  the 30pt that clears MapKit's logo on the Mac. The Rides hero stays satellite
+  ([decision 3](../maps/README.md#open-decisions)). Over the cycle map the status bar's glyphs are dark
+  and the map controls light regular glass, in Dark Mode too, with no dimming under the status bar; in
+  Dark Mode the tab bar's labels are still white over the light map
   ([WS2.7](../maps/README.md#ws2-style-for-maplibre-native-1-week)).
 
 ## Design language board

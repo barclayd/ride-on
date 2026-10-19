@@ -1714,6 +1714,13 @@ The migration and deployment commands above target production. Use
 `bun run migrate:local` and `bun run dev` for local work. Existing clients calling
 `/classify` or `/strava/*` need migration to the new API.
 
+### Map tiles
+
+The app's cycle map doesn't call this API. Its tiles are static PMTiles archives in the
+`ride-on-maps` R2 bucket, served at https://maps.ride-on.cc through an R2 custom domain (no Worker)
+and read with HTTP Range requests; the style, glyphs and sprite are bundled in the app. Keys,
+publishing, caching and CORS: [`maps/README.md`](../maps/README.md).
+
 ## Errors
 
 Malformed inputs: 400; invalid/missing token: 401; unknown or another owner's route:

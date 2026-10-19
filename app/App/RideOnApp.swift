@@ -162,8 +162,9 @@ struct RootView: View {
 }
 
 private struct TabRoot: View {
-    // `--cycle-map` (docs/maps/README.md, WS3) opens on the Routes map, in its Cycle look.
-    @State private var selection = ProcessInfo.processInfo.arguments.contains("--cycle-map") ? AppTab.routes : .rides
+    // `-CycleMapCamera` pins the Routes map's camera for screenshots (docs/maps/README.md, WS3), so it
+    // opens there.
+    @State private var selection = UserDefaults.standard.string(forKey: "CycleMapCamera") != nil ? AppTab.routes : .rides
 
     var body: some View {
         TabView(selection: $selection) {

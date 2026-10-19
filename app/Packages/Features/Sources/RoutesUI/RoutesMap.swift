@@ -11,17 +11,17 @@ enum MapLook: String, CaseIterable, Identifiable {
 
     var id: Self { self }
 
-    /// The looks the menu offers: Cycle only behind `--cycle-map`, and only on iOS. The Mac keeps
-    /// MapKit's three (docs/maps/README.md, WS3.6).
+    /// The looks the menu offers: Cycle first on iOS. The Mac keeps MapKit's three
+    /// (docs/maps/README.md, WS3.6).
     static var offered: [MapLook] {
         #if os(iOS)
-        CycleMap.isEnabled ? allCases : allCases.filter { $0 != .cycle }
+        allCases
         #else
         allCases.filter { $0 != .cycle }
         #endif
     }
 
-    /// Cycle where it's offered, satellite otherwise.
+    /// Cycle on iOS, satellite on the Mac.
     static var initial: MapLook { offered.first ?? .satellite }
 
     var title: String {

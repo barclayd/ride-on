@@ -42,8 +42,8 @@ enum ShortlistStatus: Hashable {
     }
 }
 
-/// A shortlisted route in the Routes panel's carousel: its loop on satellite imagery (the cycle map
-/// with `--cycle-map`), how it's faring on Rides, and its score when it's ranked. Tapping it shows
+/// A shortlisted route in the Routes panel's carousel: its loop on the cycle map (satellite imagery
+/// on the Mac), how it's faring on Rides, and its score when it's ranked. Tapping it shows
 /// it on the big map; the check takes it off the shortlist.
 struct ShortlistCard: View {
     var route: RouteLibrary.Route

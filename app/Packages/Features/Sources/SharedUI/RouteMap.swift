@@ -9,10 +9,10 @@ import Models
 /// Legal link. With the cycle map (`showsCycleMap`), cards and thumbnails are `CycleMap`
 /// snapshots instead (§6 #17), and a card carries the attribution itself.
 public struct RouteMap: View {
-    /// Whether cards and thumbnails are cycle-map snapshots: `--cycle-map`, on iOS.
+    /// Whether cards and thumbnails are cycle-map snapshots: on iOS; the Mac stays on MapKit.
     public static var showsCycleMap: Bool {
         #if os(iOS)
-        CycleMap.isEnabled
+        true
         #else
         false
         #endif

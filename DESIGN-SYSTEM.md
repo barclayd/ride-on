@@ -60,7 +60,7 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 Rules:
 - **Regular glass by default.** Clear glass only over rich media (the hero map, the Routes
   map), with a ~35% dark gradient behind it on the hero so white glyphs stay legible (the
-  Routes map is satellite imagery, dark enough on its own). The cycle map is light, so controls
+  Routes map's satellite looks are dark enough on their own). The cycle map is light, so controls
   over it use regular glass, held light in Dark Mode; nothing dims it, and the status bar's glyphs
   go dark over it (`.toolbarColorScheme(.light, for: .navigationBar)`).
 - **Scroll edge effects, not dividers.** No hairlines under toolbars or between sections; the
@@ -205,17 +205,17 @@ before adding a custom component in code.
     pulling the content down past its top at large lets it go to medium, like a sheet. On iPad
     and Mac it's a fixed full-height column with no grabber.
 11. **`ShortlistCard`** — a shortlisted route in the panel's carousel (272 × 158pt, card
-    radius): its loop on satellite imagery, a status pill ("Best pick · Wed", "Thu 09:00",
-    "Below your minimums", "Too long for your window", "Checking the forecast…"), name, ↔
-    distance, `mountain.2` climb, and the score out of 100 when Rides has ranked it. The white
-    check takes it off the shortlist. Selected, it gets a 3pt accent outline. At accessibility
-    sizes it takes the carousel's width and its stats stack.
+    radius): its loop on a `CycleMap` snapshot (satellite imagery on the Mac), a status pill
+    ("Best pick · Wed", "Thu 09:00", "Below your minimums", "Too long for your window",
+    "Checking the forecast…"), name, ↔ distance, `mountain.2` climb, and the score out of 100
+    when Rides has ranked it. The white check takes it off the shortlist. Selected, it gets a 3pt
+    accent outline. At accessibility sizes it takes the carousel's width and its stats stack.
 12. **`RoutesMap`** — the Routes tab's live map: other shortlisted routes in white, the selected
     one in the accent with a white casing and start marker, and a callout over its northernmost
     point ("Hilly Loop 51 km", or the ride's date from History). Tapping within 22pt of a line
     selects that route. `MapControls` (style menu, my location) sit at its top trailing corner.
-    The style menu offers Satellite, Hybrid and Standard, and Cycle (`CycleMap`) first where it's
-    available: iOS, behind `--cycle-map` until it ships, when it's also the default.
+    The style menu offers Cycle (`CycleMap`), the look at launch, then Satellite, Hybrid and
+    Standard. The Mac has no Cycle look and opens on Satellite.
 13. **Panel rows** (`LibraryRow`, `HistoryRow`) — a 48pt route thumbnail, name, "42 km · 180 m ·
     46% unpaved", then the source and last ride (Library) or the forecast saved when the ride
     was planned (History; never the weather on the day). Selected, the row fills with
@@ -253,8 +253,8 @@ before adding a custom component in code.
     `.caption2` `.secondary` at the safe area's bottom leading corner, 12pt in, held at a fixed size
     like the map controls. A tap within 22pt of a line selects it; a double tap only zooms. The selected
     route's callout is pinned over its northernmost point as on MapKit. In the fixture world it
-    draws the style's land colour only, offline. Being built behind the `--cycle-map` launch
-    argument; plan, rollout and open decisions in [`docs/maps/README.md`](docs/maps/README.md).
+    draws the style's land colour only, offline. Plan, data pipeline and open decisions in
+    [`docs/maps/README.md`](docs/maps/README.md).
     `RideHero` stays on satellite imagery and `WindRouteMap` on the muted standard map until
     those decisions say otherwise.
 
@@ -310,6 +310,6 @@ glass transitions use `.materialize`.
 | **Ideal Temperature** (push) | Big range readout, `TemperatureRange`, one-line explanation → "How Your Routes Fit" range bars per route → "Deal-Breakers" steppers. Saves automatically; no Done. |
 | **Comfortable Wind** (push) | `WindEnvelope` → "Limits" sliders (headwind, crosswind, gusts) and crosswind sensitivity → "How Your Routes Fit". Saves automatically. |
 | **Widgets & Lock Screen** | `systemSmall` (score ring, day and time, route, one line of conditions), `systemMedium` (map thumbnail, best pick, times, conditions, runner-up). Lock Screen `accessoryInline`, `accessoryCircular` (score ring + day), `accessoryRectangular`. Tap opens the ride. |
-| **Routes** (tab) | Full-screen satellite `RoutesMap` (shortlist in white, selected route in the accent, callout, start marker; `MapControls` top trailing) under the `FloatingPanel`: search capsule ("Search Routes") and "+" menu (Import GPX File, From cycle.travel, Connect Strava) pinned → "Shortlist" with "4 of 12" → `ShortlistCard` carousel → segmented Library N / History N → Library rows, or History rows grouped by month ("October 1 ride") ending with "Weather is the forecast from when you planned each ride, not what you rode in." Selecting a card or row shows it on the map. Focusing search expands the panel. No navigation bar; the tab bar never minimises. |
+| **Routes** (tab) | Full-screen `RoutesMap`, the cycle map on iOS and satellite on the Mac (shortlist in white, selected route in the accent, callout, start marker; `MapControls` top trailing) under the `FloatingPanel`: search capsule ("Search Routes") and "+" menu (Import GPX File, From cycle.travel, Connect Strava) pinned → "Shortlist" with "4 of 12" → `ShortlistCard` carousel → segmented Library N / History N → Library rows, or History rows grouped by month ("October 1 ride") ending with "Weather is the forecast from when you planned each ride, not what you rode in." Selecting a card or row shows it on the map. Focusing search expands the panel. No navigation bar; the tab bar never minimises. |
 | **Onboarding** | Not yet redesigned: one control per screen (`DialScreen`), permissions primed one sentence before each system prompt, location on first Rides entry, Health before ride matching. |
 | **Weather attribution** | Apple Weather mark + "Other data sources" link (https://developer.apple.com/weatherkit/data-source-attribution/) wherever forecast data shows, via `WeatherService.attribution`. |

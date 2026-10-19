@@ -91,8 +91,8 @@ prototype in the window the Routes map shows above the panel at its medium deten
    and take the screenshot. Its mobile map has no sidebar, so there is no `dx`. At 3× it draws its 2×
    tiles scaled 1.5×, so its lines and dots are a touch soft.
 2. App: build Ride On for the Simulator, install it, then
-   `sh capture/app-sim.sh <udid> <outDir> [view ...]`. It launches `--fixture-world --cycle-map
-   -CycleMapCamera <lat,lon,zoom>` per view and crops the map window once two screenshots a second apart
+   `sh capture/app-sim.sh <udid> <outDir> [view ...]`. It launches `--fixture-world
+   -CycleMapCamera <lat,lon,zoom>` per view (the camera argument opens it on Routes) and crops the map window once two screenshots a second apart
    match. Use the iPhone 17 simulator `79662D65-4914-46BC-BA2A-510E3989498D`, never `booted`.
 3. Prototype: `bun capture/ml-headless.mjs --phone <outDir> [view ...]`, which hides GL JS's controls.
    The trios leave its colours as captured; they're for sizes and placement, not colour.

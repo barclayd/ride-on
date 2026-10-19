@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3 done: purple cycle lanes on roads; WS1.4 done: hillshade from Mapterhorn and 10 m contours from OS Terrain 50; WS1.5 done: monthly tile rebuilds by GitHub Actions (`maps-tiles`, waiting on its R2 secrets); WS3.6 done: the Mac stays on MapKit ([decision 2](#open-decisions)); WS4b (docs, remove the flag) next |
+| Status | Built, 19 October 2026: every workstream in the [PR sequence](#suggested-pr-sequence) is done. On iOS the cycle map is the Routes map's default look (`CycleMap`), with snapshots on shortlist cards and thumbnails; the Mac stays on MapKit ([decision 2](#open-decisions)). Tiles are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)), rebuilt monthly by the `maps-tiles` workflow once its R2 secrets are added. Open before release: [decision 1](#open-decisions) (asking cycle.travel) and Dan's on-device check (the six comparison views, frame rate, memory). Open after: decision 6 (a dark variant) |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -356,7 +356,7 @@ The map itself needs nothing: it never reads the system appearance. The chrome o
   a black selected tab there. Until Dan picks, WS3 carries the first three and leaves the tab bar.
 
 The panel, cards and sheets follow the system as before: only what sits directly on the map is held light.
-All of it is behind `--cycle-map`; the satellite map is unchanged.
+MapKit's looks are unchanged.
 
 Done when the six comparison views on device read as cycle.travel to Dan, and the style validates.
 
@@ -372,7 +372,7 @@ the accent with a white casing) under the labels, tap-to-select and framing abov
 
 | | |
 |---|---|
-| Launch | `--fixture-world --cycle-map` opens on Routes with the cycle map. `-CycleMapTiles <url>` swaps the tile host for every archive (e.g. `file:///…/tiles` for a folder holding the `basemap-gb-*`, `cycling-gb-*`, `terrain-gb-*` and `contours-gb-*` files, in the Simulator); `-CycleMapCamera 51.4455,-0.2665,13` pins the camera (latitude, longitude, zoom) for screenshots |
+| Launch | `-CycleMapCamera 51.4455,-0.2665,13` opens on Routes with the camera pinned (latitude, longitude, zoom) for screenshots. `-CycleMapTiles <url>` swaps the tile host for every archive (e.g. `file:///…/tiles` for a folder holding the `basemap-gb-*`, `cycling-gb-*`, `terrain-gb-*` and `contours-gb-*` files, in the Simulator), and gives `--fixture-world`, otherwise offline, real tiles. Until WS4b, `--cycle-map` turned the cycle map on |
 | Screenshots | [Richmond Park z11](screenshots/native-spike-richmond-park-z11.jpg), [z15](screenshots/native-spike-richmond-park-z15.jpg) (iPhone 17 Simulator) |
 | Version | MapLibre Native iOS 6.31.0, `maplibre-gl-native-distribution` with `exact:`, `.when(platforms: [.iOS])`; RoutesUI then, SharedUI since 3.1 |
 | PMTiles | `pmtiles://https://…` (checked against `build.protomaps.com/20261017.pmtiles`, the build our extract came from) and `pmtiles://file://…` both render the same |
@@ -380,7 +380,7 @@ the accent with a white casing) under the labels, tap-to-select and framing abov
 | App size | Release, arm64: 35 MB app, of which `MapLibre.framework` 7.8 MB and the glyph bundle 3.5 MB (both uncompressed) |
 | Memory | 118–126 MB footprint on the Routes tab at z11–16.5 (Simulator: indicative only) |
 | macOS | Builds; MapLibre isn't linked, `RoutesMap` stays on MapKit ([WS3.6](#macos)). The glyph bundle still ships (SwiftPM resources can't be per-platform) |
-| Not checked | Frame rate, memory and battery **on a device** (Dan: run `--cycle-map` on the iPhone, pan and pinch between Richmond Park and central London at z11–15 with Xcode's memory gauge and Instruments' Animation Hitches), now with hillshade (1.4) |
+| Not checked | Frame rate, memory and battery **on a device** (Dan: open Routes on the iPhone, pan and pinch between Richmond Park and central London at z11–15 with Xcode's memory gauge and Instruments' Animation Hitches), now with hillshade (1.4) |
 
 What 3.2 has to carry over from the spike:
 - **No camera calls before layout.** `setVisibleCoordinateBounds` or `setCenter(_:zoomLevel:)` on a
@@ -451,22 +451,23 @@ coordinates), the selected line, a tint, a camera (`.rect`, `.automatic` for eve
 **3.3 Flag.** `--cycle-map` launch argument, read the way `--fixture-world` is
 (`ProcessInfo.processInfo.arguments.contains(...)`, `FixtureWorld.swift:12`; `--reset-onboarding` in
 `PreferencesStore.swift:112`). Later a hidden Preferences toggle if Dan wants to dogfood it.
-**Done**: `CycleMap.isEnabled`.
+**Done**: `CycleMap.isEnabled`. **Removed** in WS4b: Cycle is the default look on iOS, so nothing reads
+a flag; `-CycleMapCamera` opens on Routes instead, for screenshots.
 
 **3.4 Replace surfaces, in this order:**
 
 | Surface | Today (main) | Change |
 |---|---|---|
-| Routes tab map | `RoutesMap` in `app/Packages/Features/Sources/RoutesUI/RoutesMap.swift:31`: `MapReader` at :47, `Map(position:)` at :48, `.mapStyle(look.style)` at :80, tap at :81 with `proxy.convert` at :91; `MapLook` enum at :7 (satellite/hybrid/standard); `RouteCallout` :116, `MapControls` :157. Used at `RoutesView.swift:106` | Add a `cycle` `MapLook` behind the flag, then make it the default. The interactive surface where the cycle map matters most. **Done** behind the flag: Cycle is first in the menu and the look at launch (`MapLook.offered`, `.initial`); removing the flag (WS4b) makes it the default |
-| Shortlist cards | `RouteMap(…, style: .card)` at `RoutesUI/ShortlistCard.swift:75` | Static image: `MLNMapSnapshotter`, cached per route + size + scale. **Done** behind the flag |
-| Thumbnails | `RouteMap(…, style: .thumbnail)` at `RoutesUI/RouteRows.swift:202`, `RideUI/TrackRideSheet.swift:165`, `RideUI/RidesView.swift:382` | Same snapshots. Many per screen: never live map views in lists. **Done** behind the flag |
+| Routes tab map | `RoutesMap` in `app/Packages/Features/Sources/RoutesUI/RoutesMap.swift:31`: `MapReader` at :47, `Map(position:)` at :48, `.mapStyle(look.style)` at :80, tap at :81 with `proxy.convert` at :91; `MapLook` enum at :7 (satellite/hybrid/standard); `RouteCallout` :116, `MapControls` :157. Used at `RoutesView.swift:106` | Add a `cycle` `MapLook` behind the flag, then make it the default. The interactive surface where the cycle map matters most. **Done**: Cycle is first in the menu and the look at launch on iOS (`MapLook.offered`, `.initial`); behind the flag until WS4b |
+| Shortlist cards | `RouteMap(…, style: .card)` at `RoutesUI/ShortlistCard.swift:75` | Static image: `MLNMapSnapshotter`, cached per route + size + scale. **Done** |
+| Thumbnails | `RouteMap(…, style: .thumbnail)` at `RoutesUI/RouteRows.swift:202`, `RideUI/TrackRideSheet.swift:165`, `RideUI/RidesView.swift:382` | Same snapshots. Many per screen: never live map views in lists. **Done** |
 | Ride hero | `RouteMap(…, style: .hero, tint:)` at `SharedUI/RideHero.swift:40`; `RouteMap.swift`: `Map(initialPosition: .rect(framingRect), interactionModes: [])` at :56, `.mapStyle(.imagery)` at :75, `RouteOutline` shape at :93 | [Decision 3](#open-decisions): satellite or cycle map. If cycle map, a non-interactive live view or a snapshot; keep the zoom transition source |
 | Wind on the Ride | `WindRouteMap` at `SharedUI/WindRouteMap.swift:45`, `.mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))` at :60; used at `RideUI/RideBreakdownCards.swift:79` | Keep MapKit, or a muted variant of the cycle style (fewer layers, no routes) so the wind colours stay readable |
 
 Other `import MapKit` files: `RoutesView.swift` (camera types), `LiveETAProvider.swift` (directions,
 stays), `RouteSnapshotService.swift` (MapKit snapshots, only used by tests; replace or leave).
 
-**Cards and thumbnails done** (19 October 2026): with `--cycle-map` (`RouteMap.showsCycleMap`),
+**Cards and thumbnails done** (19 October 2026): on iOS (`RouteMap.showsCycleMap`),
 `RouteMap`'s `.card` and `.thumbnail` styles draw `CycleMapSnapshot` (`SharedUI/CycleMapSnapshot.swift`)
 instead of MapKit, so every call site switches with no change. `CycleMapSnapshots` keeps the images in
 an `NSCache` (48 MB), shares one render between views asking for the same image, runs at most two at
@@ -514,6 +515,9 @@ attribution links, and that Satellite swaps it for MapKit.
 
 Done when every surface above uses the cycle map on iOS behind the flag, tests are green
 (`xcodebuild … -destination 'platform=iOS Simulator,name=iPhone 17' test`), and the flag is removed.
+**Done**, 19 October 2026 (WS4b): the Routes map, shortlist cards and thumbnails draw the cycle map on
+iOS with no flag, the hero and Wind on the Ride stay on MapKit ([decision 3](#open-decisions)), and the
+suite passes on the iPhone 17 Simulator.
 
 ### WS4: Spec and docs (1–2 days)
 
@@ -534,6 +538,8 @@ Done when every surface above uses the cycle map on iOS behind the flag, tests a
 
 **WS4b, at the end:** `docs/redesign/README.md` status and screen notes, `CLAUDE.md` module map (new
 dependency, `maps/` directory), `docs/api.md` (maps route), this doc's status.
+**Done**, 19 October 2026: those, DESIGN-SYSTEM.md §2, §6 #11, #12 and #17 and §9's Routes row,
+PLAN.md, and `--cycle-map` removed.
 
 ## MapLibre Native capabilities
 
