@@ -456,7 +456,7 @@ the plan, the four workstreams and the PR order.
 - [x] Map data: GB basemap on R2, cycling overlay, terrain, scheduled rebuilds (WS1; #230, #270, #272, #277–#279)
 - [x] Style for MapLibre Native: glyphs, sprite, colour fix, known gaps, 3× tuning (WS2; #233–#235, #240, #245, #251, #258, #271, #273, #274; Dan's on-device check open)
 - [x] App: MapLibre spike, `CycleMap`, Routes map Cycle look, snapshots, attribution, macOS on MapKit (WS3; #228, #275, #276, #280)
-- [ ] Docs pass and `--cycle-map` flag removed (WS4b)
+- [x] Docs pass and `--cycle-map` flag removed: Cycle is the Routes map's default look on iOS (WS4b, #281)
 
 ### Phase 8 — Release
 - [ ] Privacy policy + App Privacy nutrition labels (location, health, fitness data)

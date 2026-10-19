@@ -13,10 +13,6 @@ import Services
 ///
 /// iOS only: MapLibre Native has no macOS build, so the Mac stays on MapKit (docs/maps/README.md, WS3.6).
 public struct CycleMap: View {
-    /// `--cycle-map` (docs/maps/README.md, WS3.3): until the cycle map ships, it's only offered when
-    /// the app is launched with this.
-    public static var isEnabled: Bool { ProcessInfo.processInfo.arguments.contains("--cycle-map") }
-
     /// A route drawn on the map.
     public struct Line: Equatable, Identifiable {
         public var id: UUID
