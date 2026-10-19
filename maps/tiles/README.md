@@ -159,6 +159,9 @@ docker run --rm -v "$PWD/maps/tiles":/src -v ~/.m2:/root/.m2 -w /src \
 
 ## Publish
 
+The `maps-tiles` workflow does all of this on the 3rd of each month: it builds main's profile on
+Geofabrik's latest extract, publishes it and opens a PR pointing the style at it
+([scheduled rebuilds](../README.md#scheduled-rebuilds)). By hand, say for a profile change between runs:
 `maps/hosting/publish.sh <file>` uploads to the `ride-on-maps` R2 bucket, served from
 `https://maps.ride-on.cc/<file>`; it needs the `r2` AWS CLI profile ([`maps/README.md`](../README.md#publishing-a-file)).
 Then bump `archives.cycling` in `maps/style/src/style.ts` and rebuild the style.

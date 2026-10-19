@@ -21,7 +21,7 @@ fail() { echo "$*" >&2; exit 1; }
 [[ -f $file ]] || fail "No such file: $file"
 [[ $(head -c 7 "$file") == PMTiles ]] || fail "$file isn't a PMTiles archive"
 aws configure list-profiles | grep -qx r2 || fail "No AWS CLI profile named r2: see maps/README.md"
-size=$(stat -f %z "$file" 2>/dev/null || stat -c %s "$file")
+size=$(wc -c < "$file" | tr -d " ")
 
 # Keys are immutable and `aws s3 cp` overwrites silently, so the key must be free.
 if out=$(r2 s3api head-object --bucket "$bucket" --key "$key" 2>&1); then

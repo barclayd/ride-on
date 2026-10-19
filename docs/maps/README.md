@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3 done: purple cycle lanes on roads; WS1.4 done: hillshade from Mapterhorn and 10 m contours from OS Terrain 50; WS1.5 (scheduled rebuilds) next |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3 done: purple cycle lanes on roads; WS1.4 done: hillshade from Mapterhorn and 10 m contours from OS Terrain 50; WS1.5 done: monthly tile rebuilds by GitHub Actions (`maps-tiles`, waiting on its R2 secrets); WS3.6 (macOS) next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -224,11 +224,18 @@ Hills, ct z11–16:
   and [z15](screenshots/cmp-box-hill-z15.jpg) (51.247, −0.308), and the app at
   [Surrey Hills z12](screenshots/native-surrey-hills-z12.jpg).
 
-**1.5 Scheduled rebuilds.** GitHub Actions on a monthly cron (cycle.travel rebuilds about monthly):
-download the Geofabrik extract, run planetiler, upload with a dated key, open a PR bumping the dated URLs
-in the style. Large uploads go through the S3 API (rclone or multipart), not `wrangler r2 object put`,
-which caps object size. Keep the previous two builds so older app versions keep working. Basemap:
-quarterly, like strava-stitch.
+**1.5 Scheduled rebuilds.** Done, 19 October 2026, but it needs its R2 secrets before it can publish:
+`.github/workflows/maps-tiles.yml`, with setup and what to check in
+[`maps/README.md`](../../maps/README.md#scheduled-rebuilds).
+- **Monthly**, as cycle.travel rebuilds about monthly: on the 3rd it builds main's cycling profile on
+  Geofabrik's latest GB extract.
+- **The basemap** is re-extracted from Protomaps' latest daily build each quarter (January, April, July,
+  October) or on request, and refused unless it is tiles v4.
+- **Publishing:** each newer build goes to R2 under its dated key through `publish.sh` (the S3 API,
+  multipart). The style is pointed at it, `bun run check` runs, and a PR opens.
+- **Dry run:** `-f publish=false` builds and checks without publishing, on any branch.
+- **Pruning** is by hand, keeping the previous two builds so older app versions keep working.
+- **Terrain** is rebuilt by hand: it changes once a year at most.
 
 ### WS2: Style for MapLibre Native (~1 week)
 

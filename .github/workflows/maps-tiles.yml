@@ -1,0 +1,190 @@
+name: maps-tiles
+
+# Rebuilds the cycle map's archives from fresh data, publishes them to R2 under new dated keys and opens
+# a PR pointing the style at them (WS1.5): the cycling overlay monthly, as cycle.travel rebuilds about
+# monthly, and the basemap with it each quarter. Setup, and what to check before merging the PR:
+# maps/README.md#scheduled-rebuilds.
+
+on:
+  schedule:
+    # The 3rd at 04:23 UTC: Geofabrik's extract of the 2nd is out by then.
+    - cron: "23 4 3 * *"
+  workflow_dispatch:
+    inputs:
+      basemap:
+        description: Extract a fresh basemap too
+        type: boolean
+        default: false
+      publish:
+        description: Publish to R2 and open the PR (off, it only builds and checks)
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: maps-tiles
+  cancel-in-progress: false
+
+env:
+  # Every aws call names the profile and endpoint: never another AWS account (maps/README.md).
+  R2: --profile r2 --endpoint-url https://3343118697a4beccae42090c4520cd29.r2.cloudflarestorage.com
+  PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
+  AGENT: ride-on-maps-ci/1.0
+
+jobs:
+  rebuild:
+    # Publishing builds main's profile and style, never an unmerged branch's; a dry run can build any.
+    if: ${{ github.ref == 'refs/heads/main' || inputs.publish == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      # First, so a missing secret fails before the build rather than after it.
+      - name: Configure the r2 AWS CLI profile
+        if: env.PUBLISH == 'true'
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          if [[ -z $R2_ACCESS_KEY_ID || -z $R2_SECRET_ACCESS_KEY ]]; then
+            echo "::error::Add the R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY secrets: maps/README.md#scheduled-rebuilds"
+            exit 1
+          fi
+          aws configure set aws_access_key_id "$R2_ACCESS_KEY_ID" --profile r2
+          aws configure set aws_secret_access_key "$R2_SECRET_ACCESS_KEY" --profile r2
+          aws configure set region auto --profile r2
+          aws configure set s3.multipart_chunksize 64MB --profile r2
+          aws configure set s3.max_concurrent_requests 8 --profile r2
+          aws configure set request_checksum_calculation when_required --profile r2
+          aws configure set response_checksum_validation when_required --profile r2
+
+      - name: Choose what to rebuild
+        id: plan
+        env:
+          ASKED: ${{ inputs.basemap }}
+        run: |
+          # The basemap each quarter (the January, April, July and October runs), or when asked.
+          if [[ $ASKED == true ]] || [[ $GITHUB_EVENT_NAME == schedule && $(( $(date -u +%-m) % 3 )) == 1 ]]; then
+            echo "basemap=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+        working-directory: maps/style
+
+      - name: Install the pmtiles CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL -o "$RUNNER_TEMP/pmtiles.tar.gz" \
+            https://github.com/protomaps/go-pmtiles/releases/download/v1.31.2/go-pmtiles_1.31.2_Linux_x86_64.tar.gz
+          echo "3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f  $RUNNER_TEMP/pmtiles.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/pmtiles.tar.gz" -C "$RUNNER_TEMP/bin" pmtiles
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Build the cycling overlay
+        run: |
+          data=$RUNNER_TEMP/tiles
+          mkdir -p "$data"
+          curl -fsSL -A "$AGENT" -o "$data/gb.osm.pbf" https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf
+          maps/tiles/build.sh "$data/gb.osm.pbf" "$data/cycling.pmtiles"
+          rm "$data/gb.osm.pbf"
+          # Named by the extract's date, which planetiler records.
+          time=$(pmtiles show "$data/cycling.pmtiles" --metadata | jq -r '."planetiler:osm:osmosisreplicationtime"')
+          key=cycling-gb-$(date -u -d "$time" +%Y%m%d).pmtiles
+          mv "$data/cycling.pmtiles" "$data/$key"
+          echo "$data/$key" >> "$RUNNER_TEMP/built"
+
+      - name: Extract the basemap
+        if: steps.plan.outputs.basemap == 'true'
+        run: |
+          data=$RUNNER_TEMP/tiles
+          build=$(curl -fsS -A "$AGENT" https://build-metadata.protomaps.dev/builds.json | jq -c '.[-1]')
+          name=$(jq -r .key <<< "$build")
+          version=$(jq -r .version <<< "$build")
+          # The style is built with @protomaps/basemaps 5, which reads tiles v4.
+          if [[ $version != 4.* ]]; then
+            echo "::error::Protomaps' latest build, $name, is tiles v$version; the style reads v4"
+            exit 1
+          fi
+          pmtiles extract "https://build.protomaps.com/$name" "$data/basemap-gb-$name" --bbox=-8.7,49.8,1.9,60.9
+          echo "$data/basemap-gb-$name" >> "$RUNNER_TEMP/built"
+
+      - name: Point the style at them
+        id: style
+        run: |
+          touch "$RUNNER_TEMP/changed"
+          while read -r file; do
+            key=$(basename "$file")
+            layer=${key%%-*}
+            ls -l "$file"
+            current=$(grep -oE "$layer-gb-[0-9]{8}(-[0-9]+)?\.pmtiles" maps/style/src/style.ts)
+            # The style already reads this data, or newer, or a rebuild of it by hand (`-2`): leave it.
+            if (( ${current:${#layer}+4:8} >= ${key:${#layer}+4:8} )); then
+              echo "::notice::The style already reads $current; this build is $key"
+              continue
+            fi
+            sed -i -E "s/$current/$key/" maps/style/src/style.ts
+            echo "$file" >> "$RUNNER_TEMP/changed"
+          done < "$RUNNER_TEMP/built"
+          if [[ ! -s $RUNNER_TEMP/changed ]]; then
+            echo "::notice::The style already reads these builds: nothing to publish"
+            exit 0
+          fi
+          git diff maps/style/src/style.ts
+          (cd maps/style && bun run build && bun run check)
+          (cd docs/maps/prototype && bun run style)
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to R2
+        if: env.PUBLISH == 'true' && steps.style.outputs.changed == 'true'
+        run: |
+          while read -r file; do
+            key=$(basename "$file")
+            # A rerun finds its own earlier upload. Builds are reproducible, so it holds this file.
+            # shellcheck disable=SC2086
+            if aws $R2 s3api head-object --bucket ride-on-maps --key "$key" > /dev/null 2>&1; then
+              echo "::notice::$key is already on R2, from an earlier run"
+            else
+              maps/hosting/publish.sh "$file"
+            fi
+          done < "$RUNNER_TEMP/changed"
+
+      - name: Open the PR
+        if: env.PUBLISH == 'true' && steps.style.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -t files < "$RUNNER_TEMP/changed"
+          keys=()
+          for file in "${files[@]}"; do keys+=("$(basename "$file")"); done
+          branch=maps/tiles-$(date -u +%Y%m%d)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add maps/style/src/style.ts app/Packages/Features/Sources/SharedUI/CycleMap/style.json docs/maps/prototype/style.json
+          git commit -m "Point the cycle map at ${keys[*]}"
+          git push --force origin "$branch"
+          if [[ -n $(gh pr list --head "$branch" --json number --jq '.[]') ]]; then
+            echo "::notice::The PR for $branch is already open"
+            exit 0
+          fi
+          {
+            echo "The scheduled tile rebuild (\`.github/workflows/maps-tiles.yml\`) published new archives to R2; this points the style at them."
+            echo
+            for file in "${files[@]}"; do
+              echo "- https://maps.ride-on.cc/$(basename "$file") ($(wc -c < "$file" | tr -d ' ') bytes)"
+            done
+            echo
+            echo "Before merging, look at the new tiles in the prototype or the app ([what to check](https://github.com/$GITHUB_REPOSITORY/blob/main/maps/README.md#scheduled-rebuilds))."
+            echo
+            echo "The job already ran \`bun run check\`. A PR opened with the workflow's token doesn't start other workflows, so maps-style CI hasn't run here: close and reopen the PR to run it."
+            echo
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$RUNNER_TEMP/body.md"
+          gh pr create --base main --head "$branch" --title "Point the cycle map at the $(date -u '+%B %Y') tiles" --body-file "$RUNNER_TEMP/body.md"
