@@ -1712,6 +1712,10 @@ a.ro-name:hover {
   border: 1px solid var(--ro-border-2);
   border-radius: 10px;
   padding: 12px 14px 12px 16px;
+  transition: opacity 0.3s;
+}
+.ro-passed[data-leaving] {
+  opacity: 0;
 }
 .ro-passed > div {
   grid-area: 1 / 1;

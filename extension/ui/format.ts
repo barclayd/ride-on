@@ -89,6 +89,10 @@ const join = (dates: string[]) => {
       : last;
 };
 
+// Under 50 a ride is Not recommended, so it never carries the Best pick or Best available flag.
+export const notRecommended = (score: number | null) =>
+  score !== null && score < 50;
+
 export const qualityColour = (score: number) =>
   score >= 75 ? '#8bc61f' : score >= 60 ? '#c9b458' : '#d98b4a';
 
@@ -635,7 +639,7 @@ export const buildResults = (
         ...base,
         state,
         flag:
-          pick?.routeId === id
+          pick?.routeId === id && !notRecommended(Math.round(b.score))
             ? pick.kind === 'best_pick'
               ? 'Best pick'
               : 'Best available'

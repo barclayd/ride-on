@@ -25,6 +25,7 @@ import {
   conditionChips,
   dayMonth,
   localDate,
+  notRecommended,
   ridden,
   shortDate,
   skyChip,
@@ -310,7 +311,7 @@ const Pills = ({ card, star }: { card: Card; star?: boolean }) => (
         {card.flag}
       </span>
     )}
-    {card.score !== null && card.score < 50 && (
+    {notRecommended(card.score) && (
       <span class="ro-pill ro-not-recommended">Not recommended</span>
     )}
     {card.state !== 'meets' && (
@@ -1046,7 +1047,7 @@ export const RouteTile = (props: {
   const rank = medal ?? 3;
   // The Rides tab's heading has the date, unless the window spans days.
   const dated = !panel || (view.range?.length ?? 0) > 1;
-  const notRecommended = card.score !== null && card.score < 50;
+  const below = notRecommended(card.score);
   // One dropdown open at a time across the grid; Ranked shares it, a lone tile keeps its own.
   const own = useState<string | null>(null);
   const [open, setOpen] = useContext(OpenPanel) ?? own;
@@ -1149,7 +1150,7 @@ export const RouteTile = (props: {
         </div>
         <TileAction card={card} tracking={tracking} disabled={blank} />
       </div>
-      {panel && (notRecommended || card.state !== 'meets') && (
+      {panel && (below || card.state !== 'meets') && (
         <div class="ro-pills">
           <Pills card={{ ...card, flag: null }} />
         </div>

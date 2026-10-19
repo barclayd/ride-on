@@ -2916,6 +2916,12 @@ test('Journeys page: a passed window asks for new dates, then rescores', async (
     path: test.info().outputPath('journeys-confirmed.png'),
     fullPage: true,
   });
+  // A few seconds after the scores arrive, the confirmation fades and the window button returns.
+  await expect(strip).toHaveCount(0, { timeout: 10_000 });
+  await expect(module.locator('.ro-window')).toBeVisible();
+  await expect(
+    tile.getByRole('meter', { name: 'Conditions score' }),
+  ).toHaveAttribute('aria-valuenow', '84');
 });
 
 test('Journeys page: paused, tiles show name and distance until turned back on', async ({
