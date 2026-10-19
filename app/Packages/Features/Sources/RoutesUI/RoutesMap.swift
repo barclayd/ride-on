@@ -11,7 +11,8 @@ enum MapLook: String, CaseIterable, Identifiable {
 
     var id: Self { self }
 
-    /// The looks the menu offers: Cycle only behind `--cycle-map`, and only on iOS until WS3.6.
+    /// The looks the menu offers: Cycle only behind `--cycle-map`, and only on iOS. The Mac keeps
+    /// MapKit's three (docs/maps/README.md, WS3.6).
     static var offered: [MapLook] {
         #if os(iOS)
         CycleMap.isEnabled ? allCases : allCases.filter { $0 != .cycle }

@@ -25,7 +25,7 @@ let package = Package(
         .package(path: "../Services"),
         .package(path: "../DesignSystem"),
         .package(path: "../Router"),
-        // iOS only: MapLibre Native has no macOS build (docs/maps/README.md, WS3).
+        // iOS only: MapLibre Native has no macOS build (docs/maps/README.md, WS3.6).
         .package(url: "https://github.com/maplibre/maplibre-gl-native-distribution", exact: "6.31.0"),
     ],
     targets: [

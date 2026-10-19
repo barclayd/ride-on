@@ -453,9 +453,9 @@ A cycle.travel-style map in place of Apple Maps. [`docs/maps/README.md`](docs/ma
 the plan, the four workstreams and the PR order.
 - [x] Plan, style reference, browser prototype and comparison screenshots (#223)
 - [x] Design-system entries (`CycleMap`, §2–§4) and default answers to the open decisions (WS4a, #225)
-- [ ] Map data: GB basemap on R2, cycling overlay, terrain, scheduled rebuilds (WS1)
-- [ ] Style for MapLibre Native: glyphs, sprite, colour fix, known gaps, 3× tuning (WS2)
-- [ ] App: MapLibre spike, `CycleMap`, Routes map Cycle look, snapshots, attribution, macOS (WS3)
+- [x] Map data: GB basemap on R2, cycling overlay, terrain, scheduled rebuilds (WS1; #230, #270, #272, #277–#279)
+- [x] Style for MapLibre Native: glyphs, sprite, colour fix, known gaps, 3× tuning (WS2; #233–#235, #240, #245, #251, #258, #271, #273, #274; Dan's on-device check open)
+- [x] App: MapLibre spike, `CycleMap`, Routes map Cycle look, snapshots, attribution, macOS on MapKit (WS3; #228, #275, #276, #280)
 - [ ] Docs pass and `--cycle-map` flag removed (WS4b)
 
 ### Phase 8 — Release

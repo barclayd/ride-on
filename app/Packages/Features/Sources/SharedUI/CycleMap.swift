@@ -11,7 +11,7 @@ import Services
 /// `Map`, it fills the screen and frames inside the safe area, and its attribution sits in the safe
 /// area's bottom leading corner (§2).
 ///
-/// iOS only: MapLibre Native has no macOS build (docs/maps/README.md, WS3.6).
+/// iOS only: MapLibre Native has no macOS build, so the Mac stays on MapKit (docs/maps/README.md, WS3.6).
 public struct CycleMap: View {
     /// `--cycle-map` (docs/maps/README.md, WS3.3): until the cycle map ships, it's only offered when
     /// the app is launched with this.
