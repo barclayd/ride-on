@@ -39,7 +39,8 @@ jobs:
     # Publishing builds main's profile and style, never an unmerged branch's; a dry run can build any.
     if: ${{ github.ref == 'refs/heads/main' || inputs.publish == false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Geofabrik's extract alone took 64 minutes to download in October 2026's dry run (maps/README.md).
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 

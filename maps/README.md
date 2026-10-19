@@ -162,6 +162,12 @@ on the 3rd of each month at 04:23 UTC, once Geofabrik's extract of the 2nd is ou
 
 A publishing run only runs on main, so it never publishes an unmerged profile.
 
+A dry run with the basemap (19 October 2026, [run 39187304048](https://github.com/barclayd/ride-on/actions/runs/39187304048))
+took 67 minutes. Downloading Geofabrik's 2.3 GB extract took 64 of them, at about 0.6 MB/s to GitHub's
+runners. Planetiler took 1 min 37 s (125.5 MB, as on a Mac), and extracting the 3 GB basemap took 26 s.
+A publishing run adds the uploads; the basemap took 3 min 43 s from a Mac ([above](#publishing-a-file)).
+The job times out after 180 minutes.
+
 **Setup (once).**
 
 1. An R2 API token for the workflow, separate from anyone's own: Cloudflare dashboard → R2 → Manage
