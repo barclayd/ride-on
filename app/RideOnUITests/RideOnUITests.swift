@@ -140,7 +140,8 @@ final class RideOnUITests: XCTestCase {
     }
 
     /// The cycle map behind `--cycle-map` (docs/maps/README.md, WS3), on the fixture world's offline
-    /// style: drawn with its attribution, and swapped for MapKit from the style menu.
+    /// style: drawn with its attribution, its snapshots on the shortlist cards, and swapped for MapKit
+    /// from the style menu.
     func testRoutesCycleMapShowsWithItsAttribution() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world", "--cycle-map"]
@@ -152,6 +153,7 @@ final class RideOnUITests: XCTestCase {
         // SwiftUI's `Link`s are buttons to XCUITest.
         XCTAssertTrue(app.buttons["Map data © OpenStreetMap contributors"].exists)
         XCTAssertTrue(app.buttons["Protomaps"].exists)
+        XCTAssertTrue(routeButton(in: app, startingWith: "Hilly Loop").exists)
 
         app.buttons["Map style"].tap()
         app.buttons["Satellite"].tap()
