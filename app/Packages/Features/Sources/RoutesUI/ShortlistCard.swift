@@ -42,9 +42,9 @@ enum ShortlistStatus: Hashable {
     }
 }
 
-/// A shortlisted route in the Routes panel's carousel: its loop on satellite imagery, how it's
-/// faring on Rides, and its score when it's ranked. Tapping it shows it on the big map; the
-/// check takes it off the shortlist.
+/// A shortlisted route in the Routes panel's carousel: its loop on satellite imagery (the cycle map
+/// with `--cycle-map`), how it's faring on Rides, and its score when it's ranked. Tapping it shows
+/// it on the big map; the check takes it off the shortlist.
 struct ShortlistCard: View {
     var route: RouteLibrary.Route
     var status: ShortlistStatus
@@ -108,42 +108,48 @@ struct ShortlistCard: View {
             .padding(.trailing, 52)
     }
 
-    /// Name, stats and score; at accessibility sizes they stack, as on `RideHero` (§8).
+    /// Name, stats and score; at accessibility sizes they stack, as on `RideHero` (§8). Under them, a
+    /// cycle-map snapshot's attribution, 10pt clear (§2).
     private func footer(distance: String, climb: String) -> some View {
         let large = dynamicTypeSize.isAccessibilitySize
         let layout = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .lastTextBaseline, spacing: 8))
         let stats = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 11))
-        return layout {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(route.name)
-                    .font(.title3.bold())
-                    .lineLimit(large ? 2 : 1)
-                stats {
-                    Label(distance, systemImage: "arrow.left.and.right")
-                    Label(climb, systemImage: "mountain.2")
+        return VStack(alignment: .leading, spacing: 10) {
+            layout {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(route.name)
+                        .font(.title3.bold())
+                        .lineLimit(large ? 2 : 1)
+                    stats {
+                        Label(distance, systemImage: "arrow.left.and.right")
+                        Label(climb, systemImage: "mountain.2")
+                    }
+                    .labelStyle(StatLabelStyle())
+                    .font(.footnote.weight(.semibold))
+                    .opacity(0.92)
                 }
-                .labelStyle(StatLabelStyle())
-                .font(.footnote.weight(.semibold))
-                .opacity(0.92)
-            }
-            if !large { Spacer(minLength: 0) }
-            if let score {
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text(score, format: .number)
-                        .font(.title.bold())
-                    Text("/100")
-                        .font(.caption.weight(.semibold))
-                        .opacity(0.72)
+                if !large { Spacer(minLength: 0) }
+                if let score {
+                    HStack(alignment: .firstTextBaseline, spacing: 1) {
+                        Text(score, format: .number)
+                            .font(.title.bold())
+                        Text("/100")
+                            .font(.caption.weight(.semibold))
+                            .opacity(0.72)
+                    }
                 }
             }
+            #if os(iOS)
+            if RouteMap.showsCycleMap { CycleMapAttribution(.card) }
+            #endif
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .monospacedDigit()
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.35), radius: 1, y: 1)
         .padding(.horizontal, 14)
-        // Clear of the Maps logo and Legal link, which sit along the card's bottom edge (§2).
-        .padding(.bottom, 30)
+        // On MapKit, clear of the Maps logo and Legal link along the card's bottom edge (§2).
+        .padding(.bottom, RouteMap.showsCycleMap ? 4 : 30)
         .padding(.top, 44)
         // Eased stops, so the scrim has no visible top edge (as on `RideHero`).
         .background(LinearGradient(stops: [0, 0.03, 0.1, 0.2, 0.33, 0.45, 0.55, 0.63, 0.7, 0.76, 0.8].enumerated().map {

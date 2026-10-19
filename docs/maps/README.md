@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.3, 3.5 and 3.7 done for the Routes map (`CycleMap`, the Cycle look behind `--cycle-map`); WS3.4 cards and thumbnails next |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3–1.4 next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -368,7 +368,7 @@ What 3.2 has to carry over from the spike:
   `file://` URL at runtime and writes the result to Caches. Font stack names must equal the glyph
   directory names (`Montserrat-Regular`, not `Montserrat Regular`). A missing range logs
   `Failed to load glyph range 1024-1279 for font stack Montserrat-Regular` and drops those labels;
-  nothing else breaks. Bundled: 0-255, 256-511, 512-767 (Latin and Latin Extended, Welsh ŵ ŷ),
+  nothing else breaks on a live map, but a snapshot fails ([3.4](#ws3-app-integration-115-weeks)). Bundled: 0-255, 256-511, 512-767 (Latin and Latin Extended, Welsh ŵ ŷ),
   7680-7935 (ẁ ẃ ỳ), 8192-8447 and 8448-8703 (punctuation, symbols). The Montserrat OFL ships beside
   them.
 - **Location.** `showsUserLocation = true` makes `MLNMapView` request permission itself; turn it on only
@@ -428,21 +428,43 @@ coordinates), the selected line, a tint, a camera (`.rect`, `.automatic` for eve
 | Surface | Today (main) | Change |
 |---|---|---|
 | Routes tab map | `RoutesMap` in `app/Packages/Features/Sources/RoutesUI/RoutesMap.swift:31`: `MapReader` at :47, `Map(position:)` at :48, `.mapStyle(look.style)` at :80, tap at :81 with `proxy.convert` at :91; `MapLook` enum at :7 (satellite/hybrid/standard); `RouteCallout` :116, `MapControls` :157. Used at `RoutesView.swift:106` | Add a `cycle` `MapLook` behind the flag, then make it the default. The interactive surface where the cycle map matters most. **Done** behind the flag: Cycle is first in the menu and the look at launch (`MapLook.offered`, `.initial`); removing the flag (WS4b) makes it the default |
-| Shortlist cards | `RouteMap(…, style: .card)` at `RoutesUI/ShortlistCard.swift:75` | Static image: `MLNMapSnapshotter`, cached per route + size + scale |
-| Thumbnails | `RouteMap(…, style: .thumbnail)` at `RoutesUI/RouteRows.swift:202`, `RideUI/TrackRideSheet.swift:165`, `RideUI/RidesView.swift:382` | Same snapshots. Many per screen: never live map views in lists |
+| Shortlist cards | `RouteMap(…, style: .card)` at `RoutesUI/ShortlistCard.swift:75` | Static image: `MLNMapSnapshotter`, cached per route + size + scale. **Done** behind the flag |
+| Thumbnails | `RouteMap(…, style: .thumbnail)` at `RoutesUI/RouteRows.swift:202`, `RideUI/TrackRideSheet.swift:165`, `RideUI/RidesView.swift:382` | Same snapshots. Many per screen: never live map views in lists. **Done** behind the flag |
 | Ride hero | `RouteMap(…, style: .hero, tint:)` at `SharedUI/RideHero.swift:40`; `RouteMap.swift`: `Map(initialPosition: .rect(framingRect), interactionModes: [])` at :56, `.mapStyle(.imagery)` at :75, `RouteOutline` shape at :93 | [Decision 3](#open-decisions): satellite or cycle map. If cycle map, a non-interactive live view or a snapshot; keep the zoom transition source |
 | Wind on the Ride | `WindRouteMap` at `SharedUI/WindRouteMap.swift:45`, `.mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))` at :60; used at `RideUI/RideBreakdownCards.swift:79` | Keep MapKit, or a muted variant of the cycle style (fewer layers, no routes) so the wind colours stay readable |
 
 Other `import MapKit` files: `RoutesView.swift` (camera types), `LiveETAProvider.swift` (directions,
 stays), `RouteSnapshotService.swift` (MapKit snapshots, only used by tests; replace or leave).
 
+**Cards and thumbnails done** (19 October 2026): with `--cycle-map` (`RouteMap.showsCycleMap`),
+`RouteMap`'s `.card` and `.thumbnail` styles draw `CycleMapSnapshot` (`SharedUI/CycleMapSnapshot.swift`)
+instead of MapKit, so every call site switches with no change. `CycleMapSnapshots` keeps the images in
+an `NSCache` (48 MB), shares one render between views asking for the same image, runs at most two at
+once and skips one whose row scrolled away while it waited. Until an image is ready the route is drawn
+on the style's land colour, projected as the snapshot projects it (Web Mercator, framing fitted and
+centred), so the snapshot fades in without the line moving. What it took:
+- **A still render fails on any resource error.** `MLNErrorDomain` code 6 with an empty description,
+  where a live map just drops what's missing. A label needing a glyph range we don't bundle (Cyrillic,
+  Arabic, Ethiopic and others in GB place names) was enough. Snapshots hide every symbol layer, as the
+  satellite cards had no labels; bundling more ranges or an `MLNOfflineStorage` delegate that answers
+  missing glyph URLs with an empty PBF would bring them back.
+- **At least 64pt a side.** A 48pt thumbnail came back 64×64. Smaller requests are drawn
+  `64 / side` times larger at that much lower a scale, lines and marker widened to match: the same
+  pixels.
+- **No simplification.** A still render's route source simplified a loop's curves into corners; the
+  snapshot's `MLNShapeSource` sets `simplificationTolerance` to 0.
+- **Key on components, not `Color.Resolved`.** Resolving the same tint twice can differ in the last bit
+  (seen in Dark Mode), and `Color.Resolved`'s `==` then fails, so the view never matched its image. The
+  request keeps the tint in 8-bit steps.
+
 **3.5 Attribution.** Replace "Apple Maps" + Legal with "© OpenStreetMap contributors" (linking
 https://www.openstreetmap.org/copyright) and Protomaps, kept visible and ≥ 10 pt from custom content as
 DESIGN-SYSTEM.md requires today. MapLibre's attribution button is an option; a SwiftUI row matching the
 current hero layout is probably nicer. Snapshots need attribution too where they're shown large.
-**Done for the live map**: `CycleMap` hides MapLibre's button and draws "© OpenStreetMap" and
-"Protomaps" as links in its bottom leading corner, inside the safe area, so 8pt clear of the panel
-plus its own 4pt. Snapshots come with the cards.
+**Done**: `CycleMap` hides MapLibre's button and draws "© OpenStreetMap" and "Protomaps" as links in
+its bottom leading corner, inside the safe area, so 8pt clear of the panel plus its own 4pt. A
+shortlist card's snapshot carries the same names (`CycleMapAttribution(.card)`) as plain text, since
+the card is a button, 10pt under its stats; thumbnails are too small for it.
 
 **3.6 macOS.** See [below](#macos).
 
@@ -496,7 +518,7 @@ row.**
 | `symbol-sort-key`, `line-sort-key` | Supported (symbol from Mapbox iOS 4.11.0) | Release notes |
 | `text-variable-anchor` + `text-radial-offset` | Supported (Mapbox iOS 4.10.0) | Release notes |
 | Runtime images for missing icons | `MLNMapViewDelegate.mapView(_:didFailToLoadImage:)` returns a `UIImage` | API docs |
-| Static images | `MLNMapSnapshotter` | API docs |
+| Static images | `MLNMapSnapshotter`. **Verified** (WS3.4): fails outright on any resource error, draws at least 64pt a side, simplifies lines unless `simplificationTolerance` is 0 | API docs |
 | SwiftUI | No official view; [swiftui-dsl](https://github.com/maplibre/swiftui-dsl) is iOS-only and experimental | |
 | SPM | [maplibre-gl-native-distribution](https://github.com/maplibre/maplibre-gl-native-distribution), iOS only | |
 | macOS | No native AppKit SDK; Mac Catalyst only | [discussion #3910](https://github.com/maplibre/maplibre-native/discussions/3910) |

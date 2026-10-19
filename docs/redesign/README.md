@@ -556,7 +556,10 @@ Build:
   `CycleMap`, MapLibre Native drawing the cycle map with the shortlist, the selected route's start
   marker and callout, tap-to-select and its own OpenStreetMap/Protomaps attribution
   ([WS3](../maps/README.md#ws3-app-integration-115-weeks)). Picking Satellite, Hybrid or Standard
-  goes back to MapKit. Over it the
+  goes back to MapKit. With the flag, shortlist cards and every route thumbnail (Routes rows, the
+  Rides list, Track a Ride) are cycle-map snapshots instead of satellite, without labels; the card
+  carries "© OpenStreetMap  Protomaps" under its stats, so its bottom padding drops from 30pt (clear
+  of MapKit's logo) to 4pt. The Rides hero stays satellite ([decision 3](../maps/README.md#open-decisions)). Over it the
   status bar's glyphs are dark and the map controls light regular glass, in Dark Mode too, with no
   dimming under the status bar; in Dark Mode the tab bar's labels are still white over the light map
   ([WS2.7](../maps/README.md#ws2-style-for-maplibre-native-1-week)).

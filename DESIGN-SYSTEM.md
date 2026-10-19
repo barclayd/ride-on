@@ -74,7 +74,9 @@ Rules:
 - **Map attribution stays visible.** Anywhere a map shows, its attribution sits at least 10pt
   from custom content: "Apple Maps" and the Legal link for MapKit (a live `Map` gets this for
   free); "© OpenStreetMap", linking to https://www.openstreetmap.org/copyright, and "Protomaps"
-  for the cycle map (`CycleMap` draws it). Snapshots shown larger than a thumbnail carry it too.
+  for the cycle map (`CycleMap` draws it). Snapshots shown larger than a thumbnail carry it too: a
+  shortlist card's cycle-map snapshot has both names as plain text in the card's white, 10pt under
+  its stats (the card is a button, so no links); thumbnails are too small for it.
 
 ## 3. Colour
 
@@ -239,7 +241,10 @@ before adding a custom component in code.
     labels in Montserrat (§4). MapLibre Native on iOS, drawing Ride On's own vector tiles with a
     style bundled in the app; MapKit stands in on macOS for now. Routes are drawn as map layers
     below the labels, in the same colours and white casing as on MapKit. Live and interactive as
-    `RoutesMap`'s Cycle look; cards and thumbnails get static snapshots of it, never live maps.
+    `RoutesMap`'s Cycle look; cards and thumbnails get static snapshots of it, never live maps:
+    `MLNMapSnapshotter` draws each once per route, framing, tint, size and scale, without labels,
+    and keeps it in memory. Until one is ready the route stands on the style's land colour exactly
+    where the snapshot will put it, then the snapshot fades in (`Motion.panelMaterialize`).
     Its attribution is always visible (§2): "© OpenStreetMap" and "Protomaps" in `.caption2`
     `.secondary` at the safe area's bottom leading corner, 12pt in, held at a fixed size like the
     map controls. A tap within 22pt of a line selects it; a double tap only zooms. The selected

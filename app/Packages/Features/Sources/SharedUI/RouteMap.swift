@@ -6,8 +6,18 @@ import Models
 /// One route drawn in the accent on a white casing. Not a §6 component. The hero is a
 /// non-interactive `Map`, which keeps the Maps attribution visible (§2); a thumbnail is just
 /// the route's outline on a plain fill, as on the canvas, since a 56pt map is all labels and
-/// Legal link.
+/// Legal link. With the cycle map (`showsCycleMap`), cards and thumbnails are `CycleMap`
+/// snapshots instead (§6 #17), and a card carries the attribution itself.
 public struct RouteMap: View {
+    /// Whether cards and thumbnails are cycle-map snapshots: `--cycle-map`, on iOS.
+    public static var showsCycleMap: Bool {
+        #if os(iOS)
+        CycleMap.isEnabled
+        #else
+        false
+        #endif
+    }
+
     public enum Style {
         /// Satellite imagery with a start marker; the route sits in the band between the
         /// toolbar and the hero's title block.
@@ -19,22 +29,37 @@ public struct RouteMap: View {
         case thumbnail
     }
 
-    var coordinates: [CLLocationCoordinate2D]
+    var route: [Coordinate]
     var style: Style
     var tint: Color
     @Environment(\.self) private var environment
 
     public init(_ coordinates: [Coordinate], style: Style, tint: Color = .accentColor) {
-        self.coordinates = coordinates.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+        self.route = coordinates
         self.style = style
         self.tint = tint
     }
 
+    private var coordinates: [CLLocationCoordinate2D] {
+        route.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+    }
+
     public var body: some View {
         switch style {
-        case .hero, .card: map
+        case .hero: map
+        case .card where Self.showsCycleMap, .thumbnail where Self.showsCycleMap: snapshot
+        case .card: map
         case .thumbnail: outline
         }
+    }
+
+    @ViewBuilder private var snapshot: some View {
+        #if os(iOS)
+        // The thumbnail's route fills the middle 68%, as `outline` does.
+        CycleMapSnapshot(coordinates: route,
+                         framing: style == .card ? framingRect : framing(top: 0.16, bottom: 0.16, side: 0.16),
+                         look: style == .card ? .card : .thumbnail, tint: tint.resolve(in: environment))
+        #endif
     }
 
     private var outline: some View {
@@ -52,6 +77,7 @@ public struct RouteMap: View {
         // re-renders with a new route.
         let resolved = tint.resolve(in: environment)
         let tint = Color(resolved)
+        let coordinates = coordinates
         let (lineWidth, marker, ring): (CGFloat, CGFloat, CGFloat) = style == .card ? (4, 12, 2.5) : (5, 16, 3)
         return Map(initialPosition: .rect(framingRect), interactionModes: []) {
             MapPolyline(coordinates: coordinates)
@@ -78,10 +104,14 @@ public struct RouteMap: View {
     /// The route's bounding box grown by per-edge margins (fractions of the final rect), so it
     /// sits clear of the toolbar and the title block.
     private var framingRect: MKMapRect {
+        let (top, bottom, side) = style == .card ? (0.08, 0.49, 0.2) : (0.28, 0.40, 0.14)
+        return framing(top: top, bottom: bottom, side: side)
+    }
+
+    private func framing(top: Double, bottom: Double, side: Double) -> MKMapRect {
         let box = coordinates.reduce(MKMapRect.null) { box, coordinate in
             box.union(MKMapRect(origin: MKMapPoint(coordinate), size: MKMapSize(width: 0, height: 0)))
         }
-        let (top, bottom, side) = style == .card ? (0.08, 0.49, 0.2) : (0.28, 0.40, 0.14)
         let width = box.width / (1 - 2 * side)
         let height = box.height / (1 - top - bottom)
         return MKMapRect(x: box.minX - side * width, y: box.minY - top * height, width: width, height: height)

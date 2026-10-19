@@ -105,6 +105,9 @@ public struct CycleMap: View {
         return url
     }()
 
+    /// The bundled style's land colour (its `background` layer): behind a snapshot until it's drawn.
+    static let land = Color(red: 0xED / 255, green: 0xF2 / 255, blue: 0xE1 / 255)
+
     /// The fixture world never touches the network (docs/maps/README.md, WS3.7): the style's land
     /// colour alone, with no tile sources, under the routes. `-CycleMapTiles` brings the tiles back,
     /// as `capture/app-sim.sh` does for screenshots.
@@ -117,20 +120,35 @@ public struct CycleMap: View {
     }
 }
 
-/// "© OpenStreetMap" and "Protomaps", each linking to its terms, in the map's own light scheme.
-struct CycleMapAttribution: View {
-    var body: some View {
+/// "© OpenStreetMap" and "Protomaps" (§2). On the live map each links to its terms, in the map's own
+/// light scheme; on a card's snapshot, which is a button, they're plain text in the card's white.
+public struct CycleMapAttribution: View {
+    public enum Placement { case map, card }
+
+    var placement: Placement
+
+    public init(_ placement: Placement = .map) {
+        self.placement = placement
+    }
+
+    public var body: some View {
         HStack(spacing: 10) {
-            Link("© OpenStreetMap", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
-                .accessibilityLabel("Map data © OpenStreetMap contributors")
-            Link("Protomaps", destination: URL(string: "https://protomaps.com")!)
+            switch placement {
+            case .map:
+                Link("© OpenStreetMap", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
+                    .accessibilityLabel("Map data © OpenStreetMap contributors")
+                Link("Protomaps", destination: URL(string: "https://protomaps.com")!)
+            case .card:
+                Text("© OpenStreetMap")
+                Text("Protomaps")
+            }
         }
         .font(.caption2.weight(.medium))
-        .foregroundStyle(.secondary)
+        .foregroundStyle(placement == .map ? AnyShapeStyle(.secondary) : AnyShapeStyle(.white.opacity(0.75)))
         .padding(.vertical, 4)
         // Chrome over the map, held at a fixed size like MapKit's own Legal link.
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
-        .environment(\.colorScheme, .light)
+        .environment(\.colorScheme, placement == .map ? .light : .dark)
     }
 }
 
@@ -312,12 +330,7 @@ private struct MapView: UIViewRepresentable {
                                                 (Layer.others, sources[0], 3.0, UIColor.white.withAlphaComponent(0.92)),
                                                 (Layer.selectedCasing, sources[1], 9.5, UIColor.white),
                                                 (Layer.selected, sources[1], 5.5, tint)] {
-                let layer = MLNLineStyleLayer(identifier: id, source: source)
-                layer.lineWidth = NSExpression(forConstantValue: width)
-                layer.lineColor = NSExpression(forConstantValue: colour)
-                layer.lineCap = NSExpression(forConstantValue: "round")
-                layer.lineJoin = NSExpression(forConstantValue: "round")
-                insert(layer)
+                insert(MLNLineStyleLayer(route: id, source: source, width: width, colour: colour))
             }
             // The start: a white disc with a hairline edge around a dot in the tint, as on `RoutesMap`.
             let start = MLNCircleStyleLayer(identifier: Layer.start, source: sources[2])
@@ -421,7 +434,18 @@ private struct MapView: UIViewRepresentable {
     }
 }
 
-private extension CLLocationCoordinate2D {
+extension MLNLineStyleLayer {
+    /// A route, or its casing: a constant width and colour, round at the ends and corners.
+    convenience init(route identifier: String, source: MLNSource, width: Double, colour: UIColor) {
+        self.init(identifier: identifier, source: source)
+        lineWidth = NSExpression(forConstantValue: width)
+        lineColor = NSExpression(forConstantValue: colour)
+        lineCap = NSExpression(forConstantValue: "round")
+        lineJoin = NSExpression(forConstantValue: "round")
+    }
+}
+
+extension CLLocationCoordinate2D {
     init(_ coordinate: Coordinate) {
         self.init(latitude: coordinate.latitude, longitude: coordinate.longitude)
     }
