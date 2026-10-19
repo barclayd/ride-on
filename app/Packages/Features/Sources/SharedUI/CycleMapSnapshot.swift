@@ -222,7 +222,11 @@ private final class SnapshotRender: NSObject, @preconcurrency MLNMapSnapshotterD
     }
 
     func mapSnapshotter(_ snapshotter: MLNMapSnapshotter, didFinishLoading style: MLNStyle) {
-        for case let labels as MLNSymbolStyleLayer in style.layers { labels.isVisible = false }
+        // Nor terrain: at a card's size the shading and contours are noise under its text.
+        for layer in style.layers where layer is MLNSymbolStyleLayer || layer is MLNHillshadeStyleLayer
+            || layer.identifier.hasPrefix("ct_contour") {
+            layer.isVisible = false
+        }
         let (tint, enlarged) = (UIColor(request.tint.color), request.enlarged)
         var coordinates = request.coordinates.map(CLLocationCoordinate2D.init)
         // As given: a still render otherwise simplifies a loop's curves into corners.

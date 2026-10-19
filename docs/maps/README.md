@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3 done: purple cycle lanes on roads; WS1.4 (terrain) next |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3 done: purple cycle lanes on roads; WS1.4 done: hillshade from Mapterhorn and 10 m contours from OS Terrain 50; WS1.5 (scheduled rebuilds) next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -77,11 +77,11 @@ What the prototype does that **can't ship**:
 ## Architecture
 
 ```
-            OSM GB extract (Geofabrik)                 DEM (Mapterhorn / OS Terrain 50 / Copernicus)
-                       │                                              │
-              planetiler profile                       gdal hillshade/terrain-RGB + gdal_contour
-           (routes, badges, paths, lanes, POIs)              + tippecanoe / pmtiles convert
-                       │                                              │
+            OSM GB extract (Geofabrik)                Mapterhorn DEM        OS Terrain 50 contours
+                       │                                     │                       │
+              planetiler profile                      pmtiles extract         ogr2ogr → PMTiles
+           (routes, badges, paths, lanes, POIs)              │                       │
+                       │                                     │                       │
            cycling-YYYYMMDD.pmtiles              terrain-YYYYMMDD.pmtiles, contours-YYYYMMDD.pmtiles
                        └───────────────┬──────────────────────────────┘
   Protomaps build ──► basemap-YYYYMMDD.pmtiles (world copy or `pmtiles extract` of our region)
@@ -104,7 +104,8 @@ What the prototype does that **can't ship**:
   [planetiler](https://github.com/onthegomap/planetiler) (Java, fast, handles relations, writes PMTiles
   directly; `FeatureMerge.mergeLineStrings` replaces the prototype's hand-written way chaining).
   tilemaker (Lua profiles; cycle.travel's author wrote it) is the alternative.
-- **Terrain:** hillshade as a `raster-dem` source and contours as a vector source, from a DEM.
+- **Terrain:** hillshade as a `raster-dem` source (Mapterhorn's terrarium DEM, extracted as it is) and
+  contours as a vector source (OS Terrain 50's 10 m contour lines). Ops notes: [`maps/README.md`](../../maps/README.md).
 - **Serving:** bucket `ride-on-maps` behind the R2 custom domain `maps.ride-on.cc`, which serves HTTP
   Range requests, ETags and Cloudflare's cache natively; `Cache-Control: public, max-age=31536000,
   immutable` because keys are dated. R2 egress is free. Ops notes: [`maps/README.md`](../../maps/README.md).
@@ -200,13 +201,28 @@ Kennington Rd and Kennington Park Rd in London:
 - Shared bus lanes look the same (Kennington Park Rd), so the style ignores `side` and `bus`.
 - Dashes, not symbol dots like the routes: at 2 px a dot cut at a vertex doesn't show.
 
-**1.4 Terrain.** cycle.travel shades hills and draws contours (see the Surrey Hills comparison).
-- DEM options: [Mapterhorn](https://mapterhorn.com) (open terrain tiles, already PMTiles), OS Terrain 50
-  (OGL, GB only), Copernicus GLO-30.
-- Hillshade: terrain-RGB PMTiles → `raster-dem` source + `hillshade` layer. Verify MapLibre Native reads
-  `raster-dem` from `pmtiles://` (see the [capability table](#maplibre-native-capabilities)).
-- Contours: `gdal_contour` (10 m? match cycle.travel's interval by measuring) → tippecanoe → PMTiles.
-- Done when the Surrey Hills view shows shading and contours at cycle.travel's density.
+**1.4 Terrain.** Done, 19 October 2026. Two archives on R2, made as [`maps/README.md`](../../maps/README.md#terrain)
+describes: `terrain-gb-20261019` (Mapterhorn's DEM, z0–12, 861 MB) and `contours-gb-20261019` (OS
+Terrain 50's 10 m contours, z11–14, 1.04 GB). Measured on cycle.travel at Box Hill and the Surrey
+Hills, ct z11–16:
+- **Hillshade** at every zoom: soft grey on the slopes facing away from a north-west light, no
+  highlight. `ct_hillshade` draws it in `#4C4A3A` with a faint accent, exaggeration 0.35 at z10, 0.3 at
+  z11 (where Mapterhorn's detail and the contours would otherwise darken the scarps), 0.36 at z13 and
+  0.4 at z15, as cycle.travel's is heavier close in. Under the water, roads and labels.
+- **Contours** every 10 m from ct z12 (our z11): 0.5 px `#685838`, opacity 0.2 at z11 rising to 0.5 at
+  z13 and 0.65 at z15.
+- **Labels** in `#B0701B`, Montserrat Regular 9 px along the line: every 20 m at ct z14 (our z13), every
+  line from ct z15 (our z14), about once a line per screen (`symbol-spacing` 600 at z14, 900 at z15).
+  Lines are cut at tile edges, so on long scarps ours still repeat a little more often.
+- Snapshots (cards, thumbnails) leave terrain out, as they do labels: at a card's size it is noise under
+  the text.
+- The app's attribution adds "Mapterhorn" (labelled "Terrain © Mapterhorn") and OS's statement on a
+  second line; [DESIGN-SYSTEM.md §2](../../DESIGN-SYSTEM.md).
+- MapLibre Native reads the `raster-dem` WebP tiles from `pmtiles://` and shades them (iPhone 17
+  Simulator, Surrey Hills z12), so the [capability table](#maplibre-native-capabilities) row is verified.
+- Comparisons: [Box Hill z12](screenshots/cmp-box-hill-z12.jpg), [z14](screenshots/cmp-box-hill-z14.jpg)
+  and [z15](screenshots/cmp-box-hill-z15.jpg) (51.247, −0.308), and the app at
+  [Surrey Hills z12](screenshots/native-surrey-hills-z12.jpg).
 
 **1.5 Scheduled rebuilds.** GitHub Actions on a monthly cron (cycle.travel rebuilds about monthly):
 download the Geofabrik extract, run planetiler, upload with a dated key, open a PR bumping the dated URLs
@@ -308,7 +324,7 @@ app (MapLibre Native) and the prototype (GL JS) ([phone gallery](#phone-comparis
   cycle.travel's width.
 - **Still different**, logged in the style spec's [known gaps](cycle-travel-style.md#known-gaps): Harwich
   is Medium on cycle.travel at z10 only; London's z9 label choice; quarters at z11 (Lot's Village, Nine
-  Elms); unnamed peaks (Spankers Hill); hillshade, contours and more POI icons on cycle.travel.
+  Elms); unnamed peaks (Spankers Hill); more POI icons on cycle.travel (and hillshade and contours, until 1.4).
 
 Agents use the iPhone 17 simulator `79662D65-4914-46BC-BA2A-510E3989498D`, never Dan's iPhone 18 Pro one
 (`1F0874B6…`). Dan: the phone trios are the place to judge "reads as cycle.travel"; a run on the iPhone
@@ -349,7 +365,7 @@ the accent with a white casing) under the labels, tap-to-select and framing abov
 
 | | |
 |---|---|
-| Launch | `--fixture-world --cycle-map` opens on Routes with the cycle map. `-CycleMapTiles <url>` swaps the tile host for both archives (e.g. `file:///…/tiles` for a folder holding the `basemap-gb-*` and `cycling-gb-*` files, in the Simulator); `-CycleMapCamera 51.4455,-0.2665,13` pins the camera (latitude, longitude, zoom) for screenshots |
+| Launch | `--fixture-world --cycle-map` opens on Routes with the cycle map. `-CycleMapTiles <url>` swaps the tile host for every archive (e.g. `file:///…/tiles` for a folder holding the `basemap-gb-*`, `cycling-gb-*`, `terrain-gb-*` and `contours-gb-*` files, in the Simulator); `-CycleMapCamera 51.4455,-0.2665,13` pins the camera (latitude, longitude, zoom) for screenshots |
 | Screenshots | [Richmond Park z11](screenshots/native-spike-richmond-park-z11.jpg), [z15](screenshots/native-spike-richmond-park-z15.jpg) (iPhone 17 Simulator) |
 | Version | MapLibre Native iOS 6.31.0, `maplibre-gl-native-distribution` with `exact:`, `.when(platforms: [.iOS])`; RoutesUI then, SharedUI since 3.1 |
 | PMTiles | `pmtiles://https://…` (checked against `build.protomaps.com/20261017.pmtiles`, the build our extract came from) and `pmtiles://file://…` both render the same |
@@ -357,7 +373,7 @@ the accent with a white casing) under the labels, tap-to-select and framing abov
 | App size | Release, arm64: 35 MB app, of which `MapLibre.framework` 7.8 MB and the glyph bundle 3.5 MB (both uncompressed) |
 | Memory | 118–126 MB footprint on the Routes tab at z11–16.5 (Simulator: indicative only) |
 | macOS | Builds; MapLibre isn't linked, `RoutesMap` stays on MapKit. The glyph bundle still ships (SwiftPM resources can't be per-platform) |
-| Not checked | Frame rate, memory and battery **on a device** (Dan: run `--cycle-map` on the iPhone, pan and pinch between Richmond Park and central London at z11–15 with Xcode's memory gauge and Instruments' Animation Hitches). `raster-dem` from PMTiles (no DEM until 1.4) |
+| Not checked | Frame rate, memory and battery **on a device** (Dan: run `--cycle-map` on the iPhone, pan and pinch between Richmond Park and central London at z11–15 with Xcode's memory gauge and Instruments' Animation Hitches), now with hillshade (1.4) |
 
 What 3.2 has to carry over from the spike:
 - **No camera calls before layout.** `setVisibleCoordinateBounds` or `setCenter(_:zoomLevel:)` on a
@@ -515,7 +531,7 @@ row.**
 | Need | Status | Source |
 |---|---|---|
 | PMTiles (`pmtiles://`) on iOS | Supported since 6.10.0; fixes in 6.14.0 and 6.28.0. **Verified** in the WS3.0 spike on 6.31.0, over HTTPS and from a local file | [newsletter Jan 2025](https://maplibre.org/news/2025-02-03-maplibre-newsletter-january-2025/), [#3403](https://github.com/maplibre/maplibre-native/issues/3403), [#3404](https://github.com/maplibre/maplibre-native/issues/3404), [#4399](https://github.com/maplibre/maplibre-native/issues/4399) |
-| `raster-dem` + hillshade from PMTiles | Unverified | Check in the WS3 spike |
+| `raster-dem` + hillshade from PMTiles | **Verified** (WS1.4) on 6.31.0: terrarium WebP, 512 px tiles, over HTTPS | |
 | `font-faces` in the style | 6.18.0+ | Release notes |
 | Glyph PBFs from the app bundle | **Verified** (WS3.0) with an absolute `file://` `glyphs` URL | |
 | Style without `glyphs` | Not supported | [#165](https://github.com/maplibre/maplibre-native/issues/165) |
@@ -552,8 +568,10 @@ Recommendation: 1 for the first release, 2 if Dan wants parity.
 - **Montserrat:** SIL OFL 1.1 (`app/Packages/Features/Sources/SharedUI/CycleMap/glyphs/OFL.txt`). Fine to bundle
   and convert to PBF.
 - **Icons:** Maki and Temaki are CC0. cycle.travel's map-key SVGs are not ours to use.
-- **Terrain:** depends on the DEM; OS Terrain 50 is OGL (attribution required), Copernicus has its own
-  notice.
+- **Terrain:** Mapterhorn's DEM is free to use with a link to
+  [mapterhorn.com/attribution](https://mapterhorn.com/attribution), which credits its sources (over GB,
+  OGL LiDAR from England, Scotland and Wales, and Copernicus GLO-30). OS Terrain 50 is OGL v3: "Contains
+  OS data © Crown copyright and database right 2026" on every map that draws the contours.
 - **cycle.travel's design:** not licensed to us. See decision 1.
 
 The repo is public, and `screenshots/` contains crops of cycle.travel's rendering for side-by-side
@@ -616,16 +634,27 @@ sRGB display's skew.
 
 | View | What to look at |
 |---|---|
-| [London, z9](screenshots/cmp-london-z9.jpg) (51.45, −0.15) | National routes and EuroVelo match, and regional routes are hidden here on both. Lanes and main-line railways now draw on both (ours from `low_roads`). cycle.travel has hillshade and a denser minor-road net |
+| [London, z9](screenshots/cmp-london-z9.jpg) (51.45, −0.15) | National routes and EuroVelo match, and regional routes are hidden here on both. Lanes and main-line railways now draw on both (ours from `low_roads`). cycle.travel has a denser minor-road net (and hillshade, which ours has had since 1.4, after these were taken) |
 | [London, z11](screenshots/cmp-london-z11.jpg) (51.48, −0.17) | Route dots, railways and motorways match in weight, and so does the dense net of thin red paths and lanes. cycle.travel draws TfL Q routes as thin lavender lines (ours start at z12) and the Avenue Verte as slate dots with AV badges (ours red, as national). It shows more minor streets |
 | [Putney, z13](screenshots/cmp-putney-z13.jpg) (51.462, −0.215) | Badges (4, 20, C34, C57, CS8), dots and lcn teal match in place; the blue rcn across Roehampton has gone, as on cycle.travel. It has more POI icons and a beige Thames foreshore |
 | [Westminster, z14](screenshots/cmp-westminster-z14.jpg) (51.5005, −0.128) | LONDON spacing, Charing Cross, Whitehall and the Palace of Westminster match; NCN 4 and the Avenue Verte are one red dotted line along the Albert Embankment, but we add AV badges there that cycle.travel doesn't. Waterloo and Victoria's platform tracks read heavier (station throats, still open). We draw more teal lcn; cycle.travel shows more street labels and POI icons, and names the London Eye where we name Burlington House |
 | [Richmond Park, z13](screenshots/cmp-richmond-park-z13.jpg) (51.4455, −0.2665) | NCN 4 on red-and-white paths, brown unpaved dashes, lcn teal and the built-up, park, wood and golf fills match. C30 is a lavender line there, violet dots here. It shows more toilet, café and parking icons |
-| [Surrey Hills, z12](screenshots/cmp-surrey-hills-z12.jpg) (51.245, −0.33) | NCN 22, the railways, hamlets and farms match. cycle.travel has hillshade and contours. A few bare `footway` + `bicycle=yes` stubs across fields near White Hill and Dunley Hill draw red here and not at all there. Our brown dashes are heavier |
+| [Surrey Hills, z12](screenshots/cmp-surrey-hills-z12.jpg) (51.245, −0.33) | NCN 22, the railways, hamlets and farms match. Taken before 1.4: for hillshade and contours see the [Box Hill views](#terrain-comparisons). A few bare `footway` + `bicycle=yes` stubs across fields near White Hill and Dunley Hill draw red here and not at all there. Our brown dashes are heavier |
 | [Harwich, z9](screenshots/cmp-harwich-z9.jpg) (51.93, 1.2) | EuroVelo and national dots: size, colours and spacing match; no ferry dots across the North Sea. Railways and minor roads now draw on both |
 | [Harwich, z10](screenshots/cmp-harwich-z10.jpg) | As z9; regional routes are dots on a thin blue line on both. Station dots along the Clacton line, Wrabness and Trimley match. cycle.travel shows a EuroVelo badge at Colchester (ours start at z11) and names more villages (Whatfield, Lindsey, Flowton). Small towns are Medium in village grey on both (Clacton-on-Sea, Brightlingsea, Manningtree); cycle.travel draws Harwich Medium too, where ours stays bold |
 | [Harwich, z11](screenshots/cmp-harwich-z11.jpg) | EuroVelo ring and centre colours, sizes and spacing match; railways and station dots on both. cycle.travel draws the Harwich ferry dashed (ours left out on purpose) and names Wrabness and Bradfield, which we don't |
 | [Colchester, z12](screenshots/cmp-colchester-z12.jpg) (51.8787, 0.964) | The path rule's test view. Middlewick's and High Woods' permissive paths are brown dashes on both, with the same few red stretches. Routes 1 and 51 and the EuroVelo dots match; cycle.travel badges EuroVelo 2 beside the 51 shield, we show only the 51. It shows café and pub icons; ours start at z14 |
+
+### Terrain comparisons
+
+cycle.travel left, prototype right, both captured in the same display Chrome on 19 October 2026 (WS1.4),
+so colours compare directly; DPR 2, zooms MapLibre (ct = +1). Box Hill, 51.247, −0.308.
+
+| View | What to look at |
+|---|---|
+| [Box Hill, z12](screenshots/cmp-box-hill-z12.jpg) | The North Downs scarp and the dry valleys north of White Hill shade alike. Ours is a little crisper (Mapterhorn's LiDAR against cycle.travel's softer DEM); the contours are as faint on both, and neither labels them yet |
+| [Box Hill, z14](screenshots/cmp-box-hill-z14.jpg) | Every contour labelled about once across the view on both; hillshade weight and the contours' brown match. Our labels bunch where the scarp's lines run close |
+| [Box Hill, z15](screenshots/cmp-box-hill-z15.jpg) | The scarp south of Zig Zag Road is the same mid grey; our contours are a touch darker and our labels repeat more along the long lines |
 
 ### Phone comparisons (3×)
 
@@ -640,8 +669,8 @@ placement here and colour in the 2× set above. The app's map controls sit top a
 | [London, z11](screenshots/phone-london-z11.jpg) | Street net, NCN 4 and dots match in weight. We name quarters (Lot's Village, Nine Elms) cycle.travel doesn't; it draws TfL Q and C57 routes and AV badges along the Avenue Verte that we don't at this zoom |
 | [Putney, z13](screenshots/phone-putney-z13.jpg) | Putney's size and grey, the lcn teal dots, NCN 4 badges and the station dot match. cycle.travel has café and shop icons and a beige foreshore |
 | [Westminster, z14](screenshots/phone-westminster-z14.jpg) | Parks, paths, the Palace of Westminster and Q badges match; we add C3 and C56 badges and the Westminster label |
-| [Richmond Park, z13](screenshots/phone-richmond-park-z13.jpg) | NCN 4 on red-and-white paths, its badges and the lcn teal match. cycle.travel has contours, water icons and Spankers Hill |
-| [Surrey Hills, z12](screenshots/phone-surrey-hills-z12.jpg) | DORKING, Westhumble, Pixham and the hills' italic names match in size; NCN 22 and the regional route too. cycle.travel has hillshade, contours and more POI icons |
+| [Richmond Park, z13](screenshots/phone-richmond-park-z13.jpg) | NCN 4 on red-and-white paths, its badges and the lcn teal match. cycle.travel has water icons and Spankers Hill (and contours, taken before 1.4) |
+| [Surrey Hills, z12](screenshots/phone-surrey-hills-z12.jpg) | DORKING, Westhumble, Pixham and the hills' italic names match in size; NCN 22 and the regional route too. cycle.travel has more POI icons (and hillshade and contours, taken before 1.4) |
 | [Harwich, z9](screenshots/phone-harwich-z9.jpg) | Felixstowe and Harwich bold, Manningtree and Brightlingsea Medium on both; EuroVelo dots match |
 | [Harwich, z10](screenshots/phone-harwich-z10.jpg) | Village names and sizes match (Holbrook, Stutton, Ramsey, Wix). cycle.travel draws Harwich Medium at this zoom only, and Dovercourt a little larger |
 | [Harwich, z11](screenshots/phone-harwich-z11.jpg) | EuroVelo 2 dots and badges, Ramsey, Little Oakley and Great Oakley match; cycle.travel names Wrabness |

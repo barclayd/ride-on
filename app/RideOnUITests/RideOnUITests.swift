@@ -153,6 +153,8 @@ final class RideOnUITests: XCTestCase {
         // SwiftUI's `Link`s are buttons to XCUITest.
         XCTAssertTrue(app.buttons["Map data © OpenStreetMap contributors"].exists)
         XCTAssertTrue(app.buttons["Protomaps"].exists)
+        XCTAssertTrue(app.buttons["Terrain © Mapterhorn"].exists)
+        XCTAssertTrue(app.buttons["Contains OS data © Crown copyright and database right 2026"].exists)
         XCTAssertTrue(routeButton(in: app, startingWith: "Hilly Loop").exists)
 
         app.buttons["Map style"].tap()

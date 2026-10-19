@@ -35,8 +35,8 @@ describe.each(Object.entries(targets))('%s style', (_, style) => {
   })
 
   test('reads the dated GB archives', () => {
-    for (const source of Object.values(style.sources)) {
-      expect(source.type).toBe('vector')
+    for (const [name, source] of Object.entries(style.sources)) {
+      expect(source.type).toBe(name === 'terrain' ? 'raster-dem' : 'vector')
       expect('url' in source && source.url).toMatch(
         /^pmtiles:\/\/https:\/\/maps\.ride-on\.cc\/[a-z]+-gb-\d{8}\.pmtiles$/,
       )

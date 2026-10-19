@@ -19,6 +19,8 @@ export interface Target {
 export const archives = {
   basemap: 'basemap-gb-20261017.pmtiles',
   cycling: 'cycling-gb-20261017.pmtiles',
+  terrain: 'terrain-gb-20261019.pmtiles',
+  contours: 'contours-gb-20261019.pmtiles',
 }
 
 /** Montserrat faces. Each is a glyph PBF directory (scripts/glyphs.sh), named after its TTF file. */
@@ -1113,6 +1115,67 @@ const lowRailCore: Layer = {
   filter: lowKind('rail'),
 }
 
+// Terrain (WS1.4): cycle.travel shades hills at every zoom, soft grey on the slopes facing away from a north-west
+// light, and draws 10 m contours from its z12 (our 11), thin and dark brown, labelled in orange-brown along the line
+// from its z14 (our 13). Hillshade comes from Mapterhorn's DEM, contours from OS Terrain 50.
+const terrain = {
+  shadow: '#4c4a3a',
+  highlight: 'rgba(255, 255, 255, 0)',
+  // Steep scarps stay soft on cycle.travel: the accent only deepens them a little.
+  accent: 'rgba(76, 74, 58, 0.4)',
+  contour: '#685838',
+  contourLabel: '#b0701b',
+}
+const hillshade: Layer = {
+  id: 'ct_hillshade',
+  type: 'hillshade',
+  source: 'terrain',
+  paint: {
+    'hillshade-shadow-color': terrain.shadow,
+    'hillshade-highlight-color': terrain.highlight,
+    'hillshade-accent-color': terrain.accent,
+    // Lighter from z11, where Mapterhorn's detail and the contours would otherwise darken the slopes, and heavier
+    // again from z14, as cycle.travel's is close in.
+    'hillshade-exaggeration': ['interpolate', ['linear'], ['zoom'], 10, 0.35, 11, 0.3, 13, 0.36, 15, 0.4],
+  },
+}
+const contourSource = { source: 'contours', 'source-layer': 'contours' }
+// Fainter where they first appear, as cycle.travel's are at its z12–13, and darker close in.
+const contours: Layer = {
+  id: 'ct_contours',
+  type: 'line',
+  ...contourSource,
+  minzoom: 11,
+  paint: {
+    'line-color': terrain.contour,
+    'line-width': 0.5,
+    'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.2, 13, 0.5, 15, 0.65],
+  },
+}
+const contourLabel = (id: string, minzoom: number, maxzoom: number, filter?: Expression): Layer => ({
+  id,
+  type: 'symbol',
+  ...contourSource,
+  minzoom,
+  maxzoom,
+  ...(filter ? { filter } : {}),
+  layout: {
+    'symbol-placement': 'line',
+    // About once a line per screen, as cycle.travel's: wider apart as the lines lengthen close in.
+    'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 14, 600, 15, 900],
+    'text-field': ['to-string', ['get', 'ele']],
+    'text-font': montserrat('Regular'),
+    'text-size': 9,
+    'text-max-angle': 25,
+  },
+  paint: { 'text-color': terrain.contourLabel },
+})
+// Every 20 m at cycle.travel's z14, every line from its z15 (our 13 and 14).
+const contourLabels = [
+  contourLabel('ct_contour_labels_20', 13, 14, ['==', ['%', ['get', 'ele'], 20], 0]),
+  contourLabel('ct_contour_labels', 14, 24),
+]
+
 const attribution = '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
 
 export const buildStyle = (target: Target): StyleSpecification => {
@@ -1124,6 +1187,8 @@ export const buildStyle = (target: Target): StyleSpecification => {
   }
   all.splice(at('landuse_park'), 0, urban, greens)
   all.splice(at('landuse_park') + 1, 0, pitches)
+  // Water covers both: lakes stay flat.
+  all.splice(at('water'), 0, hillshade, contours)
   all.splice(at('buildings') + 1, 0, ...military)
   all.splice(at('roads_minor_casing') + 1, 0, lowMinorCasing)
   all.splice(at('roads_other'), 0, cyclewayHalo)
@@ -1135,6 +1200,8 @@ export const buildStyle = (target: Target): StyleSpecification => {
   // Later layers win label collisions: badges beat POI icons, which beat point labels; EuroVelo beats national
   // beats regional.
   all.splice(at('places_subplace'), 0, ...labels, pois, ...badges)
+  // The first labels placed, so every other label wins.
+  all.splice(at('water_waterway_label'), 0, ...contourLabels)
   // Below our z12, villages' and hamlets' names go in their own layer, placed after the thinned stations, which are
   // placed after towns' names.
   const locality = all[at('places_locality')] as Layer
@@ -1160,6 +1227,18 @@ export const buildStyle = (target: Target): StyleSpecification => {
         attribution: `${attribution} · <a href="https://protomaps.com">Protomaps</a>`,
       },
       cycling: { type: 'vector', url: `pmtiles://${target.tiles}/${archives.cycling}`, attribution },
+      terrain: {
+        type: 'raster-dem',
+        url: `pmtiles://${target.tiles}/${archives.terrain}`,
+        encoding: 'terrarium',
+        tileSize: 512,
+        attribution: '<a href="https://mapterhorn.com/attribution">© Mapterhorn</a>',
+      },
+      contours: {
+        type: 'vector',
+        url: `pmtiles://${target.tiles}/${archives.contours}`,
+        attribution: 'Contains OS data © Crown copyright and database right 2026',
+      },
     },
     layers: all,
   } as StyleSpecification
