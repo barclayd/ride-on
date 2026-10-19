@@ -1,12 +1,12 @@
 import type { Target } from './style.ts'
 
-/** The app's copy of the style, glyphs and sprite: RoutesUI's `CycleMap` resources. */
-export const appResources = new URL('../../../app/Packages/Features/Sources/RoutesUI/CycleMap/', import.meta.url)
+/** The app's copy of the style, glyphs and sprite: SharedUI's `CycleMap` resources. */
+export const appResources = new URL('../../../app/Packages/Features/Sources/SharedUI/CycleMap/', import.meta.url)
 
 /** Where the app reads the style's files from. */
 export const native: Target = {
   // MapLibre Native won't resolve relative glyph URLs: the app swaps `bundle://` for the resource bundle's
-  // file URL when it loads the style (CycleMapSpike.swift).
+  // file URL when it loads the style (SharedUI's CycleMap.swift).
   glyphs: 'bundle://glyphs/{fontstack}/{range}.pbf',
   sprite: 'bundle://sprite',
   tiles: 'https://maps.ride-on.cc',

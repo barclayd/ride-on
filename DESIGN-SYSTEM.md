@@ -210,7 +210,8 @@ before adding a custom component in code.
     one in the accent with a white casing and start marker, and a callout over its northernmost
     point ("Hilly Loop 51 km", or the ride's date from History). Tapping within 22pt of a line
     selects that route. `MapControls` (style menu, my location) sit at its top trailing corner.
-    The style menu offers Satellite, Hybrid and Standard, plus Cycle (`CycleMap`) once it ships.
+    The style menu offers Satellite, Hybrid and Standard, and Cycle (`CycleMap`) first where it's
+    available: iOS, behind `--cycle-map` until it ships, when it's also the default.
 13. **Panel rows** (`LibraryRow`, `HistoryRow`) — a 48pt route thumbnail, name, "42 km · 180 m ·
     46% unpaved", then the source and last ride (Library) or the forecast saved when the ride
     was planned (History; never the weather on the day). Selected, the row fills with
@@ -239,7 +240,11 @@ before adding a custom component in code.
     style bundled in the app; MapKit stands in on macOS for now. Routes are drawn as map layers
     below the labels, in the same colours and white casing as on MapKit. Live and interactive as
     `RoutesMap`'s Cycle look; cards and thumbnails get static snapshots of it, never live maps.
-    Its attribution is always visible (§2). Being built behind the `--cycle-map` launch
+    Its attribution is always visible (§2): "© OpenStreetMap" and "Protomaps" in `.caption2`
+    `.secondary` at the safe area's bottom leading corner, 12pt in, held at a fixed size like the
+    map controls. A tap within 22pt of a line selects it; a double tap only zooms. The selected
+    route's callout is pinned over its northernmost point as on MapKit. In the fixture world it
+    draws the style's land colour only, offline. Being built behind the `--cycle-map` launch
     argument; plan, rollout and open decisions in [`docs/maps/README.md`](docs/maps/README.md).
     `RideHero` stays on satellite imagery and `WindRouteMap` on the muted standard map until
     those decisions say otherwise.

@@ -552,9 +552,11 @@ Build:
 - The panel can't be grabbed mid-settle; a new drag starts from the detent.
 - The map uses flat `.imagery`/`.hybrid`/`.standard`; `elevation: .realistic` dropped the
   annotations and blurred the lines.
-- `--cycle-map` swaps the map for the MapLibre Native spike (`CycleMapSpike`, iOS only): the
-  cycle map's basemap with the shortlist drawn on it and tap-to-select, but no callout, start marker
-  or Map Style menu yet ([findings](../maps/README.md#ws3-app-integration-115-weeks)). Over it the
+- `--cycle-map` adds a Cycle look to the Map Style menu, first and selected at launch (iOS only):
+  `CycleMap`, MapLibre Native drawing the cycle map with the shortlist, the selected route's start
+  marker and callout, tap-to-select and its own OpenStreetMap/Protomaps attribution
+  ([WS3](../maps/README.md#ws3-app-integration-115-weeks)). Picking Satellite, Hybrid or Standard
+  goes back to MapKit. Over it the
   status bar's glyphs are dark and the map controls light regular glass, in Dark Mode too, with no
   dimming under the status bar; in Dark Mode the tab bar's labels are still white over the light map
   ([WS2.7](../maps/README.md#ws2-style-for-maplibre-native-1-week)).

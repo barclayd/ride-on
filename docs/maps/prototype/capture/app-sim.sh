@@ -4,7 +4,8 @@
 # ml-headless.mjs --phone takes the prototype at the same size; cycle.travel's side is a display Chrome
 # emulating 402x299x3 (prototype README).
 # Usage: sh capture/app-sim.sh <simulator udid> <outDir> [view ...]   (Ride On installed on that simulator)
-# Name the simulator: never `booted`, which may pick someone's own device simulator.
+# Name the simulator: never `booted`, which may pick someone's own device simulator. `-CycleMapTiles`
+# names the live tile host: the fixture world is offline without it.
 set -eu
 sim=$1 out=$2
 shift 2
@@ -18,7 +19,7 @@ for view in $views; do
   name=${view%%:*} camera=${view#*:}
   if [ $# -gt 0 ] && ! printf ' %s ' "$*" | grep -q " $name "; then continue; fi
   xcrun simctl launch --terminate-running-process "$sim" com.danbarclay.rideon \
-    --fixture-world --cycle-map -CycleMapCamera "$camera" > /dev/null
+    --fixture-world --cycle-map -CycleMapCamera "$camera" -CycleMapTiles https://maps.ride-on.cc > /dev/null
   # Settled when two crops a second apart are identical (tiles, labels and fades all done).
   i=0
   rm -f "$tmp/prev.png"

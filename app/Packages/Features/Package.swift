@@ -31,18 +31,17 @@ let package = Package(
     targets: [
         .target(
             name: "SharedUI",
-            dependencies: baseDeps),
+            dependencies: baseDeps + [
+                .product(name: "MapLibre", package: "maplibre-gl-native-distribution",
+                         condition: .when(platforms: [.iOS])),
+            ],
+            resources: [.copy("CycleMap")]),
         .target(
             name: "RideUI",
             dependencies: baseDeps + ["SharedUI"]),
         .target(
             name: "RoutesUI",
-            dependencies: baseDeps + [
-                "SharedUI",
-                .product(name: "MapLibre", package: "maplibre-gl-native-distribution",
-                         condition: .when(platforms: [.iOS])),
-            ],
-            resources: [.copy("CycleMap")]),
+            dependencies: baseDeps + ["SharedUI"]),
         .target(
             name: "PreferencesUI",
             dependencies: baseDeps + ["SharedUI"]),

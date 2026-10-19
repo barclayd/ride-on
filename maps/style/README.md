@@ -22,7 +22,7 @@ Bun 1.4, TypeScript (tsgo), Biome, as in `worker/`.
 
 | Target | Command | Writes | Glyphs and sprite | Tiles |
 |---|---|---|---|---|
-| `native` | `bun run build` | `style.json`, `sprite@2x.json` and `sprite@2x.png` in `app/Packages/Features/Sources/RoutesUI/CycleMap/` | `bundle://glyphs/…`, `bundle://sprite`, rewritten to the resource bundle by the app at load | `https://maps.ride-on.cc` |
+| `native` | `bun run build` | `style.json`, `sprite@2x.json` and `sprite@2x.png` in `app/Packages/Features/Sources/SharedUI/CycleMap/` | `bundle://glyphs/…`, `bundle://sprite`, rewritten to the resource bundle by the app at load | `https://maps.ride-on.cc` |
 | `web` | `bun src/cli.ts web <out> <origin> [<tiles>]` | The prototype's `style.json` (`bun run style` there) | `<origin>/glyphs/…`, `<origin>/sprite` | `https://maps.ride-on.cc`, or `<tiles>` |
 
 Both read the archives named in `archives` in `src/style.ts`: dated keys, never overwritten. After
@@ -35,7 +35,7 @@ layer property is on its own line.
 ## Glyphs
 
 MapLibre Native needs a `glyphs` URL even when the style declares fonts, so labels come from SDF glyph
-PBFs, bundled with the app (`RoutesUI/CycleMap/glyphs/`, 2.9 MB) and served to the prototype by its
+PBFs, bundled with the app (`SharedUI/CycleMap/glyphs/`, 2.9 MB) and served to the prototype by its
 `serve.ts`. `scripts/glyphs.sh` builds them:
 
 - Montserrat's static TTFs from [JulietaUla/Montserrat](https://github.com/JulietaUla/Montserrat) at a
