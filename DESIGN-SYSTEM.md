@@ -241,8 +241,9 @@ before adding a custom component in code.
 17. **`CycleMap`** — a map that looks like cycle.travel's: OpenStreetMap data in our own style,
     cycle routes as dots over the road beneath them, route-number badges, cycle paths by surface,
     labels in Montserrat (§4). MapLibre Native on iOS, drawing Ride On's own vector tiles with a
-    style bundled in the app; MapKit stands in on macOS for now. Routes are drawn as map layers
-    below the labels, in the same colours and white casing as on MapKit. Live and interactive as
+    style bundled in the app. The Mac stays on MapKit for the first release: no Cycle look, satellite
+    cards and outline thumbnails. Routes are drawn as map layers below the labels, in the same
+    colours and white casing as on MapKit. Live and interactive as
     `RoutesMap`'s Cycle look; cards and thumbnails get static snapshots of it, never live maps:
     `MLNMapSnapshotter` draws each once per route, framing, tint, size and scale, without labels or
     terrain, and keeps it in memory. Until one is ready the route stands on the style's land colour exactly

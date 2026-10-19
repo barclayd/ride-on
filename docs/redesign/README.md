@@ -27,7 +27,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
-| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | 🟡 Being built behind `--cycle-map`: the Routes map's Cycle look, card and thumbnail snapshots, and cycle lanes on roads and terrain (hillshade, contours) done | #223, #225, #275, #276, #277, #278 |
+| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | 🟡 Being built behind `--cycle-map`: the Routes map's Cycle look, card and thumbnail snapshots, and cycle lanes on roads and terrain (hillshade, contours) done; the Mac stays on MapKit | #223, #225, #275, #276, #277, #278, #280 |
 
 Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
@@ -552,7 +552,8 @@ Build:
 - The panel can't be grabbed mid-settle; a new drag starts from the detent.
 - The map uses flat `.imagery`/`.hybrid`/`.standard`; `elevation: .realistic` dropped the
   annotations and blurred the lines.
-- `--cycle-map` adds a Cycle look to the Map Style menu, first and selected at launch (iOS only):
+- `--cycle-map` adds a Cycle look to the Map Style menu, first and selected at launch (iOS only; the
+  Mac keeps MapKit's three looks, [decision 2](../maps/README.md#open-decisions)):
   `CycleMap`, MapLibre Native drawing the cycle map with the shortlist, the selected route's start
   marker and callout, tap-to-select and its own attribution (OpenStreetMap, Protomaps, Mapterhorn and
   the OS statement for the terrain)

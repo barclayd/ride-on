@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3 done: purple cycle lanes on roads; WS1.4 done: hillshade from Mapterhorn and 10 m contours from OS Terrain 50; WS1.5 done: monthly tile rebuilds by GitHub Actions (`maps-tiles`, waiting on its R2 secrets); WS3.6 (macOS) next |
+| Status | In progress. Prototype done ([`prototype/`](prototype/)); WS4a done (spec in DESIGN-SYSTEM.md, decisions below); WS3.0 spike done: MapLibre Native works ([findings](#ws3-app-integration-115-weeks)); WS1.2 done: GB cycling overlay from planetiler ([`maps/tiles/`](../../maps/tiles/README.md)); WS1.1 done: the GB basemap and cycling overlay are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)); WS2 done except Dan's on-device check: 2.1–2.7 (2.5 bar station throats; 2.6 checked on the iPhone 17 Simulator at 3×; 2.7 the map stays light in Dark Mode), the production style builder in [`maps/style/`](../../maps/style/README.md) with bundled glyph PBFs and sprite; WS3.1–3.5 and 3.7 done behind `--cycle-map`: the Routes map's Cycle look (`CycleMap`) and snapshots on cards and thumbnails; WS1.3 done: purple cycle lanes on roads; WS1.4 done: hillshade from Mapterhorn and 10 m contours from OS Terrain 50; WS1.5 done: monthly tile rebuilds by GitHub Actions (`maps-tiles`, waiting on its R2 secrets); WS3.6 done: the Mac stays on MapKit ([decision 2](#open-decisions)); WS4b (docs, remove the flag) next |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -379,7 +379,7 @@ the accent with a white casing) under the labels, tap-to-select and framing abov
 | Fonts | Montserrat from glyph PBFs bundled in the app's resources (SharedUI's since 3.1), 7 faces × 6 ranges = 3.5 MB (6 faces, 2.9 MB since WS2.3) |
 | App size | Release, arm64: 35 MB app, of which `MapLibre.framework` 7.8 MB and the glyph bundle 3.5 MB (both uncompressed) |
 | Memory | 118–126 MB footprint on the Routes tab at z11–16.5 (Simulator: indicative only) |
-| macOS | Builds; MapLibre isn't linked, `RoutesMap` stays on MapKit. The glyph bundle still ships (SwiftPM resources can't be per-platform) |
+| macOS | Builds; MapLibre isn't linked, `RoutesMap` stays on MapKit ([WS3.6](#macos)). The glyph bundle still ships (SwiftPM resources can't be per-platform) |
 | Not checked | Frame rate, memory and battery **on a device** (Dan: run `--cycle-map` on the iPhone, pan and pinch between Richmond Park and central London at z11–15 with Xcode's memory gauge and Instruments' Animation Hitches), now with hillshade (1.4) |
 
 What 3.2 has to carry over from the spike:
@@ -496,7 +496,12 @@ its bottom leading corner, inside the safe area, so 8pt clear of the panel plus 
 shortlist card's snapshot carries the same names (`CycleMapAttribution(.card)`) as plain text, since
 the card is a button, 10pt under its stats; thumbnails are too small for it.
 
-**3.6 macOS.** See [below](#macos).
+**3.6 macOS.** **Done**, 19 October 2026, with option 1 [below](#macos): the Mac stays on MapKit.
+`CycleMap` and `CycleMapSnapshot` compile for iOS only and MapLibre is linked for iOS only, so on the Mac
+the Routes map's style menu offers Satellite (selected at launch), Hybrid and Standard with no Cycle
+look, shortlist cards are satellite `Map`s with Apple's attribution, and thumbnails are the route's
+outline on the land fill. The macOS build is checked. The style bundle still ships
+(2.9 MB of glyphs, unused): SwiftPM resources can't be per-platform.
 
 **3.7 Fixture world.** `RideOnUITests` never touch the network. Options: a tiny bundled PMTiles
 (`pmtiles extract` of a bbox around the fixture routes) with the real style, or a fixture style with a
@@ -565,7 +570,10 @@ for it. Options ([decision 2](#open-decisions)):
 3. **Build MapLibre Native for macOS from source.** It has a macOS platform in-tree but no supported
    distribution. Most work, most risk.
 
-Recommendation: 1 for the first release, 2 if Dan wants parity.
+Recommendation: 1 for the first release, 2 if Dan wants parity. **Built: 1** ([3.6](#ws3-app-integration-115-weeks)).
+Option 2 later would need a page for GL JS in the app bundle with the PMTiles protocol, the style with
+glyph and sprite URLs the web view can load, and the routes, camera, taps and callout bridged through
+JavaScript; `RoutesMap` already switches on the look, so it would slot in where `CycleMap` does on iOS.
 
 ## Attribution and licensing
 
@@ -590,7 +598,7 @@ comparison. Fine for a design reference, but don't put them in the app or market
 |---|---|
 | Copying cycle.travel this closely without permission | Decision 1 before shipping; the style is ours to change if asked |
 | MapLibre Native gaps vs GL JS (fonts, PMTiles bugs, text layout) | WS3.0 spike before committing; WKWebView fallback |
-| macOS left behind | Decision 2; the wrapper hides the implementation |
+| macOS left behind | Decision 2: MapKit on the Mac for the first release (WS3.6); GL JS in a `WKWebView` for parity later |
 | Light map breaks Liquid Glass legibility | WS4a design call before UI work |
 | Performance and battery with live maps | Snapshots for cards and thumbnails; live views only on the hero and Routes map |
 | App size | Measured in the spike: about 11 MB uncompressed (framework 7.8 MB, glyphs 3.5 MB); the badge sprite adds 1.5 KB |
@@ -607,7 +615,7 @@ dark mode, §6 `CycleMap`, `RideHero`, `WindRouteMap`).
 | # | Decision | Status | Building with |
 |---|---|---|---|
 | 1 | Ask Richard Fairhurst (cycle.travel) before shipping a look this close? | **Open.** Recommended: yes, a short email explaining Ride On links to cycle.travel. Blocks release, not development | — |
-| 2 | macOS: MapKit fallback, WKWebView + GL JS, or Catalyst/source build | Default: MapKit on macOS behind `CycleMap` for the first release; WKWebView + GL JS if Dan wants parity | MapKit on macOS |
+| 2 | macOS: MapKit fallback, WKWebView + GL JS, or Catalyst/source build | Default: MapKit on macOS behind `CycleMap` for the first release; WKWebView + GL JS if Dan wants parity. Built in WS3.6 | MapKit on macOS |
 | 3 | Ride hero: satellite, or the cycle map | Default: stays satellite. Revisit once the Routes map has shipped | Satellite |
 | 4 | Coverage: GB only, or Europe (EuroVelo, Avenue Verte into France) | Default: Great Britain. Basemap bbox −8.7, 49.8 → 1.9, 60.9 (3.0 GB); overlay from Geofabrik's GB extract | GB |
 | 5 | Small labels: Montserrat, or Open Sans like cycle.travel | **Decided** (Dan): Montserrat throughout | Montserrat |
