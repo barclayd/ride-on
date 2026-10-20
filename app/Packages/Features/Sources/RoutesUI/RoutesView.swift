@@ -7,8 +7,8 @@ import SharedUI
 
 /// The Routes tab (docs/redesign/README.md, "Routes"): every shortlisted loop on one map, under a
 /// floating panel holding the shortlist Rides ranks, then the rest of the library and the rides
-/// marked as ridden. On iPhone the panel rests at medium or large over the tab bar; on iPad and
-/// Mac it runs down the leading side.
+/// marked as ridden. On iPhone the panel rests at medium or large over the tab bar, or collapses to
+/// its search field to leave the map; on iPad and Mac it runs down the leading side.
 ///
 /// The caller owns `library` and saves shortlist edits, and registers the `RideBoard.Pick`
 /// destination "Details" pushes (Ride detail lives in RideUI, which RoutesUI can't import).
@@ -54,7 +54,7 @@ public struct RoutesView: View {
                 let medium = (large * 0.56).rounded()
                 ZStack(alignment: .bottom) {
                     map(padding: EdgeInsets(top: safeArea.top + 8, leading: 0, bottom: safeArea.bottom + 14 + medium + 8, trailing: 0),
-                        showsCallout: detent == .medium)
+                        showsCallout: detent != .large)
                     controls
                         .opacity(detent == .large ? 0 : 1)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -84,7 +84,7 @@ public struct RoutesView: View {
         .sensoryFeedback(.selection, trigger: selection)
         .sensoryFeedback(.impact(flexibility: .soft), trigger: library.shortlist)
         .onChange(of: searching) { _, searching in
-            if searching, floats, detent == .medium {
+            if searching, floats, detent != .large {
                 withAnimation(Motion.panelDetent()) { detent = .large }
             }
         }

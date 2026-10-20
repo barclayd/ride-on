@@ -235,6 +235,11 @@ public struct PreferencesView: View {
             NavigationLink { AboutView() } label: {
                 Row("About Ride On", "info.circle", .gray)
             }
+            #if os(iOS)
+            NavigationLink { MapCreditsView() } label: {
+                Row("Maps", "map.fill", .green, subtitle: "Map data and credits")
+            }
+            #endif
         } header: {
             Text("Account")
         } footer: {

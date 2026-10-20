@@ -1,40 +1,45 @@
 import SwiftUI
 import DesignSystem
 
-/// The two heights the Routes panel rests at on iPhone.
+/// The heights the Routes panel rests at on iPhone. Collapsed is just the header, so the map has
+/// the screen.
 enum PanelDetent: Hashable {
-    case medium, large
+    case collapsed, medium, large
 }
 
 /// The Routes panel: regular glass floating over the map, a pinned header (grabber, search, add)
-/// and everything else scrolling beneath it. On iPhone it rests at `heights`' two ends and tracks
-/// a drag on its header 1:1, settling on the detent the drag was heading for; with `heights` nil
-/// (iPad, Mac) it fills the height it's given and has no grabber.
+/// and everything else scrolling beneath it. On iPhone it rests collapsed or at `heights`' two ends
+/// and tracks a drag on its header 1:1, settling on the detent the drag was heading for; with
+/// `heights` nil (iPad, Mac) it fills the height it's given and has no grabber.
 struct FloatingPanel<Header: View, Content: View>: View {
     @Binding var detent: PanelDetent
     /// Medium...large, or nil for a fixed panel.
     var heights: ClosedRange<CGFloat>?
-    /// Called when the panel settles on medium, so search can give up focus.
+    /// Called when the panel settles below large, so search can give up focus.
     var collapsed: () -> Void
     @ViewBuilder var header: Header
     @ViewBuilder var content: Content
 
     @State private var drag: CGFloat = 0
     @State private var pull: CGFloat = 0
+    @State private var headerHeight: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView {
             content
                 .padding(.bottom, 14)
+                .accessibilityHidden(detent == .collapsed && heights != nil)
         }
         .scrollDismissesKeyboard(.interactively)
-        // Pulled down past the top at large, the panel lets go to medium, like a sheet.
+        // Pulled down past the top, the panel lets go a detent, like a sheet.
         .onScrollGeometryChange(for: CGFloat.self) { -($0.contentOffset.y + $0.contentInsets.top) } action: { _, pull in
             self.pull = pull
         }
         .onScrollPhaseChange { old, _ in
-            if old == .interacting, pull > 60, detent == .large, heights != nil { settle(on: .medium) }
+            if old == .interacting, pull > 60, detent != .collapsed, heights != nil {
+                settle(on: detent == .large ? .medium : .collapsed)
+            }
         }
         .safeAreaBar(edge: .top, spacing: 0) {
             VStack(spacing: 0) {
@@ -45,15 +50,18 @@ struct FloatingPanel<Header: View, Content: View>: View {
                 }
                 header
             }
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
             .contentShape(.rect)
             .gesture(dragGesture, isEnabled: heights != nil)
         }
-        // The rows fade out into the panel's bottom edge rather than being cut off by it.
+        // The rows fade out into the panel's bottom edge rather than being cut off by it; the fade
+        // shrinks as the panel closes on its header, so the search field never fades.
         .mask {
             VStack(spacing: 0) {
                 Color.black
                 LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 22)
+                    .frame(height: heights.map { min(max(height(in: $0) - headerHeight, 0), 22) } ?? 22)
             }
         }
         .frame(height: heights.map(height(in:)))
@@ -66,7 +74,7 @@ struct FloatingPanel<Header: View, Content: View>: View {
 
     private var grabber: some View {
         Button {
-            settle(on: detent == .large ? .medium : .large)
+            settle(on: detent == .medium ? .large : .medium)
         } label: {
             Capsule()
                 .fill(.tertiary)
@@ -76,6 +84,11 @@ struct FloatingPanel<Header: View, Content: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(detent == .large ? "Collapse panel" : "Expand panel")
+        .accessibilityActions {
+            if detent != .collapsed {
+                Button("Dismiss panel") { settle(on: .collapsed) }
+            }
+        }
     }
 
     // MARK: Dragging
@@ -91,8 +104,8 @@ struct FloatingPanel<Header: View, Content: View>: View {
                 // Where the panel would come to rest if it coasted (scroll deceleration), so a
                 // flick throws it to the far detent.
                 let projected = current + velocity / 1000 * 0.998 / (1 - 0.998)
-                let target: PanelDetent = abs(projected - heights.upperBound) < abs(projected - heights.lowerBound) ? .large : .medium
-                let remaining = (target == .large ? heights.upperBound : heights.lowerBound) - current
+                let target = [PanelDetent.collapsed, .medium, .large].min { abs(projected - rest($0, in: heights)) < abs(projected - rest($1, in: heights)) }!
+                let remaining = rest(target, in: heights) - current
                 settle(on: target, velocity: abs(remaining) > 1 ? velocity / remaining : 0)
             }
     }
@@ -102,15 +115,25 @@ struct FloatingPanel<Header: View, Content: View>: View {
             detent = target
             drag = 0
         }
-        if target == .medium { collapsed() }
+        if target != .large { collapsed() }
+    }
+
+    /// The panel's height resting at `detent`: collapsed shows just the header.
+    private func rest(_ detent: PanelDetent, in heights: ClosedRange<CGFloat>) -> CGFloat {
+        switch detent {
+        case .collapsed: min(headerHeight, heights.lowerBound)
+        case .medium: heights.lowerBound
+        case .large: heights.upperBound
+        }
     }
 
     /// The panel's height for the drag so far, resisting more the further it's pulled past
-    /// either detent.
+    /// collapsed or large.
     private func height(in heights: ClosedRange<CGFloat>) -> CGFloat {
-        let raw = (detent == .large ? heights.upperBound : heights.lowerBound) - drag
+        let lower = rest(.collapsed, in: heights)
+        let raw = rest(detent, in: heights) - drag
         if raw > heights.upperBound { return heights.upperBound + Self.rubberBand(raw - heights.upperBound) }
-        if raw < heights.lowerBound { return heights.lowerBound - Self.rubberBand(heights.lowerBound - raw) }
+        if raw < lower { return lower - Self.rubberBand(lower - raw) }
         return raw
     }
 
