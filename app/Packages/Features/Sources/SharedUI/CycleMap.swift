@@ -2,14 +2,16 @@
 import SwiftUI
 import MapKit
 import MapLibre
+import DesignSystem
 import Models
 import Services
 
 /// A map in cycle.travel's look (DESIGN-SYSTEM.md §6 #17): MapLibre Native drawing Ride On's own
 /// tiles with the style `maps/style` builds into `CycleMap/`. Routes are map layers under the labels:
 /// the others in white, the selected one in the tint on a white casing with its start marked. Like
-/// `Map`, it fills the screen and frames inside the safe area, and its attribution sits in the safe
-/// area's bottom leading corner (§2).
+/// `Map`, it fills the screen and frames inside the safe area. "© OpenStreetMap" sits in the safe
+/// area's bottom leading corner until the map is moved or for 5 seconds, then fades; the full credits
+/// are in Preferences → Maps (§2).
 ///
 /// iOS only: MapLibre Native has no macOS build, so the Mac stays on MapKit (docs/maps/README.md, WS3.6).
 public struct CycleMap: View {
@@ -52,6 +54,7 @@ public struct CycleMap: View {
     var select: (UUID) -> Void
 
     @Environment(\.self) private var environment
+    @State private var credited = true
 
     /// - Parameters:
     ///   - lines: Drawn white; `selected` is drawn over them.
@@ -75,13 +78,27 @@ public struct CycleMap: View {
         GeometryReader { geometry in
             ZStack(alignment: .bottomLeading) {
                 MapView(lines: lines, selected: selected, tint: UIColor(Color(tint.resolve(in: environment))),
-                        camera: camera, callout: callout, insets: geometry.safeAreaInsets, moved: moved, select: select)
+                        camera: camera, callout: callout, insets: geometry.safeAreaInsets,
+                        moved: { uncredit(); moved($0) }, select: select)
                     .ignoresSafeArea()
-                CycleMapAttribution()
-                    .padding(.leading, 12)
-                    .padding(.bottom, 4)
+                if credited {
+                    CycleMapAttribution()
+                        .padding(.leading, 12)
+                        .padding(.bottom, 4)
+                        .transition(.opacity)
+                }
             }
         }
+        .task {
+            if (try? await Task.sleep(for: .seconds(5))) != nil { uncredit() }
+        }
+    }
+
+    /// OpenStreetMap's guidelines let an interactive map's credit go once the map is in use or after
+    /// 5 seconds, so long as it can still be found (Preferences → Maps).
+    private func uncredit() {
+        guard credited else { return }
+        withAnimation(Motion.panelMaterialize) { credited = false }
     }
 
     /// The bundled style with `bundle://` pointed at the resource bundle: Native needs absolute glyph
@@ -117,10 +134,10 @@ public struct CycleMap: View {
     }
 }
 
-/// "© OpenStreetMap" and "Protomaps" (§2). On the live map each links to its terms, in the map's own
-/// light scheme, and the terrain's credits follow: Mapterhorn for the hillshade, Ordnance Survey's
-/// statement for the contours. On a card's snapshot, which is a button and has no terrain, they're
-/// plain text in the card's white.
+/// The cycle map's credit (§2). On the live map, "© OpenStreetMap" linking to its terms in the map's
+/// own light scheme; the rest (Protomaps, and the terrain's Mapterhorn and Ordnance Survey) are in
+/// Preferences → Maps. On a card's snapshot, which is a button and has no terrain, "© OpenStreetMap"
+/// and "Protomaps" as plain text in the card's white.
 public struct CycleMapAttribution: View {
     public enum Placement { case map, card }
 
@@ -131,26 +148,14 @@ public struct CycleMapAttribution: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 10) {
-                switch placement {
-                case .map:
-                    Link("© OpenStreetMap", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
-                        .accessibilityLabel("Map data © OpenStreetMap contributors")
-                    Link("Protomaps", destination: URL(string: "https://protomaps.com")!)
-                    Link("Mapterhorn", destination: URL(string: "https://mapterhorn.com/attribution")!)
-                        .accessibilityLabel("Terrain © Mapterhorn")
-                case .card:
-                    Text("© OpenStreetMap")
-                    Text("Protomaps")
-                }
-            }
-            if placement == .map {
-                // The Open Government Licence's attribution statement, as OS words it.
-                Link("Contains OS data © Crown copyright and database right 2026",
-                     destination: URL(string: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/")!)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+        HStack(spacing: 10) {
+            switch placement {
+            case .map:
+                Link("© OpenStreetMap", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
+                    .accessibilityLabel("Map data © OpenStreetMap contributors")
+            case .card:
+                Text("© OpenStreetMap")
+                Text("Protomaps")
             }
         }
         .font(.caption2.weight(.medium))

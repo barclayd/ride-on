@@ -492,8 +492,9 @@ centred), so the snapshot fades in without the line moving. What it took:
 https://www.openstreetmap.org/copyright) and Protomaps, kept visible and ≥ 10 pt from custom content as
 DESIGN-SYSTEM.md requires today. MapLibre's attribution button is an option; a SwiftUI row matching the
 current hero layout is probably nicer. Snapshots need attribution too where they're shown large.
-**Done**: `CycleMap` hides MapLibre's button and draws "© OpenStreetMap" and "Protomaps" as links in
-its bottom leading corner, inside the safe area, so 8pt clear of the panel plus its own 4pt. A
+**Done**: `CycleMap` hides MapLibre's button and draws "© OpenStreetMap" as a link in its bottom
+leading corner, inside the safe area, so 8pt clear of the panel plus its own 4pt, fading it once the map
+is moved or after 5 seconds; Preferences → Maps has the full credits with links. A
 shortlist card's snapshot carries the same names (`CycleMapAttribution(.card)`) as plain text, since
 the card is a button, 10pt under its stats; thumbnails are too small for it.
 
@@ -584,7 +585,11 @@ JavaScript; `RoutesMap` already switches on the look, so it would slot in where 
 ## Attribution and licensing
 
 - **Map data:** © OpenStreetMap contributors, ODbL. Attribution must be visible on every map and
-  snapshot shown at size. Ours and Protomaps' tiles are derived databases under ODbL.
+  snapshot shown at size. Ours and Protomaps' tiles are derived databases under ODbL. The
+  [OSMF attribution guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines) let an
+  interactive map's credit fade once the map is in use or after 5 seconds, so long as it stays findable
+  from an about or credits screen: `CycleMap` shows "© OpenStreetMap" and fades it on the first pan or
+  after 5 s, and Preferences → Maps (`MapCreditsView`) lists every credit below with its link.
 - **Protomaps:** basemap tiles ODbL (from OSM); `@protomaps/basemaps` style code BSD-3-Clause.
 - **Montserrat:** SIL OFL 1.1 (`app/Packages/Features/Sources/SharedUI/CycleMap/glyphs/OFL.txt`). Fine to bundle
   and convert to PBF.
@@ -592,7 +597,8 @@ JavaScript; `RoutesMap` already switches on the look, so it would slot in where 
 - **Terrain:** Mapterhorn's DEM is free to use with a link to
   [mapterhorn.com/attribution](https://mapterhorn.com/attribution), which credits its sources (over GB,
   OGL LiDAR from England, Scotland and Wales, and Copernicus GLO-30). OS Terrain 50 is OGL v3: "Contains
-  OS data © Crown copyright and database right 2026" on every map that draws the contours.
+  OS data © Crown copyright and database right 2026", which the licence lets us give by linking to it,
+  so it's in Preferences → Maps rather than on the map.
 - **cycle.travel's design:** not licensed to us. See decision 1.
 
 The repo is public, and `screenshots/` contains crops of cycle.travel's rendering for side-by-side

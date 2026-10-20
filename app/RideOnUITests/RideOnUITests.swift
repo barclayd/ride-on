@@ -139,9 +139,27 @@ final class RideOnUITests: XCTestCase {
         XCTAssertFalse(routeButton(in: app, startingWith: "Lea Valley Gravel").exists)
     }
 
+    func testRoutesPanelCollapsesToItsSearchField() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world"]
+        app.launch()
+
+        app.buttons["Routes"].tap()
+        let card = routeButton(in: app, startingWith: "Hilly Loop")
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+
+        // The grabber, at medium.
+        app.buttons["Expand panel"].swipeDown()
+        XCTAssertTrue(card.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["routes-search"].isHittable)
+
+        app.buttons["Expand panel"].tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+    }
+
     /// The Routes map's default Cycle look (docs/maps/README.md, WS3), on the fixture world's offline
-    /// style: drawn with its attribution, its snapshots on the shortlist cards, and swapped for MapKit
-    /// from the style menu.
+    /// style: drawn with OpenStreetMap's credit, its snapshots on the shortlist cards, and swapped for
+    /// MapKit from the style menu.
     func testRoutesCycleMapShowsWithItsAttribution() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
@@ -150,16 +168,33 @@ final class RideOnUITests: XCTestCase {
         app.buttons["Routes"].tap()
         let map = app.descendants(matching: .any)["cycle-map"]
         XCTAssertTrue(map.waitForExistence(timeout: 5))
-        // SwiftUI's `Link`s are buttons to XCUITest.
-        XCTAssertTrue(app.buttons["Map data © OpenStreetMap contributors"].exists)
-        XCTAssertTrue(app.buttons["Protomaps"].exists)
-        XCTAssertTrue(app.buttons["Terrain © Mapterhorn"].exists)
-        XCTAssertTrue(app.buttons["Contains OS data © Crown copyright and database right 2026"].exists)
+        // SwiftUI's `Link`s are buttons to XCUITest before iOS 27, links from it. The rest of the
+        // credits are in Preferences → Maps.
+        let credit = "Map data © OpenStreetMap contributors"
+        XCTAssertTrue(app.links[credit].exists || app.buttons[credit].exists)
         XCTAssertTrue(routeButton(in: app, startingWith: "Hilly Loop").exists)
 
         app.buttons["Map style"].tap()
         app.buttons["Satellite"].tap()
         XCTAssertTrue(map.waitForNonExistence(timeout: 5))
+    }
+
+    func testPreferencesMapsListsTheMapCredits() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world"]
+        app.launch()
+
+        app.buttons["Preferences"].tap()
+        let maps = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Maps'")).firstMatch
+        for _ in 0..<6 {
+            if maps.exists && maps.isHittable { break }
+            app.swipeUp()
+        }
+        maps.tap()
+        for name in ["OpenStreetMap", "Protomaps", "Mapterhorn", "Ordnance Survey"] {
+            let credit = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+            XCTAssertTrue(credit.waitForExistence(timeout: 5), name)
+        }
     }
 
     /// Shortlist cards and panel rows are buttons whose labels start with the route name.

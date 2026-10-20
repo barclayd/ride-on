@@ -398,7 +398,7 @@ Rows have a 30pt rounded-square coloured icon.
 | Riding | Average Speed 20 km/h + stepper · "Use My Strava Average, 21.4 km/h" (accent button) · Try Departures Every 30 min (menu) | Speed sets how long each route takes, and so whether it fits your window. |
 | Units | Temperature °C/°F · Wind Speed km/h/mph · Distance km/mi (segmented, each saved on its own) | |
 | Connections | Strava "Connected", subtitle "Routes and rides synced 08:10" (push) · Apple Health switch, subtitle "Log rides from cycling workouts" | |
-| Account | Apple Account "Signed In" ("Account" when Apple isn't linked) · About Ride On | Apple Weather · Other data sources |
+| Account | Apple Account "Signed In" ("Account" when Apple isn't linked) · About Ride On · Maps, subtitle "Map data and credits" (iOS: pushes the cycle map's credits, OpenStreetMap and Protomaps under Map, Mapterhorn and Ordnance Survey under Terrain, each linking to its terms) | Apple Weather · Other data sources |
 
 Icon colours: temperature orange, wind cyan, sunshine yellow, rain blue, climbing green, distance
 purple, recently ridden teal, colder indigo, hotter red, gusts grey-blue, chance of rain blue,
@@ -497,9 +497,11 @@ floating over it, 8pt from the screen edges and 14pt above the tab bar. No navig
    Loop 51 km"; from History, the ride's date: "Hilly Loop 29 Sep"). Tapping near a line selects
    it. Top trailing: the Map Style menu (Cycle on iOS, Satellite, Hybrid, Standard) and My Location,
    in regular glass held light over the cycle map and clear glass over the others.
-2. **Panel** (`FloatingPanel`): medium detent 56% of the height, large up to the safe-area top.
-   Drag the header (1:1, rubber-banded, momentum picks the detent), tap the grabber, or pull the
-   content down at large to go back to medium. Focusing search goes to large.
+2. **Panel** (`FloatingPanel`): medium detent 56% of the height, large up to the safe-area top,
+   and collapsed to just the grabber and header, leaving the map. Drag the header (1:1,
+   rubber-banded, momentum picks the detent), tap the grabber (collapsed and large go to medium,
+   medium to large), or pull the content down a detent (large to medium, medium to collapsed);
+   VoiceOver has a "Dismiss panel" action. Focusing search goes to large.
 3. **Header**, pinned: "Search Routes" capsule (filters the shortlist, library and history by
    name or source) and a "+" menu: Import GPX File · From cycle.travel ("Use the Safari
    extension") · Connect Strava ("Coming soon", disabled).
@@ -522,7 +524,7 @@ iPad and Mac: the same map, with the panel as a fixed 380pt column down the lead
 
 Build:
 - [x] Full-screen map with route lines, start marker, callout and map controls
-- [x] Floating panel with medium/large detents, velocity-carrying settle, pull-down to collapse
+- [x] Floating panel with collapsed/medium/large detents, velocity-carrying settle, pull-down to collapse
 - [x] Search, "+" menu (items are no-ops for now)
 - [x] Shortlist carousel with status pills, scores, remove
 - [x] Library and History segments, row selection and actions, Details → Ride detail
@@ -555,8 +557,9 @@ Build:
   annotations and blurred the lines.
 - On iOS the map opens in its Cycle look, first in the Map Style menu: `CycleMap`, MapLibre Native
   drawing the cycle map with the shortlist, the selected route's start marker and callout,
-  tap-to-select and its own attribution (OpenStreetMap, Protomaps, Mapterhorn and the OS statement
-  for the terrain) ([WS3](../maps/README.md#ws3-app-integration-115-weeks)). Picking Satellite,
+  tap-to-select and "© OpenStreetMap", which fades once the map is moved or after 5 seconds; the
+  full credits (OpenStreetMap, Protomaps, Mapterhorn and the OS statement for the terrain) are in
+  Preferences → Maps ([WS3](../maps/README.md#ws3-app-integration-115-weeks)). Picking Satellite,
   Hybrid or Standard goes back to MapKit; the Mac has only those three and opens on Satellite
   ([decision 2](../maps/README.md#open-decisions)). On iOS shortlist cards and every route thumbnail
   (Routes rows, the Rides list, Track a Ride) are cycle-map snapshots, without labels or terrain; the

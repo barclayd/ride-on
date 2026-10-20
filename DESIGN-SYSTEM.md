@@ -73,9 +73,12 @@ Rules:
   does it through `accessibleGlass(_:in:fallback:)`.
 - **Map attribution stays visible.** Anywhere a map shows, its attribution sits at least 10pt
   from custom content: "Apple Maps" and the Legal link for MapKit (a live `Map` gets this for
-  free); "© OpenStreetMap", linking to https://www.openstreetmap.org/copyright, "Protomaps" and
-  "Mapterhorn" (its terrain), with OS Terrain 50's "Contains OS data © Crown copyright and database
-  right 2026" on a line below, for the cycle map (`CycleMap` draws it). Snapshots shown larger than a
+  free). The live cycle map (`CycleMap`) shows "© OpenStreetMap", linking to
+  https://www.openstreetmap.org/copyright, until it's moved or for 5 seconds, then fades
+  (`Motion.panelMaterialize`), as OpenStreetMap's attribution guidelines allow for an interactive
+  map; the full credits (OpenStreetMap, Protomaps, Mapterhorn for the terrain, and OS Terrain 50's
+  "Contains OS data © Crown copyright and database right 2026") are always one tap away in
+  Preferences → Maps, each linking to its terms. Snapshots shown larger than a
   thumbnail carry it too: a shortlist card's cycle-map snapshot, drawn without terrain, has "©
   OpenStreetMap" and "Protomaps" as plain text in the card's white, 10pt under its stats (the card is
   a button, so no links); thumbnails are too small for it.
@@ -248,10 +251,10 @@ before adding a custom component in code.
     `MLNMapSnapshotter` draws each once per route, framing, tint, size and scale, without labels or
     terrain, and keeps it in memory. Until one is ready the route stands on the style's land colour exactly
     where the snapshot will put it, then the snapshot fades in (`Motion.panelMaterialize`).
-    Hills are shaded and carry 10 m contours, as on cycle.travel. Its attribution is always visible
-    (§2): "© OpenStreetMap", "Protomaps" and "Mapterhorn", then the OS statement on a second line, in
+    Hills are shaded and carry 10 m contours, as on cycle.travel. "© OpenStreetMap" sits in
     `.caption2` `.secondary` at the safe area's bottom leading corner, 12pt in, held at a fixed size
-    like the map controls. A tap within 22pt of a line selects it; a double tap only zooms. The selected
+    like the map controls, and fades once the map is moved or after 5 seconds; the full credits are in
+    Preferences → Maps (§2). A tap within 22pt of a line selects it; a double tap only zooms. The selected
     route's callout is pinned over its northernmost point as on MapKit. In the fixture world it
     draws the style's land colour only, offline. Plan, data pipeline and open decisions in
     [`docs/maps/README.md`](docs/maps/README.md).
