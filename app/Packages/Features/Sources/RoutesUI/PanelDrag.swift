@@ -3,13 +3,14 @@ import SwiftUI
 import UIKit
 
 /// The Routes panel's drag, as a UIKit pan so it can share a touch with the list's scroll view the
-/// way a sheet does: below large the drag moves the panel wherever it starts; at large the list
-/// scrolls, and pulling it down from its top takes the panel down with the finger instead.
+/// way a sheet does: a drag that starts on the panel's handle (grabber and header) moves the panel;
+/// one that starts on the list scrolls it, until the list is pulled down from its top, when the
+/// panel goes down with the finger instead.
 struct PanelDrag: UIGestureRecognizerRepresentable {
     /// False for a panel without detents.
     var enabled: Bool
-    /// Whether the panel rests at large, where the list has the drag until it's at its top.
-    var expanded: Bool
+    /// The height of the strip at the panel's top that always drags it.
+    var handle: CGFloat
     /// The panel's travel so far, downwards positive.
     var changed: (CGFloat) -> Void
     /// The panel was let go at this vertical velocity, downwards positive.
@@ -35,7 +36,9 @@ struct PanelDrag: UIGestureRecognizerRepresentable {
         let translation = pan.translation(in: nil).y
         switch pan.state {
         case .began:
-            coordinator.begin(expanded: expanded, at: translation)
+            // Where the touch came down on the panel, not where the pan began past its slop.
+            let start = context.converter.localLocation.y - (context.converter.localTranslation?.y ?? 0)
+            coordinator.begin(onHandle: start < handle, at: translation)
         case .changed:
             if let travel = coordinator.travel(to: translation) { changed(travel) }
         case .ended, .cancelled, .failed:
@@ -46,16 +49,16 @@ struct PanelDrag: UIGestureRecognizerRepresentable {
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        /// The list's scroll view, when this touch is shared with it.
+        /// The list's scroll view, when the touch is on it.
         private weak var list: UIScrollView?
-        private var expanded = false
         private var moving = false
         private var last: CGFloat = 0
         private var travel: CGFloat = 0
 
-        func begin(expanded: Bool, at translation: CGFloat) {
-            self.expanded = expanded
-            moving = !expanded
+        func begin(onHandle: Bool, at translation: CGFloat) {
+            moving = onHandle
+            // The handle has the drag, so nothing under it scrolls.
+            if onHandle { cancelList() }
             // From here, not the touch-down, so the panel doesn't jump by the pan's slop.
             last = translation
             travel = 0
@@ -67,11 +70,9 @@ struct PanelDrag: UIGestureRecognizerRepresentable {
             last = translation
             if !moving {
                 guard delta > 0, list.map(Self.atTop) ?? true else { return nil }
-                // The list is at its top and the finger turned down: the panel takes over, and
-                // cancelling the list's pan stops it bouncing or scrolling under the finger.
+                // The list is at its top and the finger turned down: the panel takes over.
                 moving = true
-                list?.panGestureRecognizer.isEnabled = false
-                list?.panGestureRecognizer.isEnabled = true
+                cancelList()
             }
             travel += delta
             return travel
@@ -79,15 +80,38 @@ struct PanelDrag: UIGestureRecognizerRepresentable {
 
         /// Whether the panel moved, so needs settling.
         func end() -> Bool {
-            defer { list = nil; moving = false }
+            defer { moving = false }
             return moving
+        }
+
+        /// Stops the list's pan, so it doesn't bounce or scroll under the finger.
+        private func cancelList() {
+            list?.panGestureRecognizer.isEnabled = false
+            list?.panGestureRecognizer.isEnabled = true
         }
 
         private static func atTop(_ scrollView: UIScrollView) -> Bool {
             scrollView.contentOffset.y <= -scrollView.adjustedContentInset.top + 1
         }
 
+        /// The list scrolls vertically; the shortlist carousel inside it doesn't.
+        private static func isList(_ scrollView: UIScrollView) -> Bool {
+            scrollView.contentSize.width <= scrollView.bounds.width + 1
+        }
+
+        /// The list the touch is in, past the carousel if it's on that.
+        private static func list(containing view: UIView?) -> UIScrollView? {
+            guard let view else { return nil }
+            if let scrollView = view as? UIScrollView, isList(scrollView) { return scrollView }
+            return list(containing: view.superview)
+        }
+
         // MARK: UIGestureRecognizerDelegate
+
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            list = Self.list(containing: touch.view)
+            return true
+        }
 
         /// Vertical drags only, so the shortlist carousel keeps its horizontal swipes.
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
@@ -96,12 +120,12 @@ struct PanelDrag: UIGestureRecognizerRepresentable {
             return abs(translation.y) > abs(translation.x)
         }
 
-        /// Shares the touch with the list (the vertical scroll view), not the carousel.
+        /// Shares the touch with the list, not the carousel.
         func gestureRecognizer(_ recognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
             guard let scrollView = other.view as? UIScrollView, other === scrollView.panGestureRecognizer,
-                  scrollView.contentSize.width <= scrollView.bounds.width + 1 else { return false }
-            list = scrollView
+                  Self.isList(scrollView) else { return false }
+            if list == nil { list = scrollView }
             return true
         }
     }

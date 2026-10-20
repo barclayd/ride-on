@@ -50,7 +50,7 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 | Toolbars | System glass. At most 3 groups. Icons only, each with an accessibility label. Related actions share one capsule (share + more) | `.toolbar`, `ToolbarItemGroup`, `ToolbarSpacer` |
 | Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
 | Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero track bell `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while tracked |
-| Routes panel | **Regular** glass floating over the map, 8pt from the screen edges and 14pt above the tab bar; grabber, search and "+" pinned, everything else scrolling beneath and fading into the bottom edge | `FloatingPanel` (§6): `.glassEffect(.regular, in: .rect(cornerRadius: 34))`, `.safeAreaBar(edge: .top)` |
+| Routes panel | **Regular** glass over the map. On iPhone it runs behind the tab bar to the bottom of the screen like Find My's sheet: 12pt from the screen edges up to small, closing to them by large, with bottom corners concentric with the screen's; grabber, title (search once the list scrolls) and "+" pinned, everything else scrolling beneath and on under the tab bar. On iPad and Mac a column whose rows fade into its bottom edge | `FloatingPanel` (§6): `.glassEffect(.regular, in: ConcentricRectangle(uniformTopCorners: .fixed(34), uniformBottomCorners: .concentric(minimum: .fixed(34))))`, `.safeAreaBar(edge: .top)` |
 | Controls over the Routes map (map style, my location) | **Clear** glass capsule, white glyphs, held at a fixed size like MapKit's own. Over the light cycle map (`CycleMap`, §6), **regular** glass with `.primary` glyphs instead, held light in Dark Mode as the map is | `.glassEffect(.clear.interactive(), in: .capsule)` (`.regular.interactive()` and `.environment(\.colorScheme, .light)` over the cycle map), `.dynamicTypeSize(...xLarge)` + `.accessibilityShowsLargeContentViewer()` |
 | Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
 | Partial-height sheets (Track) | System glass, floating inset over the dimmed screen; Close leading, actions as full-width capsules at the bottom | `.presentationDetents([.height(content)])`, `Button(role: .close)`, `.glassProminent` / `.glass` capsules |
@@ -202,13 +202,17 @@ before adding a custom component in code.
    tailwind) with a dashed gust-limit ring. Drawn with `Canvas`; the native `Slider`s below it
    are the accessible way to set the same values.
 
-10. **`FloatingPanel`** — the Routes panel (§2, §5). On iPhone it rests collapsed, medium or
-    large and moves like a sheet (Find My's drawer): below large a drag anywhere on it tracks the
-    finger 1:1 and the list doesn't scroll; at large the list scrolls, and pulling it down from
-    its top hands the same drag to the panel. It rubber-bands past either end and, let go, settles
-    on the detent its momentum projects to with UIScrollView's deceleration
-    (`Motion.panelDetent`). Tapping the grabber toggles it. On iPad and Mac it's a fixed
-    full-height column with no grabber.
+10. **`FloatingPanel`** — the Routes panel (§2, §5). On iPhone it emulates Find My's sheet
+    behind the tab bar, resting at four detents: collapsed (just the grabber, around the tab bar),
+    small (30% of the screen: the title and the top of the shortlist), medium (half) and large
+    (up to the safe area). The list scrolls at every detent but collapsed; a drag on the grabber
+    or header tracks the finger 1:1, and so does pulling the list down from its top, in the same
+    drag. It rubber-bands past either end and, let go, settles on the detent its momentum
+    projects to with UIScrollView's deceleration (`Motion.panelDetent`). Tapping the grabber goes
+    up a detent (large goes back to medium). The header shows the screen's title until the list
+    scrolls, then the search field in its place (`Motion.panelMaterialize`); search stays while
+    it's focused or has text, and always with VoiceOver. On iPad and Mac it's a fixed
+    full-height column with no grabber and search always showing.
 11. **`ShortlistCard`** — a shortlisted route in the panel's carousel (272 × 158pt, card
     radius): its loop on a `CycleMap` snapshot (satellite imagery on the Mac), a status pill
     ("Best pick · Wed", "Thu 09:00", "Below your minimums", "Too long for your window",
@@ -315,6 +319,6 @@ glass transitions use `.materialize`.
 | **Ideal Temperature** (push) | Big range readout, `TemperatureRange`, one-line explanation → "How Your Routes Fit" range bars per route → "Deal-Breakers" steppers. Saves automatically; no Done. |
 | **Comfortable Wind** (push) | `WindEnvelope` → "Limits" sliders (headwind, crosswind, gusts) and crosswind sensitivity → "How Your Routes Fit". Saves automatically. |
 | **Widgets & Lock Screen** | `systemSmall` (score ring, day and time, route, one line of conditions), `systemMedium` (map thumbnail, best pick, times, conditions, runner-up). Lock Screen `accessoryInline`, `accessoryCircular` (score ring + day), `accessoryRectangular`. Tap opens the ride. |
-| **Routes** (tab) | Full-screen `RoutesMap`, the cycle map on iOS and satellite on the Mac (shortlist in white, selected route in the accent, callout, start marker; `MapControls` top trailing) under the `FloatingPanel`: search capsule ("Search Routes") and "+" menu (Import GPX File, From cycle.travel, Connect Strava) pinned → "Shortlist" with "4 of 12" → `ShortlistCard` carousel → segmented Library N / History N → Library rows, or History rows grouped by month ("October 1 ride") ending with "Weather is the forecast from when you planned each ride, not what you rode in." Selecting a card or row shows it on the map. Focusing search expands the panel. No navigation bar; the tab bar never minimises. |
+| **Routes** (tab) | Full-screen `RoutesMap`, the cycle map on iOS and satellite on the Mac (shortlist in white, selected route in the accent, callout, start marker; `MapControls` top trailing) under the `FloatingPanel`: "Routes" title (on iPhone, the "Search Routes" capsule once the list scrolls) and "+" menu (Import GPX File, From cycle.travel, Connect Strava) pinned → "Shortlist" with "4 of 12" → `ShortlistCard` carousel → segmented Library N / History N → Library rows, or History rows grouped by month ("October 1 ride") ending with "Weather is the forecast from when you planned each ride, not what you rode in." Selecting a card or row shows it on the map. Focusing search expands the panel. No navigation bar; the tab bar never minimises. |
 | **Onboarding** | Not yet redesigned: one control per screen (`DialScreen`), permissions primed one sentence before each system prompt, location on first Rides entry, Health before ride matching. |
 | **Weather attribution** | Apple Weather mark + "Other data sources" link (https://developer.apple.com/weatherkit/data-source-attribution/) wherever forecast data shows, via `WeatherService.attribution`. |
