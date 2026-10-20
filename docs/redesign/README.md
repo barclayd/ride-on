@@ -498,10 +498,12 @@ floating over it, 8pt from the screen edges and 14pt above the tab bar. No navig
    it. Top trailing: the Map Style menu (Cycle on iOS, Satellite, Hybrid, Standard) and My Location,
    in regular glass held light over the cycle map and clear glass over the others.
 2. **Panel** (`FloatingPanel`): medium detent 56% of the height, large up to the safe-area top,
-   and collapsed to just the grabber and header, leaving the map. Drag the header (1:1,
-   rubber-banded, momentum picks the detent), tap the grabber (collapsed and large go to medium,
-   medium to large), or pull the content down a detent (large to medium, medium to collapsed);
-   VoiceOver has a "Dismiss panel" action. Focusing search goes to large.
+   and collapsed to just the grabber and header, leaving the map. It moves like Find My's drawer:
+   below large a drag anywhere on the panel moves it (1:1, rubber-banded, momentum picks the
+   detent) and the list doesn't scroll; at large the list scrolls, and pulling it down from its
+   top takes the panel down in the same drag. Tap the grabber (collapsed and large go to medium,
+   medium to large); VoiceOver has a "Dismiss panel" action and keeps scrolling at every detent.
+   Focusing search goes to large.
 3. **Header**, pinned: "Search Routes" capsule (filters the shortlist, library and history by
    name or source) and a "+" menu: Import GPX File · From cycle.travel ("Use the Safari
    extension") · Connect Strava ("Coming soon", disabled).
@@ -524,7 +526,7 @@ iPad and Mac: the same map, with the panel as a fixed 380pt column down the lead
 
 Build:
 - [x] Full-screen map with route lines, start marker, callout and map controls
-- [x] Floating panel with collapsed/medium/large detents, velocity-carrying settle, pull-down to collapse
+- [x] Floating panel with collapsed/medium/large detents, sheet-style drag shared with the list, velocity-carrying critically damped settle
 - [x] Search, "+" menu (items are no-ops for now)
 - [x] Shortlist carousel with status pills, scores, remove
 - [x] Library and History segments, row selection and actions, Details → Ride detail

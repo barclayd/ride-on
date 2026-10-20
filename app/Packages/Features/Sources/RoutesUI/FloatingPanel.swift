@@ -9,8 +9,10 @@ enum PanelDetent: Hashable {
 
 /// The Routes panel: regular glass floating over the map, a pinned header (grabber, search, add)
 /// and everything else scrolling beneath it. On iPhone it rests collapsed or at `heights`' two ends
-/// and tracks a drag on its header 1:1, settling on the detent the drag was heading for; with
-/// `heights` nil (iPad, Mac) it fills the height it's given and has no grabber.
+/// and moves like a sheet: below large a drag anywhere on it tracks the finger 1:1 and the list
+/// doesn't scroll; at large the list scrolls, and pulling it down from its top brings the panel
+/// down with it. Let go, it settles on the detent its momentum carries it to. With `heights` nil
+/// (iPad, Mac) it fills the height it's given and has no grabber.
 struct FloatingPanel<Header: View, Content: View>: View {
     @Binding var detent: PanelDetent
     /// Medium...large, or nil for a fixed panel.
@@ -21,9 +23,10 @@ struct FloatingPanel<Header: View, Content: View>: View {
     @ViewBuilder var content: Content
 
     @State private var drag: CGFloat = 0
-    @State private var pull: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
+    @State private var position = ScrollPosition(edge: .top)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     var body: some View {
         ScrollView {
@@ -31,16 +34,11 @@ struct FloatingPanel<Header: View, Content: View>: View {
                 .padding(.bottom, 14)
                 .accessibilityHidden(detent == .collapsed && heights != nil)
         }
+        .scrollPosition($position)
+        // Below large a drag moves the panel rather than the list, as a sheet's does. VoiceOver
+        // keeps scrolling, since it moves through the rows by scrolling them into view.
+        .scrollDisabled(heights != nil && detent != .large && !voiceOver)
         .scrollDismissesKeyboard(.interactively)
-        // Pulled down past the top, the panel lets go a detent, like a sheet.
-        .onScrollGeometryChange(for: CGFloat.self) { -($0.contentOffset.y + $0.contentInsets.top) } action: { _, pull in
-            self.pull = pull
-        }
-        .onScrollPhaseChange { old, _ in
-            if old == .interacting, pull > 60, detent != .collapsed, heights != nil {
-                settle(on: detent == .large ? .medium : .collapsed)
-            }
-        }
         .safeAreaBar(edge: .top, spacing: 0) {
             VStack(spacing: 0) {
                 if heights != nil {
@@ -52,8 +50,6 @@ struct FloatingPanel<Header: View, Content: View>: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
-            .contentShape(.rect)
-            .gesture(dragGesture, isEnabled: heights != nil)
         }
         // The rows fade out into the panel's bottom edge rather than being cut off by it; the fade
         // shrinks as the panel closes on its header, so the search field never fades.
@@ -68,6 +64,9 @@ struct FloatingPanel<Header: View, Content: View>: View {
         .frame(maxHeight: heights == nil ? .infinity : nil)
         .clipShape(.rect(cornerRadius: CornerRadius.floatingPanel))
         .accessibleGlass(.regular, in: .rect(cornerRadius: CornerRadius.floatingPanel), fallback: .groupedBackground)
+        #if os(iOS)
+        .gesture(PanelDrag(enabled: heights != nil, expanded: detent == .large) { drag = $0 } ended: { release(velocity: $0) })
+        #endif
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Routes")
     }
@@ -93,27 +92,26 @@ struct FloatingPanel<Header: View, Content: View>: View {
 
     // MARK: Dragging
 
-    private var dragGesture: some Gesture {
-        // Global, since the header moves with the panel as it grows.
-        DragGesture(minimumDistance: 6, coordinateSpace: .global)
-            .onChanged { drag = $0.translation.height }
-            .onEnded { value in
-                guard let heights else { return }
-                let current = height(in: heights)
-                let velocity = -value.velocity.height
-                // Where the panel would come to rest if it coasted (scroll deceleration), so a
-                // flick throws it to the far detent.
-                let projected = current + velocity / 1000 * 0.998 / (1 - 0.998)
-                let target = [PanelDetent.collapsed, .medium, .large].min { abs(projected - rest($0, in: heights)) < abs(projected - rest($1, in: heights)) }!
-                let remaining = rest(target, in: heights) - current
-                settle(on: target, velocity: abs(remaining) > 1 ? velocity / remaining : 0)
-            }
+    /// Settles the panel let go at `velocity` (points per second, downwards positive) on the
+    /// detent it would coast to.
+    private func release(velocity: CGFloat) {
+        guard let heights else { return }
+        let current = height(in: heights)
+        let velocity = -velocity
+        // Where the panel would come to rest if it coasted (scroll deceleration), so a flick
+        // throws it to the far detent.
+        let projected = current + velocity / 1000 * 0.998 / (1 - 0.998)
+        let target = [PanelDetent.collapsed, .medium, .large].min { abs(projected - rest($0, in: heights)) < abs(projected - rest($1, in: heights)) }!
+        let remaining = rest(target, in: heights) - current
+        settle(on: target, velocity: abs(remaining) > 1 ? velocity / remaining : 0)
     }
 
     private func settle(on target: PanelDetent, velocity: Double = 0) {
         withAnimation(reduceMotion ? Motion.panelMaterialize : Motion.panelDetent(velocity: velocity)) {
             detent = target
             drag = 0
+            // Below large the list can't scroll, so it goes back to its top.
+            if target != .large { position.scrollTo(edge: .top) }
         }
         if target != .large { collapsed() }
     }
