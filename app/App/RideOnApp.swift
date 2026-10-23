@@ -15,6 +15,8 @@ struct RideOnApp: App {
     @State private var preferencesStore = PreferencesStore()
     @State private var riderSettings = RiderSettingsStore(live: !FixtureWorld.isEnabled)
     @State private var rideTracker = RideTracker(live: !FixtureWorld.isEnabled)
+    @State private var rideBoard = RideBoardStore(live: !FixtureWorld.isEnabled)
+    @Environment(\.scenePhase) private var scenePhase
 
     // Fixture-world gets fully-fixture services (deterministic E2E); every
     // other launch gets `.live` (Phase 6: real WeatherKit/MapKit/HealthKit/
@@ -35,11 +37,43 @@ struct RideOnApp: App {
                 .environment(preferencesStore)
                 .environment(riderSettings)
                 .environment(rideTracker)
+                .environment(rideBoard)
                 .environment(\.unitSystem, preferencesStore.preferences.effectiveUnitSystem)
                 .environment(\.speedSystem, preferencesStore.preferences.effectiveSpeedSystem)
                 .environment(\.locale, Locale.current.temperatureUnit(preferencesStore.preferences.temperatureUnit))
                 .tint(Color.accentColor)
-                .task { await riderSettings.load() }
+                .onChange(of: scenePhase, initial: true) { _, phase in
+                    if phase == .active {
+                        Task {
+                            async let settings: Void = riderSettings.load()
+                            async let tracked: Void = rideTracker.load()
+                            await rideBoard.refresh()
+                            await settings
+                            await tracked
+                        }
+                    } else if phase == .background {
+                        scheduleBoardRefresh()
+                    }
+                }
+                .task(id: RefreshWake(phase: scenePhase, date: rideBoard.nextRefresh)) {
+                    guard scenePhase == .active, let date = rideBoard.nextRefresh else { return }
+                    do { try await Task.sleep(for: .seconds(max(0, date.timeIntervalSinceNow))) }
+                    catch { return }
+                    await rideBoard.refresh()
+                }
+                .onChange(of: riderSettings.revision) { _, _ in
+                    Task { await rideBoard.refresh(force: true) }
+                }
+                .onChange(of: rideBoard.board) { _, board in riderSettings.board = board }
+                .onReceive(NotificationCenter.default.publisher(for: RideOnAPI.sessionDidChange).receive(on: RunLoop.main)) { _ in
+                    riderSettings.clearAccount()
+                    rideTracker.clearAccount()
+                    Task {
+                        await rideBoard.refresh()
+                        await riderSettings.load()
+                        scheduleBoardRefresh()
+                    }
+                }
                 // The account's units win, so the app and the extension agree. Each is its own choice.
                 .onChange(of: riderSettings.settings?.units) { _, units in
                     guard let units else { return }
@@ -59,6 +93,13 @@ struct RideOnApp: App {
         }
         .modelContainer(modelContainer)
         .defaultSize(width: 1100, height: 700)
+        #if os(iOS)
+        .backgroundTask(.appRefresh(RideBoardBackgroundRefresh.identifier)) {
+            guard !FixtureWorld.isEnabled else { return }
+            await rideBoard.refreshInBackground()
+            await MainActor.run { scheduleBoardRefresh() }
+        }
+        #endif
         .commands {
             SidebarCommands()
             ToolbarCommands()
@@ -76,6 +117,17 @@ struct RideOnApp: App {
             .environment(preferencesStore)
             .environment(riderSettings)
         }
+        #endif
+    }
+
+    private struct RefreshWake: Equatable {
+        var phase: ScenePhase
+        var date: Date?
+    }
+
+    @MainActor private func scheduleBoardRefresh() {
+        #if os(iOS)
+        RideBoardBackgroundRefresh.schedule(after: rideBoard.nextRefresh)
         #endif
     }
 
@@ -103,6 +155,7 @@ private func destination(for tab: AppTab) -> some View {
 
 /// The Routes tab, and the Ride detail its shortlist cards push (RoutesUI can't import RideUI).
 private struct RoutesPage: View {
+    @Environment(RideBoardStore.self) private var rides
     @State private var sampleLibrary = RouteLibrary.sample
     @Environment(RiderSettingsStore.self) private var settings: RiderSettingsStore?
 
@@ -111,7 +164,10 @@ private struct RoutesPage: View {
             if FixtureWorld.isEnabled { RoutesView(library: $sampleLibrary, board: .sample) } else { LiveRoutesView() }
         }
         .navigationDestination(for: RideBoard.Pick.self) { pick in
-            if let board = settings?.board { RideDetailView(board: board, pick: pick) }
+            if let board = settings?.board {
+                RideDetailView(board: board, pick: board.details[pick.id]?.pick ?? pick,
+                               previousPlan: rides.isPreviousPlan(at: .now))
+            }
         }
     }
 }

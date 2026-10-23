@@ -208,18 +208,22 @@ public final class RiderSettingsStore {
 
     public func load() async {
         guard isLive else { return }
-        guard RideOnAPI.isSignedIn else { phase = .signedOut; return }
+        guard let session = RideOnSession.shared.credentials?.id else { clearAccount(); return }
         do {
             async let user: UserResponse = RideOnAPI.send("/users/me")
             async let auth = try? (RideOnAPI.send("/auth/me") as AuthResponse)
             let response = try await user
+            guard RideOnSession.shared.credentials?.id == session, !Task.isCancelled else { return }
             // An edit still waiting to save wins over what the server had.
             if settings == saved { apply(response) } else { version = response.user.version }
-            email = await auth?.user.email
-            providers = await auth?.user.providers ?? []
+            let authentication = await auth
+            guard RideOnSession.shared.credentials?.id == session, !Task.isCancelled else { return }
+            email = authentication?.user.email
+            providers = authentication?.user.providers ?? []
             phase = .loaded
         } catch let failure as RideOnAPI.Failure where failure.status == 401 {
             phase = .signedOut
+        } catch is CancellationError {
         } catch where Task.isCancelled {
         } catch {
             if settings == nil { phase = .failed(error.localizedDescription) }
@@ -227,14 +231,22 @@ public final class RiderSettingsStore {
     }
 
     public func signOut() {
-        RideOnAPI.signOut()
+        if isLive { RideOnAPI.signOut() }
+        clearAccount()
+        revision += 1
+    }
+
+    public func clearAccount() {
         saveTask?.cancel()
         saved = nil
+        board = nil
         settings = nil
         email = nil
         providers = []
+        weatherProviderId = nil
+        strava = nil
+        version = 0
         phase = .signedOut
-        revision += 1
     }
 
     private func apply(_ response: UserResponse) {
@@ -259,6 +271,7 @@ public final class RiderSettingsStore {
     }
 
     private func save(_ settings: RiderSettings) async {
+        let session = RideOnSession.shared.credentials?.id
         do {
             let response: UserResponse
             do {
@@ -269,6 +282,7 @@ public final class RiderSettingsStore {
                 let current: UserResponse = try await RideOnAPI.send("/users/me")
                 response = try await RideOnAPI.send("/users/me", method: "PATCH", body: Patch(expectedVersion: current.user.version, settings))
             }
+            guard RideOnSession.shared.credentials?.id == session, !Task.isCancelled else { return }
             version = response.user.version
             saved = settings
             revision += 1

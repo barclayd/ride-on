@@ -543,8 +543,8 @@ Build:
   save is in flight go out next. Any other failure puts the shortlist back as the API had it,
   with "Couldn't Save Your Shortlist". After a save the Rides board reloads, so the cards' status
   pills follow; until then a new card shows "Checking the forecast…".
-- The status pills and Details come from the last board Rides loaded; Routes fetches one if Rides
-  hasn't loaded yet.
+- The status pills and Details use the shared saved/fresh Rides board; Routes joins an in-flight
+  refresh, and shortlist saves force a refresh of that same store.
 - A History ride shows the route as ridden (the name, distance and climb saved with the ride),
   drawn with the saved route's path; a deleted route's ride stays, with no line. A plan the app
   can't read shows "No forecast saved". Temperature is the middle of the plan's range.
@@ -607,12 +607,15 @@ session.
 keychain; a refreshed `set-auth-token` replaces it; a 401 signs out. The `https` callback needs the
 `webcredentials:api.ride-on.cc` associated domain, in both the iOS and macOS entitlements.
 
-**Loading.** `GET /route-selection` (the extension's shortlist) → `GET /users/me` (saved
-planning days and window; presets resolved to dates the way the extension does, so "Next 5 Days"
-starts tomorrow) → in parallel `POST /recommendations {routeIds, days, previewDays: 7, riding:
-{window}}`, `POST /rides/summaries`,
-and per route `GET /routes/:id` (cycle.travel link) and `GET /routes/:id/geometry` (polyline6 for
-the map). Ride detail's elevation profile samples the geometry through Open-Meteo on first open.
+**Loading.** The app-owned `RideBoardStore` restores the account's saved board before the
+network finishes, keeps it visible while refreshing, and shares it with Routes so shortlist
+edits update both tabs. `GET /route-selection` and the shared `GET /users/me` run concurrently.
+Recommendations appear before optional history/geometry enrichment; unchanged route versions
+reuse saved geometry. Ranking reuse requires current weather, planning, profile, shortlist,
+route and history context. Activation, pull-to-refresh, settings/shortlist/window edits and
+iOS background refresh use the same store. Stale content is labelled as a saved forecast;
+failed refreshes retain it. See [app loading](../app-loading.md) for lifetimes and validation.
+Ride detail still samples elevation through Open-Meteo on first open.
 
 | UI | API |
 |---|---|
@@ -636,12 +639,12 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 | Factor sentences | `factors` + `conditions`; Wind and Temperature quote your limits from `resolvedPreferences` |
 | Footer | `weather.attribution` (Apple Weather when empty) |
 | Preferences, Ideal Temperature, Comfortable Wind | `GET /users/me` → `settings.riding`, `settings.preferences`, `settings.units`, `settings.display`, `preferenceLevels`, and `GET /auth/me` → `user.providers`; each edit sends `PATCH /users/me {expectedVersion, settings}` after 0.6 s (explicit `null` removes a limit or the distance range; a 409 re-reads and re-sends), then Rides reloads |
-| How Your Routes Fit | The last board Rides loaded, measured against the edited values in the app |
+| How Your Routes Fit | The restored or freshly loaded board, measured against the edited values in the app |
 
-**Not wired yet.** Unassessable routes aren't shown; a conflicting settings edit (409) keeps
-the old saved window, though that load still uses the new one; dates assume the device and the
-routes share a time zone; "Track a route" is still a no-op. Strava connection/history needs
+**Not wired yet.** Unassessable routes aren't shown; some day/time labels still use the device
+timezone. Planning choices and cache expiry use the account/response timezone. A conflicting
+window save keeps the old board and reports the error. Strava connection/history needs
 the [coordinated rollout](../strava.md); route imports and speed suggestions remain deferred. Crosswind
 Sensitivity stays hidden until the API returns a level (v0.25.0). "How Your Routes Fit" is empty
-until Rides has loaded once. The Rides day strip doesn't show the sheet's "Rain until 15:00"
+until a saved or fresh board is available. The Rides day strip doesn't show the sheet's "Rain until 15:00"
 style notes yet.

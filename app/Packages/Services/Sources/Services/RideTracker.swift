@@ -24,6 +24,15 @@ public final class RideTracker {
         isLive = live
     }
 
+    /// Account changes clear the bell and any pending replacement before another login loads.
+    public func clearAccount() {
+        ride = nil
+        nextCheck = nil
+        version = 0
+        notifies = false
+        unsent = nil
+    }
+
     /// Whether the API saved `pick` for tracking.
     public func canTrack(_ pick: RideBoard.Pick) -> Bool {
         !isLive || pick.recommendationRef != nil

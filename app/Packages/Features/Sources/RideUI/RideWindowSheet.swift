@@ -2,6 +2,7 @@ import SwiftUI
 import Models
 import DesignSystem
 import SharedUI
+import Services
 
 /// The Ride Window sheet (docs/redesign/README.md §3): which days to plan and the hours to ride in.
 /// Done hands the window to `apply`, which reloads Rides; Cancel drops the changes.
@@ -25,15 +26,29 @@ public struct RideWindowSheet: View {
         case .custom(let leave, let back): (leave, back)
         }
         _custom = State(initialValue: board.hours != .daylight)
-        _leave = State(initialValue: Self.time(leave))
-        _back = State(initialValue: Self.time(back))
+        _leave = State(initialValue: Self.time(leave, calendar: Self.calendar(board.timeZone)))
+        _back = State(initialValue: Self.time(back, calendar: Self.calendar(board.timeZone)))
     }
 
     /// Every forecast day, chosen or not.
-    private var days: [RideBoard.Day] { board.forecast.isEmpty ? board.days : board.forecast }
+    private var days: [RideBoard.Day] {
+        let saved = board.forecast.isEmpty ? board.days : board.forecast
+        guard !FixtureWorld.isEnabled else { return saved }
+        let remaining = saved.filter { $0.date >= today }
+        guard remaining.isEmpty else { return remaining }
+        // An expired/offline board must still let the rider choose new dates.
+        return (0..<7).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: today).map {
+                RideBoard.Day(date: $0, best: nil, sky: .cloudy, note: "Refresh to see the forecast")
+            }
+        }
+    }
 
-    /// The forecast's first day is the API's today.
-    private var today: Date { days.first?.date ?? .now }
+    private var calendar: Calendar { Self.calendar(board.timeZone) }
+    private var today: Date {
+        if FixtureWorld.isEnabled { return (board.forecast.isEmpty ? board.days : board.forecast).first?.date ?? .now }
+        return calendar.startOfDay(for: .now)
+    }
 
     /// The best ride across the chosen days: one that meets the minimums first, then the highest score.
     private var bestPick: RideBoard.Pick? {
@@ -42,14 +57,14 @@ public struct RideWindowSheet: View {
     }
 
     private var quickPick: RideWindow.QuickPick? {
-        Self.quickPicks.first { Set($0.days(from: today)) == selection }
+        Self.quickPicks.first { Set($0.days(from: today, calendar: calendar)) == selection }
     }
 
     private var hours: RideWindow.Hours {
-        custom ? .custom(leave: Self.minutes(leave), back: Self.minutes(back)) : .daylight
+        custom ? .custom(leave: Self.minutes(leave, calendar: calendar), back: Self.minutes(back, calendar: calendar)) : .daylight
     }
 
-    private var hoursValid: Bool { !custom || Self.minutes(leave) < Self.minutes(back) }
+    private var hoursValid: Bool { !custom || Self.minutes(leave, calendar: calendar) < Self.minutes(back, calendar: calendar) }
 
     public var body: some View {
         NavigationStack {
@@ -70,7 +85,7 @@ public struct RideWindowSheet: View {
                     Text("Days")
                 } footer: {
                     if let last = days.last {
-                        Text("Best tracked route each day. Forecast to \(last.date.formatted(Self.dayStyle)).")
+                        Text("Best tracked route each day. Forecast to \(last.date.formatted(dayStyle)).")
                     }
                 }
 
@@ -127,6 +142,7 @@ public struct RideWindowSheet: View {
                 }
             }
         }
+        .environment(\.timeZone, calendar.timeZone)
         .interactiveDismissDisabled(applying)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
@@ -139,7 +155,7 @@ public struct RideWindowSheet: View {
     private func quickPickButton(_ pick: RideWindow.QuickPick) -> some View {
         let isSelected = pick == quickPick
         return Button {
-            withAnimation(Motion.glassTapLayout) { selection = Set(pick.days(from: today)) }
+            withAnimation(Motion.glassTapLayout) { selection = Set(pick.days(from: today, calendar: calendar)) }
         } label: {
             Text(pick.title)
                 .font(.subheadline.weight(.semibold))
@@ -168,14 +184,16 @@ public struct RideWindowSheet: View {
                     .contentTransition(.symbolEffect(.replace))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(day.date == today ? "Today" : day.date.formatted(Self.dayStyle))
+                    Text(day.date == today ? "Today" : day.date.formatted(dayStyle))
                     line(day).font(.footnote)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: day.sky.outlineSymbol)
-                    .symbolRenderingMode(.multicolor)
-                    .foregroundStyle(day.sky == .rain ? AnyShapeStyle(.rain) : AnyShapeStyle(.secondary))
-                    .accessibilityLabel(day.sky.title)
+                if day.best != nil {
+                    Image(systemName: day.sky.outlineSymbol)
+                        .symbolRenderingMode(.multicolor)
+                        .foregroundStyle(day.sky == .rain ? AnyShapeStyle(.rain) : AnyShapeStyle(.secondary))
+                        .accessibilityLabel(day.sky.title)
+                }
                 if let high = day.temperatureMaxC ?? day.best?.conditions.temperatureC.upperBound {
                     Text(UnitFormat.degrees(c: high, locale: locale))
                         .font(.title3)
@@ -208,14 +226,24 @@ public struct RideWindowSheet: View {
     // MARK: Time
 
     /// "Wed 14 Oct".
-    private static let dayStyle = Date.FormatStyle.dateTime.weekday(.abbreviated).day().month(.abbreviated)
-
-    private static func time(_ minutes: Int) -> Date {
-        Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: .now) ?? .now
+    private var dayStyle: Date.FormatStyle {
+        var style = Date.FormatStyle.dateTime.weekday(.abbreviated).day().month(.abbreviated)
+        style.timeZone = calendar.timeZone
+        return style
     }
 
-    private static func minutes(_ date: Date) -> Int {
-        let time = Calendar.current.dateComponents([.hour, .minute], from: date)
+    private static func calendar(_ zone: String) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: zone) ?? .current
+        return calendar
+    }
+
+    private static func time(_ minutes: Int, calendar: Calendar) -> Date {
+        calendar.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: .now) ?? .now
+    }
+
+    private static func minutes(_ date: Date, calendar: Calendar) -> Int {
+        let time = calendar.dateComponents([.hour, .minute], from: date)
         return (time.hour ?? 0) * 60 + (time.minute ?? 0)
     }
 }

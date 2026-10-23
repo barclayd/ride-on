@@ -9,7 +9,6 @@ public enum RideOnAPI {
     /// `webcredentials:api.ride-on.cc` associated domain).
     public static let signInDonePath = "/auth/browser/done"
     static let base = URL(string: "https://\(host)")!
-    private static let tokenAccount = "ride-on-api-session"
 
     public enum Provider: String, Sendable { case apple, google }
 
@@ -28,15 +27,10 @@ public enum RideOnAPI {
         var state: String
     }
 
-    public static var isSignedIn: Bool { token != nil }
-
-    public static func signOut() {
-        KeychainStore.delete(account: tokenAccount)
-    }
-
-    private static var token: String? {
-        KeychainStore.get(account: tokenAccount).flatMap { String(data: $0, encoding: .utf8) }
-    }
+    public static let sessionDidChange = RideOnSession.changed
+    public static var isSignedIn: Bool { RideOnSession.shared.credentials != nil }
+    public static func signOut() { RideOnSession.shared.signOut() }
+    private static var token: String? { RideOnSession.shared.credentials?.token }
 
     /// Used only for the first request to our own host in a web authentication session.
     static var browserAuthorizationHeaders: [String: String] {
@@ -68,7 +62,7 @@ public enum RideOnAPI {
         struct Session: Decodable { var token: String }
         let session: Session = try await send("/auth/browser/exchange", auth: false,
                                               body: Exchange(code: code, codeVerifier: flow.verifier, redirectUri: redirectURI))
-        KeychainStore.set(Data(session.token.utf8), account: tokenAccount)
+        RideOnSession.shared.signIn(token: session.token)
     }
 
     private static var redirectURI: String { "https://\(host)\(signInDonePath)" }
@@ -90,42 +84,64 @@ public enum RideOnAPI {
     /// GET, or POST (or `method`) with a JSON `body`. A 401 signs out, so the caller can show sign-in.
     static func send<T: Decodable>(_ path: String, query: [URLQueryItem] = [], auth: Bool = true, method: String? = nil,
                                    headers: [String: String] = [:], body: (any Encodable)? = nil) async throws -> T {
-        try decoder.decode(T.self, from: await data(path, query: query, auth: auth, method: method, headers: headers, body: body))
+        let data = try await data(path, query: query, auth: auth, method: method ?? (body == nil ? "GET" : "POST"),
+                                  headers: headers, body: try body.map { try JSONEncoder().encode($0) })
+        return try decoder.decode(T.self, from: data)
     }
 
     /// The same, for a response with nothing to read, like `204 No Content`.
     static func send(_ path: String, query: [URLQueryItem] = [], method: String? = nil, headers: [String: String] = [:],
                      body: (any Encodable)? = nil) async throws {
-        _ = try await data(path, query: query, auth: true, method: method, headers: headers, body: body)
+        _ = try await data(path, query: query, method: method ?? (body == nil ? "GET" : "POST"),
+                           headers: headers, body: try body.map { try JSONEncoder().encode($0) })
     }
 
-    private static func data(_ path: String, query: [URLQueryItem], auth: Bool, method: String?, headers: [String: String],
-                             body: (any Encodable)?) async throws -> Data {
+    /// Shared profile reads prevent startup's settings and board loads from fetching twice.
+    static func data(_ path: String, query: [URLQueryItem] = [], auth: Bool = true,
+                     method: String = "GET", headers: [String: String] = [:], body: Data? = nil) async throws -> Data {
+        let credentials = RideOnSession.shared.credentials
+        if path == "/users/me", method == "GET", auth, query.isEmpty, headers.isEmpty, let credentials {
+            return try await ProfileRequests.shared.read(session: credentials.id) {
+                try await request(path, query: query, auth: auth, method: method, headers: headers, body: body, credentials: credentials)
+            }
+        }
+        if path == "/users/me", method != "GET" { await ProfileRequests.shared.invalidate() }
+        let result = try await request(path, query: query, auth: auth, method: method, headers: headers, body: body, credentials: credentials)
+        if path == "/users/me", method != "GET" { await ProfileRequests.shared.invalidate() }
+        return result
+    }
+
+    private static func request(_ path: String, query: [URLQueryItem], auth: Bool, method: String,
+                                headers: [String: String], body: Data?, credentials: RideOnSession.Credentials?) async throws -> Data {
         var components = URLComponents(url: base.appending(path: path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query }
         var request = URLRequest(url: components.url!)
-        request.httpMethod = method ?? (body == nil ? "GET" : "POST")
-        if let body {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONEncoder().encode(body)
-        }
+        request.httpMethod = method
+        request.httpBody = body
+        if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        if auth, let credentials { request.setValue("Bearer \(credentials.token)", forHTTPHeaderField: "Authorization") }
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
-        if auth, let token {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+        let started = ContinuousClock.now
         let (data, response) = try await URLSession.shared.data(for: request)
+        LoadingLog.request(path, started: started, bytes: data.count)
+        try Task.checkCancellation()
+        if auth, credentials?.id != RideOnSession.shared.credentials?.id { throw CancellationError() }
         let http = response as? HTTPURLResponse
-        // Sessions refresh after a day of use; keep the newest token.
-        if let refreshed = http?.value(forHTTPHeaderField: "set-auth-token"), !refreshed.isEmpty {
-            KeychainStore.set(Data(refreshed.utf8), account: tokenAccount)
-        }
         let status = http?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            if status == 401 { signOut() }
+            if auth, status == 401, let credentials { RideOnSession.shared.signOut(ifSession: credentials.id) }
             let detail = try? JSONDecoder().decode(ErrorEnvelope.self, from: data).error
             throw Failure(status: status, code: detail?.code ?? "HTTP_\(status)",
                           message: detail?.message ?? HTTPURLResponse.localizedString(forStatusCode: status).capitalized,
                           retryAfter: http?.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init))
+        }
+        if auth, let credentials {
+            RideOnSession.shared.refresh(http?.value(forHTTPHeaderField: "set-auth-token"), using: credentials)
+            if path == "/users/me",
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let user = json["user"] as? [String: Any], let id = user["id"] as? String {
+                RideOnSession.shared.identify(account: id, session: credentials.id)
+            }
         }
         return data
     }

@@ -7,6 +7,8 @@ import Foundation
 public struct RideBoard: Hashable, Sendable {
     public var window: DateInterval
     public var generatedAt: Date
+    public var timeZone: String = TimeZone.current.identifier
+    public var expired = false
     /// Every route that fits the window at its best departure, best first.
     public var picks: [Pick]
     /// One entry per day in the window, in order.
@@ -212,7 +214,7 @@ public struct RideWindow: Hashable, Sendable {
         self.hours = hours
     }
 
-    public enum Hours: Hashable, Sendable {
+    public enum Hours: Codable, Hashable, Sendable {
         case daylight
         /// Minutes after midnight.
         case custom(leave: Int, back: Int)
