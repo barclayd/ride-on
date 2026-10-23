@@ -58,10 +58,13 @@ public enum UnitFormat {
             .trimmingCharacters(in: CharacterSet(charactersIn: "CF"))
     }
 
-    /// A temperature range the way Weather writes it: "9–14°".
+    /// A temperature range the way Weather writes it: "9–14°", or "16°" when both
+    /// ends display as the same temperature after unit conversion and rounding.
     public static func temperatureRange(c range: ClosedRange<Double>, locale: Locale = .current) -> String {
-        let lower = degrees(c: range.lowerBound, locale: locale).trimmingCharacters(in: CharacterSet(charactersIn: "°"))
-        return "\(lower)–\(degrees(c: range.upperBound, locale: locale))"
+        let lower = degrees(c: range.lowerBound, locale: locale)
+        let upper = degrees(c: range.upperBound, locale: locale)
+        guard lower != upper else { return upper }
+        return "\(lower.trimmingCharacters(in: CharacterSet(charactersIn: "°")))–\(upper)"
     }
 
     /// Wind/cruising speed: km/h (metric) or mph (imperial).
