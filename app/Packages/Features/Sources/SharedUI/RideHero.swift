@@ -38,7 +38,7 @@ public struct RideHero: View {
                 // Art, not a control: taps belong to whatever the hero opens (Rides links it to
                 // Ride detail). The Maps attribution stays visible, just not tappable.
                 RouteMap(pick.route.coordinates, style: .hero, tint: pick.meetsMinimums ? .accentColor : .gray)
-                    .id(pick.route.id)
+                    .id(pick.route.coordinates)
                     .overlay(alignment: .top) {
                         // Dims under the status bar and toolbar so their glyphs stay legible (§2).
                         LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom)

@@ -8,28 +8,10 @@ public enum RideBoardLoader {
     /// `nil` when nothing is shortlisted. A `window` from the Ride Window sheet is saved as the
     /// planning choice (docs/planning-api.md, "Saved planning"); without one, the saved choice is used.
     public static func load(window: RideWindow? = nil) async throws -> RideBoard? {
-        let selection: SelectionResponse = try await RideOnAPI.send("/route-selection")
-        let ids = selection.selection.routeIds
-        guard !ids.isEmpty else { return nil }
-        let user: UserResponse? = try? await RideOnAPI.send("/users/me")
-        if let window, let version = user?.user.version {
-            // ponytail: a conflicting edit (409) keeps the old saved window; this load still uses the new one.
-            let patch = PlanningPatch(expectedVersion: version, settings: .init(planning: .init(
-                days: window.quickPick.map { PlanningDays(kind: "preset", preset: $0.rawValue) } ?? .dates(window.days),
-                window: PlanningWindow(window.hours))))
-            let _: UserResponse? = try? await RideOnAPI.send("/users/me", method: "PATCH", body: patch)
-        }
-        let saved = user?.user.settings?.planning
-        let days = window.map { PlanningDays.dates($0.days) } ?? saved?.days?.resolved ?? .dates(RideWindow.QuickPick.next.days(from: .now))
-        let hours = window?.hours ?? saved?.window?.hours ?? .daylight
-        let request = RecommendationRequest(routeIds: ids, days: days, previewDays: 7, riding: .init(window: PlanningWindow(hours)))
-        async let recommendation: Recommendation = RideOnAPI.send("/recommendations", body: request)
-        async let summaries: SummariesResponse = RideOnAPI.send("/rides/summaries", body: SummariesRequest(routeIds: ids))
-        async let routes = routeInfo(ids)
-        let units = ProseUnits(user?.user.settings?.units, user?.user.settings?.display)
-        var board = try await board(from: recommendation, routes: routes, summaries: summaries.summaries, units: units)
-        board.hours = hours
-        return board
+        guard let session = RideOnSession.shared.credentials else { return nil }
+        let result = try await RideBoardRepository.shared.refresh(session: session.id, account: session.accountID,
+                                                                  window: window, force: true)
+        return try result.board()
     }
 
     /// About 100 heights spaced evenly along the route, its x axis scaled to the route's distance.
@@ -49,23 +31,6 @@ public enum RideBoardLoader {
         let scale = route.distanceKm / total
         return zip(samples, heights).compactMap { sample, height in
             height.map { RideDetail.ElevationPoint(km: sample.km * scale, metres: $0) }
-        }
-    }
-
-    // ponytail: geometry is refetched on every load; cache it by route `version` if that gets slow.
-    private static func routeInfo(_ ids: [String]) async throws -> [String: RouteInfo] {
-        try await withThrowingTaskGroup(of: (String, RouteInfo).self) { group in
-            for id in ids {
-                group.addTask {
-                    async let route: RouteResponse = RideOnAPI.send("/routes/\(id)")
-                    async let geometry: GeometryResponse = RideOnAPI.send("/routes/\(id)/geometry")
-                    let source = try await route.route.source
-                    let url = source.flatMap { $0.providerId == "cycle-travel" ? URL(string: "https://cycle.travel/map/journey/\($0.externalId)") : nil }
-                    let coordinates = try await geometry.geometry.map { PolylineDecoder.decode($0.data, precision: 6) } ?? []
-                    return (id, RouteInfo(coordinates: coordinates, cycleTravelURL: url))
-                }
-            }
-            return try await group.reduce(into: [:]) { $0[$1.0] = $1.1 }
         }
     }
 
@@ -127,13 +92,16 @@ public enum RideBoardLoader {
         let dates = (response.range?.dates ?? []).compactMap(day)
         let start = dates.first ?? calendar.startOfDay(for: response.generatedAt)
         let end = calendar.date(byAdding: .day, value: 1, to: dates.last ?? start) ?? start
-        return RideBoard(window: DateInterval(start: start, end: end), generatedAt: response.generatedAt,
+        var board = RideBoard(window: DateInterval(start: start, end: end), generatedAt: response.generatedAt,
                          picks: picks, days: days, forecast: forecast, unfit: unfit, details: details,
                          credits: response.weather?.attribution?.map { RideBoard.Credit(text: $0.text, url: $0.url) } ?? [],
                          scoredWith: response.resolvedPreferences.map {
                              RideBoard.Comfort(temperatureC: $0.temperature.comfortMinC...$0.temperature.comfortMaxC,
                                                headwindKph: $0.wind.comfortableHeadwindKph, crosswindKph: $0.wind.comfortableCrosswindKph)
                          })
+        board.timeZone = response.timeZone
+        board.expired = response.expired ?? false
+        return board
     }
 
     /// Why a day has no ride, or what it's missing (docs/planning-api.md, "Day tiles"). A forecast
@@ -408,26 +376,26 @@ public enum RideBoardLoader {
 // MARK: - Wire types
 
 extension RideBoardLoader {
-    struct RouteInfo: Sendable {
+    struct RouteInfo: Codable, Sendable {
         var coordinates: [Coordinate]
         var cycleTravelURL: URL?
     }
 
-    struct SelectionResponse: Decodable {
-        struct Selection: Decodable { var routeIds: [String] }
+    struct SelectionResponse: Decodable, Sendable {
+        struct Selection: Decodable, Sendable { var routeIds: [String]; var version: Int? }
         var selection: Selection
     }
 
-    struct UserResponse: Decodable {
-        struct User: Decodable { var version: Int; var settings: Settings? }
-        struct Settings: Decodable { var planning: Planning?; var units: RiderSettings.Units?; var display: RiderSettings.Display? }
-        struct Planning: Decodable { var days: PlanningDays?; var window: PlanningWindow? }
+    struct UserResponse: Decodable, Sendable {
+        struct User: Decodable, Sendable { var id: String?; var version: Int; var settings: Settings? }
+        struct Settings: Decodable, Sendable { var timeZone: String?; var planning: Planning?; var units: RiderSettings.Units?; var display: RiderSettings.Display? }
+        struct Planning: Decodable, Sendable { var days: PlanningDays?; var window: PlanningWindow? }
         var user: User
     }
 
-    struct PlanningPatch: Encodable {
-        struct Settings: Encodable { var planning: Planning }
-        struct Planning: Encodable { var days: PlanningDays; var window: PlanningWindow }
+    struct PlanningPatch: Encodable, Sendable {
+        struct Settings: Encodable, Sendable { var planning: Planning }
+        struct Planning: Encodable, Sendable { var days: PlanningDays; var window: PlanningWindow }
         var expectedVersion: Int
         var settings: Settings
     }
@@ -440,19 +408,20 @@ extension RideBoardLoader {
         var end: String?
         var dates: [String]?
 
-        /// "2026-10-14", in the device's time zone.
-        // ponytail: assumes the device and the routes share a time zone.
-        static func dates(_ days: [Date]) -> PlanningDays {
+        /// "2026-10-14", in the supplied planning calendar's time zone.
+        static func dates(_ days: [Date], calendar: Calendar = .current) -> PlanningDays {
             PlanningDays(kind: "dates", dates: days.map {
-                let day = Calendar.current.dateComponents([.year, .month, .day], from: $0)
+                let day = calendar.dateComponents([.year, .month, .day], from: $0)
                 return String(format: "%04d-%02d-%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
             })
         }
 
         /// Presets as dates the way the extension sends them: the API's "next" starts today, the app's tomorrow.
-        var resolved: PlanningDays {
+        var resolved: PlanningDays { resolved(at: .now, calendar: .current) }
+
+        func resolved(at date: Date, calendar: Calendar) -> PlanningDays {
             guard kind == "preset", let pick = preset.flatMap(RideWindow.QuickPick.init) else { return self }
-            return .dates(pick.days(from: .now))
+            return .dates(pick.days(from: date, calendar: calendar), calendar: calendar)
         }
     }
 
@@ -486,8 +455,8 @@ extension RideBoardLoader {
         }
     }
 
-    struct RecommendationRequest: Encodable {
-        struct Riding: Encodable { var window: PlanningWindow }
+    struct RecommendationRequest: Encodable, Sendable {
+        struct Riding: Encodable, Sendable { var window: PlanningWindow }
         var routeIds: [String]
         var days: PlanningDays
         /// Today onwards, for the Ride Window sheet's days.
@@ -495,24 +464,25 @@ extension RideBoardLoader {
         var riding: Riding
     }
 
-    struct SummariesRequest: Encodable { var routeIds: [String] }
-    struct SummariesResponse: Decodable { var summaries: [Summary] }
-    struct Summary: Decodable { var routeId: String; var lastRiddenOn: String? }
+    struct SummariesRequest: Encodable, Sendable { var routeIds: [String] }
+    struct SummariesResponse: Decodable, Sendable { var summaries: [Summary]; var historyRevision: Int? }
+    struct Summary: Codable, Sendable { var routeId: String; var lastRiddenOn: String? }
 
-    struct RouteResponse: Decodable {
-        struct Route: Decodable { var source: Source? }
-        struct Source: Decodable { var providerId: String; var externalId: String }
+    struct RouteResponse: Decodable, Sendable {
+        struct Route: Decodable, Sendable { var version: Int?; var source: Source? }
+        struct Source: Decodable, Sendable { var providerId: String; var externalId: String }
         var route: Route
     }
 
-    struct GeometryResponse: Decodable {
-        struct Geometry: Decodable { var data: String }
+    struct GeometryResponse: Decodable, Sendable {
+        struct Geometry: Decodable, Sendable { var data: String }
+        var version: Int?
         var geometry: Geometry?
     }
 
-    struct Recommendation: Decodable {
-        struct Range: Decodable { var dates: [String] }
-        struct Day: Decodable {
+    struct Recommendation: Decodable, Sendable {
+        struct Range: Decodable, Sendable { var dates: [String] }
+        struct Day: Decodable, Sendable {
             var date: String
             var selected: Bool
             var best: Departure?
@@ -523,6 +493,8 @@ extension RideBoardLoader {
             var daylight: Sunlight?
             var temperatureMaxC: Double?
         }
+        var expired: Bool?
+        var algorithmVersion: String?
         var generatedAt: Date
         var timeZone: String
         var rankings: [RouteResult]
@@ -534,10 +506,10 @@ extension RideBoardLoader {
     }
 
     /// The comfort settings the ranking used.
-    struct Preferences: Decodable {
-        struct Temperature: Decodable { var comfortMinC, comfortMaxC: Double }
-        struct Wind: Decodable { var comfortableHeadwindKph, comfortableCrosswindKph, comfortableGustKph: Double }
-        struct Standards: Decodable { var maximumGustKph: Double? }
+    struct Preferences: Decodable, Sendable {
+        struct Temperature: Decodable, Sendable { var comfortMinC, comfortMaxC: Double }
+        struct Wind: Decodable, Sendable { var comfortableHeadwindKph, comfortableCrosswindKph, comfortableGustKph: Double }
+        struct Standards: Decodable, Sendable { var maximumGustKph: Double? }
         var temperature: Temperature
         var wind: Wind
         var minimumStandards: Standards?
@@ -560,15 +532,16 @@ extension RideBoardLoader {
         func height(_ m: Double) -> String { "\(Int((miles ? m / 0.3048 : m).rounded())) \(miles ? "ft" : "m")" }
     }
 
-    struct Weather: Decodable {
-        struct Credit: Decodable { var text: String; var url: URL }
+    struct Weather: Decodable, Sendable {
+        struct Credit: Decodable, Sendable { var text: String; var url: URL }
+        var refreshAt: Date?
         var attribution: [Credit]?
     }
 
-    struct Interval: Decodable { var start: Date; var end: Date }
-    struct Sunlight: Decodable { var sunrise: Date; var sunset: Date }
+    struct Interval: Decodable, Sendable { var start: Date; var end: Date }
+    struct Sunlight: Decodable, Sendable { var sunrise: Date; var sunset: Date }
 
-    struct RouteResult: Decodable {
+    struct RouteResult: Decodable, Sendable {
         var routeId: String
         var routeName: String
         var distanceKm: Double
@@ -581,17 +554,17 @@ extension RideBoardLoader {
         var alternatives: [Departure]
         var distanceFit: DistanceFit?
 
-        struct DistanceFit: Decodable { var status: String; var deviationKm: Double }
+        struct DistanceFit: Decodable, Sendable { var status: String; var deviationKm: Double }
     }
 
-    struct Departure: Decodable {
-        struct Factors: Decodable {
+    struct Departure: Decodable, Sendable {
+        struct Factors: Decodable, Sendable {
             var distance, climbing, sunshine, clearSkies: Double?
             var temperature, wind, dryness: Double
         }
-        struct Standards: Decodable { var status: String }
-        struct Hour: Decodable { var start: Date; var end: Date?; var conditions: Conditions? }
-        struct WindStretch: Decodable {
+        struct Standards: Decodable, Sendable { var status: String }
+        struct Hour: Decodable, Sendable { var start: Date; var end: Date?; var conditions: Conditions? }
+        struct WindStretch: Decodable, Sendable {
             var fromM, toM: Double
             var startAt, endAt: Date
             /// `tailwind`, `crosswind`, `headwind` or `light` (under 10 km/h).
@@ -600,13 +573,13 @@ extension RideBoardLoader {
             var averageWindSpeedKph: Double
             var maximumAdverseGustKph: Double?
         }
-        struct SunshineAssessment: Decodable {
+        struct SunshineAssessment: Decodable, Sendable {
             /// `complete`, `partial` or `unavailable`.
             var status: String
             var unknownDistanceFraction: Double
         }
-        struct RecentRides: Decodable { var penaltyPoints: Double }
-        struct Previous: Decodable { var score: Double; var generatedAt: Date }
+        struct RecentRides: Decodable, Sendable { var penaltyPoints: Double }
+        struct Previous: Decodable, Sendable { var score: Double; var generatedAt: Date }
         var departureAt: Date
         var finishAt: Date
         var score: Double
@@ -627,11 +600,11 @@ extension RideBoardLoader {
         var recommendationRef: String?
     }
 
-    struct Conditions: Decodable {
-        struct Range: Decodable { var minimum, maximum: Double }
-        struct Shares: Decodable { var headwind, tailwind, crosswind: Double }
-        struct Cloud: Decodable { var mean: Double }
-        struct GustExposure: Decodable { var maximumAdverseKph: Double }
+    struct Conditions: Decodable, Sendable {
+        struct Range: Decodable, Sendable { var minimum, maximum: Double }
+        struct Shares: Decodable, Sendable { var headwind, tailwind, crosswind: Double }
+        struct Cloud: Decodable, Sendable { var mean: Double }
+        struct GustExposure: Decodable, Sendable { var maximumAdverseKph: Double }
         var temperatureC: Range
         var averageWindSpeedKph: Double
         var averageHeadwindKph: Double

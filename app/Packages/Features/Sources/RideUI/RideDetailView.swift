@@ -9,9 +9,15 @@ import Services
 /// profile and factor breakdown. Choosing a departure updates the forecast, the profile's wind
 /// strip and the factors; the hero and verdict stay on the pick.
 public struct RideDetailView: View {
-    var board: RideBoard
+    var incomingBoard: RideBoard
+    var suppliedPreviousPlan: Bool
     var pick: RideBoard.Pick
-    var detail: RideDetail
+    @State private var savedBoard: RideBoard
+    private var board: RideBoard { incomingBoard.details[pick.id] == nil ? savedBoard : incomingBoard }
+    private var previousPlan: Bool {
+        suppliedPreviousPlan || (incomingBoard.details[pick.id] == nil && savedBoard.details[pick.id] != nil)
+    }
+    private var detail: RideDetail { board.details[pick.id] ?? .sample(for: pick, on: board) }
     @State private var selection: Date
     @State private var titleOpacity = 0.0
     @State private var addedToCalendar: Date?
@@ -22,12 +28,13 @@ public struct RideDetailView: View {
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    public init(board: RideBoard, pick: RideBoard.Pick) {
-        self.board = board
+    public init(board: RideBoard, pick: RideBoard.Pick, previousPlan: Bool = false) {
+        self.incomingBoard = board
+        self.suppliedPreviousPlan = previousPlan
+        _savedBoard = State(initialValue: board)
         self.pick = pick
         // The fixture board carries no details; it keeps the sample.
         let detail = board.details[pick.id] ?? .sample(for: pick, on: board)
-        self.detail = detail
         _elevation = State(initialValue: detail.elevation)
         _selection = State(initialValue: pick.start)
     }
@@ -37,6 +44,7 @@ public struct RideDetailView: View {
     }
 
     private var eyebrow: String? {
+        if previousPlan { return "Previous pick" }
         if pick.id == board.picks.first?.id { return "Best pick" }
         return board.days.contains { $0.best?.id == pick.id } ? "Best that day" : nil
     }
@@ -47,6 +55,10 @@ public struct RideDetailView: View {
                 RideHero(pick: pick, eyebrow: eyebrow, height: 400)
 
                 Group {
+                    if previousPlan {
+                        Label("From your saved forecast. Update Rides for current conditions.", systemImage: "clock")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     verdictCard
                     RideSection("Departure") {
                         DeparturePicker(departures: detail.departures, selection: $selection)
@@ -91,6 +103,9 @@ public struct RideDetailView: View {
             }
             .padding(.bottom, 40)
         }
+        .onChange(of: incomingBoard) { _, latest in
+            if latest.details[pick.id] != nil { savedBoard = latest }
+        }
         .onScrollGeometryChange(for: Double.self) { geometry in
             // The inline title fades in as the hero's title block scrolls under the toolbar.
             min(1, max(0, (geometry.contentOffset.y + geometry.contentInsets.top - 290) / 40))
@@ -100,10 +115,13 @@ public struct RideDetailView: View {
         .ignoresSafeArea(edges: .top)
         .background(.groupedBackground)
         .navigationTitle(pick.route.name)
-        .task {
-            // ponytail: Open-Meteo per visit, no cache; cache by route id if it gets slow.
-            guard elevation.isEmpty, !pick.route.coordinates.isEmpty else { return }
-            elevation = (try? await RideBoardLoader.elevation(of: pick.route, using: services.elevation)) ?? []
+        .task(id: pick.route.coordinates) {
+            // Route changes invalidate the old elevation; unchanged geometry keeps it on screen.
+            guard detail.elevation.isEmpty, !pick.route.coordinates.isEmpty else { return }
+            elevation = []
+            let points = (try? await RideBoardLoader.elevation(of: pick.route, using: services.elevation)) ?? []
+            guard !Task.isCancelled else { return }
+            elevation = points
         }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -120,6 +138,7 @@ public struct RideDetailView: View {
                 ShareLink(item: RouteGPX(route: pick.route), preview: SharePreview(pick.route.name)) {
                     Label("Send route to a bike computer", systemImage: "square.and.arrow.up")
                 }
+                .disabled(pick.route.coordinates.count < 2)
                 Menu("More", systemImage: "ellipsis") {
                     calendarButton
                     cycleTravelLink
@@ -139,7 +158,10 @@ public struct RideDetailView: View {
             layout {
                 ScoreGauge(score: pick.score, tint: pick.meetsMinimums ? .accentColor : .gray)
                 VStack(alignment: .leading, spacing: 4) {
-                    Verdict(meetsMinimums: pick.meetsMinimums)
+                    Group {
+                        if previousPlan { Label("From your saved forecast", systemImage: "clock") }
+                        else { Verdict(meetsMinimums: pick.meetsMinimums) }
+                    }
                         .font(.headline)
                         .foregroundStyle(pick.meetsMinimums ? AnyShapeStyle(.tint) : AnyShapeStyle(.belowMinimums))
                     HStack(alignment: .firstTextBaseline, spacing: 6) {

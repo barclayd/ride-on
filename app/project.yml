@@ -55,7 +55,9 @@ targets:
         UILaunchScreen: {}
         # Lets CloudKit's silent pushes wake the app so SwiftData pulls
         # remote changes in the background (iOS-only key, ignored on macOS).
-        UIBackgroundModes: [remote-notification]
+        UIBackgroundModes: [remote-notification, fetch]
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.danbarclay.rideon.refresh
         # Opened GPX/FIT files are imported as copies (app-owned data), never
         # edited in place. Declaring UISupportsDocumentBrowser silences Xcode's
         # "doesn't declare opening in place" iOS warning; it's a UIKit key, so
