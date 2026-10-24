@@ -1,0 +1,151 @@
+/* Ride On Web design tokens: SEED. These are a starting point for Claude Design (web/SPEC.md §13).
+   They're replaced by the exported design system once the look settles; until then, values come
+   from DESIGN-SYSTEM.md (iOS). Band colours clear 3:1 against the cycle map's land (#eef2e1)
+   in light and against #1C1C1E in dark. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Type: system stack. Montserrat only appears inside the map's own labels. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text-large-title: 2.125rem;
+  --text-title3: 1.25rem;
+  --text-headline: 1.0625rem;
+  --text-body: 1.0625rem;
+  --text-subheadline: 0.9375rem;
+  --text-footnote: 0.8125rem;
+  --text-caption2: 0.6875rem;
+
+  /* Colour: light */
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --fill-tertiary: rgb(118 118 128 / 0.12);
+  --label: #000000;
+  --label-secondary: rgb(60 60 67 / 0.6);
+  --label-tertiary: rgb(60 60 67 / 0.3);
+  --separator: rgb(60 60 67 / 0.29);
+  --accent: #248a3d;
+  --on-accent: #ffffff;
+
+  --status-below-minimums: #b23a00;
+  --status-not-in-contention: #8e8e93;
+  --status-crosswind: #e8a100;
+  --status-headwind: #c93400;
+  --status-rain: #0a66d8;
+  --status-committed: #c88a00;
+
+  --band-great: #248a3d;
+  --band-good: #6b8a00;
+  --band-fair: #b26a00;
+  --band-not-recommended: #76767b;
+  --route-unscored: #8e8e93;
+  --route-casing: #ffffff;
+
+  /* Map focus veil (SPEC §6.4): the land colour over the basemap and overlay. */
+  --map-land: #eef2e1;
+  --map-veil-opacity: 0.6;
+
+  /* Glass recipe (SPEC §9). Regular glass only. */
+  --glass-tint: rgb(255 255 255 / 0.55);
+  --glass-blur: 24px;
+  --glass-saturate: 180%;
+  --glass-rim: inset 0 1px 0 rgb(255 255 255 / 0.6), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.08);
+  --glass-solid: #f9f9f9;
+  --glass-border-contrast: rgb(0 0 0 / 0.5);
+
+  /* Shape */
+  --radius-panel: 34px;
+  --radius-card: 26px;
+  --radius-selected-row: 22px;
+  --radius-thumbnail: 11px;
+  --radius-capsule: 999px;
+
+  /* Layout */
+  --panel-width: 380px;
+  --panel-inset: 12px;
+  --panel-medium-detent: 56%;
+  --day-strip-offset: 16px;
+  --margin: 16px;
+  --target-min: 44px;
+  --line-hit-width: 22px;
+  --breakpoint-sheet: 768px; /* reference only: custom properties don't work in media queries */
+
+  /* Motion: CSS stand-ins for Motion.swift */
+  --ease-smooth: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-snappy: cubic-bezier(0.34, 1.3, 0.64, 1);
+  --motion-smooth: 350ms var(--ease-smooth); /* .smooth: default, async content arriving */
+  --motion-materialize: 350ms var(--ease-smooth); /* Motion.panelMaterialize */
+  --motion-snappy: 300ms var(--ease-snappy); /* .snappy: re-rank, glass tap layout */
+  --motion-panel-detent: 450ms cubic-bezier(0.2, 0.9, 0.25, 1); /* spring 0.35 / 0.86 */
+  --motion-ring-fill: 800ms var(--ease-smooth);
+  --attribution-fade-after: 5s;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --fill-tertiary: rgb(118 118 128 / 0.24);
+    --label: #ffffff;
+    --label-secondary: rgb(235 235 245 / 0.6);
+    --label-tertiary: rgb(235 235 245 / 0.3);
+    --separator: rgb(84 84 88 / 0.65);
+    --accent: #30d158;
+    --on-accent: #000000;
+
+    --status-below-minimums: #ff9f0a;
+    --status-crosswind: #ffd60a;
+    --status-headwind: #ff453a;
+    --status-rain: #64b5ff;
+
+    /* Panel swatches on dark UI. Map lines keep the light values while the map stays light (SPEC §6.6). */
+    --band-great: #30d158;
+    --band-good: #b4d335;
+    --band-fair: #ffb340;
+    --band-not-recommended: #98989d;
+
+    --glass-tint: rgb(30 30 32 / 0.55);
+    --glass-rim: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 0 0 1px rgb(255 255 255 / 0.08);
+    --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+    --glass-solid: #1c1c1e;
+    --glass-border-contrast: rgb(255 255 255 / 0.6);
+  }
+}
+
+.glass {
+  background: var(--glass-tint);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-rim), var(--glass-shadow);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--glass-solid);
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .glass {
+    background: var(--glass-solid);
+    backdrop-filter: none;
+    box-shadow: none;
+    border: 1px solid var(--glass-border-contrast);
+  }
+}
+
+@media (forced-colors: active) {
+  .glass {
+    background: Canvas;
+    backdrop-filter: none;
+    border: 1px solid CanvasText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-snappy: 200ms ease;
+    --motion-panel-detent: var(--motion-smooth);
+  }
+}

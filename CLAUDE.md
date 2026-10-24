@@ -31,6 +31,7 @@ app/
 └─ RideOnUITests/              XCUITest E2E tests (launch with --fixture-world)
 extension/                    Browser extension (WXT + Preact) for cycle.travel: Chrome MV3, and Safari (macOS + iOS) via the XcodeGen container in extension/safari/ — see extension/README.md
 maps/                         Cycle map data (docs/maps/README.md is the plan): tiles/ is the planetiler profile for the GB cycling overlay (Java, built and tested in Docker) — see maps/tiles/README.md; style/ builds the MapLibre style (TypeScript + Bun) into SharedUI's CycleMap/ resources with its Montserrat glyph PBFs — see maps/style/README.md; hosting/ publishes archives to the `ride-on-maps` R2 bucket, served at https://maps.ride-on.cc — see maps/README.md. `.github/workflows/maps-tiles.yml` rebuilds the overlay monthly (the basemap quarterly) and opens a PR pointing the style at it
+web/                          app.ride-on.cc, the web app (spec only so far): SPEC.md is the product/design/architecture spec, design-system/ the seed tokens for Claude Design — see web/SPEC.md
 worker/                       Cloudflare Worker (Hono): GPX upload, route storage and weather-aligned ride recommendations — see worker/CLAUDE.md and docs/api.md
 ```
 
