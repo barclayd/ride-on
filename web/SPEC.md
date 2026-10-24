@@ -1,8 +1,9 @@
 # app.ride-on.cc: web app spec
 
-Status: spec, 24 October 2026, written from the design interview. Nothing is built yet.
-The design comes first, in Claude Design (§13). The app, `packages/core` and the style
-publishing follow in their own PRs (§14).
+Status: spec, 24 October 2026, written from the design interview. The design is done in
+Claude Design (§13), and the `web/app` spike (§14 step 5) is built: Remix 3 on Workers, the BFF
+auth and an empty `MapShell` (see `web/app/README.md`). The v1 screens, `packages/core` and the
+style publishing follow in their own PRs (§14).
 
 Read with: [`DESIGN-SYSTEM.md`](../DESIGN-SYSTEM.md) (the iOS system this borrows from),
 [`docs/api.md`](../docs/api.md), [`docs/planning-api.md`](../docs/planning-api.md),
@@ -467,9 +468,12 @@ real reports.
   - The panel and the day strip are server-rendered JSX.
   - `MapShell`'s map is a hydrated client entry.
   - `<Frame>` handles partial updates where useful.
-- **Risk:** Remix 3 doesn't document Workers explicitly. It is Fetch-API based, so the first
-  scaffold PR is a spike that proves SSR, hydration and the service binding on Workers before
-  anything else is built.
+- **On Workers** (proved by the spike): `remix/router` answers the Worker's `fetch`, and
+  `src/worker.tsx` server-renders with `remix/middleware/render`. `cop()` rejects cross-site
+  posts, including from other ride-on.cc subdomains, which `SameSite=Lax` would let through.
+- **The client:** `build.ts` bundles the client entries with `Bun.build` into `public/`, and
+  Workers static assets serve them (no `remix/assets`). MapLibre is vendored there as its ESM
+  build and imported at runtime, so the hydrated entry stays small and the map loads after it.
 - **Tooling:** Bun, Biome and TypeScript, as in `extension/` and `worker/`.
 
 ### 11.2 Auth: same-origin BFF
@@ -632,8 +636,8 @@ There's one geometry request per route, so a big library means many requests.
    `web/design-system/`.
 3. **`maps/style` web publishing** to maps.ride-on.cc (§12.3).
 4. **`packages/core`** with the root workspace, and the extension migrated onto it.
-5. **The `web/app` spike:** Remix 3 on Workers, the service binding, the BFF auth and an
-   empty `MapShell`.
+5. **The `web/app` spike** (done): Remix 3 on Workers, the service binding, the BFF auth and
+   an empty `MapShell`.
 6. **v1 screens**, in this order:
    1. the library on the map
    2. the shortlist and scores
