@@ -5,7 +5,8 @@ CI builds the upload: every extension change merged to `main` produces a GitHub 
 That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store rejects one).
 
 **Item ID:** `ckoikfoejfcaphmdnpomgcmealkecoep`, Unlisted. 0.1.98 was submitted for review on
-24 October 2026 and publishes automatically once it passes. Its sign-in redirect is already in
+24 October 2026, then resubmitted the same day with new screenshots, marquee and description. It
+publishes automatically once it passes. Its sign-in redirect is already in
 `AUTH_CONFIG_JSON.clientRedirects`.
 
 ## First upload (manual, once)
@@ -39,7 +40,8 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
   >
   > HOW IT WORKS
   > 1. Track the routes you're considering, straight from your cycle.travel Journeys page.
-  > 2. Say when you can ride: today, tomorrow, the weekend or days you pick, and your time window.
+  > 2. Say when you can ride: tap the days that suit you over the next week, and set your time
+  >    window.
   > 3. Ride On picks the best route and start time, with an estimated finish, and tells you why:
   >    temperature, wind along the route, gusts, rain and sunshine at ride time.
   > 4. Once your window has passed, tell Ride On whether you rode it, and see your next best
@@ -47,12 +49,12 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
   >
   > WHAT YOU GET
   > • Your rides ranked with a conditions score out of 100, and a clear best pick
-  > • The warnings you'd want before setting off, like "Headwind for the first half" or gusts over
-  >   your limit
+  > • Temperature, sky, wind and rain at a glance, with anything outside your comfort zone picked
+  >   out, and the wind along the ride: where it's behind you, across you or in your face
   > • Routes that don't fit your time window or fall below your minimums are flagged, not hidden
-  > • Preferences that are yours: distance and climbing, how much rain and sunshine matter, a
-  >   minimum temperature (fixed or by month), and rain and gust limits
-  > • Best times shown right on cycle.travel's Journeys page, next to each route
+  > • Preferences that are yours: distance and climbing, your ideal temperature and wind, how much
+  >   rain and sunshine matter, and limits for cold (fixed or by month), heat, rain and gusts
+  > • Your tracked routes and their best times right on cycle.travel's Journeys page
   > • Alerts for the ride you've picked: a notification if rain moves in, gusts pass your limit, it
   >   turns colder than you like, or a better time opens up
   > • A history of the rides you've logged
@@ -84,8 +86,9 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
 
 The icon and small tile are made from the app logo (`app/RideOn.icon`) with the extension's fonts
 and colours. The screenshots and the marquee's right half are the real extension (the e2e build
-against a mock API) over a saved copy of the Journeys page: the page alone, then the popup's
-check-in and next windows, History, Preferences and Rides.
+against a mock API, with made-up routes and rider) over a saved copy of the Journeys page: the
+page with its tracked-route tiles, the popup's Rides, the alerts dialog, the popup's check-in and
+next windows, then Preferences. The marquee shows the popup's Rides.
 
 ## Privacy practices
 
