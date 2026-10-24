@@ -15,7 +15,7 @@ struct RideControl: ControlWidget {
                     Label("Track Best", systemImage: "bell")
                 }
             }
-            .tint(name == nil ? Color.accentColor : .committed)
+            .tint(name == nil ? Color.rideAccent : .committed)
         }
         .displayName("Ride On")
         .description("Open the ride you're tracking, or track the best one.")

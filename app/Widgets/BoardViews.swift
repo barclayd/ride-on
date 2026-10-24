@@ -63,6 +63,15 @@ struct BoardView: View {
 
     // MARK: Medium
 
+    private func startLine(_ ride: RideWidgetSnapshot.Ride, finish: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text(ride.start.clock).font(.system(size: 30, weight: .bold)).monospacedDigit()
+            if finish { Text("→ ~\(ride.finish.clock)").font(.system(size: 13)).foregroundStyle(.secondary) }
+            Spacer(minLength: 2)
+            ScorePill(score: ride.score, meetsMinimums: ride.meetsMinimums, best: isBest(day))
+        }
+    }
+
     private func medium(_ days: [RideWidgetSnapshot.Day]) -> some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 1) {
@@ -72,12 +81,8 @@ struct BoardView: View {
                     Pager(days: days, shown: day.date, onMap: false)
                 }
                 if let ride = day.ride {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text(ride.start.clock).font(.system(size: 30, weight: .bold)).monospacedDigit()
-                        Text("→ ~\(ride.finish.clock)").font(.system(size: 13)).foregroundStyle(.secondary)
-                        Spacer(minLength: 2)
-                        ScorePill(score: ride.score, meetsMinimums: ride.meetsMinimums, best: isBest(day))
-                    }
+                    // The finish gives way on narrow phones; the start never truncates.
+                    ViewThatFits(in: .horizontal) { startLine(ride, finish: true); startLine(ride, finish: false) }
                     Text("\(ride.name) · \(units.distance(ride.distanceKm))").font(.system(size: 12, weight: .semibold))
                     note(ride)
                 } else {
@@ -138,7 +143,7 @@ struct BoardView: View {
                 header(days)
                 if let ride = best.ride {
                     HStack {
-                        Heading(text: "★ Best · \(ride.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))", tint: .accentColor)
+                        Heading(text: "★ Best · \(ride.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))", tint: .rideAccent)
                         Spacer()
                         trackLink(ride, onMap: false)
                     }
@@ -169,7 +174,7 @@ struct BoardView: View {
             let star = isBest(best) ? "★ " : ""
             switch family {
             case .accessoryInline:
-                Text("\(star)\(ride.start.weekday) \(ride.start.clock) · \(ride.name) · \(ride.score)")
+                Text("\(star)\(ride.start.weekday) \(ride.start.clock) · \(ride.score) · \(ride.name)") // the name truncates, not the score
             case .accessoryCircular:
                 ZStack {
                     AccessoryWidgetBackground()
@@ -182,7 +187,8 @@ struct BoardView: View {
             default:
                 VStack(alignment: .leading, spacing: 0) {
                     Text("\(star)\(ride.start.weekday) \(ride.start.clock) · \(ride.score)").font(.headline).widgetAccentable()
-                    Text("\(ride.name) · back ~\(ride.finish.clock)")
+                    // The finish gives way before the name truncates.
+                    ViewThatFits(in: .horizontal) { Text("\(ride.name) · back ~\(ride.finish.clock)"); Text(ride.name) }
                     Text(ride.meetsMinimums ? ride.note : "⚠ \(ride.note)").foregroundStyle(.secondary)
                 }
                 .lineLimit(1)
@@ -226,7 +232,7 @@ struct BoardView: View {
                     .foregroundStyle(.tint)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .background(onMap ? AnyShapeStyle(.white) : AnyShapeStyle(Color.accentColor.opacity(0.12)), in: .capsule)
+                    .background(onMap ? AnyShapeStyle(.white) : AnyShapeStyle(Color.rideAccent.opacity(0.12)), in: .capsule)
             }
         }
     }
@@ -313,11 +319,11 @@ private struct DayStrip: View {
                         Text(day.ride.map { "\($0.score)" } ?? "–")
                             .font(.system(size: 12, weight: .bold))
                             .monospacedDigit()
-                            .foregroundStyle(day.ride?.meetsMinimums == false ? Color.belowMinimums : day.date == best ? .accentColor : .primary)
+                            .foregroundStyle(day.ride?.meetsMinimums == false ? Color.belowMinimums : day.date == best ? .rideAccent : .primary)
                     }
                     .padding(.vertical, 2)
                     .frame(maxWidth: .infinity)
-                    .background(day.date == shown ? AnyShapeStyle(Color.accentColor.opacity(0.15)) : AnyShapeStyle(.clear),
+                    .background(day.date == shown ? AnyShapeStyle(Color.rideAccent.opacity(0.15)) : AnyShapeStyle(.clear),
                                 in: .rect(cornerRadius: 5))
                 }
                 .buttonStyle(.plain)

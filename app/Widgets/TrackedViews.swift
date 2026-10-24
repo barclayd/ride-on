@@ -27,15 +27,13 @@ struct TrackedView: View {
                   systemImage: "bell.fill")
         case .accessoryCircular: gauge.gaugeStyle(.accessoryCircular)
         case .accessoryRectangular:
-            HStack(spacing: 6) {
-                gauge.gaugeStyle(.accessoryCircular)
-                VStack(alignment: .leading, spacing: 0) {
-                    Label(ride.name, systemImage: "bell.fill").font(.headline).widgetAccentable()
-                    Text("\(units.temperatures(ride.temperatureC)) · \(ride.wind.title) \(units.wind(ride.windKph))")
-                    Text(ride.rideTime(at: date, short: true)).foregroundStyle(.secondary)
-                }
-                .lineLimit(1)
+            // ponytail: score in the headline, not a gauge: the gauge left the text half the width.
+            VStack(alignment: .leading, spacing: 0) {
+                Label("\(tracked.score) · \(ride.name)", systemImage: "bell.fill").font(.headline).widgetAccentable()
+                Text("\(units.temperatures(ride.temperatureC)) · \(ride.wind.title) \(units.wind(ride.windKph))")
+                Text(ride.rideTime(at: date, short: true)).foregroundStyle(.secondary)
             }
+            .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
         #endif
         default: small

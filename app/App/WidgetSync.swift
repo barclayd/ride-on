@@ -2,6 +2,7 @@ import SwiftUI
 import WidgetKit
 import MapKit
 import Models
+import Services
 #if os(iOS)
 import ActivityKit
 import SharedUI
@@ -17,7 +18,8 @@ enum WidgetSync {
         let previous = WidgetStore.load()
         // ponytail: signed out keeps the last snapshot; clear it on sign-out if a stale widget matters.
         guard let board else { return }
-        let snapshot = RideWidgetSnapshot(board: board, tracked: tracked, units: units, previous: previous)
+        var snapshot = RideWidgetSnapshot(board: board, tracked: tracked, units: units, previous: previous)
+        if FixtureWorld.isEnabled { snapshot = snapshot.current() }
         if snapshot != previous {
             WidgetStore.save(snapshot)
             WidgetStore.defaults.removeObject(forKey: WidgetStore.pagedDayKey)
@@ -114,4 +116,33 @@ enum WidgetSync {
         }
     }
     #endif
+}
+
+private extension RideWidgetSnapshot {
+    /// The fixture world's sample, pinned to Tuesday 13 October 2026, moved to today: with
+    /// `--fixture-now <ISO 8601>`, so that sample instant is now (the morning of a ride, mid-ride).
+    func current(calendar: Calendar = .current) -> Self {
+        let anchor = ProcessInfo.processInfo.arguments.drop { $0 != "--fixture-now" }.dropFirst().first
+            .flatMap { try? Date($0, strategy: .iso8601) }
+        let from = anchor ?? generatedAt, now = Date.now
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: from), to: calendar.startOfDay(for: now)).day ?? 0
+        // ponytail: whole days keep wall-clock times across DST; the anchor's time-of-day only shifts instants,
+        // so a ride moved past midnight shows under the day before. Fine for screenshots.
+        let seconds = anchor.map { now.timeIntervalSince(calendar.startOfDay(for: now)) - $0.timeIntervalSince(calendar.startOfDay(for: $0)) } ?? 0
+        let day = { calendar.date(byAdding: .day, value: days, to: $0)! }
+        let instant = { day($0).addingTimeInterval(seconds) }
+        func move(_ ride: Ride) -> Ride {
+            var ride = ride
+            ride.start = instant(ride.start)
+            ride.finish = instant(ride.finish)
+            ride.hours = ride.hours.map { var hour = $0; hour.time = instant(hour.time); return hour }
+            return ride
+        }
+        var moved = self
+        moved.generatedAt = min(instant(generatedAt), now)
+        moved.bestDay = bestDay.map(day)
+        moved.days = self.days.map { var d = $0; d.date = day(d.date); d.ride = d.ride.map(move); return d }
+        moved.tracked = tracked.map { var t = $0; t.ride = move(t.ride); t.checkedAt = t.checkedAt.map(instant); return t }
+        return moved
+    }
 }

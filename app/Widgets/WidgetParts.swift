@@ -8,6 +8,12 @@ import DesignSystem
 // The pieces both variants share (docs/redesign/README.md §8). The widget can't import SharedUI (it
 // links MapLibre), so the score arc follows ScoreGauge's look here.
 
+extension Color {
+    /// The asset catalog's green. `Color.accentColor` stays system blue in a widget: the extension's
+    /// `NSAccentColorName` only reaches the widget gallery.
+    static let rideAccent = Color("AccentColor")
+}
+
 extension RideWidgetSnapshot.Units {
     var locale: Locale { Locale.current.temperatureUnit(temperature) }
     func temperatures(_ c: ClosedRange<Double>) -> String { UnitFormat.temperatureRange(c: c, locale: locale) }
@@ -34,7 +40,7 @@ extension RideBoard.Wind {
     /// RouteProfile's wind colours.
     var tint: Color {
         switch self {
-        case .tailwind: .accentColor
+        case .tailwind: .rideAccent
         case .crosswind: .orange
         case .headwind: .red
         }
@@ -128,12 +134,12 @@ private struct Loop: View {
         let line = { (width: CGFloat) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
         ZStack(alignment: .topLeading) {
             path.stroke(.white, style: line(5.5))
-            path.stroke(Color.accentColor, style: line(3)).widgetAccentable()
+            path.stroke(Color.rideAccent, style: line(3)).widgetAccentable()
             if let progress, progress > 0 {
                 path.trimmedPath(from: 0, to: progress).stroke(Color.committed, style: line(3))
             }
             if let start = path.trimmedPath(from: 0, to: 0.0001).currentPoint {
-                Marker(fill: .white, ring: .accentColor).position(start)
+                Marker(fill: .white, ring: .rideAccent).position(start)
             }
             if let progress, let at = path.trimmedPath(from: 0, to: max(progress, 0.0001)).currentPoint {
                 Marker(fill: .committed, ring: .white).position(at)
@@ -219,7 +225,7 @@ struct ScorePill: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(!meetsMinimums ? AnyShapeStyle(Color.belowMinimums.opacity(0.15))
-                        : best ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.fill.tertiary), in: .capsule)
+                        : best ? AnyShapeStyle(Color.rideAccent) : AnyShapeStyle(.fill.tertiary), in: .capsule)
             .widgetAccentable(best)
     }
 }
@@ -238,7 +244,7 @@ struct ScoreArc: View {
             Group {
                 Circle().trim(from: 0, to: 0.75).stroke(.fill.tertiary, style: line)
                 Circle().trim(from: 0, to: 0.75 * Double(min(max(score, 0), 100)) / 100)
-                    .stroke(warn ? Color.belowMinimums : .accentColor, style: line)
+                    .stroke(warn ? Color.belowMinimums : .rideAccent, style: line)
                     .widgetAccentable()
             }
             .rotationEffect(.degrees(135))
@@ -247,7 +253,7 @@ struct ScoreArc: View {
                 if change != 0 {
                     Text("\(change > 0 ? "▲" : "▼")\(abs(change))")
                         .font(.system(size: size * 0.15, weight: .semibold))
-                        .foregroundStyle(change > 0 ? Color.accentColor : .belowMinimums)
+                        .foregroundStyle(change > 0 ? Color.rideAccent : .belowMinimums)
                 }
             }
         }
@@ -284,7 +290,7 @@ struct Conds: View {
             Image(systemName: warn ? "exclamationmark.triangle.fill" : symbol)
                 .foregroundStyle(warn ? Color.belowMinimums : tint)
                 .frame(width: size * 1.1)
-            Text(text).foregroundStyle(warn ? Color.belowMinimums : textTint)
+            Text(text).foregroundStyle(warn ? Color.belowMinimums : textTint).minimumScaleFactor(0.8)
         }
     }
 
@@ -299,7 +305,7 @@ struct Conds: View {
                 : warnings.contains(.cold) ? "Down to \(units.degrees(ride.temperatureC.lowerBound))"
                 : "Up to \(units.degrees(ride.temperatureC.upperBound))"
             return ("exclamationmark.triangle.fill", text, .belowMinimums)
-        case .betterRide: return ("star.fill", "Better ride found", .accentColor)
+        case .betterRide: return ("star.fill", "Better ride found", .rideAccent)
         case .checking: return ("arrow.clockwise", "Checking…", .secondary)
         case .due: return ("clock", "Check due", .secondary)
         case .failed: return ("exclamationmark.circle", "Couldn't check", .secondary)
