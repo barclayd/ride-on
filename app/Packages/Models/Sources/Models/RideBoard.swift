@@ -250,11 +250,29 @@ public extension RideBoard.Sky {
         case .rain: "Rain"
         }
     }
+
+    var systemImage: String {
+        switch self {
+        case .sunny: "sun.max.fill"
+        case .sunnySpells: "cloud.sun.fill"
+        case .cloudy: "cloud.fill"
+        case .rain: "cloud.rain.fill"
+        }
+    }
 }
 
 public extension RideBoard.Wind {
     /// Sentence case: "Tailwind".
     var title: String { rawValue.capitalized }
+
+    /// Which way it pushes the rider: with them, across, against.
+    var systemImage: String {
+        switch self {
+        case .tailwind: "arrow.up"
+        case .crosswind: "arrow.right"
+        case .headwind: "arrow.down"
+        }
+    }
 }
 
 // MARK: - Sample

@@ -2,7 +2,7 @@
 
 The approved Claude Design canvas, written down screen by screen so the SwiftUI rebuild has one
 place to check against. The canvas is the visual source of truth:
-https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T (version 36). The rules behind it (materials,
+https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T (version 45). The rules behind it (materials,
 colour, type, motion, accessibility) live in [`DESIGN-SYSTEM.md`](../../DESIGN-SYSTEM.md); this
 doc is the *what*, that one is the *how*.
 
@@ -23,7 +23,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)) | #157, #164, #172 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava connection/history implemented, coordinated rollout pending ([contract](../strava.md)) | #167, #172 |
-| 6 | Widgets and Lock Screen | ⬜ | |
+| 6 | Widgets and Lock Screen | ✅ Board (A) and tracked ride (D) in every size, Lock Screen, Live Activity, Control Centre; Dan's on-device check to come | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
@@ -59,7 +59,7 @@ priority, and preserve the boolean on unrelated preference edits.
 | Saved settings (`RiderSettings`, `RiderSettingsStore`) | `app/Packages/Services/Sources/Services/RiderSettings.swift` |
 | Tabs | `app/Packages/Router/Sources/Router/AppTab.swift`: `rides`, `routes`, `preferences` |
 | Accent | `app/App/Assets.xcassets/AccentColor`: `#248A3D` light, `#30D158` dark |
-| Widgets | New widget extension target in `app/project.yml` |
+| Widgets | `app/Widgets/` (the `RideOnWidgets` extension, iOS and macOS); `app/Shared/` (App Group store, `RideLink`, map stills, compiled into the app too); `app/App/WidgetSync.swift` (writes the snapshot, renders stills, runs the Live Activity); `RideWidgetSnapshot` in Models |
 
 ---
 
@@ -469,19 +469,55 @@ Build:
 
 ## 8. Widgets and Lock Screen
 
-<img src="screens/widgets.png" width="720">
+| Light (A above, D below) | Dark (D before the start) |
+|---|---|
+| <img src="screens/widgets-light.png" width="360"> | <img src="screens/widgets-dark.png" width="360"> |
 
-- `systemSmall`: `ScoreGauge` 86, "★ Wed 09:00", "Hilly Loop", "51 km · 9–14° · Tailwind".
-- `systemMedium`: map thumbnail, "★ Best pick · Wed 14 Oct", "Hilly Loop" 86,
-  "09:00 → ~12:00 · 51 km", "9–14° · 15 km/h tailwind · Dry", runner-up "Thu · Potters Bar 79".
-- `accessoryInline`: "Wed 09:00 · Hilly Loop".
-- `accessoryCircular`: gauge 86 with "Wed".
-- `accessoryRectangular`: "Hilly Loop" / "Wed 09:00–12:00" / "9–14° · Tailwind · 86".
-- Tap opens that ride's detail.
+Canvas "A maps + D ride time". Rendered from the real views by a macOS harness, so the stills
+here are MapKit's; on iOS they're the cycle map. One adaptive widget, no configuration: the
+departure board (A) when nothing's tracked, the tracked ride (D) from the moment it's tracked
+until two hours after it ends. Tap opens that ride on Rides (`rideon://ride?pick=<id>`); Track
+opens its Track sheet (`&track=1`). No Directions anywhere.
+
+**A, the board.**
+- `systemSmall` (and StandBy): map band with "★ WED 14" and ‹ ›; "09:00" and the score pill;
+  "Hilly Loop · 51 km"; "Tailwind · Dry", or the day's note.
+- `systemMedium`: "★ WED 14" and ‹ ›, "09:00 → ~12:00" and the pill, name, note, the day strip
+  (day, score; the paged day tinted); the tall map with Track.
+- `systemLarge`: the map with its hour chips, "★ Wed 09:00 → ~12:00 · Hilly Loop 86" and Track;
+  "NEXT 5 DAYS · WED 14 – SUN 18 · Updated 08:12"; a row a day (rain-outs say why), the paged
+  one highlighted. Rows and arrows page the day (`PageDay`); the app clears it when the board changes.
+- `systemExtraLarge` (iPad, Mac): the square map; the board header, "★ BEST · WED 14 OCT" and
+  Track, Flighty's leave → back row, score and conditions, then the days.
+- Lock Screen: inline "★ Wed 09:00 · Hilly Loop · 86"; circular day, time and score;
+  rectangular the same on three lines.
+
+**D, the tracked ride.** The score and conditions lead; the ride time ("~3h ride", "2h 20m to
+go") sits where "leave in" was. The loop's ridden part turns gold, the committed colour.
+- `systemSmall`: map band with the ride time; `ScoreArc` 50 and the three condition rows (sky
+  and temperature, wind, what the last check found).
+- `systemMedium`: "🔔 HILLY LOOP · TODAY", `ScoreArc` 76, conditions, the ride time; the tall map
+  with the wind chip.
+- `systemLarge`: the map with hour chips, ride time and wind; arc, name, conditions; "Along the
+  Ride" hour cells.
+- `systemExtraLarge`: the square map; title and "Checked 07:00", arc 124, name, "51 km · 640 m ·
+  09:00 → ~12:00", conditions, hour cells.
+- Lock Screen: inline name, score, temperatures, wind; circular score gauge; rectangular gauge,
+  name, conditions, ride time.
+- Live Activity and Dynamic Island: from three hours before the start (scheduled, with an alert)
+  to the finish, then "Ride over". The loop on a tile, `ScoreArc`, conditions, "3h ride · 09:00
+  → ~12:00". Compact: the loop and the score.
+- Control Centre (iOS, macOS 26): the tracked ride's name, else "Track Best".
 
 Build:
-- [ ] Widget extension target + timeline from the same `RideBoard` data
-- [ ] All five families
+- [x] `RideOnWidgets` extension (iOS + macOS), App Group `group.com.danbarclay.rideon`
+- [x] `RideWidgetSnapshot` from `RideBoard` + `TrackedRide`, saved by the app; timeline every 5
+  minutes through the ride, at the finish, two hours on and at midnight
+- [x] Map stills rendered by the app while it's open (cycle map on iOS, MapKit on the Mac)
+- [x] Day paging and Track; deep link to Rides
+- [x] Live Activity, Dynamic Island, Control Centre control
+- [ ] Dan's on-device check: the widget gallery, StandBy, Lock Screen, the Live Activity's
+  scheduled start
 
 ## 9. Routes (tab)
 

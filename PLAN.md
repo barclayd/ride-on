@@ -447,6 +447,7 @@ Adopt the keepfresh-ios architecture (`/Users/danbarclay/Documents/Coding/keepfr
 - [x] Accessibility pass: Dynamic Type sweep, VoiceOver labels/chart descriptors, Reduce Motion/Transparency fallbacks, contrast verification over ambiance extremes
 - [x] Performance: snapshot caching, glass container audit, cold-launch time
 - [x] App icon + launch screen (launch ≈ first real screen, per HIG)
+- [x] Widgets (2026-10-24): one adaptive widget — the board, or the tracked ride — in every Home Screen, StandBy and Lock Screen family on iOS and macOS, a Live Activity and Dynamic Island for the tracked ride, a Control Centre control (docs/redesign/README.md §8)
 
 ### Phase 7.5 — Cycle map (planned 2026-10-18)
 A cycle.travel-style map in place of Apple Maps. [`docs/maps/README.md`](docs/maps/README.md) has
@@ -518,7 +519,7 @@ Deterministic world via launch arguments: seeded SwiftData store, fixture foreca
 
 ## Backlog (agreed out of v1)
 
-Multi-day trips · notifications/morning briefing + good-weather alerts · widgets & Live Activities (WidgetKit accented mode, "Start Ride" ControlWidget) · App Intents/Siri ("what should I ride today?") · FIT import (Garmin fit-swift-sdk — license restricts redistribution; revisit if open-sourcing) · Garmin Courses API (program closed; watch) · cycle.travel direct integration (no public API; bespoke deal only) · ML re-ranking from accept/ride history · photos & notes on routes · Apple Watch
+Multi-day trips · notifications/morning briefing + good-weather alerts · App Intents/Siri ("what should I ride today?") · FIT import (Garmin fit-swift-sdk — license restricts redistribution; revisit if open-sourcing) · Garmin Courses API (program closed; watch) · cycle.travel direct integration (no public API; bespoke deal only) · ML re-ranking from accept/ride history · photos & notes on routes · Apple Watch
 
 ## Open questions (non-blocking)
 
