@@ -129,9 +129,13 @@ final class RideOnUITests: XCTestCase {
         app.launch()
 
         app.buttons["Routes"].tap()
-        XCTAssertTrue(routeButton(in: app, startingWith: "Lea Valley Gravel").waitForExistence(timeout: 5))
+        let row = routeButton(in: app, startingWith: "Lea Valley Gravel")
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
 
+        // Search takes the title's place once the list scrolls.
+        row.swipeUp()
         let searchField = app.textFields["routes-search"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
         searchField.tap()
         searchField.typeText("Epping")
 
@@ -139,7 +143,7 @@ final class RideOnUITests: XCTestCase {
         XCTAssertFalse(routeButton(in: app, startingWith: "Lea Valley Gravel").exists)
     }
 
-    func testRoutesPanelCollapsesToItsSearchField() {
+    func testRoutesPanelCollapsesAroundTheTabBar() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
         app.launch()
@@ -148,12 +152,15 @@ final class RideOnUITests: XCTestCase {
         let card = routeButton(in: app, startingWith: "Hilly Loop")
         XCTAssertTrue(card.waitForExistence(timeout: 5))
 
-        // The grabber, at medium.
-        app.buttons["Expand panel"].swipeDown()
+        // The grabber, at medium, flicked down to collapsed: just the grabber above the tab bar.
+        let grabber = app.buttons["Expand panel"]
+        grabber.swipeDown()
         XCTAssertTrue(card.waitForNonExistence(timeout: 5))
-        XCTAssertTrue(app.textFields["routes-search"].isHittable)
+        XCTAssertTrue(grabber.isHittable)
+        XCTAssertTrue(app.buttons["Routes"].isHittable)
 
-        app.buttons["Expand panel"].tap()
+        // A tap brings it up to small, showing the top of the shortlist again.
+        grabber.tap()
         XCTAssertTrue(card.waitForExistence(timeout: 5))
     }
 
