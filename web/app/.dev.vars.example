@@ -1,0 +1,2 @@
+# Local only (bun run dev:session fills it). The BFF uses it on localhost when there's no session cookie.
+DEV_SESSION_TOKEN=
