@@ -83,6 +83,8 @@ struct FloatingPanel<Header: View, Content: View>: View {
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        // Ahead of the button, or a short drag on the grabber lands as a tap and expands the panel.
+        .highPriorityGesture(dragGesture, isEnabled: heights != nil)
         .accessibilityLabel(detent == .large ? "Collapse panel" : "Expand panel")
         .accessibilityActions {
             if detent != .collapsed {
