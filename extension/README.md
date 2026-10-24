@@ -105,11 +105,13 @@ Chrome and Safari share the version from the `extension-v*` tags.
 `.github/workflows/extension.yml` runs on PRs and every merge to `main` that touches `extension/`:
 check, e2e, then the store zip (uploaded as the `extension-zip` artifact). On `main`, if extension
 source changed since the last `extension-v*` tag (tests and docs don't count), it tags the next
-patch version and publishes a GitHub Release with the zip. For a minor or major bump, raise
+patch version and publishes a GitHub Release with the zips. For a minor or major bump, raise
 `version` in `package.json`; the higher one wins.
 
 Store zips are built with `EXTENSION_VERSION=<v> STORE_BUILD=1 bun run zip`: the version is set
-and the manifest `key` dropped. The first upload, listing copy and privacy answers are in
+and the manifest `key` dropped. Releases also carry `*-chrome-unpacked.zip`, the same build with
+the `key` kept: that's the one to load unpacked. Loaded unpacked, the store zip gets an ID from its
+folder path, whose redirect the API doesn't accept, so sign-in fails. The first upload, listing copy and privacy answers are in
 [STORE.md](STORE.md); the privacy policy is [PRIVACY.md](PRIVACY.md).
 
 CI also builds the Safari container unsigned for macOS and the iOS Simulator. Signing and upload
