@@ -21,6 +21,7 @@ struct RideWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "RideWidget", provider: RideProvider()) { entry in
             RideWidgetView(entry: entry)
+                .tint(.rideAccent)
                 .containerBackground(for: .widget) { Color.cardBackground }
         }
         .configurationDisplayName("Ride On")

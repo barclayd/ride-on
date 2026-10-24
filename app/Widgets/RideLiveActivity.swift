@@ -11,6 +11,7 @@ struct RideLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RideActivityAttributes.self) { context in
             LockScreenActivity(context: context)
+                .tint(.rideAccent)
                 .activityBackgroundTint(Color.cardBackground)
         } dynamicIsland: { context in
             let tracked = context.state, units = context.attributes.units
@@ -23,6 +24,7 @@ struct RideLiveActivity: Widget {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.committed)
                         .lineLimit(1)
+                        .padding(.trailing, 8) // clears the expanded island's top corner, which clipped "ride"
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack(spacing: 12) {
@@ -34,7 +36,7 @@ struct RideLiveActivity: Widget {
                 }
             } compactLeading: {
                 LoopShape(loop: context.attributes.loop)
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .stroke(Color.rideAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     .frame(width: 20, height: 20)
             } compactTrailing: {
                 IslandScore(score: tracked.score)
@@ -42,7 +44,7 @@ struct RideLiveActivity: Widget {
                 IslandScore(score: tracked.score)
             }
             .widgetURL(RideLink(pick: tracked.ride.id).url)
-            .keylineTint(.accentColor)
+            .keylineTint(.rideAccent)
         }
     }
 }
@@ -86,7 +88,7 @@ private struct LoopTile: View {
 
     var body: some View {
         LoopShape(loop: loop)
-            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+            .stroke(Color.rideAccent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
             .padding(size * 0.15)
             .frame(width: size, height: size)
             .background(.fill.tertiary, in: .rect(cornerRadius: 12))
@@ -104,7 +106,7 @@ private struct IslandScore: View {
             Text("\(score)")
         }
         .gaugeStyle(.accessoryCircularCapacity)
-        .tint(.accentColor)
+        .tint(.rideAccent)
     }
 }
 

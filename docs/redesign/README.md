@@ -489,7 +489,7 @@ opens its Track sheet (`&track=1`). No Directions anywhere.
   one highlighted. Rows and arrows page the day (`PageDay`); the app clears it when the board changes.
 - `systemExtraLarge` (iPad, Mac): the square map; the board header, "★ BEST · WED 14 OCT" and
   Track, Flighty's leave → back row, score and conditions, then the days.
-- Lock Screen: inline "★ Wed 09:00 · Hilly Loop · 86"; circular day, time and score;
+- Lock Screen: inline "★ Wed 09:00 · 86 · Hilly Loop"; circular day, time and score;
   rectangular the same on three lines.
 
 **D, the tracked ride.** The score and conditions lead; the ride time ("~3h ride", "2h 20m to
@@ -502,8 +502,8 @@ go") sits where "leave in" was. The loop's ridden part turns gold, the committed
   Ride" hour cells.
 - `systemExtraLarge`: the square map; title and "Checked 07:00", arc 124, name, "51 km · 640 m ·
   09:00 → ~12:00", conditions, hour cells.
-- Lock Screen: inline name, score, temperatures, wind; circular score gauge; rectangular gauge,
-  name, conditions, ride time.
+- Lock Screen: inline name, score, temperatures, wind; circular score gauge; rectangular "🔔 86 ·
+  Hilly Loop", conditions, ride time (a gauge left the text too narrow).
 - Live Activity and Dynamic Island: from three hours before the start (scheduled, with an alert)
   to the finish, then "Ride over". The loop on a tile, `ScoreArc`, conditions, "3h ride · 09:00
   → ~12:00". Compact: the loop and the score.
@@ -516,8 +516,18 @@ Build:
 - [x] Map stills rendered by the app while it's open (cycle map on iOS, MapKit on the Mac)
 - [x] Day paging and Track; deep link to Rides
 - [x] Live Activity, Dynamic Island, Control Centre control
-- [ ] Dan's on-device check: the widget gallery, StandBy, Lock Screen, the Live Activity's
-  scheduled start
+- [x] Simulator pass: A and D in every Home Screen size and Lock Screen accessory, Track from the
+  widget, the Live Activity, Dynamic Island and Control Centre control. Launch with `--fixture-world -CycleMapTiles https://maps.ride-on.cc
+  --fixture-now 2026-10-14T07:30:00+01:00` (the fixture world drops tiles; `--fixture-now` moves the
+  sample so that instant is now: 07:30 is the morning of Wed's ride, 10:30 mid-ride). Fixed: the
+  green accent (`Color.accentColor` is system blue in a widget; use `.rideAccent`), the medium
+  board's start time truncating, "No changes" truncating, the expanded island clipping the ride time,
+  A's rectangular cutting the finish, A's inline dropping the score, D's rectangular truncating
+  beside its gauge
+- [ ] The Live Activity's Lock Screen view shows the planned "~3h ride" mid-ride while the widgets
+  say "1h 30m to go"
+- [ ] Dan's on-device check: StandBy, iPad extra large, the Mac desktop, the Live Activity's
+  scheduled start and alert
 
 ## 9. Routes (tab)
 
