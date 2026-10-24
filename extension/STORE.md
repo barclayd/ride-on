@@ -4,6 +4,10 @@ CI builds the upload: every extension change merged to `main` produces a GitHub 
 `extension-v<version>` with `ride-on-extension-<version>-chrome.zip` attached (see README "Release").
 That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store rejects one).
 
+**Item ID:** `ckoikfoejfcaphmdnpomgcmealkecoep`, Unlisted. 0.1.98 was submitted for review on
+24 October 2026 and publishes automatically once it passes. Its sign-in redirect is already in
+`AUTH_CONFIG_JSON.clientRedirects`.
+
 ## First upload (manual, once)
 
 1. Register a developer account at https://chrome.google.com/webstore/devconsole (one-off $5 fee),
@@ -49,6 +53,8 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
   > • Preferences that are yours: distance and climbing, how much rain and sunshine matter, a
   >   minimum temperature (fixed or by month), and rain and gust limits
   > • Best times shown right on cycle.travel's Journeys page, next to each route
+  > • Alerts for the ride you've picked: a notification if rain moves in, gusts pass your limit, it
+  >   turns colder than you like, or a better time opens up
   > • A history of the rides you've logged
   > • Prefer variety? Routes that share roads with your last four weeks of rides score a little
   >   lower, fading as the ride gets older, so you're nudged towards somewhere new
@@ -60,6 +66,12 @@ That zip is built with `STORE_BUILD=1`, so it has no manifest `key` (the store r
   >
   > Needs a Ride On account (sign in with Google or Apple) and a cycle.travel account with saved
   > journeys. Ride On isn't affiliated with cycle.travel.
+- **Homepage URL:** https://github.com/barclayd/ride-on/tree/main/extension
+- **Support URL:** https://github.com/barclayd/ride-on/issues
+
+  These point at GitHub because https://ride-on.cc returned Cloudflare 525 (SSL handshake failed)
+  on 24 October 2026. Switch them to https://ride-on.cc and https://ride-on.cc/contact once the site
+  is up.
 
 ### Images
 
@@ -81,25 +93,43 @@ check-in and next windows, History, Preferences and Rides.
   the weather forecast.
 - **`identity`:** Sign-in to Ride On with Google or Apple via `chrome.identity.launchWebAuthFlow`
   (OAuth with PKCE).
-- **`storage`:** Keeps ride preferences, recent rides and the latest recommendations on the device.
-- **Optional `notifications` (Chrome):** Shows tracked-ride alerts after the rider enables them.
+- **`storage`:** Keeps the session token, ride preferences, recent rides and the latest
+  recommendations on the device.
+- **`unlimitedStorage`:** Cached recommendations, forecasts and ride history can pass the default
+  `storage.local` quota; this stops those writes failing.
+- **`scripting`:** After an update, re-injects the packaged Journeys content script into
+  cycle.travel Journeys tabs that were already open. Never injects remote code.
+- **`alarms`:** Ends a rider's pause at the time they picked, and syncs the pause state daily.
+- **`notifications` (Chrome):** Required, not optional: the Track button on the Journeys page turns
+  alerts on, and a page can't ask for the permission. Shows Web Push alerts for the picked ride.
 - **`nativeMessaging` (Safari):** Links notification setup with the signed Ride On companion app.
-- **Host permission `https://api.ride-on.cc/*`:** The extension's own backend: imports tracked
-  routes and returns weather-based ride recommendations.
-- **Content script on `https://cycle.travel/user/journeys*`:** Reads the user's saved journeys so
-  they can be tracked, and shows each route's best time to ride on that page. Runs on no other page.
+- **Host permissions:** `https://api.ride-on.cc/*` is the extension's own backend (sign-in,
+  route import, recommendations). `https://cycle.travel/*` is for the content script, which runs
+  only on `/user/journeys`: it reads the user's saved journeys so they can be tracked, shows each
+  route's best time to ride, and is re-injected there after an update.
 - **Remote code:** No. All code ships in the package.
 - **Data usage, collected:**
   - Personally identifiable information (name and email from sign-in)
   - Authentication information (session token)
-  - Installation identifiers and push tokens/subscriptions (optional notification delivery)
   - Location (route coordinates, and which routes you rode on which dates)
   - Website content (cycle.travel journeys)
+
+  Push subscriptions for alerts have no matching category on the form; PRIVACY.md covers them.
 - **Data usage, not collected:** health, financial, personal communications, web history, user
   activity.
 - **Certify all three:** not sold or transferred to third parties outside the approved use cases,
   not used for unrelated purposes, not used for creditworthiness.
 - **Privacy policy URL:** https://github.com/barclayd/ride-on/blob/main/extension/PRIVACY.md
+
+## Test instructions
+
+No credentials (any Google or Apple account signs in). Additional instructions:
+
+> No test account needed. 1) Open the toolbar popup and choose Continue with Google (or Apple); any
+> account works. 2) Create a free account at cycle.travel, plan a route and save it as a journey.
+> 3) Open https://cycle.travel/user/journeys and click "+ Track" next to a journey. The chip then
+> shows its best time to ride, and the popup recommends which tracked route to ride and when from
+> the forecast. Routes in Great Britain work best.
 
 ## Later: automatic publishing
 
