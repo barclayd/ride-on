@@ -1,5 +1,6 @@
 import SwiftUI
 import DesignSystem
+import Models
 
 /// DESIGN-SYSTEM.md §6.8: Ideal Temperature's two-handle range on the `ConditionPalette` ramp,
 /// in whole degrees Celsius. SwiftUI has no range slider, so each handle is dragged on its own

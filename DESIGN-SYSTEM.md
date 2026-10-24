@@ -193,8 +193,10 @@ before adding a custom component in code.
    over a wind strip on the same km axis (`RectangleMark` bands: tailwind / crosswind /
    headwind, with a worded legend). Scrubbing with `chartXSelection`.
 7. **`ScoreGauge`** — the score as a ring (`Gauge(.accessoryCircular)` style) on Ride detail
-   (64pt), the Track sheet's ride card (40pt) and in widgets. On Rides the score is a plain number with a `ProgressView` bar and a ▲/▼
-   change badge.
+   (64pt) and the Track sheet's ride card (40pt). On Rides the score is a plain number with a `ProgressView` bar and a ▲/▼
+   change badge. The tracked-ride widgets and Live Activity draw it as an open arc (`ScoreArc`, a
+   270° ring with the score and its ▲/▼ change inside, `.belowMinimums` when a check warns), and the
+   Lock Screen and Dynamic Island as `Gauge(.accessoryCircular)`.
 8. **`TemperatureRange`** — Ideal Temperature's two-handle range control on the temperature
    ramp, plus the Weather-style range bars in "How Your Routes Fit". Custom because SwiftUI
    has no range slider; each handle gets an adjustable accessibility action.
@@ -260,6 +262,14 @@ before adding a custom component in code.
     [`docs/maps/README.md`](docs/maps/README.md).
     `RideHero` stays on satellite imagery and `WindRouteMap` on the muted standard map until
     those decisions say otherwise.
+18. **Widget parts** (`app/Widgets/`, docs/redesign/README.md §8) — the widget extension can't link
+    SharedUI, so its pieces are its own: `MapPanel` (a map still the app renders into the App Group,
+    the cycle map on iOS and MapKit on the Mac, with the loop drawn over it, the ridden part in
+    `.committed` gold, optional hour chips), `ScorePill` (the score on an accent capsule, grey below
+    minimums), `ScoreArc` (§6 #7), `Conds` (sky and temperature, wind, what the last check found:
+    three symbol rows), `HourCells` ("Along the Ride": time, sky, temperature, wind), the board's
+    day rows and pager (`Button(intent:)`, the paged day stays until the board changes) and map chips
+    (white capsules with black text, over the map in both appearances, as the map is light). No glass.
 
 Kept until onboarding is redesigned: **`DialScreen`** (with `AmbianceStyle`).
 
@@ -312,7 +322,7 @@ glass transitions use `.materialize`.
 | **Preferences** (tab) | `Form` with a large title and subtitle "Changes re-rank your rides straight away." Sections: What Makes a Good Ride (Ideal Temperature and Comfortable Wind push to their screens; Sunshine, Rain, Climbing, Recently Ridden are menus; Distance), Deal-Breakers, Riding (average speed stepper, "Use My Strava Average", departure interval), Units (segmented), Connections (Strava, Apple Health), Account. Plumbing is plain settings rows; taste gets a visual screen. |
 | **Ideal Temperature** (push) | Big range readout, `TemperatureRange`, one-line explanation → "How Your Routes Fit" range bars per route → "Deal-Breakers" steppers. Saves automatically; no Done. |
 | **Comfortable Wind** (push) | `WindEnvelope` → "Limits" sliders (headwind, crosswind, gusts) and crosswind sensitivity → "How Your Routes Fit". Saves automatically. |
-| **Widgets & Lock Screen** | `systemSmall` (score ring, day and time, route, one line of conditions), `systemMedium` (map thumbnail, best pick, times, conditions, runner-up). Lock Screen `accessoryInline`, `accessoryCircular` (score ring + day), `accessoryRectangular`. Tap opens the ride. |
+| **Widgets & Lock Screen** | One adaptive widget, no configuration. Nothing tracked: the departure board (A) — the best ride's map, time and score, the days with ‹ › paging, a Track link. A tracked ride (D), until two hours after it ends: the score (`ScoreArc`) and conditions lead, the ride time where "leave in" was, the ridden part of the loop in gold. Every Home Screen size (and StandBy, and XL on iPad and Mac), Lock Screen inline/circular/rectangular, a Live Activity and Dynamic Island from three hours before the start to the finish, and a Control Centre control. Tap opens the ride on Rides; Track opens its Track sheet. Layouts in docs/redesign/README.md §8. |
 | **Routes** (tab) | Full-screen `RoutesMap`, the cycle map on iOS and satellite on the Mac (shortlist in white, selected route in the accent, callout, start marker; `MapControls` top trailing) under the `FloatingPanel`: search capsule ("Search Routes") and "+" menu (Import GPX File, From cycle.travel, Connect Strava) pinned → "Shortlist" with "4 of 12" → `ShortlistCard` carousel → segmented Library N / History N → Library rows, or History rows grouped by month ("October 1 ride") ending with "Weather is the forecast from when you planned each ride, not what you rode in." Selecting a card or row shows it on the map. Focusing search expands the panel. No navigation bar; the tab bar never minimises. |
 | **Onboarding** | Not yet redesigned: one control per screen (`DialScreen`), permissions primed one sentence before each system prompt, location on first Rides entry, Health before ride matching. |
 | **Weather attribution** | Apple Weather mark + "Other data sources" link (https://developer.apple.com/weatherkit/data-source-attribution/) wherever forecast data shows, via `WeatherService.attribution`. |

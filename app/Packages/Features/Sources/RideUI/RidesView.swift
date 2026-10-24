@@ -22,6 +22,7 @@ public struct RidesView: View {
     @State private var shownTracked: String?
     @Namespace private var zoom
     @Environment(RideTracker.self) private var tracker: RideTracker?
+    @Environment(RideRequest.self) private var request: RideRequest?
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.speedSystem) private var speedSystem
     @Environment(\.locale) private var locale
@@ -118,6 +119,16 @@ public struct RidesView: View {
             TrackRideSheet(pick: pick, isTracking: shownTracked == pick.id, replacing: replacing(pick))
         }
         .onAppear { shownTracked = tracker?.ride?.pickID }
+        .onChange(of: request?.pickID, initial: true) { _, id in
+            guard let id, let request else { return }
+            let track = request.track
+            request.pickID = nil
+            guard let pick = (board.picks + board.days.compactMap(\.best)).first(where: { $0.id == id }) else { return }
+            if let day = board.days.first(where: { $0.best?.id == id }) ?? board.days.first(where: { Calendar.current.isDate($0.date, inSameDayAs: pick.start) }) {
+                selectedDay = day.date
+            }
+            if track { tracking = trackable(pick) }
+        }
         .onChange(of: tracker?.ride?.pickID) { if tracking == nil { showTracked() } }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -540,4 +551,19 @@ struct RouteGPX: Transferable {
         RidesView(board: .sample)
     }
     .environment(RideTracker(live: false))
+}
+
+/// A widget tap (docs/redesign/README.md §8): Rides shows the ride's day, and with `track` opens its
+/// Track sheet. The app sets it from `rideon://ride`; Rides clears it once handled.
+@MainActor @Observable
+public final class RideRequest {
+    public var pickID: String?
+    public var track = false
+
+    public init() {}
+
+    public func open(_ pickID: String, track: Bool) {
+        self.track = track
+        self.pickID = pickID
+    }
 }
