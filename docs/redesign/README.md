@@ -509,7 +509,7 @@ go") sits where "leave in" was. The loop's ridden part turns gold, the committed
   → ~12:00". Compact: the loop and the score.
 - Control Centre (iOS, macOS 26): the tracked ride's name, else "Track Best".
 
-Build:
+Build (where it stands, how to test it and what's left: [the widgets handoff](../widgets-handoff.md)):
 - [x] `RideOnWidgets` extension (iOS + macOS), App Group `group.com.danbarclay.rideon`
 - [x] `RideWidgetSnapshot` from `RideBoard` + `TrackedRide`, saved by the app; timeline every 5
   minutes through the ride, at the finish, two hours on and at midnight
@@ -517,10 +517,10 @@ Build:
 - [x] Day paging and Track; deep link to Rides
 - [x] Live Activity, Dynamic Island, Control Centre control
 - [x] Simulator pass: A and D in every Home Screen size and Lock Screen accessory, Track from the
-  widget, the Live Activity, Dynamic Island and Control Centre control. Launch with `--fixture-world -CycleMapTiles https://maps.ride-on.cc
-  --fixture-now 2026-10-14T07:30:00+01:00` (the fixture world drops tiles; `--fixture-now` moves the
-  sample so that instant is now: 07:30 is the morning of Wed's ride, 10:30 mid-ride). Fixed: the
-  green accent (`Color.accentColor` is system blue in a widget; use `.rideAccent`), the medium
+  widget, the Live Activity, Dynamic Island and Control Centre control. Launch with
+  `--fixture-world -CycleMapTiles https://maps.ride-on.cc --fixture-now 2026-10-14T07:30:00+01:00`
+  (the fixture world drops tiles; `--fixture-now` moves the sample so that instant is now: 07:30
+  is the morning of Wed's ride, 10:30 mid-ride). Fixed: the green accent (`Color.accentColor` is system blue in a widget; use `.rideAccent`), the medium
   board's start time truncating, "No changes" truncating, the expanded island clipping the ride time,
   A's rectangular cutting the finish, A's inline dropping the score, D's rectangular truncating
   beside its gauge
