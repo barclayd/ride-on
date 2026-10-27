@@ -1,0 +1,104 @@
+/* The interactive prototype (SPEC §13): ride-on.css's screens, live. The desktop frame fills the window;
+   the phone frame is a 393×852 device, centred and scaled to fit. The guide sits outside both. */
+.proto { position: fixed; inset: 0; overflow: hidden; background: #e8e6dc; font-family: var(--font-sans); }
+/* support.js wraps every text hole in a span: keep it out of ride-on.css's `x span` rules. */
+.proto .sc-interp { all: unset; }
+
+.frame.live.desk { position: absolute; inset: 0; width: auto; height: auto; }
+.frame.live.phone { position: absolute; top: 50%; left: 50%; translate: -50% -50%; scale: var(--k, 1); border-radius: 48px; box-shadow: 0 0 0 10px #1c1c1e, 0 0 0 11px #3a3a3c, 0 30px 80px rgb(0 0 0 / 0.3); }
+@media (max-width: 500px) {
+  .frame.live.phone { top: 0; left: 0; width: 100%; height: 100%; translate: none; scale: 1; border-radius: 0; box-shadow: none; }
+  .frame.live.phone .statusbar { display: none; }
+}
+.live .map { z-index: 0; }
+
+/* Panel and sheet views: push in from the right, pop back from the left. */
+.live .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.live .panel-s { overflow-y: auto; scrollbar-width: none; }
+.live .panel-s.stale { opacity: 0.55; transition: opacity 0.2s; }
+.view.v-push { animation: v-push 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.view.v-pop { animation: v-pop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes v-push { from { opacity: 0; transform: translateX(40px); } }
+@keyframes v-pop { from { opacity: 0; transform: translateX(-40px); } }
+
+.live .sheet { transition: height 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.live .sheet.large { height: calc(100% - 64px); }
+.live .sheet.gone { transform: translateY(110%); }
+.grab { flex: none; padding: 0 0 6px; cursor: grab; touch-action: none; }
+
+.tap, .live .switch, .live .day, .live .dtile, .live .act, .live .seg span, .live .pop-r { cursor: pointer; }
+.live .switch i { transition: left 0.2s; }
+.live .switch { transition: background 0.2s; }
+.live .range { touch-action: none; cursor: pointer; }
+.live .icon-btn { cursor: pointer; }
+.seg.auto span { flex: auto; padding: 0 12px; }
+/* Bands are gone (SPEC §6.2): day bars and factor bars are neutral; route colours are the only hues. */
+.live .dbar { background: var(--label-tertiary); }
+.live .day.sel .dbar { background: var(--label); }
+.live .ftrack span { background: var(--label-secondary); }
+.verdict.close i { color: var(--band-fair); }
+.verdict.low i { color: var(--band-notrec); }
+
+/* Search: the field in the panel header. */
+.search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font: inherit; color: var(--label); padding: 0; }
+.search input::placeholder { color: var(--label-secondary); }
+.search:focus-within { box-shadow: 0 0 0 2px var(--accent); }
+
+/* Library rows: Add shows on hover; always on touch. */
+button.add { border: 0; background: none; font-family: inherit; padding: 6px 4px; cursor: pointer; }
+.row.lib .add { visibility: hidden; }
+.row.lib:hover .add, .phone .row.lib .add { visibility: visible; }
+
+/* Wind compass: the speed sits in the arrow's gap, outside the SVG. */
+.cwrap { position: relative; flex: none; }
+.cspd { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; line-height: 1; }
+.cspd b { font-size: 20px; font-weight: 700; }
+.cspd small { font-size: 9px; font-weight: 600; color: var(--label-secondary); }
+.prof { touch-action: none; cursor: crosshair; }
+
+/* Over the map: the glance card and demo cursor follow the logic's --gx/--gy and --cx/--cy. */
+.live .glance { left: var(--gx, -999px); top: var(--gy, -999px); pointer-events: none; z-index: 2; }
+.live .cursor { left: var(--cx, -999px); top: var(--cy, -999px); z-index: 3; }
+.g-item { display: flex; flex-direction: column; gap: 6px; }
+.g-item + .g-item { border-top: 0.5px solid var(--separator); padding-top: 10px; margin-top: 4px; }
+
+.checkpill, .toast { position: absolute; left: calc(404px + (100% - 404px) / 2); bottom: 116px; translate: -50% 0; z-index: 2; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 999px; font-size: var(--text-subheadline); font-weight: 500; white-space: nowrap; animation: fade-up 0.25s ease-out; }
+.toast { gap: 14px; padding-right: 6px; }
+.toast .btn { height: 30px; padding: 0 12px; font-size: var(--text-subheadline); cursor: pointer; }
+.phone .checkpill, .phone .toast { left: 50%; top: 112px; bottom: auto; }
+@keyframes fade-up { from { opacity: 0; translate: -50% 8px; } }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { rotate: 360deg; } }
+
+.live .pop { left: 404px; top: 72px; z-index: 3; max-height: calc(100% - 96px); }
+.pop-l { min-height: 0; overflow-y: auto; }
+.phone .pop { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: calc(100% - 64px); animation: sheet-up 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+
+.live.desk .daystrip { left: calc(404px + (100% - 404px) / 2); }
+.live .day.off { cursor: default; }
+
+/* The guide: the happy path, one step at a time. Not part of the design. */
+.guide { position: fixed; right: 16px; bottom: 16px; z-index: 10; width: 284px; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 18px; background: #1f1e1d; color: #f5f4ef; font: 13px/1.45 var(--font-sans); box-shadow: 0 12px 40px rgb(0 0 0 / 0.35); }
+.guide .g-h { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+.guide .dots { display: flex; gap: 4px; }
+.guide .dot { width: 6px; height: 6px; border-radius: 50%; background: rgb(255 255 255 / 0.2); }
+.guide .dot.done { background: #30d158; }
+.guide .dot.cur { background: #fff; }
+.guide .g-label { color: rgb(245 244 239 / 0.8); }
+.guide .g-a { display: flex; gap: 8px; align-items: center; }
+.guide button { height: 30px; border: 0; border-radius: 999px; padding: 0 14px; font: inherit; font-weight: 600; cursor: pointer; background: rgb(255 255 255 / 0.12); color: inherit; }
+.guide button.go { background: #30d158; color: #000; }
+.guide .seg { margin-left: auto; background: rgb(255 255 255 / 0.12); }
+.guide .seg span { height: 26px; color: rgb(245 244 239 / 0.75); }
+.guide .seg .on { background: #48484a; color: #fff; }
+@media (max-width: 500px) {
+  .guide { top: 8px; left: 8px; right: 8px; bottom: auto; width: auto; padding: 8px 10px; gap: 6px; }
+  .guide .g-label, .guide .seg { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view.v-push, .view.v-pop, .checkpill, .toast, .phone .pop { animation: none; }
+  .live .sheet, .live .switch, .live .switch i { transition: none; }
+  .spin { animation-duration: 3s; }
+}
