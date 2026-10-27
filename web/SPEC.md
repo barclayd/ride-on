@@ -3,7 +3,9 @@
 Status: spec, 24 October 2026, written from the design interview. The design is done in
 Claude Design (§13), and the `web/app` spike (§14 step 5) is built: Remix 3 on Workers, the BFF
 auth and an empty `MapShell` (see `web/app/README.md`). The v1 screens, `packages/core` and the
-style publishing follow in their own PRs (§14).
+style publishing follow in their own PRs (§14). Where the prototype differs from this spec
+(route identity colours instead of score bands, no veil), the prototype wins: see
+[`HANDOFF.md`](HANDOFF.md), and [`design/`](design/README.md) for its source.
 
 Read with: [`DESIGN-SYSTEM.md`](../DESIGN-SYSTEM.md) (the iOS system this borrows from),
 [`docs/api.md`](../docs/api.md), [`docs/planning-api.md`](../docs/planning-api.md),
