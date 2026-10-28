@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /og
+
+Sitemap: https://ride-on.cc/sitemap-index.xml
