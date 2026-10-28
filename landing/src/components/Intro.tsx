@@ -79,6 +79,24 @@ const cloud: CSSProperties = {
     'radial-gradient(closest-side,light-dark(rgba(90,100,125,0.22),rgba(205,210,225,0.2)),rgba(128,128,128,0))',
 };
 
+// Phones get the compact layout below this width, as in global.css.
+const PHONE = '(width < 700px)';
+
+// The map's hillshade and contour sources, which phones go without.
+const RELIEF = ['terrain', 'contours'];
+
+// A phrase runs from its first letter to the far edge of its emoji.
+const phraseWidth = (row: Element) => {
+  const first = row.firstElementChild as HTMLElement | null;
+  const last = row.lastElementChild as HTMLElement | null;
+  return first && last
+    ? last.offsetLeft + last.offsetWidth - first.offsetLeft
+    : 0;
+};
+
+// Fits the first phrase before the island hydrates, so a phone never paints "Ride on" clipped.
+const FIRST_FIT = `{const f=document.currentScript.previousElementSibling.firstElementChild,[h,c]=f.children,r=c.querySelector('[data-row]'),w=(${phraseWidth})(r),s=Math.min(1,(f.parentElement.offsetWidth-32)/(c.offsetLeft-h.offsetLeft+w)),x=matchMedia('${PHONE}').matches?(c.offsetWidth-w)/2:0;f.style.transform='scale('+s+') translateX('+x+'px)'}`;
+
 // Values at the top of the page, so the server render matches the first frame.
 const I = (raw: number, i: number) =>
   clamp(1 - Math.abs(raw - (i + 0.25)) / 0.7);
@@ -133,6 +151,9 @@ export default function Intro() {
     const mapContainer = one('.intro-map');
     const poster = one('.intro-poster');
     const live = one('.intro-live');
+    const fit = one('[data-fit]');
+    const heading = one('.intro-text h1');
+    const column = one('.intro-list');
     const list = one('[data-list]');
     const cue = one('.intro-cue');
     const fxRoot = one('[data-fx-root]');
@@ -155,11 +176,23 @@ export default function Intro() {
     const groups = all('[data-route]');
     const strokes = groups.map((group) => [...group.querySelectorAll('path')]);
     const starts = groups.map((group) => [...group.querySelectorAll('circle')]);
-    if (!stage || !drift || !mapContainer || !live || !list || !cue || !fxRoot)
+    if (
+      !stage ||
+      !drift ||
+      !mapContainer ||
+      !live ||
+      !fit ||
+      !heading ||
+      !column ||
+      !list ||
+      !cue ||
+      !fxRoot
+    )
       return;
 
     const reducedQuery = matchMedia('(prefers-reduced-motion: reduce)');
     const portraitQuery = matchMedia('(orientation: portrait)');
+    const phoneQuery = matchMedia(PHONE);
     let map: MapLibreMap | undefined;
     let view = { center: toLngLat(route(0).cx, route(0).cy), zoom: 10 };
     let frame = 0;
@@ -167,6 +200,22 @@ export default function Intro() {
     let t = 0;
     let introOn: boolean | undefined;
     let cameraKey = '';
+
+    // Widths for fitting the text, read again whenever the layout changes.
+    let measured = false;
+    let phrases: number[] = [];
+    let [rideWidth, gapWidth, columnWidth] = [0, 0, 0];
+    const measure = () => {
+      measured = true;
+      phrases = rows.map(phraseWidth);
+      rideWidth = heading.offsetWidth;
+      gapWidth = column.offsetLeft - heading.offsetLeft - rideWidth;
+      columnWidth = column.offsetWidth;
+    };
+    const remeasure = () => {
+      measured = false;
+      schedule();
+    };
 
     const render = (raw: number, reduced: boolean) => {
       const k = Math.min(N - 1, Math.floor(raw));
@@ -176,12 +225,25 @@ export default function Intro() {
       );
       const pos = reduced ? Math.round(eased) : eased;
       const act = Math.round(pos);
+      if (!measured) measure();
       const { width, height } = stage.getBoundingClientRect();
 
-      // Text
-      list.style.transform = reduced
-        ? ''
-        : `translateY(${(-pos * 1.18).toFixed(3)}em)`;
+      // Text: scale "Ride on" and the phrase in view to fit one line, and on phones centre the
+      // pair rather than "Ride on" and the widest phrase. Mid-swap it sizes for the wider of the
+      // two phrases, so the one in view never runs off the edge.
+      const at = Math.floor(pos);
+      const swap = pos - at;
+      const from = phrases[at] ?? 0;
+      const to = phrases[at + 1] ?? from;
+      const wide = Math.max(from, to);
+      const phrase =
+        swap < 0.5
+          ? from + (wide - from) * swap * 2
+          : wide + (to - wide) * (swap * 2 - 1);
+      const scale = Math.min(1, (width - 32) / (rideWidth + gapWidth + phrase));
+      const shift = phoneQuery.matches ? (columnWidth - phrase) / 2 : 0;
+      fit.style.transform = `scale(${scale.toFixed(4)}) translateX(${shift.toFixed(1)}px)`;
+      list.style.transform = `translateY(${(-pos * 1.18).toFixed(3)}em)`;
       cue.style.opacity = clamp(1 - raw * 2).toFixed(2);
       WORDS.forEach((word, i) => {
         const row = rows[i];
@@ -368,6 +430,12 @@ export default function Intro() {
       // Past the intro, render once more to settle, then sleep until it scrolls back.
       const on = rect.bottom > height * 0.4;
       const changed = on !== introOn;
+      // The map starts on the way back if the page opened further down, and phones drop it on
+      // the way out.
+      if (changed && introOn !== undefined) {
+        if (on) void startMap();
+        else if (phoneQuery.matches) stopMap();
+      }
       introOn = on;
       if (changed && grid) grid.style.opacity = on ? '' : '0';
       if (!on && !changed) {
@@ -387,14 +455,20 @@ export default function Intro() {
 
     schedule();
     window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
+    window.addEventListener('resize', remeasure);
     document.addEventListener('visibilitychange', schedule);
     reducedQuery.addEventListener('change', schedule);
+    void document.fonts.ready.then(remeasure);
 
-    // The live map is a nice-to-have: skip it on Save-Data, and never let it break the page.
+    // The live map is a nice-to-have: skip it on Save-Data, and never let it break the page. Its
+    // tiles cost a few hundred MB, so phones get a lighter map and hand it back past the intro.
     let cancelled = false;
+    let loading = false;
     const startMap = async () => {
-      if ((navigator as SaveData).connection?.saveData) return;
+      if (map || loading || (navigator as SaveData).connection?.saveData)
+        return;
+      loading = true;
+      const light = phoneQuery.matches;
       try {
         const origin = location.origin;
         const [maplibre, { Protocol }, style] = await Promise.all([
@@ -406,10 +480,19 @@ export default function Intro() {
             (response) => response.json() as Promise<StyleSpecification>,
           ),
         ]);
-        if (cancelled) return;
+        if (cancelled || introOn === false) return;
         maplibre.addProtocol('pmtiles', new Protocol().tile);
         style.sprite = `${origin}/map/sprite`;
         style.glyphs = `${origin}/map/glyphs/{fontstack}/{range}.pbf`;
+        if (light) {
+          // One tile worker rather than Safari's three, and no hillshade or contours.
+          maplibre.setWorkerCount(1);
+          style.layers = style.layers.filter(
+            (layer) =>
+              !('source' in layer) || !RELIEF.includes(layer.source as string),
+          );
+          for (const source of RELIEF) delete style.sources[source];
+        }
         let warned = false;
         map = new maplibre.Map({
           container: live,
@@ -419,6 +502,7 @@ export default function Intro() {
           attributionControl: false,
           fadeDuration: 0,
           renderWorldCopies: false,
+          maxTileCacheZoomLevels: light ? 1 : undefined,
           pixelRatio: Math.min(window.devicePixelRatio, 2),
           // Workers assets redirect any path with an @, so the 2x sprite is published without it.
           transformRequest: (url) => ({
@@ -433,7 +517,14 @@ export default function Intro() {
         map.once('idle', () => mapContainer.classList.add('is-ready'));
       } catch (error) {
         console.warn('Intro map unavailable', error);
+      } finally {
+        loading = false;
       }
+    };
+    const stopMap = () => {
+      map?.remove();
+      map = undefined;
+      mapContainer.classList.remove('is-ready');
     };
     if ('requestIdleCallback' in window)
       requestIdleCallback(() => void startMap());
@@ -443,7 +534,7 @@ export default function Intro() {
       cancelled = true;
       cancelAnimationFrame(frame);
       window.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
+      window.removeEventListener('resize', remeasure);
       document.removeEventListener('visibilitychange', schedule);
       reducedQuery.removeEventListener('change', schedule);
       map?.remove();
@@ -695,51 +786,55 @@ export default function Intro() {
         </div>
 
         <div className="intro-text">
-          <h1>
-            Ride on
-            <span className="visually-hidden">
-              {' '}
-              for sunny days, tailwinds, dry roads, still mornings, warm
-              evenings, dream days and perfect conditions
-            </span>
-          </h1>
-          <div className="intro-list" aria-hidden="true">
-            <div data-list>
-              {WORDS.map((word, i) => (
-                <div
-                  key={word.fx}
-                  className="intro-row"
-                  data-row={i}
-                  style={{
-                    opacity: rowOpacity(i, 0),
-                    color: i === 0 ? 'var(--accent)' : undefined,
-                  }}
-                >
-                  <span className="intro-letters">
-                    {SPLIT.has(word.fx)
-                      ? LETTERS[i]?.map(({ letter, id }) => (
-                          <span key={id} data-letter>
-                            {letter}
-                          </span>
-                        ))
-                      : word.text}
-                  </span>
-                  <span
-                    className="intro-emoji"
-                    data-emoji
-                    style={
-                      i === 0
-                        ? undefined
-                        : { filter: 'grayscale(1)', transform: 'scale(0.75)' }
-                    }
+          <div className="intro-fit" data-fit suppressHydrationWarning>
+            <h1>
+              Ride on
+              <span className="visually-hidden">
+                {' '}
+                for sunny days, tailwinds, dry roads, still mornings, warm
+                evenings, dream days and perfect conditions
+              </span>
+            </h1>
+            <div className="intro-list" aria-hidden="true">
+              <div data-list>
+                {WORDS.map((word, i) => (
+                  <div
+                    key={word.fx}
+                    className="intro-row"
+                    data-row={i}
+                    style={{
+                      opacity: rowOpacity(i, 0),
+                      color: i === 0 ? 'var(--accent)' : undefined,
+                    }}
                   >
-                    {word.emoji}
-                  </span>
-                </div>
-              ))}
+                    <span className="intro-letters">
+                      {SPLIT.has(word.fx)
+                        ? LETTERS[i]?.map(({ letter, id }) => (
+                            <span key={id} data-letter>
+                              {letter}
+                            </span>
+                          ))
+                        : word.text}
+                    </span>
+                    <span
+                      className="intro-emoji"
+                      data-emoji
+                      style={
+                        i === 0
+                          ? undefined
+                          : { filter: 'grayscale(1)', transform: 'scale(0.75)' }
+                      }
+                    >
+                      {word.emoji}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed string, written here */}
+        <script dangerouslySetInnerHTML={{ __html: FIRST_FIT }} />
         <div className="intro-cue">Scroll</div>
       </div>
     </section>
