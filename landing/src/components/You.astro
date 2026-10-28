@@ -1,0 +1,34 @@
+---
+import TempRamp from './TempRamp';
+
+const DEALS = [
+  ['💨', 'Never above 45 km/h gusts'],
+  ['🥶', 'Nothing below 5°C'],
+  ['🌧', 'No more than a 40% chance of rain'],
+];
+---
+
+<section class="section" data-rv>
+  <div class="wrap stack">
+    <div class="you-head">
+      <div class="eyebrow">Made for you</div>
+      <h2 class="h2">
+        Some riders love 12°C and a breeze. Some won't go out under 15°C. Ride On learns your idea of a good day.
+      </h2>
+    </div>
+    <div class="you-grid">
+      <TempRamp client:visible />
+      <div class="card deals">
+        <div class="subtle">Deal-Breakers</div>
+        {
+          DEALS.map(([emoji, text], i) => (
+            <div class="deal rv" style={`--rv-delay: ${200 + i * 120}ms`}>
+              <span aria-hidden="true">{emoji}</span>
+              {text}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</section>

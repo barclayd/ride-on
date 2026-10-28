@@ -1,0 +1,78 @@
+---
+// The 1200×630 social card. scripts/og.ts screenshots this page into public/og.png.
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Ride On" noindex>
+  <div class="og">
+    <div class="og-copy">
+      <div class="og-brand"><span class="dot" aria-hidden="true"></span>Ride On</div>
+      <h1>Pick the right ride.</h1>
+      <p>The forecast along every kilometre of your favourite routes, at the time you'll actually ride them.</p>
+    </div>
+    <div class="phone-frame og-phone">
+      <img src="/screens/rides-dark.webp" alt="" width="276" height="592" />
+    </div>
+  </div>
+</Base>
+
+<style>
+  .og {
+    position: fixed;
+    inset: 0 auto auto 0;
+    z-index: 10;
+    width: 1200px;
+    height: 630px;
+    box-sizing: border-box;
+    padding: 0 0 0 88px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    overflow: hidden;
+    color-scheme: dark;
+    background: radial-gradient(120% 90% at 85% 10%, #0f3d1d 0%, #000 60%);
+    color: #fff;
+  }
+
+  .og-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+    max-width: 640px;
+  }
+
+  .og-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .og-brand .dot {
+    width: 14px;
+    height: 14px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 104px;
+    line-height: 0.95;
+    letter-spacing: -0.05em;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+
+  p {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.35;
+    color: rgba(235, 235, 245, 0.65);
+  }
+
+  .og-phone {
+    flex: none;
+    margin: 150px 110px 0 0;
+    transform: rotate(-4deg);
+  }
+</style>
