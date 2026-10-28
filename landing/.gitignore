@@ -1,0 +1,8 @@
+dist/
+.astro/
+test-results/
+playwright-report/
+# scripts/copy-map.ts copies SharedUI's CycleMap here on every build.
+public/map/
+# ...and vendors MapLibre's ES modules here.
+public/vendor/
