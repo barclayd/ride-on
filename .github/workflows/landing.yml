@@ -64,7 +64,7 @@ jobs:
         run: |
           for attempt in 1 2 3 4 5 6; do
             if curl -fsS https://ride-on.cc | grep -q "<meta name=\"revision\" content=\"$GITHUB_SHA\""; then
-              location=$(curl -fsS -o /dev/null -w '%{redirect_url}' https://www.ride-on.cc/)
+              location=$(curl -fsS -o /dev/null -w '%{redirect_url}' https://www.ride-on.cc/ || true)
               [ "$location" = "https://ride-on.cc/" ] && exit 0
               echo "www redirected to '$location'"
             fi
