@@ -14,7 +14,9 @@ test.afterEach(({ page }) => {
   expect(errors.get(page)).toEqual([]);
 });
 
-/** Scrolls to the bottom half a screen at a time, so every reveal and island runs. */
+/** Scrolls to the bottom half a screen at a time, so every reveal and island runs. Instant, not the
+ * page's smooth scrolling: each smooth scroll cuts off the last, and on a slow runner one dropped
+ * frame can carry it past a whole section before its observer sees it. */
 const scrollThrough = (page: Page) =>
   page.evaluate(async () => {
     const frame = () =>
@@ -22,7 +24,7 @@ const scrollThrough = (page: Page) =>
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
       );
     for (let y = 0; y < document.body.scrollHeight; y += innerHeight / 2) {
-      scrollTo(0, y);
+      scrollTo({ top: y, behavior: 'instant' });
       await frame();
     }
   });
