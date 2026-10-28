@@ -1,12 +1,25 @@
 import type { Map as MapLibreMap, StyleSpecification } from 'maplibre-gl';
 import { type CSSProperties, useEffect, useRef } from 'react';
-import routes from '../data/routes.json';
+import landscape from '../assets/intro/landscape.avif';
+import portrait from '../assets/intro/portrait.avif';
+import posters from '../data/posters.json';
+import {
+  camera,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  OVERHANG,
+  ROUTES,
+  type Route,
+  route,
+  TILE,
+  toLngLat,
+} from '../lib/map';
 import { clamp, easeInOut } from '../lib/math';
 import { sticky } from '../lib/scroll';
 
 type Fx = 'sun' | 'wind' | 'clouds' | 'still' | 'sunset' | 'dream' | 'terms';
 
-// Each phrase pans the map to the fixture route at the same index.
+// Each phrase flies the map to the ride at the same index in src/data/routes.json.
 const WORDS: { text: string; emoji: string; fx: Fx }[] = [
   { text: 'sunny days', emoji: '☀️', fx: 'sun' },
   { text: 'tailwinds', emoji: '💨', fx: 'wind' },
@@ -26,73 +39,6 @@ const SPLIT = new Set<Fx>(['wind', 'dream', 'terms']);
 const LETTERS = WORDS.map((word) =>
   [...word.text].map((letter, j) => ({ letter, id: `${word.fx}-${j}` })),
 );
-
-// Web Mercator in world units (0–1): at zoom z the world is 512·2^z px across, as in MapLibre.
-const TILE = 512;
-const project = ([lng, lat]: [number, number]): [number, number] => {
-  const sin = Math.sin((lat * Math.PI) / 180);
-  return [
-    (lng + 180) / 360,
-    0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI),
-  ];
-};
-
-type Route = {
-  id: string;
-  points: [number, number][];
-  cx: number;
-  cy: number;
-  w: number;
-  h: number;
-};
-const ROUTES: Route[] = routes.map((route) => {
-  const points = (route.coordinates as [number, number][]).map(project);
-  const xs = points.map(([x]) => x);
-  const ys = points.map(([, y]) => y);
-  const [minX, maxX, minY, maxY] = [
-    Math.min(...xs),
-    Math.max(...xs),
-    Math.min(...ys),
-    Math.max(...ys),
-  ];
-  return {
-    id: route.name,
-    points,
-    cx: (minX + maxX) / 2,
-    cy: (minY + maxY) / 2,
-    w: maxX - minX,
-    h: maxY - minY,
-  };
-});
-const route = (i: number) => ROUTES[clamp(i, 0, N - 1)] as Route;
-
-/** Fits a route's bounds into half the stage. */
-const zoomFor = (r: Route, width: number, height: number) =>
-  clamp(
-    Math.log2(Math.min((width * 0.5) / r.w, (height * 0.5) / r.h) / TILE),
-    8,
-    13.5,
-  );
-
-const camera = (pos: number, width: number, height: number) => {
-  const k = Math.min(N - 1, Math.floor(pos));
-  const f = pos - k;
-  const [a, b] = [route(k), route(k + 1)];
-  const [za, zb] = [zoomFor(a, width, height), zoomFor(b, width, height)];
-  return {
-    x: a.cx + (b.cx - a.cx) * f,
-    y: a.cy + (b.cy - a.cy) * f,
-    zoom: za + (zb - za) * f,
-  };
-};
-
-const toLngLat = (x: number, y: number): [number, number] => [
-  x * 360 - 180,
-  (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI,
-];
-
-// The drift wrapper overhangs the stage by 40px on every side.
-const OVERHANG = 80;
 
 const BEAMS = [
   [44, 10, 0],
@@ -142,6 +88,32 @@ const rowOpacity = (i: number, pos: number) => {
   return Math.round(pos) === i ? 1 : Math.max(0.06, 0.3 - 0.07 * (d - 1));
 };
 
+// Each ride draws in as its phrase arrives, then fades back while the map flies to the next.
+const drawn = (raw: number, i: number) => {
+  const from = i ? i - 0.15 : 0;
+  return clamp((raw - from) / (i + 0.5 - from));
+};
+const dim = (raw: number, i: number) => 1 - 0.65 * clamp((raw - i - 0.5) / 0.5);
+
+// The poster's bounds around the first ride, in units of that ride's width, so the stylesheet can
+// place it at the opening zoom before the island hydrates.
+const first = route(0);
+const posterVars = {
+  '--aspect': (first.h / first.w).toFixed(4),
+  '--min': `${(TILE * 2 ** MIN_ZOOM * first.w).toFixed(2)}px`,
+  '--max': `${(TILE * 2 ** MAX_ZOOM * first.w).toFixed(2)}px`,
+  ...Object.fromEntries(
+    Object.entries(posters).flatMap(([name, { x, y, w, h }]) =>
+      Object.entries({
+        x: (x - first.cx) / first.w,
+        y: (y - first.cy) / first.w,
+        w: w / first.w,
+        h: h / first.w,
+      }).map(([key, value]) => [`--${key}-${name[0]}`, value.toFixed(4)]),
+    ),
+  ),
+} as CSSProperties;
+
 type SaveData = Navigator & { connection?: { saveData?: boolean } };
 
 export default function Intro() {
@@ -159,6 +131,8 @@ export default function Intro() {
     const stage = one('.intro-stage');
     const drift = one('.intro-drift');
     const mapContainer = one('.intro-map');
+    const poster = one('.intro-poster');
+    const live = one('.intro-live');
     const list = one('[data-list]');
     const cue = one('.intro-cue');
     const fxRoot = one('[data-fx-root]');
@@ -178,13 +152,14 @@ export default function Intro() {
       one('[data-sunset="glow"]'),
       one('[data-sunset="sun"]'),
     ];
-    const bases = all('[data-base]');
     const groups = all('[data-route]');
     const strokes = groups.map((group) => [...group.querySelectorAll('path')]);
     const starts = groups.map((group) => [...group.querySelectorAll('circle')]);
-    if (!stage || !drift || !mapContainer || !list || !cue || !fxRoot) return;
+    if (!stage || !drift || !mapContainer || !live || !list || !cue || !fxRoot)
+      return;
 
     const reducedQuery = matchMedia('(prefers-reduced-motion: reduce)');
+    const portraitQuery = matchMedia('(orientation: portrait)');
     let map: MapLibreMap | undefined;
     let view = { center: toLngLat(route(0).cx, route(0).cy), zoom: 10 };
     let frame = 0;
@@ -353,7 +328,6 @@ export default function Intro() {
             .join('');
         ROUTES.forEach((r, i) => {
           const d = path(r);
-          bases[i]?.setAttribute('d', d);
           for (const stroke of strokes[i] ?? []) stroke.setAttribute('d', d);
           const [sx, sy] = r.points[0] ?? [0, 0];
           for (const start of starts[i] ?? []) {
@@ -363,13 +337,26 @@ export default function Intro() {
         });
         view = { center: toLngLat(cx, cy), zoom };
         map?.jumpTo(view);
+
+        // The poster only covers the first ride, so it fades as the camera leaves in case the live
+        // map hasn't taken over by then.
+        if (poster) {
+          const bounds = portraitQuery.matches
+            ? posters.portrait
+            : posters.landscape;
+          poster.style.left = `${((bounds.x - cx) * scale + ox).toFixed(1)}px`;
+          poster.style.top = `${((bounds.y - cy) * scale + oy).toFixed(1)}px`;
+          poster.style.width = `${(bounds.w * scale).toFixed(1)}px`;
+          poster.style.height = `${(bounds.h * scale).toFixed(1)}px`;
+          poster.style.opacity = clamp(1 - pos * 2.5).toFixed(2);
+        }
       }
       groups.forEach((group, i) => {
-        const opacity = reduced ? (i === act ? 1 : 0) : I(raw, i);
-        const offset = reduced ? 0 : 1 - easeInOut(clamp(P(raw, i) * 1.7));
-        group.style.opacity = opacity.toFixed(2);
+        const draw = reduced ? +(i <= act) : drawn(raw, i);
+        const fade = reduced ? (i < act ? 0.35 : 1) : dim(raw, i);
+        group.style.opacity = (clamp(draw * 20) * fade).toFixed(2);
         for (const stroke of strokes[i] ?? [])
-          stroke.style.strokeDashoffset = offset.toFixed(3);
+          stroke.style.strokeDashoffset = (1 - draw).toFixed(3);
       });
     };
 
@@ -425,7 +412,7 @@ export default function Intro() {
         style.glyphs = `${origin}/map/glyphs/{fontstack}/{range}.pbf`;
         let warned = false;
         map = new maplibre.Map({
-          container: mapContainer,
+          container: live,
           style,
           ...view,
           interactive: false,
@@ -442,7 +429,8 @@ export default function Intro() {
           if (!warned) console.warn('Intro map', error);
           warned = true;
         });
-        map.once('load', () => mapContainer.classList.add('is-ready'));
+        // Swap the poster out once the first view's tiles have drawn.
+        map.once('idle', () => mapContainer.classList.add('is-ready'));
       } catch (error) {
         console.warn('Intro map unavailable', error);
       }
@@ -472,18 +460,23 @@ export default function Intro() {
       <div className="intro-stage">
         <div className="intro-layer" aria-hidden="true">
           <div className="intro-drift">
-            <div className="intro-map" />
+            <div className="intro-map">
+              <picture>
+                <source media="(orientation: portrait)" srcSet={portrait.src} />
+                <img
+                  className="intro-poster"
+                  src={landscape.src}
+                  alt=""
+                  fetchPriority="high"
+                  style={posterVars}
+                />
+              </picture>
+              <div className="intro-live" />
+            </div>
             <svg className="intro-routes">
-              <title>Fixture routes</title>
+              <title>Rides</title>
               {ROUTES.map((r) => (
-                <path key={r.id} className="base" data-base />
-              ))}
-              {ROUTES.map((r, i) => (
-                <g
-                  key={r.id}
-                  data-route
-                  style={{ opacity: I(0, i).toFixed(2) }}
-                >
+                <g key={r.id} data-route style={{ opacity: 0 }}>
                   <path
                     className="casing"
                     pathLength={1}

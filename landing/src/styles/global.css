@@ -244,6 +244,7 @@ button {
   top: 0;
   height: 100svh;
   overflow: hidden;
+  container-type: size;
 }
 
 .intro-layer {
@@ -261,29 +262,63 @@ button {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.8s ease;
+  opacity: 0.7;
   filter: grayscale(0.25) contrast(0.95);
 }
 
-.intro-map.is-ready {
-  opacity: 0.55;
+@media (prefers-color-scheme: dark) {
+  .intro-map {
+    opacity: 1;
+    filter: grayscale(0.35) brightness(0.42) contrast(1.15);
+  }
 }
 
-.intro-map canvas {
+/* A render of the opening view, so there's a map before MapLibre loads. Until the island takes
+   over it's placed here at the first ride's zoom: --s is that ride's width in px, as the intro
+   fits it into half the stage. */
+.intro-poster {
+  --x: var(--x-l);
+  --y: var(--y-l);
+  --w: var(--w-l);
+  --h: var(--h-l);
+  --s: clamp(var(--min), min(50cqw, 50cqh / var(--aspect)), var(--max));
+  position: absolute;
+  left: calc(50% + var(--s) * var(--x));
+  top: calc(50% + var(--s) * var(--y));
+  width: calc(var(--s) * var(--w));
+  height: calc(var(--s) * var(--h));
+  max-width: none;
+}
+
+@media (orientation: portrait) {
+  .intro-poster {
+    --x: var(--x-p);
+    --y: var(--y-p);
+    --w: var(--w-p);
+    --h: var(--h-p);
+  }
+}
+
+.intro-live {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.intro-live canvas {
   position: absolute;
   left: 0;
   top: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  .intro-map {
-    filter: grayscale(0.35) brightness(0.42) contrast(1.15);
-  }
+.is-ready .intro-live {
+  opacity: 1;
+}
 
-  .intro-map.is-ready {
-    opacity: 1;
-  }
+.is-ready .intro-poster {
+  visibility: hidden;
+  transition: visibility 0s 0.8s;
 }
 
 .intro-routes {
@@ -295,11 +330,6 @@ button {
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
-}
-
-.intro-routes .base {
-  stroke: light-dark(rgba(60, 60, 67, 0.5), rgba(255, 255, 255, 0.5));
-  stroke-width: 2.5;
 }
 
 .intro-routes .casing {

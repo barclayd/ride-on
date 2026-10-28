@@ -2,6 +2,9 @@
 // openstreetmap.de OSRM bike profile. Each starts somewhere different and none share roads, so every
 // phrase reads as its own ride. Run with `bun run routes` after changing a waypoint.
 
+// A module, for the top-level awaits.
+export {};
+
 type LngLat = [number, number];
 
 const ROUTES: { name: string; via: LngLat[] }[] = [
