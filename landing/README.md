@@ -25,8 +25,9 @@ bun run deploy     # build + wrangler deploy (CI does this on main)
   `bun run routes`
 - `src/worker.ts` is the `ride-on-landing` Worker: www → apex 301, security headers, immutable
   caching for `/_astro/*`, everything else from the static assets
-- `src/lib/site.ts` has the site name, copy for meta tags and the Cloudflare Web Analytics token
-  (the beacon only renders when it's set)
+- `src/lib/site.ts` has the site name and copy for meta tags
+- Cloudflare Web Analytics is on for the ride-on.cc zone and injects its beacon automatically
+  (excluding EU visitors), so the page doesn't include one
 
 Still placeholders: the beta form (stores nothing), "Open the web app", and the Privacy and Terms
 links.

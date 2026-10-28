@@ -1,6 +1,6 @@
 ---
 import '../styles/global.css';
-import { CF_BEACON_TOKEN, SITE } from '../lib/site';
+import { SITE } from '../lib/site';
 
 interface Props {
   title?: string;
@@ -67,16 +67,6 @@ const revision = process.env.GITHUB_SHA ?? 'dev';
         }
       </style>
     </noscript>
-    {
-      CF_BEACON_TOKEN && (
-        <script
-          is:inline
-          defer
-          src="https://static.cloudflareinsights.com/beacon.min.js"
-          data-cf-beacon={JSON.stringify({ token: CF_BEACON_TOKEN })}
-        />
-      )
-    }
   </head>
   <body>
     <div id="grid" class="grid" aria-hidden="true"></div>
