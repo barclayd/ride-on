@@ -111,11 +111,15 @@ test('shows everything at once with reduced motion', async ({ page }) => {
   expect(unseen).toBe(0);
 });
 
-for (const width of [375, 430]) {
+for (const [width, height] of [
+  [375, 667],
+  [390, 844],
+  [430, 932],
+] as const) {
   test(`fits a ${width}px phone without sideways scrolling`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width, height: 900 });
+    await page.setViewportSize({ width, height });
     await page.goto('/');
     await scrollThrough(page);
     const overflow = await page.evaluate(
@@ -123,7 +127,49 @@ for (const width of [375, 430]) {
     );
     expect(overflow).toBeLessThanOrEqual(0);
   });
+
+  test(`keeps each intro phrase on a ${width}px screen`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    await hydrated(page, '.intro');
+    // Steps through the intro, noting how far "Ride on" or the phrase in view reach off screen.
+    const overhang = await page.evaluate(async () => {
+      const frame = () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        );
+      const intro = document.querySelector<HTMLElement>('.intro');
+      const heading = document.querySelector('.intro-text h1');
+      const rows = [...document.querySelectorAll<HTMLElement>('[data-row]')];
+      if (!intro || !heading) return Infinity;
+      let worst = -Infinity;
+      for (let step = 0; step <= 24; step++) {
+        const top = ((intro.offsetHeight - innerHeight) * step) / 24;
+        scrollTo({ top, behavior: 'instant' });
+        await frame();
+        const row = rows.find((r) => Number(r.style.opacity) === 1);
+        const end = row?.lastElementChild?.getBoundingClientRect().right;
+        if (end === undefined) return Infinity;
+        const start = heading.getBoundingClientRect().left;
+        worst = Math.max(worst, -start, end - innerWidth);
+      }
+      return worst;
+    });
+    expect(overhang).toBeLessThanOrEqual(0);
+  });
 }
+
+test('keeps the nav on one line at 320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/');
+  const middles = await page.locator('.nav > :visible').evaluateAll((items) =>
+    items.map((item) => {
+      const { top, height } = item.getBoundingClientRect();
+      return Math.round(top + height / 2);
+    }),
+  );
+  expect(new Set(middles).size).toBe(1);
+});
 
 test('serves the 404 page', async ({ page }) => {
   const response = await page.goto('/nowhere');
