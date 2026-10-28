@@ -7,7 +7,7 @@
     "build": "bun run map && astro build",
     "preview": "astro preview",
     "map": "bun scripts/copy-map.ts",
-    "routes": "bun scripts/extract-routes.ts",
+    "routes": "bun scripts/plot-routes.ts",
     "og": "bun scripts/og.ts",
     "check": "bun run types && bun run lint",
     "types": "astro check",
