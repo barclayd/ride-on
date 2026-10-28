@@ -1,0 +1,64 @@
+---
+import ScoreRing from './ScoreRing';
+
+const BANDS = [
+  ['95–100', 'Almost ideal for you', 'var(--green)'],
+  ['85–94', 'Very comfortable', 'var(--green)'],
+  ['70–84', 'Good, with noticeable compromises', 'var(--ink)'],
+  ['50–69', 'Rideable, but with real discomfort', 'light-dark(#a07800, #ffd60a)'],
+  ['Below 50', 'A poor match for your preferences', 'light-dark(#c25e00, #ff9f0a)'],
+];
+const FACTORS = [
+  ['Rain', 100, 'Dry throughout.'],
+  ['Temperature', 96, '12–14° all morning, inside your range.'],
+  ['Gusts', 88, 'Peaking at 28 km/h, under your 45 km/h limit.'],
+  ['Wind', 78, 'Light crosswind for most of the ride, −6'],
+  ['Sunshine', 70, 'Sunny spells from 10:00, −5'],
+] as const;
+---
+
+<section class="section" data-rv>
+  <div class="wrap split">
+    <div class="copy">
+      <div class="eyebrow">A score you can trust</div>
+      <h2 class="h2">Not a black box. Every score shows its working.</h2>
+      <p class="lede">Deal-breakers always come first. A ride that breaks one still shows, labelled with the reason.</p>
+      <div class="minimums">
+        <strong>⚠ Below your minimums</strong><span>Braintree · Gusts 48 km/h</span>
+      </div>
+      <div class="bands tabular">
+        {
+          BANDS.map(([range, meaning, colour]) => (
+            <div>
+              <span style={`color: ${colour}`}>{range}</span>
+              <span>{meaning}</span>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+    <div class="card score-card tabular">
+      <div class="score-head">
+        <ScoreRing client:visible />
+        <div class="score-meta">
+          <h3 class="score-title">Why It Scored 86</h3>
+          <div class="subtle">Hilly Loop · Wed 14 Oct · 09:00</div>
+        </div>
+      </div>
+      {
+        FACTORS.map(([name, value, note], i) => (
+          <div class="factor">
+            <div class="factor-head">
+              <span>{name}</span>
+              <span>{value}</span>
+            </div>
+            <div class="bar" style={`--w: ${value}%; --delay: ${300 + i * 120}ms`} aria-hidden="true">
+              <div class="bar-fill" />
+            </div>
+            <div class="factor-note">{note}</div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

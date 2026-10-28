@@ -1,0 +1,29 @@
+---
+const STEPS = [
+  { emoji: '🗺️', title: 'Shortlist your routes', body: 'Bring the rides you love, up to 12.' },
+  {
+    emoji: '🎚️',
+    title: 'Say what a good ride feels like',
+    body: 'Temperature, wind, rain, sun, and your deal-breakers.',
+  },
+  { emoji: '🏁', title: 'Get the best pick', body: 'Which route, which day, when to leave, and why.' },
+];
+---
+
+<section class="section" data-rv>
+  <div class="wrap stack">
+    <h2 class="h2 rv">Three steps. Then just ride.</h2>
+    <div class="steps">
+      {
+        STEPS.map((step, i) => (
+          <div class="card step rv" style={`--rv-from: translateY(45px); --rv-delay: ${120 + i * 120}ms`}>
+            <div class="step-emoji" aria-hidden="true">{step.emoji}</div>
+            <div class="step-number tabular">0{i + 1}</div>
+            <h3 class="step-title">{step.title}</h3>
+            <p class="step-body">{step.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>
