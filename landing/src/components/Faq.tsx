@@ -2,6 +2,14 @@ import { useId, useState } from 'react';
 
 const FAQ = [
   [
+    'Is it free?',
+    'Yes. Ride On is free, with Apple Weather forecasts included. Paid upgrades add Met Office forecasts.',
+  ],
+  [
+    'What can I use it on?',
+    'A native iOS app and Chrome extensions, with a web app coming soon.',
+  ],
+  [
     'Does it give directions?',
     'No. It recommends; use your bike computer or favourite app to navigate.',
   ],
@@ -12,10 +20,9 @@ const FAQ = [
   ],
   [
     'Which weather does it use?',
-    'Apple Weather by default, or the Met Office.',
+    'Apple Weather by default, at no cost. Met Office forecasts are available as a paid upgrade.',
   ],
   ['Do I need Strava?', "No. It's optional, for logging rides."],
-  ['What does it cost?', 'To be decided.'],
 ] as const;
 
 /** One answer open at a time. */
