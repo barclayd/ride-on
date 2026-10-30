@@ -44,3 +44,11 @@ rewrites `request.url` to `app.ride-on.cc`.
 bun run check         # types, lint, tests
 bun run build:check   # wrangler deploy --dry-run
 ```
+
+`web-ci` runs both on every PR that touches the app.
+
+## Deploying
+
+Merging to `main` deploys the app to app.ride-on.cc (`.github/workflows/web-deploy.yml`). The
+workflow tags the version with the commit, then checks the edge serves that build's client bundle.
+`bun run deploy` still works by hand, but ask Dan first.

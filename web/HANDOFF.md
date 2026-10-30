@@ -52,9 +52,13 @@ Read it with:
      applied again to the server's newer list.
    - Hovering a row lifts its line on the map, and hovering a line lights its row.
    - Icons are inline `lucide-static` SVGs, and the tokens now have `--route-1` to `--route-12`.
-
-Screens 1 and 2 aren't deployed yet: production still runs the spike until Dan runs `bun run deploy`
-in `app/`.
+7. **Screens 1 and 2 are live.** They were deployed on 30 October 2026, as version `cdad6479`.
+8. **CI deploys the app.**
+   - `web-ci` runs `bun run check` and `bun run build:check` on every PR that touches the app.
+   - `web-deploy` deploys on every merge to `main`, tagged with the commit. It then checks that the
+     edge serves that build's client bundle and that `/` and `/api/*` still need a session.
+   - Both workflows also watch the files `build.ts` copies in: SharedUI's cycle map style and the
+     extension's favicon.
 
 ## Decisions since the spec
 
@@ -122,7 +126,7 @@ browser:
 - Sign-out.
 - `/api/*` with the session.
 
-Each later deploy (`bun run deploy` in `app/`) is outward-facing, so **ask Dan first**.
+Merging to `main` now deploys the app, so there's no separate deploy step.
 
 ### 2. The v1 screens (SPEC §14 step 6)
 
@@ -180,11 +184,6 @@ This is SPEC §13 step 2.
   with Dan first. Once it's live, the app stops copying SharedUI's style.
 - **Create `packages/core` (`@ride-on/core`)** and move the extension onto it.
 
-### 6. CI
-
-No CI covers `web/` yet. A workflow that runs `bun run check` and `bun run build:check` in `app/`
-would be cheap to add.
-
 ## Gotchas from the spike
 
 - **`wrangler dev` rewrites `request.url` and `Host`** to the first route's host, app.ride-on.cc,
@@ -223,7 +222,7 @@ would be cheap to add.
   `gh pr merge --merge`.
 - **Ask Dan before anything outward-facing:**
   - production secrets
-  - deploys
+  - manual deploys (`bun run deploy`). Deploys through `web-deploy` on merge are agreed.
   - publishing to the maps.ride-on.cc bucket
 - **Secrets** go in an ignored `.dev.vars` or in Worker secrets.
 - **Never log** tokens, GPX bodies, forecast bodies or auth headers (`worker/CLAUDE.md`).
