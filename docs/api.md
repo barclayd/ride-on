@@ -1,5 +1,7 @@
 # Ride On API MVP
 
+API v0.42.0 moves a comparison to Apple Weather when the rider's Met Office choice is out of quota, instead of returning every route as `unassessable`. `weather.fallback` (`{ reason: "rate-limited", retryAt }`, or `null`) says when this happened; `weather.requestedProviderId` keeps the rider's choice. See [provider choices](weather-provider-choices.md). Scoring stays `comfort-v0.17`.
+
 API v0.41.0 adds `conditions.skyConditionShares`: known sky categories retain their distance shares when symbols are missing, alongside an explicit `unknown` share. This supports the extension's sky timeline and “Data unavailable” legend. Scoring stays `comfort-v0.17`; fixed departures, alert editing and per-device switches are unchanged.
 
 API v0.40.0 keeps the tracked route's recommendation on its fixed departure, suggests better times on that route and supports editing its alert switches without replacing the plan. See [fixed departures](#fixed-departures-v0400) and [alert edits](#edit-tracked-ride-alerts-v0400). Per-device switches from v0.39.0 remain unchanged. Scoring stays `comfort-v0.17`.
@@ -1544,6 +1546,10 @@ label; exact technical provenance remains in `weather.selectedSource`.
 `weather: { "mode": "ordered-fallback", "providerIds": ["met-office", "another-provider"] }`
 allows that exact ordered list. The source-selection layer chooses one provider
 for the entire comparison, with no field mixing or silent outside fallback.
+The exception is a public provider choice that runs out of quota: the whole
+comparison then moves to Apple Weather and `weather.fallback` reports
+`{ reason: "rate-limited", retryAt }` (`null` otherwise). See
+[provider choices](weather-provider-choices.md).
 New profiles and requests without a profile default to strict `apple-weather`.
 Existing saved choices remain unchanged, including Dan's strict Met Office policy.
 

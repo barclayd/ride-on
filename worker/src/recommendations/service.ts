@@ -13,6 +13,8 @@ import {
   withForecastCache,
 } from '../weather/cache.ts';
 import {
+  quotaFallbackProviderId,
+  weatherProviderChoices,
   weatherProviderForSource,
   weatherProviderIdForPolicy,
 } from '../weather/choices.ts';
@@ -25,7 +27,7 @@ import {
   createWeatherProviders,
   forecastHorizonHours,
 } from '../weather/providers.ts';
-import { getForecastForPolicy } from '../weather/source-policy.ts';
+import { getForecastForPolicy, rateLimited } from '../weather/source-policy.ts';
 import { planDepartures } from './daylight.ts';
 import { recommendRides, requiredWeatherFor } from './engine.ts';
 import { forecastRefreshSeconds } from './freshness.ts';
@@ -58,6 +60,7 @@ export type ComparisonContext = {
     providers?: Readonly<Record<string, ForecastProvider>>;
   };
 };
+type ForecastSettings = Pick<RecommendationInput, 'weather' | 'forecast'>;
 /** One history snapshot and one provider selection for a bounded set of date/window
  * comparisons. Callers supply identical settings apart from their dates and windows. */
 export const evaluateComparisons = async (
@@ -80,13 +83,13 @@ export const evaluateComparisons = async (
     startedAt,
     input.timeZone,
   );
-  const requestedQuality = {
+  const qualityFor = (forecast: RecommendationInput['forecast']) => ({
     ...quality,
     maxAgeSeconds:
-      input.forecast.freshnessBasis === 'retrieval-time'
+      forecast.freshnessBasis === 'retrieval-time'
         ? refreshAfterSeconds
         : quality.maxAgeSeconds,
-  };
+  });
   const plans = inputs.flatMap((dayInput) =>
     routes.map((route) => ({
       route,
@@ -195,23 +198,71 @@ export const evaluateComparisons = async (
         ).toISOString(),
       }
     : null;
-  const request: ForecastRequest | null = range
-    ? {
-        locations,
-        range,
-        required: requiredWeatherFor(input),
-        ...requestedQuality,
-        freshnessBasis: input.forecast.freshnessBasis,
-      }
-    : null;
-  const selected = request
-    ? await getForecastForPolicy(
-        providers,
-        input.weather,
-        request,
-        AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
-      )
-    : null;
+  // One deadline covers the rider's provider and any quota fallback.
+  const deadline = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
+  const fetchForecast = async (settings: ForecastSettings) => {
+    const request: ForecastRequest | null = range
+      ? {
+          locations,
+          range,
+          required: requiredWeatherFor({ ...input, ...settings }),
+          ...qualityFor(settings.forecast),
+          freshnessBasis: settings.forecast.freshnessBasis,
+        }
+      : null;
+    const selected = request
+      ? await getForecastForPolicy(
+          providers,
+          settings.weather,
+          request,
+          deadline,
+        )
+      : null;
+    return { settings, request, selected };
+  };
+  const requestedProviderId = weatherProviderIdForPolicy(input.weather);
+  let forecast = await fetchForecast({
+    weather: input.weather,
+    forecast: input.forecast,
+  });
+  // A provider out of quota can't finish this comparison, so the whole comparison
+  // moves to Apple Weather: one source per comparison, never a mix of locations.
+  // Advanced ordered-fallback policies (no provider choice) keep their own list.
+  const quota =
+    requestedProviderId && requestedProviderId !== quotaFallbackProviderId
+      ? rateLimited(forecast.selected)
+      : null;
+  let fallback: { reason: 'rate-limited'; retryAt: string | null } | null =
+    null;
+  if (quota) {
+    const next = await fetchForecast(
+      weatherProviderChoices[quotaFallbackProviderId].settings,
+    );
+    const attempts = [
+      ...(forecast.selected?.attempts ?? []),
+      ...(next.selected?.attempts ?? []),
+    ];
+    const usable = next.selected?.attempts.some(
+      (attempt) => attempt.status !== 'unavailable',
+    );
+    const kept = usable ? next : forecast;
+    forecast = {
+      ...kept,
+      selected: kept.selected && { ...kept.selected, attempts },
+    };
+    if (usable)
+      fallback = {
+        reason: 'rate-limited',
+        retryAt:
+          quota.retryAfterSeconds === null
+            ? null
+            : new Date(
+                now().getTime() + quota.retryAfterSeconds * 1000,
+              ).toISOString(),
+      };
+  }
+  const { settings, request, selected } = forecast;
+  const requestedQuality = qualityFor(settings.forecast);
   const results = selected?.results ?? [];
   const forecastCheckedAt = now().getTime();
   // Until then the same request reuses this evidence, so clients can keep the ranking. Null: ask again.
@@ -223,7 +274,7 @@ export const evaluateComparisons = async (
             result,
             {
               ...requestedQuality,
-              freshnessBasis: input.forecast.freshnessBasis,
+              freshnessBasis: settings.forecast.freshnessBasis,
             },
             refreshAfterSeconds,
           ),
@@ -235,7 +286,8 @@ export const evaluateComparisons = async (
   const outlines = new Map(
     routes.map((route) => [route.id, routeOutline(route)]),
   );
-  const comparisons = inputs.map((dayInput) => {
+  const comparisons = inputs.map((requested) => {
+    const dayInput = { ...requested, ...settings };
     const dayTtl = forecastRefreshSeconds(
       [dayInput.date],
       startedAt,
@@ -247,7 +299,10 @@ export const evaluateComparisons = async (
       result.status === 'unavailable' ||
       isFreshForecast(
         result,
-        { ...requestedQuality, freshnessBasis: input.forecast.freshnessBasis },
+        {
+          ...requestedQuality,
+          freshnessBasis: settings.forecast.freshnessBasis,
+        },
         forecastCheckedAt,
         dayTtl,
       )
@@ -306,6 +361,8 @@ export const evaluateComparisons = async (
   );
   return {
     comparisons,
+    /** The forecast settings actually used: Apple Weather's after a quota fallback. */
+    forecast: settings.forecast,
     pinnedRefreshAt: pinnedRoute
       ? (() => {
           const ids = new Set(pinnedRoute.weatherLocations.map((l) => l.id));
@@ -325,7 +382,7 @@ export const evaluateComparisons = async (
                       r,
                       {
                         ...requestedQuality,
-                        freshnessBasis: input.forecast.freshnessBasis,
+                        freshnessBasis: settings.forecast.freshnessBasis,
                       },
                       refreshAfterSeconds,
                     ),
@@ -340,7 +397,7 @@ export const evaluateComparisons = async (
       pinned && pinnedRoute
         ? recommendRides(
             [pinnedRoute],
-            pinned.input,
+            { ...pinned.input, ...settings },
             results,
             startedAt.getTime(),
             quality.maxLocationDistanceM,
@@ -362,13 +419,14 @@ export const evaluateComparisons = async (
       ...summarizeProvenance(results),
       snapshotPolicy: 'provider-horizon',
       requestedPolicy: input.weather,
-      requestedProviderId: weatherProviderIdForPolicy(input.weather),
+      requestedProviderId,
       selectedProvider: weatherProviderForSource(selected?.source.providerId),
       selectedSource: selected?.source ?? null,
       attempts: selected?.attempts ?? [],
+      fallback,
       quality: {
         ...requestedQuality,
-        freshnessBasis: input.forecast.freshnessBasis,
+        freshnessBasis: settings.forecast.freshnessBasis,
         refreshAfterSeconds,
       },
       refreshAt,
