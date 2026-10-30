@@ -1,5 +1,6 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { z } from 'zod';
+import { experienceSchema } from './experience.ts';
 import { geometrySchema, type RideGeometry } from './geometry.ts';
 import { ridePlanSchema } from './plan.ts';
 
@@ -29,6 +30,7 @@ export const createRideSchema = z
     riddenOn: rideDate,
     timeZone: rideTimeZone,
     plan: ridePlanSchema.nullable().default(null),
+    recommendationId: z.uuid().optional(),
   })
   .refine(
     (input) => {
@@ -74,6 +76,11 @@ type RideRow = {
   request_hash: string;
   plan_json: string | null;
   geometry_available: number;
+  experience_json: string | null;
+  experience_version: number;
+  recommendation_id: string | null;
+  weather_status?: string | null;
+  weather_reason?: string | null;
 };
 export const publicRide = (row: RideRow) => ({
   id: row.id,
@@ -86,12 +93,23 @@ export const publicRide = (row: RideRow) => ({
   updatedAt: row.updated_at,
   plan: row.plan_json ? ridePlanSchema.parse(JSON.parse(row.plan_json)) : null,
   planSource: row.plan_json ? ('client-supplied' as const) : null,
+  recommendationId: row.recommendation_id ?? null,
+  experience: row.experience_json
+    ? experienceSchema.parse(JSON.parse(row.experience_json))
+    : null,
+  experienceVersion: row.experience_version ?? 0,
+  weatherEnrichment: {
+    status: row.weather_status ?? 'not-requested',
+    reason: row.weather_reason ?? null,
+  },
   source: { type: 'manual' as const },
   geometryBasis: 'assumed-saved-route' as const,
   geometryStatus: row.geometry_available ? 'available' : 'unavailable',
 });
 const columns = `r.*, EXISTS(SELECT 1 FROM ride_geometries g
-  WHERE g.owner_id = r.owner_id AND g.source_hash = r.source_hash) AS geometry_available`;
+  WHERE g.owner_id = r.owner_id AND g.source_hash = r.source_hash) AS geometry_available,
+  (SELECT status FROM ride_weather w WHERE w.owner_id = r.owner_id AND w.ride_id = r.id) AS weather_status,
+  (SELECT reason FROM ride_weather w WHERE w.owner_id = r.owner_id AND w.ride_id = r.id) AS weather_reason`;
 export const getRide = (db: D1Database, owner: string, id: string) =>
   db
     .prepare(`SELECT ${columns} FROM rides r WHERE r.owner_id = ? AND r.id = ?`)
@@ -113,11 +131,16 @@ export const createRide = async (
     db
       .prepare(`INSERT INTO rides
       (owner_id, id, idempotency_key, request_hash, route_id, source_hash,
-       route_snapshot, ridden_on, time_zone, recorded_at, updated_at, plan_json)
+       route_snapshot, ridden_on, time_zone, recorded_at, updated_at, plan_json, weather_route_json, recommendation_id)
       SELECT owner_id, ?, ?, ?, id, json_extract(route_json, '$.sourceHash'),
        json_object('id', id, 'name', name, 'version', version,
         'distanceM', json_extract(route_json, '$.distanceM'), 'ascentM', json_extract(route_json, '$.ascentM')),
-       ?, ?, ?, ?, ? FROM routes WHERE owner_id = ? AND id = ? AND version = ?
+       ?, ?, ?, ?, ?, json_object('distanceM', json_extract(route_json, '$.distanceM'), 'legs', json(json_extract(route_json, '$.legs'))),
+       (SELECT s.id FROM recommendation_snapshots s, json_each(s.snapshot_json, '$.routes') sr
+         WHERE s.owner_id = routes.owner_id AND s.id = ? AND json_extract(sr.value, '$.id') = routes.id
+         AND json_extract(sr.value, '$.sourceHash') = json_extract(routes.route_json, '$.sourceHash')
+         AND EXISTS (SELECT 1 FROM json_each(s.snapshot_json, '$.dates') WHERE value = ?) LIMIT 1)
+       FROM routes WHERE owner_id = ? AND id = ? AND version = ?
        AND NOT EXISTS (SELECT 1 FROM ride_tombstones WHERE owner_id = ? AND idempotency_key = ?)
       ON CONFLICT(owner_id, idempotency_key) DO NOTHING`)
       .bind(
@@ -129,6 +152,8 @@ export const createRide = async (
         timestamp,
         timestamp,
         input.plan ? JSON.stringify(input.plan) : null,
+        input.recommendationId ?? null,
+        input.riddenOn,
         owner,
         input.routeId,
         input.expectedRouteVersion,

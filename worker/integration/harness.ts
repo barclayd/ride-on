@@ -54,6 +54,7 @@ export const createHarness = async (authConfig?: string) => {
     APNS_CONFIG_JSON: '',
     WEB_PUSH_CONFIG_JSON: '',
     GROUND_EVIDENCE_MODE: 'non-commercial',
+    RIDE_LEARNING_WEATHER_MODE: 'off',
     MET_OFFICE_API_KEY: WEATHER_KEY,
     MET_OFFICE_BPF_API_KEY: 'integration-bpf-key-not-a-real-secret',
     APPLE_WEATHER_CONFIG_JSON: '',

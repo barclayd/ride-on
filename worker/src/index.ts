@@ -47,6 +47,9 @@ import {
 } from './recommendations/score-changes.ts';
 import { evaluateComparisons } from './recommendations/service.ts';
 import { readJsonBody, validateInput } from './request.ts';
+import { experienceRoutes } from './rides/experience-routes.ts';
+import { drainRideWeather } from './rides/learning-service.ts';
+import { recordRecommendation } from './rides/recommendation-snapshot.ts';
 import { rideRoutes } from './rides/routes.ts';
 import { importGpx } from './routes/gpx.ts';
 import { importSourceRoute } from './routes/import.ts';
@@ -116,6 +119,7 @@ export const createApp = (
     cache?: ForecastCache;
     now?: () => Date;
     log?: boolean;
+    recordRecommendation?: typeof recordRecommendation;
   } = {},
 ) => {
   const app = new Hono<Bindings>();
@@ -187,7 +191,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.41.0',
+      version: '0.42.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -234,6 +238,7 @@ export const createApp = (
     });
   app.route('/', notificationRoutes(now));
   app.route('/', rideRoutes(now));
+  app.route('/', experienceRoutes(now));
   app.route('/', stravaHistoryRoutes(now));
   app.route('/', stravaRoutes());
   app.route('/', trackingRoutes(now, store, users, dependencies));
@@ -852,8 +857,34 @@ export const createApp = (
         ),
       );
     }
+    const recommendationId = await (
+      dependencies.recordRecommendation ?? recordRecommendation
+    )(c.env.ROUTES_DB, c.get('ownerId'), startedAt.toISOString(), {
+      schemaVersion: 1,
+      algorithmVersion: ALGORITHM_VERSION,
+      routes: routes.map((route) => ({
+        id: route.id,
+        sourceHash: route.sourceHash,
+      })),
+      dates: selectedDates,
+      preferences: input.preferences,
+      timeZone: input.timeZone,
+      riding: input.riding,
+      history: comparison.history,
+      weather: comparison.weather,
+      rankings: evaluation.rankings.map((r) => ({
+        routeId: r.routeId,
+        rank: r.rank,
+        best: r.best,
+      })),
+      unranked: evaluation.unranked.map((r) => ({
+        routeId: r.routeId,
+        best: r.best,
+      })),
+    });
     return c.json({
       ...evaluation,
+      recommendationId,
       rankings: evaluation.rankings.map((r) => ({
         ...presentRoute(r, input.riding.departureStepMinutes),
         best: r.best
@@ -1009,11 +1040,12 @@ export const createApp = (
 const app = createApp();
 export default {
   fetch: app.fetch,
-  scheduled: async (_controller: ScheduledController, env: Env) => {
+  scheduled: async (controller: ScheduledController, env: Env) => {
     await Promise.all([
       dispatchMonitoring(env),
       cleanStravaFlows(env.ROUTES_DB),
       dispatchImports(env),
+      drainRideWeather(env, new Date(controller.scheduledTime)),
     ]);
   },
   queue: async (batch: MessageBatch<unknown>, env: Env) => {

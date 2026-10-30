@@ -7,6 +7,7 @@ remain separate; adapt them after the API algorithm has been calibrated.
 
 Read `../docs/api.md` for contracts, defaults, setup, validation and limitations.
 Read `../docs/strava.md` for the shared Stitch connection and coordinated rollout. Keep Strava credentials in Stitch and do not revive the legacy token proxy.
+Read `../docs/ride-learning.md` for optional feedback and shadow learning; never apply personal adjustments to live scores.
 Read `../docs/ride-history.md` for ride logging, geometry enrichment and repetition scoring.
 Read `../docs/planning-api.md` for multi-day searches, presets and coverage.
 Read `../docs/extension-api-brief-v3.md` for planned snapshots, next-window suggestions and route-history summaries.
