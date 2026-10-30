@@ -31,6 +31,7 @@ import {
   RouteTile,
   reducedMotion,
   Segmented,
+  Switch,
   Toast,
   type Tracking,
   useTracking,
@@ -76,7 +77,11 @@ import {
   windowWhen,
 } from '../../ui/format';
 import '../../ui/tokens.css';
-import { LearningControls, RideFeedback } from '../../ui/ride-feedback';
+import {
+  FeedbackInvite,
+  HistoryFeedback,
+  TailoredRides,
+} from '../../ui/ride-feedback';
 
 const TABS: [Tab, string][] = [
   ['rides', 'Rides'],
@@ -733,7 +738,7 @@ const CheckIn = ({ view }: { view: View }) => {
         </div>
       </section>
       {done && loggedRide && (
-        <RideFeedback key={loggedRide.id} ride={loggedRide} initiallyOpen />
+        <FeedbackInvite key={loggedRide.id} ride={loggedRide} view={view} />
       )}
     </>
   );
@@ -913,25 +918,6 @@ const RidesTab = ({ view, onChoose }: { view: View; onChoose: () => void }) => {
     </>
   );
 };
-
-const Switch = (props: {
-  on: boolean;
-  label: string;
-  disabled?: boolean;
-  onClick: () => void;
-}) => (
-  <button
-    type="button"
-    class="ro-switch"
-    role="switch"
-    aria-checked={props.on}
-    aria-label={props.label}
-    disabled={props.disabled}
-    onClick={props.onClick}
-  >
-    <span />
-  </button>
-);
 
 const Stepper = (props: {
   label: string;
@@ -1582,6 +1568,7 @@ const PrefsTab = ({ view }: { view: View }) => {
       </section>
       <PauseCard view={view} />
       <NotificationsCard push={view.state.push} />
+      <TailoredRides view={view} />
       <button
         type="button"
         class="ro-sign-out"
@@ -1599,18 +1586,14 @@ const HistoryTab = ({ view }: { view: View }) => {
   const list = [...rides].sort(newest);
   if (!list.length)
     return (
-      <>
-        <LearningControls view={view} />
-        <span class="ro-empty">
-          No rides yet. When a window you planned ends, Ride On asks whether you
-          rode it.
-        </span>
-      </>
+      <span class="ro-empty">
+        No rides yet. When a window you planned ends, Ride On asks whether you
+        rode it.
+      </span>
     );
   const labelled = new Set<string>();
   return (
     <>
-      <LearningControls view={view} />
       {list.map((ride) => {
         const month = monthLabel(ride.riddenOn, view.today);
         const label = !labelled.has(month) && labelled.add(month);
@@ -1642,7 +1625,7 @@ const HistoryTab = ({ view }: { view: View }) => {
                   />
                 </div>
                 <span class="ro-history-line">{rideLine(ride)}</span>
-                <RideFeedback ride={ride} />
+                <HistoryFeedback ride={ride} view={view} />
               </article>
             )}
           </Fragment>

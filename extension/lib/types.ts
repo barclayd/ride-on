@@ -408,8 +408,17 @@ export type Ride = {
   experience?:
     | (RideExperience & { firstSubmittedAt: string; updatedAt: string })
     | null;
-  weatherEnrichment?: { status: string; reason: string | null };
+  weatherEnrichment?: {
+    status: WeatherEnrichmentStatus;
+    reason: string | null;
+  };
 };
+export type WeatherEnrichmentStatus =
+  | 'not-requested'
+  | 'pending'
+  | 'processing'
+  | 'ready'
+  | 'unavailable';
 export type FeedbackFactor =
   | 'sunshine'
   | 'temperature'
@@ -438,13 +447,25 @@ export type RideExperience = {
     includeInLearning: boolean;
   } | null;
 };
+// GET /users/me/learning. The API keeps its `learning` names; the UI calls this
+// Tailored Rides (docs/ride-learning.md).
+export type LearningFactor = 'cold' | 'heat' | 'wind' | 'rain' | 'shade';
 export type LearningProfile = {
+  modelVersion?: string;
   enabled: boolean;
   settingsVersion: number;
+  resetAt: string | null;
   mode: 'shadow';
   scoringApplied: false;
   eligibleRideCount: number;
+  feedbackRideCount: number;
   status: string;
+  factors: {
+    factor: LearningFactor;
+    evidenceCount: number;
+    confidence: number;
+    adjustmentPoints: number;
+  }[];
 };
 // POST /rides/summaries
 export type RideSummary = {

@@ -25,6 +25,7 @@ import {
   type Planning,
   readState,
   type State,
+  type WriteFailure,
 } from '../lib/state';
 import { surfaceSeenKey } from '../lib/surface';
 import {
@@ -36,6 +37,7 @@ import {
 } from '../lib/tracking';
 import {
   type AlertTriggers,
+  type LearningProfile,
   MAX_TRACKED,
   type NextWindows,
   type PreferencesPatch,
@@ -111,6 +113,14 @@ const errorMessage = (error: unknown) =>
 
 const isConflict = (error: unknown) =>
   error instanceof ApiError && error.status === 409;
+
+// Feedback and Tailored Rides show their own copy for each of these, never the API's message.
+const failureOf = (error: unknown): WriteFailure =>
+  isConflict(error)
+    ? 'conflict'
+    : error instanceof ApiError && error.code === 'INVALID_RIDE_TIMING'
+      ? 'timing'
+      : 'offline';
 
 const loadUser = async () => {
   try {
@@ -430,6 +440,49 @@ const commitDeletes = async (all = false) => {
   return done.length;
 };
 
+// Feedback removed in History is sent once its undo window passes, or on the next wake if
+// the worker stopped first. A refused one is dropped and shown on its ride with Try Again.
+const REMOVE_MS = 5000;
+const commitRemovals = async (all = false) => {
+  const due = (await readState()).pendingRemovals.filter(
+    (r) => all || Date.now() - r.at >= REMOVE_MS,
+  );
+  if (!due.length) return;
+  const settled = await Promise.allSettled(
+    due.map((r) =>
+      api<{ ride: Ride }>(`/rides/${r.id}/experience`, {
+        method: 'PUT',
+        body: {
+          expectedVersion: r.expectedVersion,
+          expectedRideVersion: r.expectedRideVersion,
+          timing: null,
+          feedback: null,
+        },
+      }),
+    ),
+  );
+  const saved = new Map<string, Ride>();
+  const failures: Record<string, WriteFailure> = {};
+  settled.forEach((result, i) => {
+    const { id } = due[i];
+    if (result.status === 'fulfilled') saved.set(id, result.value.ride);
+    else failures[id] = failureOf(result.reason);
+  });
+  await update((state) => ({
+    pendingRemovals: state.pendingRemovals.filter(
+      (r) => !due.some((d) => d.id === r.id),
+    ),
+    removeFailures: {
+      ...Object.fromEntries(
+        Object.entries(state.removeFailures).filter(([id]) => !saved.has(id)),
+      ),
+      ...failures,
+    },
+    rides: state.rides.map((r) => saved.get(r.id) ?? r),
+    learning: null,
+  }));
+};
+
 // Optional: without it the picker shows only the saved source.
 const loadProviders = () =>
   api<{ providers: WeatherProvider[] }>('/weather-providers')
@@ -444,6 +497,7 @@ const refresh = async (force = false) => {
     return;
   }
   await commitDeletes().catch(() => {});
+  await commitRemovals().catch(() => {});
   await pauseWrite; // read after a pause in flight, not before it lands
   const was = (await readState()).pause;
   const [user, selection, routes, providers, rides] = await Promise.all([
@@ -758,6 +812,7 @@ const handle = async (message: Message, from?: Browser.tabs.Tab) => {
       await disablePush();
       // Removals still in their undo window belong to this account; send them first.
       await commitDeletes(true).catch(() => {});
+      await commitRemovals(true).catch(() => {});
       await api('/api/auth/sign-out', { body: {} }).catch(() => {});
       return signOutLocally();
     case 'refresh':
@@ -1061,24 +1116,64 @@ const handle = async (message: Message, from?: Browser.tabs.Tab) => {
       }));
       return;
     }
+    case 'removeRideExperience': {
+      const { type: _, ...removal } = message;
+      await update((state) => ({
+        pendingRemovals: [
+          ...state.pendingRemovals.filter((r) => r.id !== message.id),
+          { ...removal, at: Date.now() },
+        ],
+        removeFailures: Object.fromEntries(
+          Object.entries(state.removeFailures).filter(
+            ([id]) => id !== message.id,
+          ),
+        ),
+      }));
+      // ponytail: in-memory timer, as for deletes; a worker that dies first commits on its next wake.
+      setTimeout(() => commitRemovals().catch(() => {}), REMOVE_MS + 100);
+      return;
+    }
+    case 'undoRemoveExperience':
+      return update((state) => ({
+        pendingRemovals: state.pendingRemovals.filter(
+          (r) => r.id !== message.id,
+        ),
+      }));
+    // After a conflict: the ride as the API has it now, feedback and versions included.
+    case 'loadRide': {
+      const { ride } = await api<{ ride: Ride }>(`/rides/${message.id}`);
+      return update((state) => ({
+        rides: state.rides.map((r) => (r.id === ride.id ? ride : r)),
+        removeFailures: Object.fromEntries(
+          Object.entries(state.removeFailures).filter(([id]) => id !== ride.id),
+        ),
+      }));
+    }
     case 'loadLearning': {
-      const learning =
-        await api<import('../lib/types').LearningProfile>('/users/me/learning');
+      const learning = await api<LearningProfile>('/users/me/learning');
       return update(() => ({ learning }));
     }
     case 'saveLearning': {
-      const learning = await api<import('../lib/types').LearningProfile>(
-        '/users/me/learning',
-        {
+      try {
+        const learning = await api<LearningProfile>('/users/me/learning', {
           method: 'PATCH',
           body: {
             expectedVersion: message.expectedVersion,
             enabled: message.enabled,
             reset: message.reset ?? false,
           },
-        },
-      );
-      return update(() => ({ learning }));
+        });
+        return update(() => ({ learning }));
+      } catch (error) {
+        // Another device changed it: show where it stands now, then report the conflict.
+        if (isConflict(error)) {
+          const learning = await api<LearningProfile>(
+            '/users/me/learning',
+          ).catch(() => null);
+          if (learning) await update(() => ({ learning }));
+        }
+        throw error;
+      }
     }
     case 'deleteRide':
       await update((state) => ({
@@ -1137,6 +1232,7 @@ export default defineBackground(() => {
   // ponytail: builds up to 0.1.0 kept the token in storage.local; drop it (costs one sign-in).
   // Delete once no such install remains.
   commitDeletes().catch(() => {});
+  commitRemovals().catch(() => {});
   browser.runtime.onInstalled.addListener(() =>
     browser.storage.local.remove('token'),
   );
@@ -1191,7 +1287,10 @@ export default defineBackground(() => {
         async (error) => {
           if (error instanceof ApiError && error.status === 401)
             await signOutLocally();
-          sendResponse({ error: errorMessage(error) });
+          sendResponse({
+            error: errorMessage(error),
+            failure: failureOf(error),
+          });
         },
       );
       return true;

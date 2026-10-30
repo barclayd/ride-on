@@ -140,6 +140,9 @@ export type State = {
   ridesCursor: string | null;
   summaries: Record<string, RideSummary>; // by route ID, for ride tags
   pendingDeletes: { id: string; at: number }[]; // removed in History, sent after the undo window
+  // Feedback removed in History, sent after its undo window (the ride itself stays).
+  pendingRemovals: PendingRemoval[];
+  removeFailures: Record<string, WriteFailure>; // removals the API refused, by ride ID
   // Route highlight derived from the account’s pinned departure.
   alertRouteId: string | null;
   tracker: Tracker;
@@ -148,6 +151,16 @@ export type State = {
   // Account pause mirrored from the API.
   pause: Pause | null;
 };
+
+export type PendingRemoval = {
+  id: string;
+  at: number;
+  expectedVersion: number;
+  expectedRideVersion: number;
+};
+
+// Why a feedback write failed, so the UI can show its own copy instead of the API's message.
+export type WriteFailure = 'offline' | 'conflict' | 'timing';
 
 export const initialState: State = {
   auth: 'signed-out',
@@ -181,6 +194,8 @@ export const initialState: State = {
   ridesCursor: null,
   summaries: {},
   pendingDeletes: [],
+  pendingRemovals: [],
+  removeFailures: {},
   alertRouteId: null,
   tracker: { ready: false, ride: null, version: 0, error: null },
   triggers: {},
@@ -272,6 +287,14 @@ export type Message =
       expectedRideVersion: number;
       experience: RideExperience;
     }
+  | {
+      type: 'removeRideExperience';
+      id: string;
+      expectedVersion: number;
+      expectedRideVersion: number;
+    }
+  | { type: 'undoRemoveExperience'; id: string }
+  | { type: 'loadRide'; id: string }
   | { type: 'loadLearning' }
   | {
       type: 'saveLearning';
@@ -288,5 +311,7 @@ export type JourneyGpx = {
   surface?: SurfaceInput;
 };
 
-export const send = (message: Message): Promise<{ error?: string }> =>
+export const send = (
+  message: Message,
+): Promise<{ error?: string; failure?: WriteFailure }> =>
   browser.runtime.sendMessage(message);
