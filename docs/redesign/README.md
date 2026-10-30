@@ -535,29 +535,23 @@ Build (where it stands, how to test it and what's left: [the widgets handoff](..
 |---|---|
 | <img src="screens/routes-library.png" width="300"> | <img src="screens/routes-history.png" width="300"> |
 
-A full-screen map, the cycle map on iOS and satellite on the Mac, with a regular-glass panel over
-it that on iPhone runs behind the tab bar to the bottom of the screen, as Find My's sheet does. No
-navigation bar, and the tab bar never minimises here.
+A full-screen map, the cycle map on iOS and satellite on the Mac, with a regular-glass panel
+floating over it, 8pt from the screen edges and 14pt above the tab bar. No navigation bar, and the tab bar never minimises here.
 
 1. **Map** (`RoutesMap`): the other shortlisted routes in white, the selected one in the accent
    with a white casing and a start marker, and a callout over its northernmost point ("Hilly
    Loop 51 km"; from History, the ride's date: "Hilly Loop 29 Sep"). Tapping near a line selects
    it. Top trailing: the Map Style menu (Cycle on iOS, Satellite, Hybrid, Standard) and My Location,
    in regular glass held light over the cycle map and clear glass over the others.
-2. **Panel** (`FloatingPanel`): Find My's four detents, measured up from the bottom of the screen:
-   collapsed to just the grabber around the tab bar, small (30% of the screen: the title and the
-   top of the shortlist), medium (half, where it opens) and large (up to the safe-area top). Up to
-   small it stands 12pt off the screen's sides and bottom, a tray around the tab bar, closing to
-   the edges by large; its bottom corners follow the screen's. The list scrolls at every detent
-   but collapsed, on under the tab bar. A drag on the grabber or header moves the panel (1:1,
-   rubber-banded, momentum picks the detent), and so does pulling the list down from its top, in
-   the same drag. Tap the grabber to go up a detent (large goes back to medium); VoiceOver has a
-   "Dismiss panel" action. Focusing search goes to large.
-3. **Header**, pinned: "Routes" in the large title and a "+" menu: Import GPX File · From
-   cycle.travel ("Use the Safari extension") · Connect Strava ("Coming soon", disabled). Once the
-   list scrolls, the "Search Routes" capsule (filters the shortlist, library and history by name
-   or source) slides up into the title's place, and slides away when the list is back at its top,
-   unless search is focused or has text. With VoiceOver, and on iPad and Mac, search always shows.
+2. **Panel** (`FloatingPanel`): medium detent 56% of the height, large up to the safe-area top,
+   and collapsed to just the grabber and header, leaving the map. Drag the grabber or header, or
+   pull the list down from its top and the panel follows in the same drag, as a sheet does (1:1,
+   rubber-banded, momentum picks the detent and a critically damped spring settles it); tap the
+   grabber (collapsed and large go to medium, medium to large); VoiceOver has a "Dismiss panel"
+   action. Focusing search goes to large.
+3. **Header**, pinned: "Search Routes" capsule (filters the shortlist, library and history by
+   name or source) and a "+" menu: Import GPX File · From cycle.travel ("Use the Safari
+   extension") · Connect Strava ("Coming soon", disabled).
 4. **"Shortlist"**, "4 of 12": `ShortlistCard`s, 272 × 158, snapping to the leading edge. Hilly
    Loop "Best pick · Wed" 86, Potters Bar "Thu 09:00" 79, Braintree "Below your minimums" 61,
    East Anglia "Too long for your window". The white check removes a card; tapping one shows it
@@ -577,9 +571,9 @@ iPad and Mac: the same map, with the panel as a fixed 380pt column down the lead
 
 Build:
 - [x] Full-screen map with route lines, start marker, callout and map controls
-- [x] Find My-style panel behind the tab bar: collapsed/small/medium/large detents, list scrolling at every detent, sheet-style drag shared with the list, velocity-carrying critically damped settle, title swapping for search on scroll
+- [x] Floating panel with collapsed/medium/large detents, velocity-carrying critically damped settle
+- [x] Sheet-style drag: a UIKit pan shared with the list, so pulling the list down from its top moves the panel in the same touch
 - [x] Search, "+" menu (items are no-ops for now)
-- [x] Reconciled with current main (30 October): the UIKit pan owns the grabber drag; UI coverage scrolls within the visible list at medium and drags beyond the 20pt handle
 - [x] Shortlist carousel with status pills, scores, remove
 - [x] Library and History segments, row selection and actions, Details → Ride detail
 - [x] Accessibility sizes (cards widen and stack, rows wrap), Reduce Transparency/Increase Contrast fallbacks
@@ -607,9 +601,6 @@ Build:
 - The "+" items do nothing yet. The cycle.travel import comes back later as a Dynamic Island
   (Live Activity) flow rather than a panel section.
 - The panel can't be grabbed mid-settle; a new drag starts from the detent.
-- There's no public API for a sheet behind the tab bar (Find My's is a sheet holding its own tab
-  bar), so the panel draws under the system tab bar instead: the tab content's bottom safe area is
-  the tab bar's band, which sets collapsed and the list's bottom margin.
 - The map uses flat `.imagery`/`.hybrid`/`.standard`; `elevation: .realistic` dropped the
   annotations and blurred the lines.
 - On iOS the map opens in its Cycle look, first in the Map Style menu: `CycleMap`, MapLibre Native

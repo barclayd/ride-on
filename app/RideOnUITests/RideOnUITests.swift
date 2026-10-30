@@ -129,19 +129,9 @@ final class RideOnUITests: XCTestCase {
         app.launch()
 
         app.buttons["Routes"].tap()
-        let row = routeButton(in: app, startingWith: "Lea Valley Gravel")
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue(routeButton(in: app, startingWith: "Lea Valley Gravel").waitForExistence(timeout: 5))
 
-        // Search takes the title's place once the list scrolls.
-        // The first library row is partly behind the system tab bar at medium height.
-        // Start in the visible shortlist, so this scroll reaches the list rather than the tab bar.
-        let card = routeButton(in: app, startingWith: "Hilly Loop")
-        let handleY = app.buttons["Expand panel"].frame.minY
-        let start = card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -200)))
         let searchField = app.textFields["routes-search"]
-        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
-        XCTAssertEqual(app.buttons["Expand panel"].frame.minY, handleY, accuracy: 2)
         searchField.tap()
         searchField.typeText("Epping")
 
@@ -149,7 +139,7 @@ final class RideOnUITests: XCTestCase {
         XCTAssertFalse(routeButton(in: app, startingWith: "Lea Valley Gravel").exists)
     }
 
-    func testRoutesPanelCollapsesAroundTheTabBar() {
+    func testRoutesPanelCollapsesToItsSearchField() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
         app.launch()
@@ -158,17 +148,13 @@ final class RideOnUITests: XCTestCase {
         let card = routeButton(in: app, startingWith: "Hilly Loop")
         XCTAssertTrue(card.waitForExistence(timeout: 5))
 
-        // The grabber, at medium, flicked down to collapsed: just the grabber above the tab bar.
-        let grabber = app.buttons["Expand panel"]
-        // The handle is only 20pt tall; an element swipe never clears UIKit's pan slop.
-        let start = grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        // The grabber, at medium. It's only 20pt tall; an element swipe never clears UIKit's pan slop.
+        let start = app.buttons["Expand panel"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 300)))
         XCTAssertTrue(card.waitForNonExistence(timeout: 5))
-        XCTAssertTrue(grabber.isHittable)
-        XCTAssertTrue(app.buttons["Routes"].isHittable)
+        XCTAssertTrue(app.textFields["routes-search"].isHittable)
 
-        // A tap brings it up to small, showing the top of the shortlist again.
-        grabber.tap()
+        app.buttons["Expand panel"].tap()
         XCTAssertTrue(card.waitForExistence(timeout: 5))
     }
 

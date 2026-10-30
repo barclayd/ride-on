@@ -7,9 +7,8 @@ import SharedUI
 
 /// The Routes tab (docs/redesign/README.md, "Routes"): every shortlisted loop on one map, under a
 /// floating panel holding the shortlist Rides ranks, then the rest of the library and the rides
-/// marked as ridden. On iPhone the panel runs behind the tab bar and rests at Find My's four heights,
-/// down to just its grabber around the tab bar to leave the map; on iPad and Mac it runs down the
-/// leading side.
+/// marked as ridden. On iPhone the panel rests at medium or large over the tab bar, or collapses to
+/// its search field to leave the map; on iPad and Mac it runs down the leading side.
 ///
 /// The caller owns `library` and saves shortlist edits, and registers the `RideBoard.Pick`
 /// destination "Details" pushes (Ride detail lives in RideUI, which RoutesUI can't import).
@@ -21,7 +20,6 @@ public struct RoutesView: View {
     @State private var segment = Segment.library
     @State private var query = ""
     @State private var detent = PanelDetent.medium
-    @State private var scrolled = false
     @State private var camera: MapCameraPosition
     @State private var look = MapLook.initial
     @State private var carouselID: UUID?
@@ -30,8 +28,6 @@ public struct RoutesView: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.unitSystem) private var unitSystem
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     public init(library: Binding<RouteLibrary>, board: RideBoard?) {
         self.board = board
@@ -53,23 +49,19 @@ public struct RoutesView: View {
         GeometryReader { proxy in
             let safeArea = proxy.safeAreaInsets
             if floats {
-                // Up from the bottom of the screen, which the panel runs down to behind the tab bar:
-                // small shows the title and the top of the shortlist, medium half the screen, and
-                // large reaches the safe area. With the keyboard up the bottom inset is its height
-                // (and the size shrinks by as much), so the list scrolls clear of it.
-                let screen = proxy.size.height + safeArea.top + safeArea.bottom
-                let heights = PanelHeights(small: max((screen * 0.3).rounded(), safeArea.bottom + 160),
-                                           medium: (screen * 0.5).rounded(), large: screen - safeArea.top,
-                                           tabBar: safeArea.bottom)
+                // Medium leaves the top 44% of the space for the map; large reaches the safe area.
+                let large = max(proxy.size.height - 14, 0)
+                let medium = (large * 0.56).rounded()
                 ZStack(alignment: .bottom) {
-                    map(padding: EdgeInsets(top: safeArea.top + 8, leading: 0, bottom: heights.medium + 8, trailing: 0),
+                    map(padding: EdgeInsets(top: safeArea.top + 8, leading: 0, bottom: safeArea.bottom + 14 + medium + 8, trailing: 0),
                         showsCallout: detent != .large)
                     controls
                         .opacity(detent == .large ? 0 : 1)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    panel(heights: heights)
+                    panel(heights: medium...large)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 14)
                 }
-                .ignoresSafeArea(edges: .bottom)
             } else {
                 ZStack(alignment: .topLeading) {
                     map(padding: EdgeInsets(top: safeArea.top + 8, leading: safeArea.leading + 8 + Self.sidePanelWidth + 8, bottom: safeArea.bottom + 8, trailing: 8),
@@ -162,12 +154,12 @@ public struct RoutesView: View {
 
     // MARK: Panel
 
-    private func panel(heights: PanelHeights?) -> some View {
-        FloatingPanel(detent: $detent, heights: heights, scrolled: $scrolled) {
+    private func panel(heights: ClosedRange<CGFloat>?) -> some View {
+        FloatingPanel(detent: $detent, heights: heights) {
             searching = false
         } header: {
             HStack(spacing: 10) {
-                titleOrSearch
+                searchField
                 addMenu
             }
             .padding(.horizontal, 16)
@@ -189,31 +181,6 @@ public struct RoutesView: View {
             }
             .animation(Motion.glassTapLayout, value: selection)
         }
-    }
-
-    /// On iPhone the title until the list scrolls, then search in its place, as Find My's sheet.
-    private var titleOrSearch: some View {
-        ZStack(alignment: .leading) {
-            Text("Routes")
-                .font(.largeTitle.bold())
-                .accessibilityAddTraits(.isHeader)
-                .opacity(showsSearch ? 0 : 1)
-                .offset(y: showsSearch && !reduceMotion ? -12 : 0)
-                .accessibilityHidden(showsSearch)
-                .allowsHitTesting(!showsSearch)
-            searchField
-                .opacity(showsSearch ? 1 : 0)
-                .offset(y: showsSearch || reduceMotion ? 0 : 12)
-                .accessibilityHidden(!showsSearch)
-                .allowsHitTesting(showsSearch)
-        }
-        .animation(Motion.panelMaterialize, value: showsSearch)
-    }
-
-    /// Search shows once the list scrolls and while it's in use; always beside the map on iPad and
-    /// Mac, and with VoiceOver, so it's there to find.
-    private var showsSearch: Bool {
-        !floats || scrolled || searching || !query.isEmpty || voiceOver
     }
 
     private var searchField: some View {
