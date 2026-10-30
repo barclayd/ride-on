@@ -148,8 +148,9 @@ final class RideOnUITests: XCTestCase {
         let card = routeButton(in: app, startingWith: "Hilly Loop")
         XCTAssertTrue(card.waitForExistence(timeout: 5))
 
-        // The grabber, at medium.
-        app.buttons["Expand panel"].swipeDown()
+        // The grabber, at medium. It's only 20pt tall; an element swipe never clears UIKit's pan slop.
+        let start = app.buttons["Expand panel"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 300)))
         XCTAssertTrue(card.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.textFields["routes-search"].isHittable)
 

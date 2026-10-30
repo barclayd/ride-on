@@ -205,10 +205,11 @@ before adding a custom component in code.
    are the accessible way to set the same values.
 
 10. **`FloatingPanel`** — the Routes panel (§2, §5). On iPhone it rests at a medium and a large
-    detent; a drag on its header tracks 1:1, rubber-bands past either end, and settles on the
-    detent its momentum projects to (`Motion.panelDetent`). Tapping the grabber toggles it;
-    pulling the content down past its top at large lets it go to medium, like a sheet. On iPad
-    and Mac it's a fixed full-height column with no grabber.
+    detent, or collapsed to its header; a drag on the grabber or header tracks 1:1, and so does
+    pulling the list down from its top, in the same touch, as a sheet's does. It rubber-bands
+    past either end and, let go, settles on the detent its momentum projects to with
+    UIScrollView's deceleration (`Motion.panelDetent`). Tapping the grabber toggles medium and
+    large. On iPad and Mac it's a fixed full-height column with no grabber.
 11. **`ShortlistCard`** — a shortlisted route in the panel's carousel (272 × 158pt, card
     radius): its loop on a `CycleMap` snapshot (satellite imagery on the Mac), a status pill
     ("Best pick · Wed", "Thu 09:00", "Below your minimums", "Too long for your window",
@@ -289,7 +290,7 @@ hand-roll `.animation()` calls.
 | Async content arriving | `.smooth` (`Motion.panelMaterialize`), never a hard cut |
 | Haptics — stepped sliders, range handles, pickers | `.sensoryFeedback(.selection)` per step |
 | Track sheet in and out | system sheet presentation (no bounce) |
-| Routes panel settling on a detent | `Motion.panelDetent(velocity:)`: a spring (response 0.35, damping 0.86) starting at the drag's release velocity; `.smooth` with Reduce Motion |
+| Routes panel settling on a detent | `Motion.panelDetent(velocity:)`: a critically damped spring (response 0.4, damping 1), like a sheet's, starting at the drag's release velocity; `.smooth` with Reduce Motion |
 | Shortlist card press, row selection | `Motion.glassTapLayout` |
 | Star turning gold once the Track sheet has gone | `.contentTransition(.symbolEffect(.replace))` + `.symbolEffect(.bounce)`, `.sensoryFeedback(.success)` |
 
