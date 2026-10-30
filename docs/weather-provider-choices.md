@@ -65,9 +65,25 @@ forecast/coverage fields, not the presence of this label.
   than the catalogue's current Met Office choice. Always use recommendation
   availability metadata for the dates a user can assess.
 - A failed or unconfigured Met Office selection is reported as unavailable. It
-  does not silently fall back to Global Spot or Apple, nor combine statistics
-  across products. The BPF configuration determines the new Met Office choice's
-  `configured` flag; it is not a health or quota check.
+  does not fall back to Global Spot, nor combine statistics across products. The
+  BPF configuration determines the new Met Office choice's `configured` flag; it
+  is not a health or quota check.
+- **Quota exhaustion is the one exception (v0.42.0).** When any location comes
+  back `rate-limited`, the provider can't finish the comparison, so the whole
+  comparison moves to Apple Weather's deterministic preset: one source for every
+  location and day, never a mix. The response says so:
+  - `weather.requestedProviderId` stays `met-office`.
+  - `weather.selectedProvider` / `selectedSource` name Apple Weather.
+  - `weather.attempts` lists the Met Office attempt, then Apple's.
+  - `weather.fallback` is `{ "reason": "rate-limited", "retryAt": "<ISO>" | null }`
+    (`retryAt` from the upstream `Retry-After`); it is `null` otherwise.
+  - The response's `forecast` is Apple's (`deterministic`, `retrieval-time`).
+
+  If Apple Weather is unavailable too, the original Met Office result is kept and
+  `fallback` stays `null`. Saved settings never change. Advanced ordered-fallback
+  policies (`weatherProviderId: null`) keep their own list and get no quota
+  fallback. A tracked ride compared with Apple during the outage sees a context
+  change when Met Office returns.
 - Existing advanced `weather` / `forecast` fields and catalogue
   `recommendedSettings` pairs remain supported. An old `weather.providerId:
   "met-office"` still means Global Spot; the new **`weatherProviderId`** field is

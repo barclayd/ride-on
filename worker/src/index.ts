@@ -187,7 +187,7 @@ export const createApp = (
   app.get('/health', (c) =>
     c.json({
       ok: true,
-      version: '0.41.0',
+      version: '0.42.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -940,7 +940,7 @@ export const createApp = (
       ),
       resolvedMinimumTemperature: resolveMinimumTemperature(input),
       riding: input.riding,
-      forecast: input.forecast,
+      forecast: comparison.forecast,
       assumptions: [
         ...(recent.mode === 'prefer-variety'
           ? [
@@ -962,12 +962,12 @@ export const createApp = (
               'Sunshine comfort uses forecast weather symbols: sunny, sunny intervals or other conditions. Category shares describe route sections, not sunshine duration or probability. Unknown symbols remain missing and contribute neutral comfort (0.5) only in the combined score; sunshineAssessment reports the unknown distance fraction. They do not block otherwise usable forecast coverage.',
             ]
           : []),
-        ...(input.forecast.representation === 'ensemble-summary'
+        ...(comparison.forecast.representation === 'ensemble-summary'
           ? [
               'Weather uses marginal 50th-percentile values and ensemble-mean wind direction, not a joint scenario. Hourly precipitation probability is for more than 0 mm in its native interval.',
             ]
           : []),
-        ...(input.forecast.freshnessBasis === 'retrieval-time'
+        ...(comparison.forecast.freshnessBasis === 'retrieval-time'
           ? [
               'Freshness is measured since retrieval only; the age of the underlying forecast model may be unknown.',
             ]
