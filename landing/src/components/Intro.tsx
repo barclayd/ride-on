@@ -3,6 +3,7 @@ import { type CSSProperties, useEffect, useRef } from 'react';
 import landscape from '../assets/intro/landscape.avif';
 import portrait from '../assets/intro/portrait.avif';
 import posters from '../data/posters.json';
+import { INTRO_MAP } from '../lib/flags';
 import {
   camera,
   MAX_ZOOM,
@@ -147,6 +148,7 @@ export default function Intro() {
       section.querySelector<HTMLElement>(selector);
 
     const stage = one('.intro-stage');
+    // The map's layers, only there with INTRO_MAP on.
     const drift = one('.intro-drift');
     const mapContainer = one('.intro-map');
     const poster = one('.intro-poster');
@@ -176,18 +178,7 @@ export default function Intro() {
     const groups = all('[data-route]');
     const strokes = groups.map((group) => [...group.querySelectorAll('path')]);
     const starts = groups.map((group) => [...group.querySelectorAll('circle')]);
-    if (
-      !stage ||
-      !drift ||
-      !mapContainer ||
-      !live ||
-      !fit ||
-      !heading ||
-      !column ||
-      !list ||
-      !cue ||
-      !fxRoot
-    )
+    if (!stage || !fit || !heading || !column || !list || !cue || !fxRoot)
       return;
 
     const reducedQuery = matchMedia('(prefers-reduced-motion: reduce)');
@@ -372,6 +363,7 @@ export default function Intro() {
       }
 
       // Map: the camera follows the phrase, the backdrop drifts on its own.
+      if (!drift) return;
       drift.style.transform = reduced
         ? ''
         : `translate(${(-20 * Math.sin(t * 0.12)).toFixed(1)}px,${(-12 * Math.cos(t * 0.1)).toFixed(1)}px)`;
@@ -465,7 +457,13 @@ export default function Intro() {
     let cancelled = false;
     let loading = false;
     const startMap = async () => {
-      if (map || loading || (navigator as SaveData).connection?.saveData)
+      if (
+        !live ||
+        !mapContainer ||
+        map ||
+        loading ||
+        (navigator as SaveData).connection?.saveData
+      )
         return;
       loading = true;
       const light = phoneQuery.matches;
@@ -524,7 +522,7 @@ export default function Intro() {
     const stopMap = () => {
       map?.remove();
       map = undefined;
-      mapContainer.classList.remove('is-ready');
+      mapContainer?.classList.remove('is-ready');
     };
     if ('requestIdleCallback' in window)
       requestIdleCallback(() => void startMap());
@@ -550,45 +548,54 @@ export default function Intro() {
     >
       <div className="intro-stage">
         <div className="intro-layer" aria-hidden="true">
-          <div className="intro-drift">
-            <div className="intro-map">
-              <picture>
-                <source media="(orientation: portrait)" srcSet={portrait.src} />
-                <img
-                  className="intro-poster"
-                  src={landscape.src}
-                  alt=""
-                  fetchPriority="high"
-                  style={posterVars}
-                />
-              </picture>
-              <div className="intro-live" />
+          {INTRO_MAP ? (
+            <div className="intro-drift">
+              <div className="intro-map">
+                <picture>
+                  <source
+                    media="(orientation: portrait)"
+                    srcSet={portrait.src}
+                  />
+                  <img
+                    className="intro-poster"
+                    src={landscape.src}
+                    alt=""
+                    fetchPriority="high"
+                    style={posterVars}
+                  />
+                </picture>
+                <div className="intro-live" />
+              </div>
+              <svg className="intro-routes">
+                <title>Rides</title>
+                {ROUTES.map((r) => (
+                  <g key={r.id} data-route style={{ opacity: 0 }}>
+                    <path
+                      className="casing"
+                      pathLength={1}
+                      strokeDasharray="1 1"
+                      strokeDashoffset={1}
+                    />
+                    <path
+                      className="line"
+                      pathLength={1}
+                      strokeDasharray="1 1"
+                      strokeDashoffset={1}
+                    />
+                    <circle r={7} fill="#fff" />
+                    <circle r={4.5} className="start" />
+                  </g>
+                ))}
+              </svg>
             </div>
-            <svg className="intro-routes">
-              <title>Rides</title>
-              {ROUTES.map((r) => (
-                <g key={r.id} data-route style={{ opacity: 0 }}>
-                  <path
-                    className="casing"
-                    pathLength={1}
-                    strokeDasharray="1 1"
-                    strokeDashoffset={1}
-                  />
-                  <path
-                    className="line"
-                    pathLength={1}
-                    strokeDasharray="1 1"
-                    strokeDashoffset={1}
-                  />
-                  <circle r={7} fill="#fff" />
-                  <circle r={4.5} className="start" />
-                </g>
-              ))}
-            </svg>
-          </div>
+          ) : (
+            <div className="intro-hatch" />
+          )}
           <div className="intro-scrim" />
         </div>
-        <div className="intro-credit">© OpenStreetMap · Protomaps</div>
+        {INTRO_MAP && (
+          <div className="intro-credit">© OpenStreetMap · Protomaps</div>
+        )}
 
         <div className="intro-layer" aria-hidden="true" data-fx-root>
           <div
