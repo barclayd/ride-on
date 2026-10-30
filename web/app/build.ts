@@ -1,5 +1,5 @@
 // Builds everything the Worker serves from ./public: the client bundle, vendored MapLibre,
-// the cycle map style, the design tokens and the favicon. The Worker itself is bundled by wrangler.
+// the cycle map style, the design tokens, the favicon and the app icon. The Worker itself is bundled by wrangler.
 import { cp, rm } from 'node:fs/promises';
 
 const style = '../../app/Packages/Features/Sources/SharedUI/CycleMap';
@@ -46,5 +46,6 @@ await Promise.all([
   cp(`${style}/glyphs`, 'public/map/glyphs', { recursive: true }),
   cp('../design-system/tokens.css', 'public/tokens.css'),
   cp('../../extension/public/icon/32.png', 'public/favicon.png'),
+  cp('../../extension/public/icon/128.png', 'public/icon.png'),
 ]);
 console.log(`Built ${result.outputs.length} client files into public/`);

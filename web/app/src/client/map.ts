@@ -17,6 +17,8 @@ const gb: Bounds = [
   [-10.7, 48.8],
   [3.9, 61.9],
 ];
+// Signed out, the map rests on London's cycle network.
+const london: [number, number] = [-0.12, 51.5];
 // Route lines go under the minor road labels, as in the prototype (design/up/map/live.js).
 const before = 'roads_labels_minor';
 // The panel and day strip cover the map's edges (PAD in design/gen/proto-logic.js).
@@ -67,12 +69,17 @@ const camera = ({ lines }: Library) => {
   return around(line ? [line] : lines.values()) ?? gb;
 };
 
-export async function mount(container: HTMLElement, signal: AbortSignal) {
+/** `backdrop`: the map behind sign-in. It has no routes, stays still and keeps its camera out of the URL. */
+export async function mount(
+  container: HTMLElement,
+  signal: AbortSignal,
+  backdrop = false,
+) {
   const { origin } = location;
   // A camera in the hash wins; a bare URL waits for the library so the first frame already fits it.
   const bare = location.hash.length < 2;
   // ponytail: the designed error states are v1 (SPEC §7.8); until then a failed load shows no routes.
-  const library = board.load();
+  const library = backdrop ? Promise.resolve(null) : board.load();
   const [maplibre, style, ready] = await Promise.all([
     import(`${origin}/vendor/maplibre-gl/maplibre-gl.mjs`) as Promise<
       typeof import('maplibre-gl')
@@ -90,16 +97,22 @@ export async function mount(container: HTMLElement, signal: AbortSignal) {
   const map = new maplibre.Map({
     container,
     style,
-    bounds: ready ? camera(ready) : gb,
-    fitBoundsOptions: { padding: padding(), maxZoom: 14 },
+    ...(backdrop
+      ? { center: london, zoom: 11, interactive: false }
+      : {
+          bounds: ready ? camera(ready) : gb,
+          fitBoundsOptions: { padding: padding(), maxZoom: 14 },
+          hash: true,
+        }),
     maxBounds: gb,
-    hash: true,
     attributionControl: { compact: true },
     // Workers assets 307 any path with an @, so the 2x sprite is served without one.
     transformRequest: (url) => ({
       url: url.replace(/\/sprite(@2x)?\.(json|png)$/, '/sprite2x.$2'),
     }),
   });
+  // The sign-in card covers the map's edge as the panel does, so London centres in what's left.
+  if (backdrop) map.setPadding(padding());
   signal.addEventListener('abort', () => map.remove());
   const [loaded] = await Promise.all([library, map.once('load')]);
   if (loaded && !signal.aborted) addRoutes(map, loaded, signal);

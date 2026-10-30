@@ -58,7 +58,14 @@ Read it with:
    - `web-deploy` deploys on every merge to `main`, tagged with the commit. It then checks that the
      edge serves that build's client bundle and that `/` and `/api/*` still need a session.
    - Both workflows also watch the files `build.ts` copies in: SharedUI's cycle map style and the
-     extension's favicon.
+     extension's icons.
+9. **Sign-in works and is redesigned.**
+   - The Apple and Google buttons did nothing on app.ride-on.cc: Remix fetched the form post, and a
+     fetch can't follow the redirect to the provider. The form now has `data-rmx-document` (see
+     Gotchas).
+   - The page is a glass card where the panel sits once you're in, over a still map of London's
+     cycle network (`CycleMap backdrop`). It has the app icon and the two providers' own buttons and
+     logos.
 
 ## Decisions since the spec
 
@@ -207,6 +214,9 @@ This is SPEC §13 step 2.
 - **Seed local routes** by posting GPX to `/api/routes` with `Content-Type: application/gpx+xml`.
   Twelve or more are needed to see the full-shortlist sheet.
 - **`worker/.dev.vars` doesn't hot-reload.** Restart the API's `wrangler dev` after editing it.
+- **Remix fetches same-origin links and form posts.** A form that redirects off-site (sign-in) or
+  must drop the page's memory (sign-out) needs `data-rmx-document`, or it fails with "Failed to
+  fetch". See `remix/guides/05-interactivity.md`.
 - **MapLibre is vendored**: it's imported at runtime from `/vendor/` and isn't bundled. pmtiles is
   bundled into `map.js`.
 - **Remix 3 idioms:**

@@ -5,9 +5,9 @@ on:
     paths:
       - "web/app/**"
       - "web/design-system/**"
-      # build.ts copies the cycle map style and the favicon from these.
+      # build.ts copies the cycle map style and the extension's icons from these.
       - "app/Packages/Features/Sources/SharedUI/CycleMap/**"
-      - "extension/public/icon/32.png"
+      - "extension/public/icon/**"
       - ".github/workflows/web-ci.yml"
       - ".github/workflows/web-deploy.yml"
 
