@@ -426,15 +426,18 @@ integration(
     assert.equal(next.experienceVersion, 1);
     assert.equal(next.experience?.timing, null);
     assert.equal((await save(h, ride.id, { timing: null })).status, 200);
-    assert.equal(
-      (
-        await save(h, ride.id, {
-          timing: null,
-          feedback: { ...feedback, weatherComfort: 5 },
-        })
-      ).status,
-      409,
-    );
+    const conflict = await save(h, ride.id, {
+      timing: null,
+      feedback: { ...feedback, weatherComfort: 5 },
+    });
+    assert.equal(conflict.status, 409);
+    assert.deepEqual(await conflict.json(), {
+      error: {
+        code: 'EXPERIENCE_VERSION_CONFLICT',
+        message:
+          'This ride or its feedback changed on another device. Refresh and try again.',
+      },
+    });
     assert.equal(
       (
         await save(h, ride.id, {
@@ -483,9 +486,14 @@ integration(
     );
     const profile = await h.send('/users/me/learning');
     const learned = z
-      .object({ eligibleRideCount: z.number(), scoringApplied: z.boolean() })
+      .object({
+        eligibleRideCount: z.number(),
+        feedbackRideCount: z.number(),
+        scoringApplied: z.boolean(),
+      })
       .parse(await profile.json());
     assert.equal(learned.eligibleRideCount, 1);
+    assert.equal(learned.feedbackRideCount, 1);
     assert.equal(learned.scoringApplied, false);
     await h.restart({ TEST_NOW: '2026-10-10T12:00:00Z' });
     assert.equal(
@@ -562,30 +570,55 @@ integration(
     const result = await settledWeather(h, ride.id);
     assert.equal(result.reason, 'reanalysis-pending');
     assert.equal(result.evidence?.basis, 'modelled-past');
+    const profileSchema = z.object({
+      enabled: z.boolean(),
+      status: z.string(),
+      eligibleRideCount: z.number(),
+      feedbackRideCount: z.number(),
+      factors: z.array(
+        z.object({ evidenceCount: z.number(), adjustmentPoints: z.number() }),
+      ),
+      evaluation: z.object({ evaluatedRideCount: z.number() }),
+    });
+    // Pausing keeps the counts for Tailored Rides' dimmed progress, never the adjustments.
+    const paused = await h.send('/users/me/learning', {
+      method: 'PATCH',
+      body: JSON.stringify({ expectedVersion: 0, enabled: false }),
+    });
+    assert.equal(paused.status, 200);
+    const pausedProfile = profileSchema.parse(await paused.json());
+    assert.equal(pausedProfile.enabled, false);
+    assert.equal(pausedProfile.status, 'disabled');
+    assert.equal(pausedProfile.eligibleRideCount, 1);
+    assert.equal(pausedProfile.feedbackRideCount, 1);
+    assert.ok(pausedProfile.factors.some((f) => f.evidenceCount > 0));
+    assert.ok(pausedProfile.factors.every((f) => f.adjustmentPoints === 0));
+    assert.equal(pausedProfile.evaluation.evaluatedRideCount, 0);
     const reset = await h.send('/users/me/learning', {
       method: 'PATCH',
-      body: JSON.stringify({ expectedVersion: 0, enabled: true, reset: true }),
+      body: JSON.stringify({ expectedVersion: 1, enabled: true, reset: true }),
     });
     assert.equal(reset.status, 200);
-    assert.equal(
-      z.object({ eligibleRideCount: z.number() }).parse(await reset.json())
-        .eligibleRideCount,
-      0,
-    );
+    const afterReset = profileSchema.parse(await reset.json());
+    assert.equal(afterReset.eligibleRideCount, 0);
+    assert.equal(afterReset.feedbackRideCount, 0);
+    const stale = await h.send('/users/me/learning', {
+      method: 'PATCH',
+      body: JSON.stringify({ expectedVersion: 1, enabled: false }),
+    });
+    assert.equal(stale.status, 409);
+    assert.deepEqual(await stale.json(), {
+      error: {
+        code: 'LEARNING_VERSION_CONFLICT',
+        message:
+          'Tailored Rides changed on another device. Refresh and try again.',
+      },
+    });
     assert.equal(
       (
         await h.send('/users/me/learning', {
           method: 'PATCH',
-          body: JSON.stringify({ expectedVersion: 0, enabled: false }),
-        })
-      ).status,
-      409,
-    );
-    assert.equal(
-      (
-        await h.send('/users/me/learning', {
-          method: 'PATCH',
-          body: JSON.stringify({ expectedVersion: 1, enabled: false }),
+          body: JSON.stringify({ expectedVersion: 2, enabled: false }),
         })
       ).status,
       200,

@@ -112,7 +112,7 @@ export const experienceRoutes = (now: () => Date) => {
       throw new AppError(
         409,
         'EXPERIENCE_VERSION_CONFLICT',
-        'This ride or its feedback changed. Refresh before saving again.',
+        'This ride or its feedback changed on another device. Refresh and try again.',
       );
     c.executionCtx.waitUntil(
       enrichRide(c.env, owner, id, timestamp).catch(() => {}),
@@ -173,7 +173,7 @@ export const experienceRoutes = (now: () => Date) => {
       throw new AppError(
         409,
         'LEARNING_VERSION_CONFLICT',
-        'Refresh your learning settings before saving.',
+        'Tailored Rides changed on another device. Refresh and try again.',
       );
     return c.json(await readLearning(c.env.ROUTES_DB, c.get('ownerId')));
   });

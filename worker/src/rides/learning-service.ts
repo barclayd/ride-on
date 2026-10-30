@@ -37,6 +37,10 @@ export const readLearning = async (db: D1Database, owner: string) => {
       AND json_extract(r.experience_json, '$.firstSubmittedAt') > COALESCE((SELECT reset_at FROM ride_learning_settings WHERE owner_id = ?), '')
       ORDER BY COALESCE(json_extract(r.experience_json, '$.timing.startedAt'), r.ridden_on), r.id LIMIT 501`)
       .bind(owner, owner),
+    db
+      .prepare(`SELECT COUNT(*) AS count FROM rides WHERE owner_id = ? AND json_extract(experience_json, '$.feedback') IS NOT NULL
+      AND json_extract(experience_json, '$.firstSubmittedAt') > COALESCE((SELECT reset_at FROM ride_learning_settings WHERE owner_id = ?), '')`)
+      .bind(owner, owner),
   ]);
   const settings = result[0]?.results[0] as
     | { enabled: number; reset_at: string; version: number }
@@ -44,7 +48,8 @@ export const readLearning = async (db: D1Database, owner: string) => {
   const enabled = settings?.enabled !== 0;
   const limitExceeded = (result[1]?.results.length ?? 0) > 500;
   const examples: LearningExample[] = [];
-  if (enabled && !limitExceeded)
+  // Paused accounts keep their counts (the UI dims them) but never their adjustments.
+  if (!limitExceeded)
     for (const row of result[1]?.results ?? []) {
       const experience = experienceSchema.parse(
         JSON.parse(String(row.experience_json)),
@@ -60,9 +65,14 @@ export const readLearning = async (db: D1Database, owner: string) => {
           baseline: evidence.baselineComfort,
         });
     }
+  const learned = learnComfort(examples);
   return {
-    ...learnComfort(examples),
-    evaluation: evaluateLearning(examples),
+    ...learned,
+    factors: enabled
+      ? learned.factors
+      : learned.factors.map((f) => ({ ...f, adjustmentPoints: 0 })),
+    evaluation: evaluateLearning(enabled ? examples : []),
+    feedbackRideCount: Number(result[2]?.results[0]?.count ?? 0),
     enabled,
     settingsVersion: settings?.version ?? 0,
     resetAt: settings?.reset_at || null,

@@ -22,8 +22,19 @@ and confirmation that the rider followed the saved route. Planned times are only
 suggestions; the rider must explicitly add timing and confirm the route.
 
 Riders can skip, edit, clear individual ratings, remove all feedback, exclude one
-ride, pause learning, or start learning afresh. Saving feedback never creates a
-second ride. Existing check-in/undo semantics remain unchanged.
+ride, pause tailoring, or start afresh. Saving feedback never creates a second ride.
+Existing check-in/undo semantics remain unchanged.
+
+Clients present this feature as **Tailored Rides** and never say "learning". The
+API keeps its `learning` paths and field names; clients map them as follows:
+
+| API | Client wording |
+| --- | --- |
+| `PATCH /users/me/learning` `enabled` | Use My Feedback (account switch) |
+| `feedback.includeInLearning` | Use to Tailor My Rides (per-ride switch) |
+| `reset: true` | Start Afresh |
+| `eligibleRideCount` of `feedbackRideCount` | Rides That Count |
+| `enabled: false` | "Tailoring is paused…" and the dimmed Progress So Far |
 
 ## API contract
 
@@ -56,7 +67,8 @@ reject unknown fields. Responses use `Cache-Control: no-store`.
 
 - `expectedVersion` is the ride's **experienceVersion**, initially zero.
   `expectedRideVersion` is its ordinary `version`. Both must match; a conflict
-  returns `409 EXPERIENCE_VERSION_CONFLICT`. Refresh the ride before editing again.
+  returns `409 EXPERIENCE_VERSION_CONFLICT` ("This ride or its feedback changed on
+  another device. Refresh and try again."). Refresh the ride before editing again.
 - `timing` and `feedback` can independently be `null`. Sending both as `null`
   removes feedback, timing and their weather evidence, retaining the ride itself.
 - `startTime` is `HH:mm` in the ride's saved date/time zone; elapsed duration is
@@ -96,12 +108,15 @@ Missing evidence has `features: null`, `summary: null`, quality zero; it is neve
 interpreted as dry, calm or comfortable weather. A record can be `ready` with
 `reason: "reanalysis-pending"` while provisional evidence is usable in shadow mode.
 
-### Personal learning controls
+### Tailored Rides controls
 
 `GET /users/me/learning` returns:
 
 - `modelVersion: "ride-comfort-shadow-v1"`, `mode: "shadow"`, `scoringApplied: false`.
 - `enabled`, `settingsVersion`, `resetAt`, `status`, `eligibleRideCount`.
+- `feedbackRideCount`: rides with feedback first submitted after `resetAt`,
+  including rides excluded from tailoring or still waiting for weather. Clients
+  show "Rides That Count `eligibleRideCount` of `feedbackRideCount`".
 - Per-factor `evidenceCount`, `confidence`, `adjustmentPoints` for `cold`, `heat`,
   `wind`, `rain`, `shade`. Confidence is a conservative evidence-weight heuristic,
   **not** a calibrated probability or statistical confidence interval.
@@ -117,9 +132,12 @@ interpreted as dry, calm or comfortable weather. A record can be `ready` with
 ```
 
 Settings begin enabled at version zero; successful writes increment the version.
-Stale writes return `409 LEARNING_VERSION_CONFLICT`. Disabled accounts receive no
-new weather jobs and have zero personal adjustments. Re-enabling permits existing
-eligible evidence again. `reset: true` excludes feedback first submitted at or
+Stale writes return `409 LEARNING_VERSION_CONFLICT` ("Tailored Rides changed on
+another device. Refresh and try again."). Disabled accounts receive no new weather
+jobs and have zero personal adjustments and an empty `evaluation`, but keep
+`eligibleRideCount`, `feedbackRideCount` and per-factor `evidenceCount`/`confidence`
+so clients can show paused progress. Re-enabling permits existing eligible evidence
+again. `reset: true` excludes feedback first submitted at or
 before the reset timestamp, while retaining ratings/history. Editing that earlier
 feedback does not re-include it. Removing it and explicitly submitting fresh feedback
 creates a new submission. An already dispatched weather request may finish after
