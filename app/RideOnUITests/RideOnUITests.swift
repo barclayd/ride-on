@@ -133,9 +133,15 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
 
         // Search takes the title's place once the list scrolls.
-        row.swipeUp()
+        // The first library row is partly behind the system tab bar at medium height.
+        // Start in the visible shortlist, so this scroll reaches the list rather than the tab bar.
+        let card = routeButton(in: app, startingWith: "Hilly Loop")
+        let handleY = app.buttons["Expand panel"].frame.minY
+        let start = card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -200)))
         let searchField = app.textFields["routes-search"]
         XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["Expand panel"].frame.minY, handleY, accuracy: 2)
         searchField.tap()
         searchField.typeText("Epping")
 
@@ -154,7 +160,9 @@ final class RideOnUITests: XCTestCase {
 
         // The grabber, at medium, flicked down to collapsed: just the grabber above the tab bar.
         let grabber = app.buttons["Expand panel"]
-        grabber.swipeDown()
+        // The handle is only 20pt tall; an element swipe never clears UIKit's pan slop.
+        let start = grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 300)))
         XCTAssertTrue(card.waitForNonExistence(timeout: 5))
         XCTAssertTrue(grabber.isHittable)
         XCTAssertTrue(app.buttons["Routes"].isHittable)

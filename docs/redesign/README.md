@@ -579,6 +579,7 @@ Build:
 - [x] Full-screen map with route lines, start marker, callout and map controls
 - [x] Find My-style panel behind the tab bar: collapsed/small/medium/large detents, list scrolling at every detent, sheet-style drag shared with the list, velocity-carrying critically damped settle, title swapping for search on scroll
 - [x] Search, "+" menu (items are no-ops for now)
+- [x] Reconciled with current main (30 October): the UIKit pan owns the grabber drag; UI coverage scrolls within the visible list at medium and drags beyond the 20pt handle
 - [x] Shortlist carousel with status pills, scores, remove
 - [x] Library and History segments, row selection and actions, Details → Ride detail
 - [x] Accessibility sizes (cards widen and stack, rows wrap), Reduce Transparency/Increase Contrast fallbacks
