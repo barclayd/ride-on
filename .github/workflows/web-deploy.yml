@@ -1,0 +1,66 @@
+name: web-deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "web/app/**"
+      - "web/design-system/**"
+      # build.ts copies the cycle map style and the extension's icons from these.
+      - "app/Packages/Features/Sources/SharedUI/CycleMap/**"
+      - "extension/public/icon/**"
+      - ".github/workflows/web-deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Manual retries must also deploy main, never an unmerged feature branch.
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build
+      - run: bunx wrangler deploy --tag "$GITHUB_SHA"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # The edge must serve this build's client bundle, and the BFF must still guard the app and
+      # /api. A new version can take a few seconds to reach the edge serving this runner.
+      - name: Verify deployed app
+        run: |
+          verify() {
+            [ "$(curl -s -o /dev/null -w '%{redirect_url}' "$APP_URL/")" = "$APP_URL/sign-in" ] || return 1
+            [ "$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/api/routes")" = 401 ] || return 1
+            for file in public/assets/*; do
+              curl -sf "$APP_URL/assets/${file#public/assets/}" | cmp -s - "$file" || return 1
+            done
+          }
+          for attempt in 1 2 3 4 5 6; do
+            if verify; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 6 ]; then
+              sleep 10
+            fi
+          done
+          exit 1
+        env:
+          APP_URL: https://app.ride-on.cc

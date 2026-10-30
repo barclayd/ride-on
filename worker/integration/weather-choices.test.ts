@@ -51,6 +51,15 @@ const weather = z.object({
   selectedSource: z
     .object({ providerId: z.string(), productId: z.string() })
     .nullable(),
+  attempts: z.array(
+    z.object({
+      source: z.object({ providerId: z.string() }),
+      status: z.string(),
+    }),
+  ),
+  fallback: z
+    .object({ reason: z.string(), retryAt: z.string().nullable() })
+    .nullable(),
 });
 const result = z.object({
   recommendedRouteId: z.string().nullable(),
@@ -282,6 +291,63 @@ integration(
     assert.ok(
       h.requests.every((r) => r.url.includes('mo-blended-prob-forecast')),
     );
+  },
+);
+
+integration(
+  'Met Office quota exhaustion moves the whole comparison to Apple Weather and says so',
+  async (h) => {
+    h.use(
+      http.get(
+        'https://data.hub.api.metoffice.gov.uk/mo-blended-prob-forecast-feature-svc/2.0.0/collections/*',
+        () =>
+          new HttpResponse(null, {
+            status: 429,
+            headers: { 'Retry-After': '600' },
+          }),
+      ),
+      apple(),
+    );
+    const route = await upload(h);
+    const rec = await recommend(h, route.id, {
+      weatherProviderId: 'met-office',
+    });
+    assert.equal(rec.recommendedRouteId, route.id);
+    assert.equal(rec.weather.requestedProviderId, 'met-office');
+    assert.deepEqual(rec.weather.selectedProvider, {
+      id: 'apple-weather',
+      name: 'Apple Weather',
+    });
+    assert.deepEqual(rec.weather.fallback, {
+      reason: 'rate-limited',
+      retryAt: '2026-10-09T12:10:00.000Z',
+    });
+    // The Apple fixture covers one day, so its attempt can be partial.
+    assert.deepEqual(
+      rec.weather.attempts.map((a) => [
+        a.source.providerId,
+        a.status === 'unavailable',
+      ]),
+      [
+        ['met-office-bpf', true],
+        ['apple-weather', false],
+      ],
+    );
+    assert.equal(rec.forecast.representation, 'deterministic');
+    const windows = await h.send('/recommendations/next-windows', {
+      body: JSON.stringify({
+        routeIds: [route.id],
+        after: { date: '2026-10-09', window: 'daylight' },
+        weatherProviderId: 'met-office',
+      }),
+    });
+    assert.equal(windows.status, 200, await windows.clone().text());
+    const next = z
+      .object({ weather, forecast: result.shape.forecast })
+      .parse(await windows.json());
+    assert.equal(next.weather.selectedProvider?.id, 'apple-weather');
+    assert.equal(next.weather.fallback?.reason, 'rate-limited');
+    assert.equal(next.forecast.representation, 'deterministic');
   },
 );
 

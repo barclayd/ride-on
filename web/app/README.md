@@ -7,8 +7,8 @@ of `ride-on-api`, reached over the `API` service binding, and serves the map she
 - `src/session.ts`: the session and handoff cookies, PKCE and the API calls
 - `src/pages.tsx`: the document, `MapShell` and the sign-in page
 - `src/client/`: the hydrated `CycleMap` entry and the MapLibre mount
-- `build.ts`: bundles the client and copies MapLibre, SharedUI's map style, the tokens and the
-  favicon into `public/`
+- `build.ts`: bundles the client and copies MapLibre, SharedUI's map style, the tokens, the favicon
+  and the app icon into `public/`
 
 ## Local development
 
@@ -44,3 +44,11 @@ rewrites `request.url` to `app.ride-on.cc`.
 bun run check         # types, lint, tests
 bun run build:check   # wrangler deploy --dry-run
 ```
+
+`web-ci` runs both on every PR that touches the app.
+
+## Deploying
+
+Merging to `main` deploys the app to app.ride-on.cc (`.github/workflows/web-deploy.yml`). The
+workflow tags the version with the commit, then checks the edge serves that build's client bundle.
+`bun run deploy` still works by hand, but ask Dan first.

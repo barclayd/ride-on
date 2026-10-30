@@ -240,7 +240,7 @@ export const recommendNextWindows = async (
     resolvedPreferences: settings.preferences,
     preferenceLevels: preferenceLevels(settings.preferences),
     riding: settings.riding,
-    forecast: settings.forecast,
+    forecast: shared.forecast,
     history: shared.history,
     weather: shared.weather,
   };

@@ -30,6 +30,9 @@ export const weatherProviderChoices = {
   },
 } as const;
 
+/** A provider choice that runs out of quota hands the whole comparison to this one. */
+export const quotaFallbackProviderId: WeatherProviderId = 'apple-weather';
+
 export const weatherProviderForSource = (sourceId: string | undefined) => {
   const id = weatherProviderIds.find((id) =>
     (weatherProviderChoices[id].sourceIds as readonly string[]).includes(

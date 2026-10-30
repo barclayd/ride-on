@@ -111,3 +111,18 @@ export const getForecastForPolicy = async (
     throw new Error('At least one weather provider must be selected.');
   return { ...selected, attempts };
 };
+
+/** Quota covers the whole subscription, so one rate-limited location means the
+ * provider can't finish the comparison. Null when nothing was rate-limited. */
+export const rateLimited = (selected: SelectedForecast | null) => {
+  const issues = (selected?.results ?? []).flatMap((result) =>
+    result.status === 'unavailable'
+      ? result.issues.filter((issue) => issue.code === 'rate-limited')
+      : [],
+  );
+  if (!issues.length) return null;
+  const waits = issues.flatMap((issue) =>
+    issue.retryAfterSeconds === undefined ? [] : [issue.retryAfterSeconds],
+  );
+  return { retryAfterSeconds: waits.length ? Math.max(...waits) : null };
+};
