@@ -19,6 +19,9 @@ bun run deploy     # build + wrangler deploy (CI does this on main)
   `.tsx` islands for anything interactive or scroll-driven
 - Static sections reveal with `[data-rv]` → `[data-seen]` (an IntersectionObserver in
   `src/layouts/Base.astro`); reduced motion and no-JS show everything at once
+- `INTRO_MAP` in `src/lib/flags.ts` gates the intro's live map, posters and drawn rides. It's off
+  for now (the map could take mobile Safari down), so the intro sits on the design's original
+  hatched backdrop; set it to `true` to bring the map back
 - `scripts/copy-map.ts` copies SharedUI's `CycleMap` style, sprite and glyphs into `public/map` and
   vendors MapLibre into `public/vendor` on every build (both gitignored). Tiles come from
   https://maps.ride-on.cc

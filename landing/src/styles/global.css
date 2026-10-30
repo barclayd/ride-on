@@ -347,6 +347,17 @@ button {
   fill: var(--accent);
 }
 
+/* The design's original backdrop, for when the INTRO_MAP flag is off. */
+.intro-hatch {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    135deg,
+    light-dark(rgba(0, 0, 0, 0.045), rgba(255, 255, 255, 0.05)) 0 1px,
+    transparent 1px 14px
+  );
+}
+
 .intro-scrim {
   position: absolute;
   inset: 0;
