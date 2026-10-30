@@ -54,13 +54,25 @@ export const assignSlots = (
 // The API keeps only the shortlist's order, so the slots live in this browser. Sign-out clears them.
 const key = 'ride-on:route-slots';
 
+const stored = (): Record<string, number> => {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? '{}');
+  } catch {
+    return {};
+  }
+};
+
+/** In a swap, the route coming in takes the outgoing route's slot. Call it before `routeSlots`. */
+export const handOver = (from: string, to: string) => {
+  const { [from]: slot, ...rest } = stored();
+  try {
+    localStorage.setItem(key, JSON.stringify({ ...rest, [to]: slot }));
+  } catch {}
+};
+
 /** The shortlist's slots, reconciled with the ones this browser last showed. */
 export const routeSlots = (shortlist: readonly string[]) => {
-  let previous: Record<string, number> = {};
-  try {
-    previous = JSON.parse(localStorage.getItem(key) ?? '{}');
-  } catch {}
-  const slots = assignSlots(shortlist, previous);
+  const slots = assignSlots(shortlist, stored());
   try {
     localStorage.setItem(key, JSON.stringify(Object.fromEntries(slots)));
   } catch {}

@@ -1,13 +1,16 @@
+import type { FeatureCollection } from 'geojson';
 import type {
   ExpressionSpecification,
   FilterSpecification,
+  GeoJSONSource,
   Map as MapLibreMap,
   StyleSpecification,
 } from 'maplibre-gl';
 import { Protocol } from 'pmtiles';
 import type { Line } from '../geometry.ts';
-import { type Library, loadLibrary } from './library.ts';
-import { HUES, routeSlots, UNSCORED } from './slots.ts';
+import { board } from './board.ts';
+import type { Library } from './library.ts';
+import { HUES, UNSCORED } from './slots.ts';
 
 type Bounds = [[number, number], [number, number]];
 const gb: Bounds = [
@@ -68,11 +71,8 @@ export async function mount(container: HTMLElement, signal: AbortSignal) {
   const { origin } = location;
   // A camera in the hash wins; a bare URL waits for the library so the first frame already fits it.
   const bare = location.hash.length < 2;
-  const library = loadLibrary(signal).catch((error) => {
-    // ponytail: the designed error states are v1 (SPEC §7.8); until then the map shows no routes.
-    if (!signal.aborted) console.warn('Ride On: no library', error);
-    return null;
-  });
+  // ponytail: the designed error states are v1 (SPEC §7.8); until then a failed load shows no routes.
+  const library = board.load();
   const [maplibre, style, ready] = await Promise.all([
     import(`${origin}/vendor/maplibre-gl/maplibre-gl.mjs`) as Promise<
       typeof import('maplibre-gl')
@@ -102,27 +102,30 @@ export async function mount(container: HTMLElement, signal: AbortSignal) {
   });
   signal.addEventListener('abort', () => map.remove());
   const [loaded] = await Promise.all([library, map.once('load')]);
-  if (loaded && !signal.aborted) addRoutes(map, loaded);
+  if (loaded && !signal.aborted) addRoutes(map, loaded, signal);
 }
 
+/** Every route as one feature, shortlisted ones last so they draw over the grey ones and win a hover. */
+const collection = (
+  lines: Map<string, Line>,
+  slots: Map<string, number>,
+): FeatureCollection => ({
+  type: 'FeatureCollection',
+  features: [...lines.keys()]
+    .sort((a, b) => Number(slots.has(a)) - Number(slots.has(b)))
+    .map((id) => ({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: lines.get(id) ?? [] },
+      properties: { id },
+    })),
+});
+
 /** Every library route in one source: shortlisted ones in their identity colour, the rest thin and grey. */
-function addRoutes(map: MapLibreMap, { shortlist, lines }: Library) {
-  const slots = routeSlots(shortlist);
-  // Shortlisted lines come last, so they draw over the grey ones and win a hover where lines cross.
-  const ids = [...lines.keys()].sort(
-    (a, b) => Number(slots.has(a)) - Number(slots.has(b)),
-  );
+function addRoutes(map: MapLibreMap, { lines }: Library, signal: AbortSignal) {
   map.addSource('routes', {
     type: 'geojson',
     promoteId: 'id',
-    data: {
-      type: 'FeatureCollection',
-      features: ids.map((id) => ({
-        type: 'Feature',
-        geometry: { type: 'LineString', coordinates: lines.get(id) ?? [] },
-        properties: { id },
-      })),
-    },
+    data: collection(lines, board.slots),
   });
   const line = { type: 'line', source: 'routes', layout: round } as const;
   // routes-hit is 22px and invisible, so thin lines are easy to hover.
@@ -172,22 +175,47 @@ function addRoutes(map: MapLibreMap, { shortlist, lines }: Library) {
     },
     before,
   );
-  for (const [id, slot] of slots)
-    map.setFeatureState({ source: 'routes', id }, { c: HUES[slot], on: true });
-
-  let hovered: string | null = null;
-  const hover = (id: string | null) => {
-    if (id === hovered) return;
-    hovered = id;
-    map.getCanvas().style.cursor = id ? 'pointer' : '';
-    map.setFilter('top-casing', only(id ? [id] : []));
-    map.setFilter('top-line', only(id ? [id] : []));
+  const paint = () => {
+    for (const [id, slot] of board.slots)
+      map.setFeatureState(
+        { source: 'routes', id },
+        { c: HUES[slot], on: true },
+      );
   };
+  paint();
+  // A shortlist change re-sorts the lines and repaints them from scratch, so a route that left drops its colour.
+  board.addEventListener(
+    'shortlist',
+    () => {
+      map.removeFeatureState({ source: 'routes' });
+      map
+        .getSource<GeoJSONSource>('routes')
+        ?.setData(collection(lines, board.slots));
+      paint();
+    },
+    { signal },
+  );
+
+  // Hover goes through the board, so a line and its row in the panel light together.
+  board.addEventListener(
+    'hover',
+    () => {
+      const id = board.hovered;
+      map.setFilter('top-casing', only(id ? [id] : []));
+      map.setFilter('top-line', only(id ? [id] : []));
+    },
+    { signal },
+  );
   map.on('mousemove', (event) => {
     const [top] = map.queryRenderedFeatures(event.point, {
       layers: ['routes-hit'],
     });
-    hover(typeof top?.properties.id === 'string' ? top.properties.id : null);
+    const id =
+      typeof top?.properties.id === 'string' ? top.properties.id : null;
+    map.getCanvas().style.cursor = id ? 'pointer' : '';
+    board.hover(id);
   });
-  map.getCanvas().addEventListener('mouseleave', () => hover(null));
+  map.getCanvas().addEventListener('mouseleave', () => board.hover(null), {
+    signal,
+  });
 }
