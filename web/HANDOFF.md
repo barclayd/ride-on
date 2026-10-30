@@ -1,6 +1,6 @@
 # app.ride-on.cc: handoff
 
-This is where the web app stood on 27 October 2026, written for whoever picks it up next.
+This is where the web app stood on 30 October 2026, written for whoever picks it up next.
 
 Read it with:
 
@@ -24,7 +24,24 @@ Read it with:
    - An empty `MapShell` on the cycle map.
 
    Everything is verified locally except a full Apple or Google sign-in (see Gotchas).
-4. **Nothing is deployed yet.** app.ride-on.cc isn't live.
+4. **app.ride-on.cc is live** with the spike. It was deployed on 30 October 2026, as version
+   `7c8a8607`.
+   - The production `AUTH_CONFIG_JSON` now has the app's origin and callback.
+   - The smoke checks pass:
+     - `/` redirects to sign-in.
+     - `/api/*` returns 401 without a session.
+     - The Google start hop reaches accounts.google.com, which accepts the new callback.
+   - A real Apple or Google sign-in still needs Dan in a browser (next steps, step 1).
+5. **Screen 1 of the v1 screens is built**: the library on the map, in identity colours. It isn't
+   deployed yet.
+   - `GET /api/library-geometry` is in `app/src/geometry.ts`. It fans out to
+     `/routes/:id/geometry`, six calls at a time, and returns one FeatureCollection.
+   - The client is split into:
+     - `client/library.ts`, which loads the library
+     - `client/geometry-cache.ts`, the IndexedDB line cache, keyed `routeId@version`
+     - `client/slots.ts`, which assigns the colour slots and keeps them in localStorage
+   - Sign-out sends `Clear-Site-Data: "storage"`, so the next person on the device doesn't see the
+     last rider's lines or colours.
 
 ## Decisions since the spec
 
@@ -82,28 +99,33 @@ which colour is which ride.
 
 ## Next steps, in order
 
-### 1. Go live
+### 1. Finish checking go-live
 
-This is outward-facing, so **ask Dan first**. He hasn't given the go-ahead yet.
+The secret and the deploy are done. These checks need a real account, so Dan has to do them in a
+browser:
 
-1. **Update the production `AUTH_CONFIG_JSON`**, the API's Worker secret. See
-   [docs/authentication.md](../docs/authentication.md) under "Secret configuration".
-   - Add `https://app.ride-on.cc` to `trustedOrigins`.
-   - Add `https://app.ride-on.cc/auth/callback` to `clientRedirects`.
-   - From `worker/`, run `bunx wrangler secret put AUTH_CONFIG_JSON`.
-2. **Deploy:** run `bun run deploy` in `app/`. The `custom_domain` route creates app.ride-on.cc.
-3. **Check:**
-   - Apple sign-in, end to end.
-   - Google sign-in, end to end.
-   - Sign-out.
-   - `/api/*` with the session.
+- Apple sign-in, end to end.
+- Google sign-in, end to end.
+- Sign-out.
+- `/api/*` with the session.
+
+Each later deploy (`bun run deploy` in `app/`) is outward-facing, so **ask Dan first**.
 
 ### 2. The v1 screens (SPEC §14 step 6)
 
 Build them one PR at a time, in this order:
 
-1. The library on the map, in identity colours.
-2. The shortlist and scores.
+1. ~~The library on the map, in identity colours.~~ Done.
+2. The shortlist and scores. Things to know before starting:
+   - **Panel colours:** add `--route-1` to `--route-12`, in light and dark, to the tokens. The map
+     already uses `HUES` from `client/slots.ts`, which holds the light values.
+   - **Swaps:** a swap has to write the outgoing route's slot to the incoming route, through the
+     stored slots in `client/slots.ts`, before `assignSlots` runs. The tests already cover it.
+   - **Shortlist changes** have to:
+     - reset the feature state
+     - re-sort the source with `setData`, so shortlisted lines still draw on top
+   - **The phone fit** already leaves room for the sheet (`padding()` in `map.ts`). Until the sheet
+     exists, the routes sit in a band at the top of the screen.
 3. The day strip.
 4. The detail.
 5. Preferences and Pause.
@@ -123,7 +145,6 @@ Port each piece from `design/`:
 
 Also on the way:
 
-- `GET /api/library-geometry` (SPEC §12.4)
 - `/api/client-errors` and Web Analytics (SPEC §11.3)
 - passkeys (SPEC §11.2)
 
