@@ -1,0 +1,40 @@
+---
+const NOTES = [
+  { icon: '🌧', title: 'Rain moves in', body: 'Hilly Loop, 60% from 11:00', time: 'now' },
+  { icon: '⏰', title: 'A better time for Hilly Loop', body: 'Tue 20 Oct, 10:00 scores 82', time: '2h ago' },
+  { icon: '✓', title: "Tomorrow's forecast", body: 'Still 86', time: '18:00' },
+];
+---
+
+<section class="section" data-rv>
+  <div class="wrap split track-split">
+    <div class="copy">
+      <div class="eyebrow">Track it</div>
+      <h2 class="h2">Quiet unless it matters.</h2>
+      <p class="lede">
+        Tap the bell and Ride On watches the forecast until you leave. It never switches your plan on its own.
+      </p>
+    </div>
+    <div class="track-stack">
+      <div class="island rv">
+        <div class="island-ring tabular">86</div>
+        <span>Hilly Loop</span>
+        <span class="tabular">Leave 09:00</span>
+      </div>
+      {
+        NOTES.map((note, i) => (
+          <div class="note rv" style={`--rv-delay: ${300 + i * 220}ms`}>
+            <div class="note-icon" aria-hidden="true">{note.icon}</div>
+            <div class="note-text">
+              <div class="note-head">
+                <strong>{note.title}</strong>
+                <span>{note.time}</span>
+              </div>
+              <span class="note-body">{note.body}</span>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

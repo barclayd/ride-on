@@ -7,6 +7,8 @@ import Foundation
 public struct RideBoard: Hashable, Sendable {
     public var window: DateInterval
     public var generatedAt: Date
+    public var timeZone: String = TimeZone.current.identifier
+    public var expired = false
     /// Every route that fits the window at its best departure, best first.
     public var picks: [Pick]
     /// One entry per day in the window, in order.
@@ -212,7 +214,7 @@ public struct RideWindow: Hashable, Sendable {
         self.hours = hours
     }
 
-    public enum Hours: Hashable, Sendable {
+    public enum Hours: Codable, Hashable, Sendable {
         case daylight
         /// Minutes after midnight.
         case custom(leave: Int, back: Int)
@@ -248,11 +250,29 @@ public extension RideBoard.Sky {
         case .rain: "Rain"
         }
     }
+
+    var systemImage: String {
+        switch self {
+        case .sunny: "sun.max.fill"
+        case .sunnySpells: "cloud.sun.fill"
+        case .cloudy: "cloud.fill"
+        case .rain: "cloud.rain.fill"
+        }
+    }
 }
 
 public extension RideBoard.Wind {
     /// Sentence case: "Tailwind".
     var title: String { rawValue.capitalized }
+
+    /// Which way it pushes the rider: with them, across, against.
+    var systemImage: String {
+        switch self {
+        case .tailwind: "arrow.up"
+        case .crosswind: "arrow.right"
+        case .headwind: "arrow.down"
+        }
+    }
 }
 
 // MARK: - Sample

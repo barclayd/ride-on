@@ -76,17 +76,6 @@ public struct FlowLayout: Layout {
     }
 }
 
-public extension RideBoard.Sky {
-    var systemImage: String {
-        switch self {
-        case .sunny: "sun.max.fill"
-        case .sunnySpells: "cloud.sun.fill"
-        case .cloudy: "cloud.fill"
-        case .rain: "cloud.rain.fill"
-        }
-    }
-}
-
 #Preview {
     FlowLayout {
         ConditionChip("9–14°", systemImage: "thermometer.medium", tint: .orange)

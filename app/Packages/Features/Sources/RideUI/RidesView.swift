@@ -10,6 +10,8 @@ import SharedUI
 /// the window's days, then every other tracked route.
 public struct RidesView: View {
     var board: RideBoard
+    var refreshStatus: String?
+    var previousPlan: Bool
     var refresh: @MainActor @Sendable () async -> Void
     var apply: @MainActor @Sendable (RideWindow) async -> Void
     @State private var selectedDay: Date
@@ -20,6 +22,7 @@ public struct RidesView: View {
     @State private var shownTracked: String?
     @Namespace private var zoom
     @Environment(RideTracker.self) private var tracker: RideTracker?
+    @Environment(RideRequest.self) private var request: RideRequest?
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.speedSystem) private var speedSystem
     @Environment(\.locale) private var locale
@@ -28,8 +31,11 @@ public struct RidesView: View {
     /// `apply` reloads Rides for a window chosen in the Ride Window sheet.
     // ponytail: the fixture world's default `apply` does nothing, so Done there only closes the sheet.
     public init(board: RideBoard, refresh: @escaping @MainActor @Sendable () async -> Void = {},
-                apply: @escaping @MainActor @Sendable (RideWindow) async -> Void = { _ in }) {
+                apply: @escaping @MainActor @Sendable (RideWindow) async -> Void = { _ in },
+                refreshStatus: String? = nil, previousPlan: Bool = false) {
         self.board = board
+        self.refreshStatus = refreshStatus
+        self.previousPlan = previousPlan
         self.refresh = refresh
         self.apply = apply
         let bestDay = board.days.first { $0.best?.id == board.picks.first?.id } ?? board.days.first
@@ -49,7 +55,7 @@ public struct RidesView: View {
                 VStack(spacing: 16) {
                     ZStack(alignment: .bottomTrailing) {
                         NavigationLink(value: hero) {
-                            RideHero(pick: hero, eyebrow: hero.id == board.picks.first?.id ? "Best pick" : "Best that day")
+                            RideHero(pick: hero, eyebrow: previousPlan ? "Previous pick" : hero.id == board.picks.first?.id ? "Best pick" : "Best that day")
                                 .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
@@ -65,6 +71,13 @@ public struct RidesView: View {
                     }
 
                     Group {
+                        if let refreshStatus {
+                            Text(refreshStatus)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("rides.refreshStatus")
+                        }
                         conditionsCard(hero)
                         RideSection("Your Window") { windowCard }
                         let others = board.picks.filter { $0.route.id != hero.route.id }
@@ -90,16 +103,32 @@ public struct RidesView: View {
         #endif
         .toolbar(removing: .title)
         .navigationDestination(for: RideBoard.Pick.self) { pick in
-            RideDetailView(board: board, pick: pick)
+            let current = board.details[pick.id]?.pick ?? pick
+            RideDetailView(board: board, pick: current, previousPlan: previousPlan)
                 .zoomTransition(from: pick.id, in: zoom)
         }
         .refreshable { await refresh() }
+        .onChange(of: board.days.map(\.date)) { _, dates in
+            if !dates.contains(selectedDay) {
+                selectedDay = board.days.first { $0.best?.id == board.picks.first?.id }?.date ?? dates.first ?? board.window.start
+            }
+        }
         .sheet(isPresented: $choosingWindow) { RideWindowSheet(board: board, apply: apply) }
         // The bell changes once the sheet has gone, so the change is seen.
         .sheet(item: $tracking, onDismiss: showTracked) { pick in
             TrackRideSheet(pick: pick, isTracking: shownTracked == pick.id, replacing: replacing(pick))
         }
         .onAppear { shownTracked = tracker?.ride?.pickID }
+        .onChange(of: request?.pickID, initial: true) { _, id in
+            guard let id, let request else { return }
+            let track = request.track
+            request.pickID = nil
+            guard let pick = (board.picks + board.days.compactMap(\.best)).first(where: { $0.id == id }) else { return }
+            if let day = board.days.first(where: { $0.best?.id == id }) ?? board.days.first(where: { Calendar.current.isDate($0.date, inSameDayAs: pick.start) }) {
+                selectedDay = day.date
+            }
+            if track { tracking = trackable(pick) }
+        }
         .onChange(of: tracker?.ride?.pickID) { if tracking == nil { showTracked() } }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -212,7 +241,10 @@ public struct RidesView: View {
         return VStack(alignment: .leading, spacing: 14) {
             planHeader(pick)
             Divider()
-            let verdict = Verdict(meetsMinimums: pick.meetsMinimums)
+            let verdict = Group {
+                if previousPlan { Label("From your saved forecast", systemImage: "clock") }
+                else { Verdict(meetsMinimums: pick.meetsMinimums) }
+            }
             let lastRidden = pick.lastRidden.map {
                 Text("Last ridden \($0.formatted(.dateTime.day().month(.abbreviated)))")
                     .font(.footnote.weight(.regular))
@@ -314,7 +346,7 @@ public struct RidesView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
-                    if pick.meetsMinimums {
+                    if pick.meetsMinimums || previousPlan {
                         Text("\(UnitFormat.temperatureRange(c: pick.conditions.temperatureC, locale: locale)) · \(pick.conditions.wind.title) · \(pick.conditions.sky.title)")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
@@ -394,10 +426,20 @@ public struct RidesView: View {
 
     // MARK: Chrome
 
+    private var updatedTime: String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: board.timeZone) ?? .current
+        var format = calendar.isDateInToday(board.generatedAt)
+            ? Date.FormatStyle.dateTime.hour().minute()
+            : Date.FormatStyle.dateTime.day().month(.abbreviated).hour().minute()
+        format.timeZone = calendar.timeZone
+        return board.generatedAt.formatted(format)
+    }
+
     private var footer: some View {
         VStack(alignment: .leading, spacing: 4) {
             WeatherAttributionFooter(board.credits)
-            Text("Updated \(board.generatedAt.formatted(.clockTime)). Pull down to refresh.")
+            Text("Updated \(updatedTime). Pull down to refresh.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -509,4 +551,19 @@ struct RouteGPX: Transferable {
         RidesView(board: .sample)
     }
     .environment(RideTracker(live: false))
+}
+
+/// A widget tap (docs/redesign/README.md §8): Rides shows the ride's day, and with `track` opens its
+/// Track sheet. The app sets it from `rideon://ride`; Rides clears it once handled.
+@MainActor @Observable
+public final class RideRequest {
+    public var pickID: String?
+    public var track = false
+
+    public init() {}
+
+    public func open(_ pickID: String, track: Bool) {
+        self.track = track
+        self.pickID = pickID
+    }
 }

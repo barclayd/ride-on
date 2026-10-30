@@ -1,0 +1,47 @@
+---
+import BetaForm from '../components/BetaForm';
+import Cards from '../components/Cards.astro';
+import Faq from '../components/Faq';
+import Footer from '../components/Footer.astro';
+import How from '../components/How.astro';
+import Intro from '../components/Intro';
+import Nav from '../components/Nav.astro';
+import Problem from '../components/Problem';
+import Reveal from '../components/Reveal';
+import Score from '../components/Score.astro';
+import Track from '../components/Track.astro';
+import Wind from '../components/Wind';
+import Window from '../components/Window.astro';
+import You from '../components/You.astro';
+import Base from '../layouts/Base.astro';
+---
+
+<Base>
+  <Nav />
+  <main>
+    <Intro client:load />
+    <Reveal client:idle />
+    <Problem client:idle />
+    <How />
+    <Wind client:idle />
+    <Score />
+    <Window />
+    <Track />
+    <You />
+    <Cards />
+    <section id="faq" class="section faq-section">
+      <div class="wrap">
+        <h2 class="h2">FAQs</h2>
+        <Faq client:visible />
+      </div>
+    </section>
+    <section id="beta" class="section beta-section">
+      <div class="cta">
+        <h2>Ride on.</h2>
+        <p>Join the beta for iPhone and Mac. Great Britain only, for now.</p>
+        <BetaForm client:visible />
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Base>

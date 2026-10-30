@@ -29,8 +29,10 @@ targets:
     supportedDestinations: [iOS, macOS]
     sources:
       - path: App
+      - path: Shared
       - path: RideOn.icon
     dependencies:
+      - target: RideOnWidgets
       - package: Router
       - package: Services
       - package: Features
@@ -55,7 +57,9 @@ targets:
         UILaunchScreen: {}
         # Lets CloudKit's silent pushes wake the app so SwiftData pulls
         # remote changes in the background (iOS-only key, ignored on macOS).
-        UIBackgroundModes: [remote-notification]
+        UIBackgroundModes: [remote-notification, fetch]
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.danbarclay.rideon.refresh
         # Opened GPX/FIT files are imported as copies (app-owned data), never
         # edited in place. Declaring UISupportsDocumentBrowser silences Xcode's
         # "doesn't declare opening in place" iOS warning; it's a UIKit key, so
@@ -92,6 +96,8 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.danbarclay.rideon.strava
             CFBundleURLSchemes: [rideon]
+        # The tracked ride's Live Activity (RideLiveActivity, iOS only).
+        NSSupportsLiveActivities: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.danbarclay.rideon
@@ -112,6 +118,41 @@ targets:
         CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: App/RideOn-iOS.entitlements
         CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: App/RideOn-iOS.entitlements
         CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: App/RideOn-macOS.entitlements
+
+  # The widget, its Lock Screen forms, the Control Centre control and the Live
+  # Activity (docs/redesign/README.md §8). Links only Models and DesignSystem:
+  # SharedUI brings MapLibre, too heavy for a widget's memory.
+  RideOnWidgets:
+    type: app-extension
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Widgets
+      - path: Shared
+      - path: App/Assets.xcassets
+    dependencies:
+      - package: Models
+      - package: DesignSystem
+    info:
+      path: Generated/RideOnWidgets-Info.plist
+      properties:
+        CFBundleDisplayName: Ride On
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danbarclay.rideon.widgets
+        PRODUCT_NAME: RideOnWidgets
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: NO
+        DEVELOPMENT_TEAM: R2GGK3VN2C
+        CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: Widgets/RideOnWidgets-iOS.entitlements
+        CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: Widgets/RideOnWidgets-iOS.entitlements
+        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: Widgets/RideOnWidgets-macOS.entitlements
 
   RideOnTests:
     type: bundle.unit-test

@@ -189,6 +189,17 @@ final class CycleMapSnapshots {
     }
 }
 
+/// The cycle map alone, no route, for the widget's stills (docs/redesign/README.md §8): the widget
+/// draws the loop over it, so its progress can move without a new image. Not cached: the app saves it.
+public enum CycleMapStill {
+    @MainActor
+    public static func image(framing: MKMapRect, size: CGSize, scale: CGFloat) async -> UIImage? {
+        let request = SnapshotRequest(coordinates: [], framing: framing, look: .thumbnail,
+                                      tint: Color.clear.resolve(in: EnvironmentValues()), size: size, scale: scale)
+        return await SnapshotRender(request).image()
+    }
+}
+
 /// One `MLNMapSnapshotter` run, its delegate: the route is added once the style has loaded. Held by
 /// `image()` until the snapshot is done, since the snapshotter holds its delegate weakly.
 @MainActor
@@ -227,6 +238,7 @@ private final class SnapshotRender: NSObject, @preconcurrency MLNMapSnapshotterD
             || layer.identifier.hasPrefix("ct_contour") {
             layer.isVisible = false
         }
+        guard !request.coordinates.isEmpty else { return }
         let (tint, enlarged) = (UIColor(request.tint.color), request.enlarged)
         var coordinates = request.coordinates.map(CLLocationCoordinate2D.init)
         // As given: a still render otherwise simplifies a loop's curves into corners.

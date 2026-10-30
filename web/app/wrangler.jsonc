@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ride-on-app",
+  "account_id": "3343118697a4beccae42090c4520cd29",
+  "main": "src/worker.tsx",
+  "workers_dev": true,
+  "routes": [{ "pattern": "app.ride-on.cc", "custom_domain": true }],
+  "compatibility_date": "2026-10-09",
+  // The BFF (SPEC §11.2): /api/* reaches ride-on-api over this binding, never the public internet.
+  "services": [{ "binding": "API", "service": "ride-on-api" }],
+  // build.ts writes the client bundle, MapLibre and the map style here.
+  "assets": { "directory": "./public" },
+  "observability": { "enabled": true },
+  // Without host, wrangler dev rewrites request.url to app.ride-on.cc.
+  "dev": { "port": 8788, "host": "localhost:8788", "upstream_protocol": "http" }
+}

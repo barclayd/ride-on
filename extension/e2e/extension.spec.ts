@@ -1680,7 +1680,7 @@ test('When tab: Days and Time visible; custom times re-query', async ({
     '14°',
     '14°',
     '14°',
-    'To 12:00',
+    `To ${clock(`${day(5)}T11:00:00Z`, 'Europe/London')}`, // 12:00 in BST, 11:00 in GMT
     'Not yet',
   ]);
   await page.screenshot({ path: test.info().outputPath('when.png') });

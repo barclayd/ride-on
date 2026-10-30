@@ -1,0 +1,95 @@
+---
+import '../styles/global.css';
+import { SITE } from '../lib/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+  noindex?: boolean;
+}
+
+const { title = SITE.title, description = SITE.description, noindex = false } =
+  Astro.props;
+const canonical = new URL(Astro.url.pathname, SITE.url).href;
+const image = new URL('/og.png', SITE.url).href;
+const revision = process.env.GITHUB_SHA ?? 'dev';
+---
+
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex" />}
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <meta name="revision" content={revision} />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE.name} />
+    <meta property="og:locale" content="en_GB" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={image} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Ride On on iPhone, recommending today's best ride" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={image} />
+
+    <noscript>
+      <style>
+        .rv,
+        [data-motion] {
+          opacity: 1 !important;
+          transform: none !important;
+        }
+        .bar-fill {
+          width: var(--w) !important;
+        }
+        .day-label {
+          opacity: 1 !important;
+        }
+        .day-bar {
+          height: var(--h) !important;
+        }
+        .faq-answer {
+          grid-template-rows: 1fr !important;
+        }
+      </style>
+    </noscript>
+  </head>
+  <body>
+    <div id="grid" class="grid" aria-hidden="true"></div>
+    <slot />
+    <script>
+      // Static sections reveal on view: each [data-rv] gains data-seen once 20% of it shows.
+      const targets = document.querySelectorAll<HTMLElement>('[data-rv]');
+      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduced || !('IntersectionObserver' in window)) {
+        for (const target of targets) target.dataset.seen = '';
+      } else {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue;
+              (entry.target as HTMLElement).dataset.seen = '';
+              observer.unobserve(entry.target);
+            }
+          },
+          { threshold: 0.2 },
+        );
+        for (const target of targets) observer.observe(target);
+      }
+    </script>
+  </body>
+</html>

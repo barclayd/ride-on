@@ -15,7 +15,7 @@ public struct LiveRoutesView: View {
     @State private var saving = false
     @State private var saveError: String?
     /// Holds the board Rides loaded, which gives the shortlist cards their status.
-    @Environment(RiderSettingsStore.self) private var settings: RiderSettingsStore?
+    @Environment(RideBoardStore.self) private var rides
 
     public init() {}
 
@@ -51,7 +51,7 @@ public struct LiveRoutesView: View {
                 }
             }
         case .loaded:
-            RoutesView(library: $library, board: settings?.board)
+            RoutesView(library: $library, board: rides.board)
         }
     }
 
@@ -61,8 +61,8 @@ public struct LiveRoutesView: View {
 
     private func load() async {
         guard RideOnAPI.isSignedIn else { phase = .signedOut; return }
-        let settings = settings
-        async let board: Void = Self.refreshBoard(settings, onlyIfMissing: true)
+        let rides = rides
+        async let board: Void = rides.refresh()
         do {
             let (loaded, shortlist) = try await RouteLibraryLoader.load()
             if saving || saved.map({ library.shortlist != $0.routeIDs }) == true {
@@ -115,15 +115,6 @@ public struct LiveRoutesView: View {
             saveError = error.localizedDescription
             return
         }
-        await Self.refreshBoard(settings, onlyIfMissing: false)
-    }
-
-    /// Fetches the board Rides shows, when it hasn't loaded yet or the shortlist changed. A failed
-    /// fetch keeps the last board; Rides loads its own when it appears.
-    private static func refreshBoard(_ settings: RiderSettingsStore?, onlyIfMissing: Bool) async {
-        guard let settings, !onlyIfMissing || settings.board == nil else { return }
-        do {
-            settings.board = try await RideBoardLoader.load()
-        } catch {}
+        await rides.refresh(force: true)
     }
 }

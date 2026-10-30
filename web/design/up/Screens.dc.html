@@ -1,0 +1,726 @@
+<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><script src="./support.js"></script></head><body><x-dc><helmet data-dc-atomics><meta name="design_doc_mode" content="canvas" /><title>Ride On Web: screens</title><link rel="stylesheet" href="https://unpkg.com/lucide-static@0.469.0/font/lucide.css" /><link rel="stylesheet" href="./ride-on.css" /><script src="./map/routes.js"></script><script src="./map/cyclemap.js"></script><script src="./glass.js"></script><style>body { margin: 0; background: #f0eee9; }</style></helmet>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Home: best pick, shortlist and library on the cycle map (Sat 24 Oct)</span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Desktop, light, with Liquid Glass refraction (Chrome and Edge)</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="1a Home, desktop light">
+<div class="map" data-map="home" data-pad="72 40 140 416"></div>
+<aside class="panel glass ">
+<div class="panel-h"><div class="search"><i class="icon-search"></i>Search routes</div><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s">
+  <div class="card">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat</span>
+    <div class="hero">
+      <div class="f1 minw0"><h2>Ripley café loop</h2><div class="dep">10:00 → ~12:30</div><div class="facts">↔ 49.6 km · 267 m climb</div></div>
+      <div class="hero-score"><b>84</b><span class="bar band-great"></span><span>Great</span></div>
+    </div>
+    <div class="chips"><span class="chip"><i class="icon-thermometer"></i>10–13°</span><span class="chip"><i class="icon-wind"></i>SW 18 km/h</span><span class="chip"><i class="icon-cloud-sun"></i>Sunny spells</span><span class="chip"><i class="icon-droplet-off"></i>Dry</span></div>
+    <div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Shortlist</h3><span>12 of 12</span></div>
+    <div class="list"><sc-for list="{{ shortlist }}" as="r"><div class="row {{ r.cls }}">
+      <div class="score"><b>{{ r.s }}</b><span class="bar band-{{ r.band }}"></span></div>
+      <div class="f1 minw0">
+        <div class="nl"><span class="name">{{ r.name }}</span><span class="delta">{{ r.delta }}</span></div>
+        <div class="sub">{{ r.word }} · {{ r.dep }}</div>
+        <div class="sub">{{ r.km }} · {{ r.cond }}</div>
+        <sc-if value="{{ r.below }}"><div class="sub warn"><i class="icon-triangle-alert"></i>{{ r.below }}</div></sc-if>
+      </div>
+    </div></sc-for></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Doesn't Fit Your Window</h3></div>
+    <div class="list"><div class="row"><div class="thumb"><i class="icon-clock"></i></div><div class="f1 minw0"><div class="name">Leith Hill &amp; the Surrey Hills</div><div class="sub">84.8 km · 1072 m climb</div><div class="sub">Needs about 5 h 10 min. Your window is 09:00–14:00.</div></div></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Library</h3><span>3 routes</span></div>
+    <div class="list"><sc-for list="{{ library }}" as="r"><div class="row {{ r.cls }}">
+      <div class="thumb"><i class="icon-route"></i></div>
+      <div class="f1 minw0"><div class="name">{{ r.name }}</div><div class="sub">{{ r.facts }}</div><div class="sub">{{ r.src }}</div></div>
+      <sc-if value="{{ r.hover }}"><span class="add"><i class="icon-plus"></i>Add</span></sc-if>
+    </div></sc-for></div>
+  </div>
+  <div class="footer">Updated 08:12 · forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</aside>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Desktop, Dark Mode panel (map, controls and day strip held light)</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="1b Home, desktop dark panel">
+<div class="map" data-map="home" data-pad="72 40 140 416"></div>
+<aside class="panel glass theme-dark">
+<div class="panel-h"><div class="search"><i class="icon-search"></i>Search routes</div><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s">
+  <div class="card">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat</span>
+    <div class="hero">
+      <div class="f1 minw0"><h2>Ripley café loop</h2><div class="dep">10:00 → ~12:30</div><div class="facts">↔ 49.6 km · 267 m climb</div></div>
+      <div class="hero-score"><b>84</b><span class="bar band-great"></span><span>Great</span></div>
+    </div>
+    <div class="chips"><span class="chip"><i class="icon-thermometer"></i>10–13°</span><span class="chip"><i class="icon-wind"></i>SW 18 km/h</span><span class="chip"><i class="icon-cloud-sun"></i>Sunny spells</span><span class="chip"><i class="icon-droplet-off"></i>Dry</span></div>
+    <div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Shortlist</h3><span>12 of 12</span></div>
+    <div class="list"><sc-for list="{{ shortlist }}" as="r"><div class="row {{ r.cls }}">
+      <div class="score"><b>{{ r.s }}</b><span class="bar band-{{ r.band }}"></span></div>
+      <div class="f1 minw0">
+        <div class="nl"><span class="name">{{ r.name }}</span><span class="delta">{{ r.delta }}</span></div>
+        <div class="sub">{{ r.word }} · {{ r.dep }}</div>
+        <div class="sub">{{ r.km }} · {{ r.cond }}</div>
+        <sc-if value="{{ r.below }}"><div class="sub warn"><i class="icon-triangle-alert"></i>{{ r.below }}</div></sc-if>
+      </div>
+    </div></sc-for></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Doesn't Fit Your Window</h3></div>
+    <div class="list"><div class="row"><div class="thumb"><i class="icon-clock"></i></div><div class="f1 minw0"><div class="name">Leith Hill &amp; the Surrey Hills</div><div class="sub">84.8 km · 1072 m climb</div><div class="sub">Needs about 5 h 10 min. Your window is 09:00–14:00.</div></div></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Library</h3><span>3 routes</span></div>
+    <div class="list"><sc-for list="{{ library }}" as="r"><div class="row {{ r.cls }}">
+      <div class="thumb"><i class="icon-route"></i></div>
+      <div class="f1 minw0"><div class="name">{{ r.name }}</div><div class="sub">{{ r.facts }}</div><div class="sub">{{ r.src }}</div></div>
+      <sc-if value="{{ r.hover }}"><span class="add"><i class="icon-plus"></i>Add</span></sc-if>
+    </div></sc-for></div>
+  </div>
+  <div class="footer">Updated 08:12 · forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</aside>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Mobile, sheet at the medium detent (day strip above the sheet, per spec)</div><div class="dv-card" style="width: 393px">
+<div class="frame phone theme-light" data-screen-label="1c Home, mobile">
+<div class="map" data-map="home" data-pad="112 28 596 28"></div>
+<div class="statusbar">08:14<span><i class="icon-signal"></i><i class="icon-wifi"></i><i class="icon-battery-full"></i></span></div>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+<section class="sheet glass "><div class="grabber"></div>
+
+<div class="panel-h"><div class="search"><i class="icon-search"></i>Search routes</div><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s">
+  <div class="card">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat</span>
+    <div class="hero">
+      <div class="f1 minw0"><h2>Ripley café loop</h2><div class="dep">10:00 → ~12:30</div><div class="facts">↔ 49.6 km · 267 m climb</div></div>
+      <div class="hero-score"><b>84</b><span class="bar band-great"></span><span>Great</span></div>
+    </div>
+    <div class="chips"><span class="chip"><i class="icon-thermometer"></i>10–13°</span><span class="chip"><i class="icon-wind"></i>SW 18 km/h</span><span class="chip"><i class="icon-cloud-sun"></i>Sunny spells</span><span class="chip"><i class="icon-droplet-off"></i>Dry</span></div>
+    <div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Shortlist</h3><span>12 of 12</span></div>
+    <div class="list"><sc-for list="{{ shortlist }}" as="r"><div class="row {{ r.cls }}">
+      <div class="score"><b>{{ r.s }}</b><span class="bar band-{{ r.band }}"></span></div>
+      <div class="f1 minw0">
+        <div class="nl"><span class="name">{{ r.name }}</span><span class="delta">{{ r.delta }}</span></div>
+        <div class="sub">{{ r.word }} · {{ r.dep }}</div>
+        <div class="sub">{{ r.km }} · {{ r.cond }}</div>
+        <sc-if value="{{ r.below }}"><div class="sub warn"><i class="icon-triangle-alert"></i>{{ r.below }}</div></sc-if>
+      </div>
+    </div></sc-for></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Doesn't Fit Your Window</h3></div>
+    <div class="list"><div class="row"><div class="thumb"><i class="icon-clock"></i></div><div class="f1 minw0"><div class="name">Leith Hill &amp; the Surrey Hills</div><div class="sub">84.8 km · 1072 m climb</div><div class="sub">Needs about 5 h 10 min. Your window is 09:00–14:00.</div></div></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Library</h3><span>3 routes</span></div>
+    <div class="list"><sc-for list="{{ library }}" as="r"><div class="row {{ r.cls }}">
+      <div class="thumb"><i class="icon-route"></i></div>
+      <div class="f1 minw0"><div class="name">{{ r.name }}</div><div class="sub">{{ r.facts }}</div><div class="sub">{{ r.src }}</div></div>
+      <sc-if value="{{ r.hover }}"><span class="add"><i class="icon-plus"></i>Add</span></sc-if>
+    </div></sc-for></div>
+  </div>
+  <div class="footer">Updated 08:12 · forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</section>
+</div>
+</div></div>
+<div class="dv-opt" id="1d"><div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Mobile alternative: day strip docked in the sheet, more map</div><div class="dv-card" style="width: 393px">
+<div class="frame phone theme-light" data-screen-label="1d Home, mobile, docked day strip">
+<div class="map" data-map="home" data-pad="112 28 510 28"></div>
+<div class="statusbar">08:14<span><i class="icon-signal"></i><i class="icon-wifi"></i><i class="icon-battery-full"></i></span></div>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+
+<section class="sheet glass "><div class="grabber"></div>
+<div class="daystrip" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+<div class="panel-h"><div class="search"><i class="icon-search"></i>Search routes</div><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s">
+  <div class="card">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat</span>
+    <div class="hero">
+      <div class="f1 minw0"><h2>Ripley café loop</h2><div class="dep">10:00 → ~12:30</div><div class="facts">↔ 49.6 km · 267 m climb</div></div>
+      <div class="hero-score"><b>84</b><span class="bar band-great"></span><span>Great</span></div>
+    </div>
+    <div class="chips"><span class="chip"><i class="icon-thermometer"></i>10–13°</span><span class="chip"><i class="icon-wind"></i>SW 18 km/h</span><span class="chip"><i class="icon-cloud-sun"></i>Sunny spells</span><span class="chip"><i class="icon-droplet-off"></i>Dry</span></div>
+    <div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Shortlist</h3><span>12 of 12</span></div>
+    <div class="list"><sc-for list="{{ shortlist }}" as="r"><div class="row {{ r.cls }}">
+      <div class="score"><b>{{ r.s }}</b><span class="bar band-{{ r.band }}"></span></div>
+      <div class="f1 minw0">
+        <div class="nl"><span class="name">{{ r.name }}</span><span class="delta">{{ r.delta }}</span></div>
+        <div class="sub">{{ r.word }} · {{ r.dep }}</div>
+        <div class="sub">{{ r.km }} · {{ r.cond }}</div>
+        <sc-if value="{{ r.below }}"><div class="sub warn"><i class="icon-triangle-alert"></i>{{ r.below }}</div></sc-if>
+      </div>
+    </div></sc-for></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Doesn't Fit Your Window</h3></div>
+    <div class="list"><div class="row"><div class="thumb"><i class="icon-clock"></i></div><div class="f1 minw0"><div class="name">Leith Hill &amp; the Surrey Hills</div><div class="sub">84.8 km · 1072 m climb</div><div class="sub">Needs about 5 h 10 min. Your window is 09:00–14:00.</div></div></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Library</h3><span>3 routes</span></div>
+    <div class="list"><sc-for list="{{ library }}" as="r"><div class="row {{ r.cls }}">
+      <div class="thumb"><i class="icon-route"></i></div>
+      <div class="f1 minw0"><div class="name">{{ r.name }}</div><div class="sub">{{ r.facts }}</div><div class="sub">{{ r.src }}</div></div>
+      <sc-if value="{{ r.hover }}"><span class="add"><i class="icon-plus"></i>Add</span></sc-if>
+    </div></sc-for></div>
+  </div>
+  <div class="footer">Updated 08:12 · forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</section>
+</div>
+</div></div>
+<div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Panel, full length (what scrolls under the fade)</div><div class="dv-card" style="width: 404px">
+<div class="frame tall theme-light" data-screen-label="1e Panel, full length"><aside class="panel glass">
+<div class="panel-h"><div class="search"><i class="icon-search"></i>Search routes</div><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s">
+  <div class="card">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat</span>
+    <div class="hero">
+      <div class="f1 minw0"><h2>Ripley café loop</h2><div class="dep">10:00 → ~12:30</div><div class="facts">↔ 49.6 km · 267 m climb</div></div>
+      <div class="hero-score"><b>84</b><span class="bar band-great"></span><span>Great</span></div>
+    </div>
+    <div class="chips"><span class="chip"><i class="icon-thermometer"></i>10–13°</span><span class="chip"><i class="icon-wind"></i>SW 18 km/h</span><span class="chip"><i class="icon-cloud-sun"></i>Sunny spells</span><span class="chip"><i class="icon-droplet-off"></i>Dry</span></div>
+    <div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Shortlist</h3><span>12 of 12</span></div>
+    <div class="list"><sc-for list="{{ shortlist }}" as="r"><div class="row {{ r.cls }}">
+      <div class="score"><b>{{ r.s }}</b><span class="bar band-{{ r.band }}"></span></div>
+      <div class="f1 minw0">
+        <div class="nl"><span class="name">{{ r.name }}</span><span class="delta">{{ r.delta }}</span></div>
+        <div class="sub">{{ r.word }} · {{ r.dep }}</div>
+        <div class="sub">{{ r.km }} · {{ r.cond }}</div>
+        <sc-if value="{{ r.below }}"><div class="sub warn"><i class="icon-triangle-alert"></i>{{ r.below }}</div></sc-if>
+      </div>
+    </div></sc-for></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Doesn't Fit Your Window</h3></div>
+    <div class="list"><div class="row"><div class="thumb"><i class="icon-clock"></i></div><div class="f1 minw0"><div class="name">Leith Hill &amp; the Surrey Hills</div><div class="sub">84.8 km · 1072 m climb</div><div class="sub">Needs about 5 h 10 min. Your window is 09:00–14:00.</div></div></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Library</h3><span>3 routes</span></div>
+    <div class="list"><sc-for list="{{ library }}" as="r"><div class="row {{ r.cls }}">
+      <div class="thumb"><i class="icon-route"></i></div>
+      <div class="f1 minw0"><div class="name">{{ r.name }}</div><div class="sub">{{ r.facts }}</div><div class="sub">{{ r.src }}</div></div>
+      <sc-if value="{{ r.hover }}"><span class="add"><i class="icon-plus"></i>Add</span></sc-if>
+    </div></sc-for></div>
+  </div>
+  <div class="footer">Updated 08:12 · forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</aside></div>
+</div></div>
+<div class="dv-opt" id="1f" data-frost><div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Frosted fallback: Safari (so every iPhone browser) and Firefox. Same layout, frost instead of refraction</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="1f Home, desktop light, frosted">
+<div class="map" data-map="home" data-pad="72 40 140 416"></div>
+<aside class="panel glass ">
+<div class="panel-h"><div class="search"><i class="icon-search"></i>Search routes</div><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s">
+  <div class="card">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat</span>
+    <div class="hero">
+      <div class="f1 minw0"><h2>Ripley café loop</h2><div class="dep">10:00 → ~12:30</div><div class="facts">↔ 49.6 km · 267 m climb</div></div>
+      <div class="hero-score"><b>84</b><span class="bar band-great"></span><span>Great</span></div>
+    </div>
+    <div class="chips"><span class="chip"><i class="icon-thermometer"></i>10–13°</span><span class="chip"><i class="icon-wind"></i>SW 18 km/h</span><span class="chip"><i class="icon-cloud-sun"></i>Sunny spells</span><span class="chip"><i class="icon-droplet-off"></i>Dry</span></div>
+    <div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Shortlist</h3><span>12 of 12</span></div>
+    <div class="list"><sc-for list="{{ shortlist }}" as="r"><div class="row {{ r.cls }}">
+      <div class="score"><b>{{ r.s }}</b><span class="bar band-{{ r.band }}"></span></div>
+      <div class="f1 minw0">
+        <div class="nl"><span class="name">{{ r.name }}</span><span class="delta">{{ r.delta }}</span></div>
+        <div class="sub">{{ r.word }} · {{ r.dep }}</div>
+        <div class="sub">{{ r.km }} · {{ r.cond }}</div>
+        <sc-if value="{{ r.below }}"><div class="sub warn"><i class="icon-triangle-alert"></i>{{ r.below }}</div></sc-if>
+      </div>
+    </div></sc-for></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Doesn't Fit Your Window</h3></div>
+    <div class="list"><div class="row"><div class="thumb"><i class="icon-clock"></i></div><div class="f1 minw0"><div class="name">Leith Hill &amp; the Surrey Hills</div><div class="sub">84.8 km · 1072 m climb</div><div class="sub">Needs about 5 h 10 min. Your window is 09:00–14:00.</div></div></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Library</h3><span>3 routes</span></div>
+    <div class="list"><sc-for list="{{ library }}" as="r"><div class="row {{ r.cls }}">
+      <div class="thumb"><i class="icon-route"></i></div>
+      <div class="f1 minw0"><div class="name">{{ r.name }}</div><div class="sub">{{ r.facts }}</div><div class="sub">{{ r.src }}</div></div>
+      <sc-if value="{{ r.hover }}"><span class="add"><i class="icon-plus"></i>Add</span></sc-if>
+    </div></sc-for></div>
+  </div>
+  <div class="footer">Updated 08:12 · forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</aside>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+</div>
+</section>
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Route detail: hover, select, scroll (Ripley café loop, Sat 24 Oct)</span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="2a"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Hover: the glance card 16px from the cursor; the line thickens and its row lights up</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="2a Home, desktop, glance card">
+<div class="map" data-map="home" data-hover="c93c3293@0.42" data-pad="72 40 140 416"></div>
+<aside class="panel glass ">
+<div class="panel-h"><div class="search"><i class="icon-search"></i>Search routes</div><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s">
+  <div class="card">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat</span>
+    <div class="hero">
+      <div class="f1 minw0"><h2>Ripley café loop</h2><div class="dep">10:00 → ~12:30</div><div class="facts">↔ 49.6 km · 267 m climb</div></div>
+      <div class="hero-score"><b>84</b><span class="bar band-great"></span><span>Great</span></div>
+    </div>
+    <div class="chips"><span class="chip"><i class="icon-thermometer"></i>10–13°</span><span class="chip"><i class="icon-wind"></i>SW 18 km/h</span><span class="chip"><i class="icon-cloud-sun"></i>Sunny spells</span><span class="chip"><i class="icon-droplet-off"></i>Dry</span></div>
+    <div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Shortlist</h3><span>12 of 12</span></div>
+    <div class="list"><sc-for list="{{ shortlistHover }}" as="r"><div class="row {{ r.cls }}">
+      <div class="score"><b>{{ r.s }}</b><span class="bar band-{{ r.band }}"></span></div>
+      <div class="f1 minw0">
+        <div class="nl"><span class="name">{{ r.name }}</span><span class="delta">{{ r.delta }}</span></div>
+        <div class="sub">{{ r.word }} · {{ r.dep }}</div>
+        <div class="sub">{{ r.km }} · {{ r.cond }}</div>
+        <sc-if value="{{ r.below }}"><div class="sub warn"><i class="icon-triangle-alert"></i>{{ r.below }}</div></sc-if>
+      </div>
+    </div></sc-for></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Doesn't Fit Your Window</h3></div>
+    <div class="list"><div class="row"><div class="thumb"><i class="icon-clock"></i></div><div class="f1 minw0"><div class="name">Leith Hill &amp; the Surrey Hills</div><div class="sub">84.8 km · 1072 m climb</div><div class="sub">Needs about 5 h 10 min. Your window is 09:00–14:00.</div></div></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Library</h3><span>3 routes</span></div>
+    <div class="list"><sc-for list="{{ libraryPlain }}" as="r"><div class="row {{ r.cls }}">
+      <div class="thumb"><i class="icon-route"></i></div>
+      <div class="f1 minw0"><div class="name">{{ r.name }}</div><div class="sub">{{ r.facts }}</div><div class="sub">{{ r.src }}</div></div>
+      <sc-if value="{{ r.hover }}"><span class="add"><i class="icon-plus"></i>Add</span></sc-if>
+    </div></sc-for></div>
+  </div>
+  <div class="footer">Updated 08:12 · forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</aside>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+<div class="cursor" aria-hidden="true"><svg width="18" height="22" viewBox="0 0 18 22"><path d="M1 1 L1 17 L5.5 13 L8.5 20.5 L11.5 19.2 L8.6 12 L15 12 Z" fill="#000" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /></svg></div>
+<div class="glance glass" role="tooltip">
+  <div class="name">Thames to Walton</div>
+  <div class="g-score"><b>76</b><span class="bar band-great"></span>Great</div>
+  <div class="sub">Sat · 11:00 → ~12:10 · 24.0 km</div>
+  <div class="chips"><span class="chip"><i class="icon-thermometer"></i>12–13°</span><span class="chip"><i class="icon-wind"></i>SW 18 km/h</span><span class="chip"><i class="icon-droplet-off"></i>Dry</span></div>
+  <div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div>
+</div>
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="2b"><div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Selected: the detail pushes into the panel; other lines step back, the route gets its start marker</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="2b Detail, desktop">
+<div class="map" data-map="detail" data-selected="6b8b1863" data-pad="72 40 140 416"></div>
+<aside class="panel glass ">
+<div class="panel-h"><button class="icon-btn" aria-label="Back to routes"><i class="icon-chevron-left"></i></button><div class="ph-title">Ripley café loop</div><span class="ph-sp"></span></div>
+<div class="panel-s">
+  <div class="dt">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat 24 Oct</span>
+    <h1>Ripley café loop</h1>
+    <div class="dep">10:00 → ~12:30</div>
+    <div class="facts">↔ 49.6 km · 267 m climb · 4% unpaved</div>
+  </div>
+  <div class="card">
+    <div class="vc"><svg class="ring" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32.0" cy="32.0" r="28.0" class="ring-t" /><circle cx="32.0" cy="32.0" r="28.0" class="ring-v" stroke-dasharray="175.9" stroke-dashoffset="28.1" transform="rotate(-90 32.0 32.0)" /><text x="50%" y="50%" dy="0.35em">84</text></svg><div class="minw0"><div class="vc-band">Great</div><div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div><div class="sub">▲ 3 since 07:00 · last ridden 12 Oct</div></div></div>
+    <div class="notes"><div><i class="icon-thermometer"></i>Starts at 10°, a degree under your ideal range.</div><div><i class="icon-wind"></i>Headwind for 14 km on the way out to Ripley.</div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Departure</h3></div>
+    <div class="dtiles"><button class="dtile sel" aria-pressed="true"><span class="sub">Sat 24</span><b>10:00</b><span class="dscore">84<span class="bar band-great"></span></span></button><button class="dtile" aria-pressed="false"><span class="sub">Sat 24</span><b>09:30</b><span class="dscore">81<span class="bar band-great"></span></span></button><button class="dtile" aria-pressed="false"><span class="sub">Sat 24</span><b>11:00</b><span class="dscore">80<span class="bar band-great"></span></span></button><button class="dtile" aria-pressed="false"><span class="sub">Sun 25</span><b>10:00</b><span class="dscore">72<span class="bar band-good"></span></span></button></div>
+    <div class="sub note-u">The best start in your 09:00–14:00 window, then the next three.</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Forecast on the Ride</h3></div>
+    <div class="card"><div class="fc"><span></span><b>10:00</b><b>11:00</b><b>12:00</b><span></span><i class="icon-sun"></i><i class="icon-cloud-sun"></i><i class="icon-cloud-sun"></i><span class="fl">Temperature</span><span>10°</span><span>12°</span><span>13°</span><span class="fl">Wind, km/h</span><span>SW 16</span><span>SW 18</span><span>SW 19</span><span class="fl">Gusts, km/h</span><span>26</span><span>29</span><span>30</span><span class="fl">Rain</span><span>0%</span><span>0%</span><span>5%</span></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Sky on the Ride</h3></div>
+    <div class="card"><div class="sk"><i class="icon-cloud-sun"></i>Sunny spells, cloudier towards the finish</div><div class="share"><div class="share-bar"><span style="flex: 45; background: #ffcc00"></span><span style="flex: 40; background: color-mix(in srgb, #ffcc00 50%, transparent)"></span><span style="flex: 15; background: #8e8e93"></span></div><div class="share-ends"><span>10:00</span><span>~12:30</span></div></div><div class="legend"><span><i style="background: #ffcc00"></i>Sunny <b>~45%</b></span><span><i style="background: color-mix(in srgb, #ffcc00 50%, transparent)"></i>Sunny intervals <b>~40%</b></span><span><i style="background: #8e8e93"></i>Cloudy <b>~15%</b></span></div></div>
+  </div>
+</div>
+</aside>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="2c"><div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>Scrolled to wind: "Show wind on the map" on, and scrubbing the profile at 31 km moves the dot on the map</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="2c Detail, desktop, wind view and scrub">
+<div class="map" data-map="detail" data-selected="6b8b1863" data-wind="c:0-5,h:5-19,c:19-27,t:27-49.6" data-scrub="31" data-pad="72 40 140 416"></div>
+<aside class="panel glass ">
+<div class="panel-h scrolled"><button class="icon-btn" aria-label="Back to routes"><i class="icon-chevron-left"></i></button><div class="ph-title">Ripley café loop</div><span class="ph-sp"></span></div>
+<div class="panel-s">
+  <div>
+    <div class="section-h"><h3>Wind on the Ride</h3></div>
+    <div class="card">
+      <div class="wn"><svg class="compass" width="104" height="104" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="44" class="tk" stroke-dasharray="1 2.840" transform="rotate(-90.5 52 52)" /><line x1="52" y1="4" x2="52" y2="12" transform="rotate(0 52 52)" class="tk-m" /><line x1="52" y1="4" x2="52" y2="12" transform="rotate(90 52 52)" class="tk-m" /><line x1="52" y1="4" x2="52" y2="12" transform="rotate(180 52 52)" class="tk-m" /><line x1="52" y1="4" x2="52" y2="12" transform="rotate(270 52 52)" class="tk-m" /><text x="52" y="24" class="cn">N</text><text x="82" y="56" class="">E</text><text x="52" y="86" class="">S</text><text x="22" y="56" class="">W</text><g transform="rotate(405 52 52)"><line x1="52" y1="96" x2="52" y2="75" class="ar" /><circle cx="52" cy="96" r="3.5" class="ah" /><line x1="52" y1="29" x2="52" y2="12" class="ar" /><path d="M52 7 l-6 9 h12 z" class="ah" /></g><text x="52" y="52" class="cs">18</text><text x="52" y="64" class="cu">km/h</text></svg><div class="minw0"><div class="wn-h">Wind from the south-west</div><div class="sub">18 km/h on average</div><div class="sub">Gusts up to 30 km/h around 12:00</div></div></div>
+      <div class="share"><div class="share-bar"><span style="flex: 5; background: var(--status-crosswind)"></span><span style="flex: 14; background: var(--status-headwind)"></span><span style="flex: 8; background: var(--status-crosswind)"></span><span style="flex: 22.6; background: var(--band-great)"></span></div><div class="share-ends"><span>10:00</span><span>~12:30</span></div></div>
+      <div class="legend"><span><i style="background: var(--band-great)"></i>Tailwind <b>~46%</b></span><span><i style="background: var(--status-headwind)"></i>Headwind <b>~28%</b></span><span><i style="background: var(--status-crosswind)"></i>Crosswind <b>~26%</b></span></div>
+      <div class="tg"><span>Show wind on the map</span><span class="switch on" role="switch" aria-checked="true"><i></i></span></div>
+    </div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Along the Route</h3></div>
+    <div class="card"><svg class="profile" viewBox="0 0 320 168" aria-hidden="true"><line x1="0" x2="320" y1="61.0" y2="61.0" class="gl" /><text x="0" y="58.0" class="yl">40 m</text><line x1="0" x2="320" y1="22.0" y2="22.0" class="gl" /><text x="0" y="19.0" class="yl">80 m</text><polygon points="0,100 0,79.7 3,79.8 6,80.8 10,81.5 13,80.9 16,79.9 19,89.9 23,94.2 26,86.9 29,82.1 32,77.2 35,74.9 39,68.9 42,56.5 45,56.8 48,61.8 52,61.6 55,61.9 58,60.9 61,67.4 65,74.0 68,68.7 71,68.8 74,74.8 77,79.6 81,81.7 84,73.3 87,68.4 90,67.0 94,53.3 97,38.4 100,27.5 103,23.7 106,27.6 110,24.1 113,24.7 116,36.1 119,43.4 123,47.9 126,47.9 129,50.8 132,64.2 135,69.7 139,71.3 142,78.9 145,85.8 148,92.3 152,88.3 155,79.0 158,81.0 161,80.8 165,76.5 168,74.4 171,73.9 174,81.7 177,82.6 181,71.9 184,67.5 187,63.9 190,59.1 194,53.1 197,45.2 200,51.4 203,61.1 206,61.5 210,63.4 213,65.6 216,70.4 219,73.2 223,65.5 226,66.4 229,75.6 232,80.5 235,84.2 239,83.2 242,86.2 245,91.2 248,81.4 252,70.5 255,65.6 258,63.0 261,64.4 265,60.5 268,62.5 271,75.8 274,80.7 277,79.7 281,77.2 284,76.2 287,82.4 290,80.5 294,76.7 297,84.1 300,90.2 303,93.1 306,88.9 310,81.7 313,85.1 316,84.1 319,77.1 320,76.6 320,100" class="area" /><polyline points="0,79.7 3,79.8 6,80.8 10,81.5 13,80.9 16,79.9 19,89.9 23,94.2 26,86.9 29,82.1 32,77.2 35,74.9 39,68.9 42,56.5 45,56.8 48,61.8 52,61.6 55,61.9 58,60.9 61,67.4 65,74.0 68,68.7 71,68.8 74,74.8 77,79.6 81,81.7 84,73.3 87,68.4 90,67.0 94,53.3 97,38.4 100,27.5 103,23.7 106,27.6 110,24.1 113,24.7 116,36.1 119,43.4 123,47.9 126,47.9 129,50.8 132,64.2 135,69.7 139,71.3 142,78.9 145,85.8 148,92.3 152,88.3 155,79.0 158,81.0 161,80.8 165,76.5 168,74.4 171,73.9 174,81.7 177,82.6 181,71.9 184,67.5 187,63.9 190,59.1 194,53.1 197,45.2 200,51.4 203,61.1 206,61.5 210,63.4 213,65.6 216,70.4 219,73.2 223,65.5 226,66.4 229,75.6 232,80.5 235,84.2 239,83.2 242,86.2 245,91.2 248,81.4 252,70.5 255,65.6 258,63.0 261,64.4 265,60.5 268,62.5 271,75.8 274,80.7 277,79.7 281,77.2 284,76.2 287,82.4 290,80.5 294,76.7 297,84.1 300,90.2 303,93.1 306,88.9 310,81.7 313,85.1 316,84.1 319,77.1 320,76.6" class="eline" /><text x="96.2" y="26.7" text-anchor="end" class="pk">79 m</text><rect x="0.0" y="110" width="32.3" height="8" rx="2" fill="var(--status-crosswind)" /><rect x="33.3" y="110" width="89.3" height="8" rx="2" fill="var(--status-headwind)" /><rect x="123.6" y="110" width="50.6" height="8" rx="2" fill="var(--status-crosswind)" /><rect x="175.2" y="110" width="144.8" height="8" rx="2" fill="var(--band-great)" /><text x="0.0" y="136" text-anchor="start" class="tl">10°</text><text x="90.3" y="136" text-anchor="middle" class="tl">11°</text><text x="180.6" y="136" text-anchor="middle" class="tl">12°</text><text x="271.0" y="136" text-anchor="middle" class="tl">13°</text><text x="0.0" y="160" text-anchor="start" class="xl">0</text><text x="64.5" y="160" text-anchor="middle" class="xl">10</text><text x="129.0" y="160" text-anchor="middle" class="xl">20</text><text x="193.5" y="160" text-anchor="middle" class="xl">30</text><text x="258.1" y="160" text-anchor="middle" class="xl">40</text><text x="320" y="160" text-anchor="end" class="xl">km</text><line x1="200.0" x2="200.0" y1="16" y2="122" class="cur" /><circle cx="200.0" cy="51.4" r="5" class="cur-dot" /><g transform="translate(200.0 0)"><rect x="-84" y="-1" width="168" height="18" rx="9" class="tag" /><text x="0" y="12" class="tag-t">31 km · 50 m · 12° · Tailwind</text></g></svg><div class="legend"><span><i style="background: var(--label-secondary)"></i>Elevation <b></b></span><span><i style="background: var(--band-great)"></i>Tailwind <b></b></span><span><i style="background: var(--status-crosswind)"></i>Crosswind <b></b></span><span><i style="background: var(--status-headwind)"></i>Headwind <b></b></span></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Why It Scored 84</h3></div>
+    <div class="list"><div class="frow"><div class="nl"><span class="fname">Rain</span><b>100</b></div><div class="ftrack"><span class="band-great" style="width: 100%"></span></div><div class="sub">Dry for the whole ride.</div></div><div class="frow"><div class="nl"><span class="fname">Time budget</span><b>95</b></div><div class="ftrack"><span class="band-great" style="width: 95%"></span></div><div class="sub">Back by ~12:30, well inside your 09:00–14:00 window.</div></div><div class="frow"><div class="nl"><span class="fname">Surface</span><b>88</b></div><div class="ftrack"><span class="band-great" style="width: 88%"></span></div><div class="sub">Almost all tarmac, with 2 km of firm towpath.</div></div><div class="frow"><div class="nl"><span class="fname">Sky</span><b>82</b></div><div class="ftrack"><span class="band-great" style="width: 82%"></span></div><div class="sub">Sunny spells for most of the ride.</div></div><div class="frow"><div class="nl"><span class="fname">Temperature</span><b>80</b></div><div class="ftrack"><span class="band-great" style="width: 80%"></span></div><div class="sub">Starts at 10°, a degree under your ideal, and reaches 13°.</div></div><div class="frow"><div class="nl"><span class="fname">Wind</span><b>78</b></div><div class="ftrack"><span class="band-great" style="width: 78%"></span></div><div class="sub">South-westerly 18 km/h, with the tailwind for the last 22 km.</div></div><div class="frow"><div class="nl"><span class="fname">Intent</span><b>74</b></div><div class="ftrack"><span class="band-good" style="width: 74%"></span></div><div class="sub">A steady endurance loop, as you asked for on Saturdays.</div></div><div class="frow"><div class="nl"><span class="fname">Novelty</span><b>70</b></div><div class="ftrack"><span class="band-good" style="width: 70%"></span></div><div class="sub">You rode it 12 days ago.</div></div></div>
+  </div>
+  <div class="list acts">
+    <button class="act"><i class="icon-calendar-plus"></i>Add to Calendar<span class="act-t">Sat 10:00–12:30<i class="icon-chevron-down"></i></span></button>
+    <button class="act"><i class="icon-external-link"></i>Open in cycle.travel</button>
+    <button class="act"><i class="icon-download"></i>Download GPX</button>
+    <button class="act danger"><i class="icon-circle-minus"></i>Remove from shortlist</button>
+  </div>
+  <div class="footer">Forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</aside>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="2d"><div class="dv-olabel"><a class="dv-oid" href="#2d">2d</a>Mobile: the detail in the sheet at the medium detent, day strip above it</div><div class="dv-card" style="width: 393px">
+<div class="frame phone theme-light" data-screen-label="2d Detail, mobile">
+<div class="map" data-map="detail" data-selected="6b8b1863" data-pad="112 28 596 28"></div>
+<div class="statusbar">08:14<span><i class="icon-signal"></i><i class="icon-wifi"></i><i class="icon-battery-full"></i></span></div>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+<section class="sheet glass "><div class="grabber"></div>
+
+<div class="panel-h"><button class="icon-btn" aria-label="Back to routes"><i class="icon-chevron-left"></i></button><div class="ph-title">Ripley café loop</div><span class="ph-sp"></span></div>
+<div class="panel-s">
+  <div class="dt">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat 24 Oct</span>
+    <h1>Ripley café loop</h1>
+    <div class="dep">10:00 → ~12:30</div>
+    <div class="facts">↔ 49.6 km · 267 m climb · 4% unpaved</div>
+  </div>
+  <div class="card">
+    <div class="vc"><svg class="ring" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32.0" cy="32.0" r="28.0" class="ring-t" /><circle cx="32.0" cy="32.0" r="28.0" class="ring-v" stroke-dasharray="175.9" stroke-dashoffset="28.1" transform="rotate(-90 32.0 32.0)" /><text x="50%" y="50%" dy="0.35em">84</text></svg><div class="minw0"><div class="vc-band">Great</div><div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div><div class="sub">▲ 3 since 07:00 · last ridden 12 Oct</div></div></div>
+    <div class="notes"><div><i class="icon-thermometer"></i>Starts at 10°, a degree under your ideal range.</div><div><i class="icon-wind"></i>Headwind for 14 km on the way out to Ripley.</div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Departure</h3></div>
+    <div class="dtiles"><button class="dtile sel" aria-pressed="true"><span class="sub">Sat 24</span><b>10:00</b><span class="dscore">84<span class="bar band-great"></span></span></button><button class="dtile" aria-pressed="false"><span class="sub">Sat 24</span><b>09:30</b><span class="dscore">81<span class="bar band-great"></span></span></button><button class="dtile" aria-pressed="false"><span class="sub">Sat 24</span><b>11:00</b><span class="dscore">80<span class="bar band-great"></span></span></button><button class="dtile" aria-pressed="false"><span class="sub">Sun 25</span><b>10:00</b><span class="dscore">72<span class="bar band-good"></span></span></button></div>
+    <div class="sub note-u">The best start in your 09:00–14:00 window, then the next three.</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Forecast on the Ride</h3></div>
+    <div class="card"><div class="fc"><span></span><b>10:00</b><b>11:00</b><b>12:00</b><span></span><i class="icon-sun"></i><i class="icon-cloud-sun"></i><i class="icon-cloud-sun"></i><span class="fl">Temperature</span><span>10°</span><span>12°</span><span>13°</span><span class="fl">Wind, km/h</span><span>SW 16</span><span>SW 18</span><span>SW 19</span><span class="fl">Gusts, km/h</span><span>26</span><span>29</span><span>30</span><span class="fl">Rain</span><span>0%</span><span>0%</span><span>5%</span></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Sky on the Ride</h3></div>
+    <div class="card"><div class="sk"><i class="icon-cloud-sun"></i>Sunny spells, cloudier towards the finish</div><div class="share"><div class="share-bar"><span style="flex: 45; background: #ffcc00"></span><span style="flex: 40; background: color-mix(in srgb, #ffcc00 50%, transparent)"></span><span style="flex: 15; background: #8e8e93"></span></div><div class="share-ends"><span>10:00</span><span>~12:30</span></div></div><div class="legend"><span><i style="background: #ffcc00"></i>Sunny <b>~45%</b></span><span><i style="background: color-mix(in srgb, #ffcc00 50%, transparent)"></i>Sunny intervals <b>~40%</b></span><span><i style="background: #8e8e93"></i>Cloudy <b>~15%</b></span></div></div>
+  </div>
+</div>
+</section>
+</div>
+</div></div>
+<div class="dv-opt" id="2e"><div class="dv-olabel"><a class="dv-oid" href="#2e">2e</a>Detail, full length: every section, in iOS order</div><div class="dv-card" style="width: 404px">
+<div class="frame tall theme-light" data-screen-label="2e Detail, full length"><aside class="panel glass">
+<div class="panel-h"><button class="icon-btn" aria-label="Back to routes"><i class="icon-chevron-left"></i></button><div class="ph-title">Ripley café loop</div><span class="ph-sp"></span></div>
+<div class="panel-s">
+  <div class="dt">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat 24 Oct</span>
+    <h1>Ripley café loop</h1>
+    <div class="dep">10:00 → ~12:30</div>
+    <div class="facts">↔ 49.6 km · 267 m climb · 4% unpaved</div>
+  </div>
+  <div class="card">
+    <div class="vc"><svg class="ring" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32.0" cy="32.0" r="28.0" class="ring-t" /><circle cx="32.0" cy="32.0" r="28.0" class="ring-v" stroke-dasharray="175.9" stroke-dashoffset="28.1" transform="rotate(-90 32.0 32.0)" /><text x="50%" y="50%" dy="0.35em">84</text></svg><div class="minw0"><div class="vc-band">Great</div><div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div><div class="sub">▲ 3 since 07:00 · last ridden 12 Oct</div></div></div>
+    <div class="notes"><div><i class="icon-thermometer"></i>Starts at 10°, a degree under your ideal range.</div><div><i class="icon-wind"></i>Headwind for 14 km on the way out to Ripley.</div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Departure</h3></div>
+    <div class="dtiles"><button class="dtile sel" aria-pressed="true"><span class="sub">Sat 24</span><b>10:00</b><span class="dscore">84<span class="bar band-great"></span></span></button><button class="dtile" aria-pressed="false"><span class="sub">Sat 24</span><b>09:30</b><span class="dscore">81<span class="bar band-great"></span></span></button><button class="dtile" aria-pressed="false"><span class="sub">Sat 24</span><b>11:00</b><span class="dscore">80<span class="bar band-great"></span></span></button><button class="dtile" aria-pressed="false"><span class="sub">Sun 25</span><b>10:00</b><span class="dscore">72<span class="bar band-good"></span></span></button></div>
+    <div class="sub note-u">The best start in your 09:00–14:00 window, then the next three.</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Forecast on the Ride</h3></div>
+    <div class="card"><div class="fc"><span></span><b>10:00</b><b>11:00</b><b>12:00</b><span></span><i class="icon-sun"></i><i class="icon-cloud-sun"></i><i class="icon-cloud-sun"></i><span class="fl">Temperature</span><span>10°</span><span>12°</span><span>13°</span><span class="fl">Wind, km/h</span><span>SW 16</span><span>SW 18</span><span>SW 19</span><span class="fl">Gusts, km/h</span><span>26</span><span>29</span><span>30</span><span class="fl">Rain</span><span>0%</span><span>0%</span><span>5%</span></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Sky on the Ride</h3></div>
+    <div class="card"><div class="sk"><i class="icon-cloud-sun"></i>Sunny spells, cloudier towards the finish</div><div class="share"><div class="share-bar"><span style="flex: 45; background: #ffcc00"></span><span style="flex: 40; background: color-mix(in srgb, #ffcc00 50%, transparent)"></span><span style="flex: 15; background: #8e8e93"></span></div><div class="share-ends"><span>10:00</span><span>~12:30</span></div></div><div class="legend"><span><i style="background: #ffcc00"></i>Sunny <b>~45%</b></span><span><i style="background: color-mix(in srgb, #ffcc00 50%, transparent)"></i>Sunny intervals <b>~40%</b></span><span><i style="background: #8e8e93"></i>Cloudy <b>~15%</b></span></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Wind on the Ride</h3></div>
+    <div class="card">
+      <div class="wn"><svg class="compass" width="104" height="104" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="44" class="tk" stroke-dasharray="1 2.840" transform="rotate(-90.5 52 52)" /><line x1="52" y1="4" x2="52" y2="12" transform="rotate(0 52 52)" class="tk-m" /><line x1="52" y1="4" x2="52" y2="12" transform="rotate(90 52 52)" class="tk-m" /><line x1="52" y1="4" x2="52" y2="12" transform="rotate(180 52 52)" class="tk-m" /><line x1="52" y1="4" x2="52" y2="12" transform="rotate(270 52 52)" class="tk-m" /><text x="52" y="24" class="cn">N</text><text x="82" y="56" class="">E</text><text x="52" y="86" class="">S</text><text x="22" y="56" class="">W</text><g transform="rotate(405 52 52)"><line x1="52" y1="96" x2="52" y2="75" class="ar" /><circle cx="52" cy="96" r="3.5" class="ah" /><line x1="52" y1="29" x2="52" y2="12" class="ar" /><path d="M52 7 l-6 9 h12 z" class="ah" /></g><text x="52" y="52" class="cs">18</text><text x="52" y="64" class="cu">km/h</text></svg><div class="minw0"><div class="wn-h">Wind from the south-west</div><div class="sub">18 km/h on average</div><div class="sub">Gusts up to 30 km/h around 12:00</div></div></div>
+      <div class="share"><div class="share-bar"><span style="flex: 5; background: var(--status-crosswind)"></span><span style="flex: 14; background: var(--status-headwind)"></span><span style="flex: 8; background: var(--status-crosswind)"></span><span style="flex: 22.6; background: var(--band-great)"></span></div><div class="share-ends"><span>10:00</span><span>~12:30</span></div></div>
+      <div class="legend"><span><i style="background: var(--band-great)"></i>Tailwind <b>~46%</b></span><span><i style="background: var(--status-headwind)"></i>Headwind <b>~28%</b></span><span><i style="background: var(--status-crosswind)"></i>Crosswind <b>~26%</b></span></div>
+      <div class="tg"><span>Show wind on the map</span><span class="switch" role="switch" aria-checked="false"><i></i></span></div>
+    </div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Along the Route</h3></div>
+    <div class="card"><svg class="profile" viewBox="0 0 320 168" aria-hidden="true"><line x1="0" x2="320" y1="61.0" y2="61.0" class="gl" /><text x="0" y="58.0" class="yl">40 m</text><line x1="0" x2="320" y1="22.0" y2="22.0" class="gl" /><text x="0" y="19.0" class="yl">80 m</text><polygon points="0,100 0,79.7 3,79.8 6,80.8 10,81.5 13,80.9 16,79.9 19,89.9 23,94.2 26,86.9 29,82.1 32,77.2 35,74.9 39,68.9 42,56.5 45,56.8 48,61.8 52,61.6 55,61.9 58,60.9 61,67.4 65,74.0 68,68.7 71,68.8 74,74.8 77,79.6 81,81.7 84,73.3 87,68.4 90,67.0 94,53.3 97,38.4 100,27.5 103,23.7 106,27.6 110,24.1 113,24.7 116,36.1 119,43.4 123,47.9 126,47.9 129,50.8 132,64.2 135,69.7 139,71.3 142,78.9 145,85.8 148,92.3 152,88.3 155,79.0 158,81.0 161,80.8 165,76.5 168,74.4 171,73.9 174,81.7 177,82.6 181,71.9 184,67.5 187,63.9 190,59.1 194,53.1 197,45.2 200,51.4 203,61.1 206,61.5 210,63.4 213,65.6 216,70.4 219,73.2 223,65.5 226,66.4 229,75.6 232,80.5 235,84.2 239,83.2 242,86.2 245,91.2 248,81.4 252,70.5 255,65.6 258,63.0 261,64.4 265,60.5 268,62.5 271,75.8 274,80.7 277,79.7 281,77.2 284,76.2 287,82.4 290,80.5 294,76.7 297,84.1 300,90.2 303,93.1 306,88.9 310,81.7 313,85.1 316,84.1 319,77.1 320,76.6 320,100" class="area" /><polyline points="0,79.7 3,79.8 6,80.8 10,81.5 13,80.9 16,79.9 19,89.9 23,94.2 26,86.9 29,82.1 32,77.2 35,74.9 39,68.9 42,56.5 45,56.8 48,61.8 52,61.6 55,61.9 58,60.9 61,67.4 65,74.0 68,68.7 71,68.8 74,74.8 77,79.6 81,81.7 84,73.3 87,68.4 90,67.0 94,53.3 97,38.4 100,27.5 103,23.7 106,27.6 110,24.1 113,24.7 116,36.1 119,43.4 123,47.9 126,47.9 129,50.8 132,64.2 135,69.7 139,71.3 142,78.9 145,85.8 148,92.3 152,88.3 155,79.0 158,81.0 161,80.8 165,76.5 168,74.4 171,73.9 174,81.7 177,82.6 181,71.9 184,67.5 187,63.9 190,59.1 194,53.1 197,45.2 200,51.4 203,61.1 206,61.5 210,63.4 213,65.6 216,70.4 219,73.2 223,65.5 226,66.4 229,75.6 232,80.5 235,84.2 239,83.2 242,86.2 245,91.2 248,81.4 252,70.5 255,65.6 258,63.0 261,64.4 265,60.5 268,62.5 271,75.8 274,80.7 277,79.7 281,77.2 284,76.2 287,82.4 290,80.5 294,76.7 297,84.1 300,90.2 303,93.1 306,88.9 310,81.7 313,85.1 316,84.1 319,77.1 320,76.6" class="eline" /><text x="96.2" y="26.7" text-anchor="end" class="pk">79 m</text><rect x="0.0" y="110" width="32.3" height="8" rx="2" fill="var(--status-crosswind)" /><rect x="33.3" y="110" width="89.3" height="8" rx="2" fill="var(--status-headwind)" /><rect x="123.6" y="110" width="50.6" height="8" rx="2" fill="var(--status-crosswind)" /><rect x="175.2" y="110" width="144.8" height="8" rx="2" fill="var(--band-great)" /><text x="0.0" y="136" text-anchor="start" class="tl">10°</text><text x="90.3" y="136" text-anchor="middle" class="tl">11°</text><text x="180.6" y="136" text-anchor="middle" class="tl">12°</text><text x="271.0" y="136" text-anchor="middle" class="tl">13°</text><text x="0.0" y="160" text-anchor="start" class="xl">0</text><text x="64.5" y="160" text-anchor="middle" class="xl">10</text><text x="129.0" y="160" text-anchor="middle" class="xl">20</text><text x="193.5" y="160" text-anchor="middle" class="xl">30</text><text x="258.1" y="160" text-anchor="middle" class="xl">40</text><text x="320" y="160" text-anchor="end" class="xl">km</text></svg><div class="legend"><span><i style="background: var(--label-secondary)"></i>Elevation <b></b></span><span><i style="background: var(--band-great)"></i>Tailwind <b></b></span><span><i style="background: var(--status-crosswind)"></i>Crosswind <b></b></span><span><i style="background: var(--status-headwind)"></i>Headwind <b></b></span></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Why It Scored 84</h3></div>
+    <div class="list"><div class="frow"><div class="nl"><span class="fname">Rain</span><b>100</b></div><div class="ftrack"><span class="band-great" style="width: 100%"></span></div><div class="sub">Dry for the whole ride.</div></div><div class="frow"><div class="nl"><span class="fname">Time budget</span><b>95</b></div><div class="ftrack"><span class="band-great" style="width: 95%"></span></div><div class="sub">Back by ~12:30, well inside your 09:00–14:00 window.</div></div><div class="frow"><div class="nl"><span class="fname">Surface</span><b>88</b></div><div class="ftrack"><span class="band-great" style="width: 88%"></span></div><div class="sub">Almost all tarmac, with 2 km of firm towpath.</div></div><div class="frow"><div class="nl"><span class="fname">Sky</span><b>82</b></div><div class="ftrack"><span class="band-great" style="width: 82%"></span></div><div class="sub">Sunny spells for most of the ride.</div></div><div class="frow"><div class="nl"><span class="fname">Temperature</span><b>80</b></div><div class="ftrack"><span class="band-great" style="width: 80%"></span></div><div class="sub">Starts at 10°, a degree under your ideal, and reaches 13°.</div></div><div class="frow"><div class="nl"><span class="fname">Wind</span><b>78</b></div><div class="ftrack"><span class="band-great" style="width: 78%"></span></div><div class="sub">South-westerly 18 km/h, with the tailwind for the last 22 km.</div></div><div class="frow"><div class="nl"><span class="fname">Intent</span><b>74</b></div><div class="ftrack"><span class="band-good" style="width: 74%"></span></div><div class="sub">A steady endurance loop, as you asked for on Saturdays.</div></div><div class="frow"><div class="nl"><span class="fname">Novelty</span><b>70</b></div><div class="ftrack"><span class="band-good" style="width: 70%"></span></div><div class="sub">You rode it 12 days ago.</div></div></div>
+  </div>
+  <div class="list acts">
+    <button class="act"><i class="icon-calendar-plus"></i>Add to Calendar<span class="act-t">Sat 10:00–12:30<i class="icon-chevron-down"></i></span></button>
+    <button class="act"><i class="icon-external-link"></i>Open in cycle.travel</button>
+    <button class="act"><i class="icon-download"></i>Download GPX</button>
+    <button class="act danger"><i class="icon-circle-minus"></i>Remove from shortlist</button>
+  </div>
+  <div class="footer">Forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</aside></div>
+</div></div>
+</div>
+</section>
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">Preferences, the full shortlist, paused and empty</span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="3a"><div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>Preferences: ⚙ pushes them into the panel, over the live map</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="3a Preferences, desktop">
+<div class="map" data-map="home" data-pad="72 40 140 416"></div>
+<aside class="panel glass ">
+<div class="panel-h"><button class="icon-btn" aria-label="Back to routes"><i class="icon-chevron-left"></i></button><div class="ph-title">Preferences</div><span class="ph-sp"></span></div>
+<div class="panel-s">
+  <div class="dt"><h1>Preferences</h1><div class="sub">Changes re-rank your rides straight away.</div></div>
+  <div><div class="section-h"><h3>What Makes a Good Ride</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #ff9500"><i class="icon-thermometer"></i></span><div class="f1"><span class="pl">Ideal Temperature</span></div><span class="pv">11–18°</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #32ade6"><i class="icon-wind"></i></span><div class="f1"><span class="pl">Comfortable Wind</span></div><span class="pv">20 km/h</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #ffcc00"><i class="icon-sun"></i></span><div class="f1"><span class="pl">Sunshine</span></div><span class="menu">Nice to Have<i class="icon-chevrons-up-down"></i></span></div><div class="prow "><span class="ico" style="background: #007aff"><i class="icon-cloud-rain"></i></span><div class="f1"><span class="pl">Rain</span></div><span class="menu">Prefer Dry<i class="icon-chevrons-up-down"></i></span></div><div class="prow "><span class="ico" style="background: #34c759"><i class="icon-mountain"></i></span><div class="f1"><span class="pl">Climbing</span></div><span class="menu">No Preference<i class="icon-chevrons-up-down"></i></span></div><div class="prow "><span class="ico" style="background: #af52de"><i class="icon-repeat"></i></span><div class="f1"><span class="pl">Recently Ridden</span></div><span class="menu">Prefer Variety<i class="icon-chevrons-up-down"></i></span></div></div><div class="sub note-u">Prefer Variety scores a route lower if you rode it in the last 14 days.</div></div>
+  <div><div class="section-h"><h3>Distance</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #30b0c7"><i class="icon-route"></i></span><div class="f1"><span class="pl">Distance</span></div><span class="pv">20–60 km</span></div><div class="pblock"><div class="seg " role="radiogroup"><span class="" role="radio" aria-checked="false">No limit</span><span class="on" role="radio" aria-checked="true">Choose a range</span></div><div class="range" style="--a: 20.0; --b: 60.0"><span class="rt"></span><span class="rf"></span><span class="th ta"></span><span class="th tb"></span></div><div class="rscale"><span style="--p: 0.0">0</span><span style="--p: 50.0">50</span><span style="--p: 100.0">100</span></div></div></div><div class="sub note-u">Routes outside the range stay in your library, but aren't recommended.</div></div>
+  <div><div class="section-h"><h3>When</h3></div><div class="list "><div class="pblock"><div class="seg " role="radiogroup"><span class="" role="radio" aria-checked="false">Daylight hours</span><span class="on" role="radio" aria-checked="true">Choose times</span></div></div><div class="prow "><span class="ico" style="background: #ff9500"><i class="icon-clock-9"></i></span><div class="f1"><span class="pl">Leave After</span></div><span class="tpill">09:00</span></div><div class="prow "><span class="ico" style="background: #5856d6"><i class="icon-clock-2"></i></span><div class="f1"><span class="pl">Back By</span></div><span class="tpill">14:00</span></div></div><div class="sub note-u">Ride On finds the best start inside this window, every day.</div></div>
+  <div><div class="section-h"><h3>Deal-Breakers</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #007aff"><i class="icon-thermometer-snowflake"></i></span><div class="f1"><span class="pl">Never Colder Than</span></div><span class="pv">4°</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #ff3b30"><i class="icon-thermometer-sun"></i></span><div class="f1"><span class="pl">Never Hotter Than</span></div><span class="pv">28°</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #667894"><i class="icon-wind"></i></span><div class="f1"><span class="pl">Gust Limit</span></div><span class="pv">35 km/h</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #30b0c7"><i class="icon-umbrella"></i></span><div class="f1"><span class="pl">Chance of Rain</span></div><span class="menu">60%<i class="icon-chevrons-up-down"></i></span></div></div><div class="sub note-u">A ride past any of these is marked Below your minimums, whatever it scores.</div></div>
+  <div><div class="section-h"><h3>Riding</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #34c759"><i class="icon-gauge"></i></span><div class="f1"><span class="pl">Average Speed</span></div><span class="pv">22 km/h</span><span class="stepper"><span><i class="icon-minus"></i></span><span><i class="icon-plus"></i></span></span></div><div class="prow "><span class="ico" style="background: #8e8e93"><i class="icon-timer"></i></span><div class="f1"><span class="pl">Try Departures Every</span></div><span class="menu">30 min<i class="icon-chevrons-up-down"></i></span></div></div><div class="sub note-u">Sets how long each route takes you, so departures fit your window.</div></div>
+  <div><div class="section-h"><h3>Units</h3></div><div class="list plain"><div class="prow "><div class="f1"><span class="pl">Temperature</span></div><div class="seg sm" role="radiogroup"><span class="on" role="radio" aria-checked="true">°C</span><span class="" role="radio" aria-checked="false">°F</span></div></div><div class="prow "><div class="f1"><span class="pl">Speed</span></div><div class="seg sm" role="radiogroup"><span class="on" role="radio" aria-checked="true">km/h</span><span class="" role="radio" aria-checked="false">mph</span></div></div><div class="prow "><div class="f1"><span class="pl">Distance</span></div><div class="seg sm" role="radiogroup"><span class="on" role="radio" aria-checked="true">km</span><span class="" role="radio" aria-checked="false">mi</span></div></div></div></div>
+  <div><div class="list "><div class="prow "><span class="ico" style="background: #8e8e93"><i class="icon-circle-pause"></i></span><div class="f1"><span class="pl">Pause Ride On</span><span class="sub">Hide forecasts, scores and alerts. Your routes stay listed.</span></div><span class="switch" role="switch" aria-checked="false"><i></i></span></div></div></div>
+  <div><div class="section-h"><h3>Account</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #1c1c1e"><i class="icon-user-round"></i></span><div class="f1"><span class="pl">Email</span></div><span class="pv">rider@example.com</span></div><div class="prow "><span class="ico" style="background: #34c759"><i class="icon-shield-check"></i></span><div class="f1"><span class="pl">Sign-In Methods</span></div><span class="pv">2</span><i class="icon-chevron-right chev"></i></div></div></div>
+  <div><div class="section-h"><h3>Passkeys</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #8e8e93"><i class="icon-key-round"></i></span><div class="f1"><span class="pl">MacBook Pro</span><span class="sub">iCloud Keychain · added 2 Oct</span></div><button class="icon-btn sm" aria-label="Passkey options"><i class="icon-ellipsis"></i></button></div><div class="prow "><span class="ico" style="background: #8e8e93"><i class="icon-key-round"></i></span><div class="f1"><span class="pl">Pixel 9</span><span class="sub">Google Password Manager · added 14 Oct</span></div><button class="icon-btn sm" aria-label="Passkey options"><i class="icon-ellipsis"></i></button></div><div class="prow acc"><span class="ico" style="background: var(--accent)"><i class="icon-plus"></i></span><div class="f1"><span class="pl">Add a Passkey</span></div></div></div><div class="sub note-u">Sign in with Face ID, Touch ID or your phone. No password to remember.</div></div>
+  <div><div class="list plain"><div class="prow danger"><div class="f1"><span class="pl">Sign Out</span></div></div></div><div class="sub note-u">You'll stay signed in on your other devices.</div></div>
+  <div><div class="section-h"><h3>About</h3></div><div class="list plain"><div class="prow "><div class="f1"><span class="pl">OpenStreetMap</span><span class="sub">Map data © OpenStreetMap contributors</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Protomaps</span><span class="sub">Basemap</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Mapterhorn</span><span class="sub">Terrain and hillshading</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Ordnance Survey</span><span class="sub">Contains OS data © Crown copyright and database right 2026</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Met Office</span><span class="sub">Weather. Contains Met Office data licensed under the Open Government Licence v3.0.</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Version</span></div><span class="pv">1.0 (Dec 2026)</span></div></div></div>
+</div>
+</aside>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="3b"><div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>Ideal Temperature: the low handle dragged from 11° to 12°. The map recolours as you drag: Windsor drops to Good, Runnymede to Fair, Saturday to 77</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="3b Ideal Temperature, desktop">
+<div class="map" data-map="home" data-scores="6b8b1863:77,4e5ad57f:70,1eaf3c4f:63,e8d1896c:55,bcb8871c:41" data-pad="72 40 140 416"></div>
+<aside class="panel glass ">
+<div class="panel-h"><button class="icon-btn" aria-label="Back to Preferences"><i class="icon-chevron-left"></i></button><div class="ph-title">Ideal Temperature</div><span class="ph-sp"></span></div>
+<div class="panel-s">
+  <div class="dt"><h1>Ideal Temperature</h1></div>
+  <div class="card">
+    <div class="tr-read"><b>12–18°</b><span class="sub">The range you'd happily ride in</span></div>
+    <div class="range ramp" style="--a: 42.5; --b: 57.5"><span class="rt" style="background: linear-gradient(90deg, rgb(13, 38, 140) 0.0%, rgb(102, 178, 255) 22.5%, rgb(52, 199, 89) 47.5%, rgb(255, 204, 0) 65.0%, rgb(255, 149, 0) 80.0%, rgb(255, 59, 48) 95.0%)"></span><span class="rd rd1"></span><span class="rd rd2"></span><span class="th ta"></span><span class="th tb"></span></div>
+    <div class="rscale"><span style="--p: 12.5">0°</span><span style="--p: 37.5">10°</span><span style="--p: 62.5">20°</span><span style="--p: 87.5">30°</span></div>
+    <div class="sub">A ride that starts or ends outside it scores lower. Never Colder Than and Never Hotter Than are the hard limits.</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>How Your Routes Fit</h3></div>
+    <div class="card"><div class="tfit"><span class="name">Ripley</span><span class="tbar"><span class="tideal" style="left: 42.9%; right: 14.3%"></span><span class="tspan" style="left: 28.6%; right: 50.0%; background: linear-gradient(90deg, #48bf9b, #39c56a)"></span></span><span class="pv">2° under</span></div><div class="tfit"><span class="name">Windsor</span><span class="tbar"><span class="tideal" style="left: 42.9%; right: 14.3%"></span><span class="tspan" style="left: 21.4%; right: 50.0%; background: linear-gradient(90deg, #4dbcac, #39c56a)"></span></span><span class="pv">3° under</span></div><div class="tfit"><span class="name">Thames</span><span class="tbar"><span class="tideal" style="left: 42.9%; right: 14.3%"></span><span class="tspan" style="left: 42.9%; right: 50.0%; background: linear-gradient(90deg, #3ec37a, #39c56a)"></span></span><span class="pv ok">In range</span></div><div class="tfit"><span class="name">Box Hill</span><span class="tbar"><span class="tideal" style="left: 42.9%; right: 14.3%"></span><span class="tspan" style="left: 21.4%; right: 57.1%; background: linear-gradient(90deg, #4dbcac, #3ec37a)"></span></span><span class="pv">3° under</span></div><div class="tfit"><span class="name">Richmond</span><span class="tbar"><span class="tideal" style="left: 42.9%; right: 14.3%"></span><span class="tspan" style="left: 50.0%; right: 42.9%; background: linear-gradient(90deg, #39c56a, #34c759)"></span></span><span class="pv ok">In range</span></div><div class="tfit"><span class="name">Esher</span><span class="tbar"><span class="tideal" style="left: 42.9%; right: 14.3%"></span><span class="tspan" style="left: 42.9%; right: 50.0%; background: linear-gradient(90deg, #3ec37a, #39c56a)"></span></span><span class="pv ok">In range</span></div><div class="tfit"><span class="name">Runnymede</span><span class="tbar"><span class="tideal" style="left: 42.9%; right: 14.3%"></span><span class="tspan" style="left: 28.6%; right: 50.0%; background: linear-gradient(90deg, #48bf9b, #39c56a)"></span></span><span class="pv">2° under</span></div></div>
+    <div class="sub note-u">Saturday's forecast for each route, start to finish.</div>
+  </div>
+  <div><div class="section-h"><h3>Deal-Breakers</h3></div><div class="list "><div class="prow "><div class="f1"><span class="pl">Never Colder Than</span></div><span class="pv">4°</span><span class="stepper"><span><i class="icon-minus"></i></span><span><i class="icon-plus"></i></span></span></div><div class="prow "><div class="f1"><span class="pl">Never Hotter Than</span></div><span class="pv">28°</span><span class="stepper"><span><i class="icon-minus"></i></span><span><i class="icon-plus"></i></span></span></div></div><div class="sub note-u">Rides outside these are marked Below your minimums.</div></div>
+</div>
+</aside>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ daysCool }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="3c"><div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a>Preferences, full length</div><div class="dv-card" style="width: 404px">
+<div class="frame tall theme-light" data-screen-label="3c Preferences, full length"><aside class="panel glass">
+<div class="panel-h"><button class="icon-btn" aria-label="Back to routes"><i class="icon-chevron-left"></i></button><div class="ph-title">Preferences</div><span class="ph-sp"></span></div>
+<div class="panel-s">
+  <div class="dt"><h1>Preferences</h1><div class="sub">Changes re-rank your rides straight away.</div></div>
+  <div><div class="section-h"><h3>What Makes a Good Ride</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #ff9500"><i class="icon-thermometer"></i></span><div class="f1"><span class="pl">Ideal Temperature</span></div><span class="pv">11–18°</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #32ade6"><i class="icon-wind"></i></span><div class="f1"><span class="pl">Comfortable Wind</span></div><span class="pv">20 km/h</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #ffcc00"><i class="icon-sun"></i></span><div class="f1"><span class="pl">Sunshine</span></div><span class="menu">Nice to Have<i class="icon-chevrons-up-down"></i></span></div><div class="prow "><span class="ico" style="background: #007aff"><i class="icon-cloud-rain"></i></span><div class="f1"><span class="pl">Rain</span></div><span class="menu">Prefer Dry<i class="icon-chevrons-up-down"></i></span></div><div class="prow "><span class="ico" style="background: #34c759"><i class="icon-mountain"></i></span><div class="f1"><span class="pl">Climbing</span></div><span class="menu">No Preference<i class="icon-chevrons-up-down"></i></span></div><div class="prow "><span class="ico" style="background: #af52de"><i class="icon-repeat"></i></span><div class="f1"><span class="pl">Recently Ridden</span></div><span class="menu">Prefer Variety<i class="icon-chevrons-up-down"></i></span></div></div><div class="sub note-u">Prefer Variety scores a route lower if you rode it in the last 14 days.</div></div>
+  <div><div class="section-h"><h3>Distance</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #30b0c7"><i class="icon-route"></i></span><div class="f1"><span class="pl">Distance</span></div><span class="pv">20–60 km</span></div><div class="pblock"><div class="seg " role="radiogroup"><span class="" role="radio" aria-checked="false">No limit</span><span class="on" role="radio" aria-checked="true">Choose a range</span></div><div class="range" style="--a: 20.0; --b: 60.0"><span class="rt"></span><span class="rf"></span><span class="th ta"></span><span class="th tb"></span></div><div class="rscale"><span style="--p: 0.0">0</span><span style="--p: 50.0">50</span><span style="--p: 100.0">100</span></div></div></div><div class="sub note-u">Routes outside the range stay in your library, but aren't recommended.</div></div>
+  <div><div class="section-h"><h3>When</h3></div><div class="list "><div class="pblock"><div class="seg " role="radiogroup"><span class="" role="radio" aria-checked="false">Daylight hours</span><span class="on" role="radio" aria-checked="true">Choose times</span></div></div><div class="prow "><span class="ico" style="background: #ff9500"><i class="icon-clock-9"></i></span><div class="f1"><span class="pl">Leave After</span></div><span class="tpill">09:00</span></div><div class="prow "><span class="ico" style="background: #5856d6"><i class="icon-clock-2"></i></span><div class="f1"><span class="pl">Back By</span></div><span class="tpill">14:00</span></div></div><div class="sub note-u">Ride On finds the best start inside this window, every day.</div></div>
+  <div><div class="section-h"><h3>Deal-Breakers</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #007aff"><i class="icon-thermometer-snowflake"></i></span><div class="f1"><span class="pl">Never Colder Than</span></div><span class="pv">4°</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #ff3b30"><i class="icon-thermometer-sun"></i></span><div class="f1"><span class="pl">Never Hotter Than</span></div><span class="pv">28°</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #667894"><i class="icon-wind"></i></span><div class="f1"><span class="pl">Gust Limit</span></div><span class="pv">35 km/h</span><i class="icon-chevron-right chev"></i></div><div class="prow "><span class="ico" style="background: #30b0c7"><i class="icon-umbrella"></i></span><div class="f1"><span class="pl">Chance of Rain</span></div><span class="menu">60%<i class="icon-chevrons-up-down"></i></span></div></div><div class="sub note-u">A ride past any of these is marked Below your minimums, whatever it scores.</div></div>
+  <div><div class="section-h"><h3>Riding</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #34c759"><i class="icon-gauge"></i></span><div class="f1"><span class="pl">Average Speed</span></div><span class="pv">22 km/h</span><span class="stepper"><span><i class="icon-minus"></i></span><span><i class="icon-plus"></i></span></span></div><div class="prow "><span class="ico" style="background: #8e8e93"><i class="icon-timer"></i></span><div class="f1"><span class="pl">Try Departures Every</span></div><span class="menu">30 min<i class="icon-chevrons-up-down"></i></span></div></div><div class="sub note-u">Sets how long each route takes you, so departures fit your window.</div></div>
+  <div><div class="section-h"><h3>Units</h3></div><div class="list plain"><div class="prow "><div class="f1"><span class="pl">Temperature</span></div><div class="seg sm" role="radiogroup"><span class="on" role="radio" aria-checked="true">°C</span><span class="" role="radio" aria-checked="false">°F</span></div></div><div class="prow "><div class="f1"><span class="pl">Speed</span></div><div class="seg sm" role="radiogroup"><span class="on" role="radio" aria-checked="true">km/h</span><span class="" role="radio" aria-checked="false">mph</span></div></div><div class="prow "><div class="f1"><span class="pl">Distance</span></div><div class="seg sm" role="radiogroup"><span class="on" role="radio" aria-checked="true">km</span><span class="" role="radio" aria-checked="false">mi</span></div></div></div></div>
+  <div><div class="list "><div class="prow "><span class="ico" style="background: #8e8e93"><i class="icon-circle-pause"></i></span><div class="f1"><span class="pl">Pause Ride On</span><span class="sub">Hide forecasts, scores and alerts. Your routes stay listed.</span></div><span class="switch" role="switch" aria-checked="false"><i></i></span></div></div></div>
+  <div><div class="section-h"><h3>Account</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #1c1c1e"><i class="icon-user-round"></i></span><div class="f1"><span class="pl">Email</span></div><span class="pv">rider@example.com</span></div><div class="prow "><span class="ico" style="background: #34c759"><i class="icon-shield-check"></i></span><div class="f1"><span class="pl">Sign-In Methods</span></div><span class="pv">2</span><i class="icon-chevron-right chev"></i></div></div></div>
+  <div><div class="section-h"><h3>Passkeys</h3></div><div class="list "><div class="prow "><span class="ico" style="background: #8e8e93"><i class="icon-key-round"></i></span><div class="f1"><span class="pl">MacBook Pro</span><span class="sub">iCloud Keychain · added 2 Oct</span></div><button class="icon-btn sm" aria-label="Passkey options"><i class="icon-ellipsis"></i></button></div><div class="prow "><span class="ico" style="background: #8e8e93"><i class="icon-key-round"></i></span><div class="f1"><span class="pl">Pixel 9</span><span class="sub">Google Password Manager · added 14 Oct</span></div><button class="icon-btn sm" aria-label="Passkey options"><i class="icon-ellipsis"></i></button></div><div class="prow acc"><span class="ico" style="background: var(--accent)"><i class="icon-plus"></i></span><div class="f1"><span class="pl">Add a Passkey</span></div></div></div><div class="sub note-u">Sign in with Face ID, Touch ID or your phone. No password to remember.</div></div>
+  <div><div class="list plain"><div class="prow danger"><div class="f1"><span class="pl">Sign Out</span></div></div></div><div class="sub note-u">You'll stay signed in on your other devices.</div></div>
+  <div><div class="section-h"><h3>About</h3></div><div class="list plain"><div class="prow "><div class="f1"><span class="pl">OpenStreetMap</span><span class="sub">Map data © OpenStreetMap contributors</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Protomaps</span><span class="sub">Basemap</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Mapterhorn</span><span class="sub">Terrain and hillshading</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Ordnance Survey</span><span class="sub">Contains OS data © Crown copyright and database right 2026</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Met Office</span><span class="sub">Weather. Contains Met Office data licensed under the Open Government Licence v3.0.</span></div><i class="icon-arrow-up-right chev"></i></div><div class="prow "><div class="f1"><span class="pl">Version</span></div><span class="pv">1.0 (Dec 2026)</span></div></div></div>
+</div>
+</aside></div>
+</div></div>
+<div class="dv-opt" id="3d"><div class="dv-olabel"><a class="dv-oid" href="#3d">3d</a>Adding a 13th route: pick one to swap out. The lowest scorer is chosen for you</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="3d Swap popover, desktop">
+<div class="map" data-map="home" data-pad="72 40 140 416"></div>
+<aside class="panel glass ">
+<div class="panel-h scrolled"><div class="search"><i class="icon-search"></i>Search routes</div><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s end">
+  <div class="card">
+    <span class="pill"><i class="icon-sparkles"></i>Best pick · Sat</span>
+    <div class="hero">
+      <div class="f1 minw0"><h2>Ripley café loop</h2><div class="dep">10:00 → ~12:30</div><div class="facts">↔ 49.6 km · 267 m climb</div></div>
+      <div class="hero-score"><b>84</b><span class="bar band-great"></span><span>Great</span></div>
+    </div>
+    <div class="chips"><span class="chip"><i class="icon-thermometer"></i>10–13°</span><span class="chip"><i class="icon-wind"></i>SW 18 km/h</span><span class="chip"><i class="icon-cloud-sun"></i>Sunny spells</span><span class="chip"><i class="icon-droplet-off"></i>Dry</span></div>
+    <div class="verdict"><i class="icon-circle-check"></i>Meets your preferences</div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Shortlist</h3><span>12 of 12</span></div>
+    <div class="list"><sc-for list="{{ shortlist }}" as="r"><div class="row {{ r.cls }}">
+      <div class="score"><b>{{ r.s }}</b><span class="bar band-{{ r.band }}"></span></div>
+      <div class="f1 minw0">
+        <div class="nl"><span class="name">{{ r.name }}</span><span class="delta">{{ r.delta }}</span></div>
+        <div class="sub">{{ r.word }} · {{ r.dep }}</div>
+        <div class="sub">{{ r.km }} · {{ r.cond }}</div>
+        <sc-if value="{{ r.below }}"><div class="sub warn"><i class="icon-triangle-alert"></i>{{ r.below }}</div></sc-if>
+      </div>
+    </div></sc-for></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Doesn't Fit Your Window</h3></div>
+    <div class="list"><div class="row"><div class="thumb"><i class="icon-clock"></i></div><div class="f1 minw0"><div class="name">Leith Hill &amp; the Surrey Hills</div><div class="sub">84.8 km · 1072 m climb</div><div class="sub">Needs about 5 h 10 min. Your window is 09:00–14:00.</div></div></div></div>
+  </div>
+  <div>
+    <div class="section-h"><h3>Library</h3><span>3 routes</span></div>
+    <div class="list"><sc-for list="{{ library }}" as="r"><div class="row {{ r.cls }}">
+      <div class="thumb"><i class="icon-route"></i></div>
+      <div class="f1 minw0"><div class="name">{{ r.name }}</div><div class="sub">{{ r.facts }}</div><div class="sub">{{ r.src }}</div></div>
+      <sc-if value="{{ r.hover }}"><span class="add"><i class="icon-plus"></i>Add</span></sc-if>
+    </div></sc-for></div>
+  </div>
+  <div class="footer">Updated 08:12 · forecast retrieved 08:10<br />Contains Met Office data licensed under the Open Government Licence v3.0.</div>
+</div>
+</aside>
+<div class="controls"><div class="keychip glass"><span class="sws"><span class="sw band-great"></span><span class="sw band-good"></span><span class="sw band-fair"></span><span class="sw band-notrec"></span></span>Bands<i class="icon-chevron-down"></i></div><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+<div class="daystrip glass" role="group" aria-label="Day"><sc-for list="{{ days }}" as="d"><button class="day {{ d.cls }}" aria-pressed="{{ d.sel }}"><span class="day-n">{{ d.d }}</span><span class="track"><span class="dbar band-{{ d.band }}" style="height: {{ d.h }}px"></span></span><span class="day-s">{{ d.s }}<sc-if value="{{ d.rain }}"><i class="icon-umbrella" aria-label="Rain"></i></sc-if></span></button></sc-for></div>
+<div class="pop glass" role="dialog" aria-label="Your shortlist is full" style="left: 404px; top: 150px"><div class="pop-h"><h3>Your shortlist is full</h3><div class="sub">Choose one to swap out for Barnes &amp; Putney Bridge. A shortlist holds 12.</div></div><div role="radiogroup"><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Ripley café loop</span><b>84</b><span class="bar band-great"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Windsor Great Park</span><b>79</b><span class="bar band-great"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Thames to Walton</span><b>76</b><span class="bar band-great"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Box Hill via Leatherhead</span><b>71</b><span class="bar band-good"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Richmond Park laps</span><b>68</b><span class="bar band-good"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Esher &amp; Claygate lanes</span><b>66</b><span class="bar band-good"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Hampton Court &amp; Bushy Park</span><b>63</b><span class="bar band-good"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Runnymede &amp; Staines</span><b>61</b><span class="bar band-good"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Wimbledon Common</span><b>57</b><span class="bar band-fair"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Ham &amp; Petersham riverside</span><b>52</b><span class="bar band-fair"></span></div><div class="pop-r on" role="radio" aria-checked="true"><span class="radio on"><i class=icon-check></i></span><span class="name">Epsom Downs &amp; Headley</span><b>44</b><span class="bar band-notrec"></span></div><div class="pop-r" role="radio" aria-checked="false"><span class="radio"></span><span class="name">Leith Hill &amp; the Surrey Hills</span><span class="sub">Doesn't fit</span></div></div><div class="pop-a"><button class="btn">Cancel</button><button class="btn tint">Swap</button></div></div>
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="3e"><div class="dv-olabel"><a class="dv-oid" href="#3e">3e</a>Paused: a quiet map, every line grey; no scores, day strip or bands</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="3e Paused, desktop">
+<div class="map" data-map="paused" data-pad="72 40 140 416"></div>
+<aside class="panel glass ">
+<div class="panel-h"><div class="search"><i class="icon-search"></i>Search routes</div><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s">
+  <div class="card"><div class="pc"><i class="icon-circle-pause"></i><div><div class="pc-t">Ride On is paused until Mon 3 Nov</div><div class="sub">No forecasts, scores or alerts until then. Your routes stay here to browse.</div></div></div><button class="btn tint">Resume</button></div>
+  <div><div class="section-h"><h3>Shortlist</h3><span>12 routes</span></div><div class="list"><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Box Hill via Leatherhead</div><div class="sub">55.7 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Epsom Downs &amp; Headley</div><div class="sub">45.2 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Esher &amp; Claygate lanes</div><div class="sub">29.0 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Ham &amp; Petersham riverside</div><div class="sub">10.7 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Hampton Court &amp; Bushy Park</div><div class="sub">10.0 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Leith Hill &amp; the Surrey Hills</div><div class="sub">84.8 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Richmond Park laps</div><div class="sub">14.6 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Ripley café loop</div><div class="sub">49.6 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Runnymede &amp; Staines</div><div class="sub">52.1 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Thames to Walton</div><div class="sub">24.0 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Wimbledon Common</div><div class="sub">21.7 km</div></div></div><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">Windsor Great Park</div><div class="sub">62.9 km</div></div></div></div></div>
+  <div><div class="section-h"><h3>Library</h3><span>3 routes</span></div><div class="list"><sc-for list="{{ libraryPlain }}" as="r"><div class="row"><div class="thumb"><i class="icon-route"></i></div><div class="f1 minw0"><div class="name">{{ r.name }}</div><div class="sub">{{ r.facts }}</div></div></div></sc-for></div></div>
+</div>
+</aside>
+<div class="controls"><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+
+
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="3f"><div class="dv-olabel"><a class="dv-oid" href="#3f">3f</a>Empty: no routes yet, the map pulled back to Great Britain</div><div class="dv-card" style="width: 1440px">
+<div class="frame desk theme-light" data-screen-label="3f Empty, desktop">
+<div class="map" data-map="empty" data-pad="40 40 40 416"></div>
+<aside class="panel glass fit">
+<div class="panel-h"><span class="ph-name">Ride On</span><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s"><div class="card empty"><div class="e-icon"><i class="icon-route"></i></div><h2>Import routes from cycle.travel</h2><p>Install the extension, open a journey on cycle.travel and save it.</p><div class="e-acts"><button class="btn tint">Add to Chrome</button><button class="btn">Add to Safari</button></div><div class="sub">Saved routes show up here and on the map straight away.</div></div></div>
+</aside>
+<div class="controls"><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+
+
+<div class="osm">© OpenStreetMap</div>
+</div>
+</div></div>
+<div class="dv-opt" id="3g"><div class="dv-olabel"><a class="dv-oid" href="#3g">3g</a>Empty, mobile: Safari only, since Chrome on iPhone has no extensions</div><div class="dv-card" style="width: 393px">
+<div class="frame phone theme-light" data-screen-label="3g Empty, mobile">
+<div class="map" data-map="empty" data-pad="112 28 380 28"></div>
+<div class="statusbar">08:14<span><i class="icon-signal"></i><i class="icon-wifi"></i><i class="icon-battery-full"></i></span></div>
+<div class="controls"><button class="icon-btn glass" aria-label="Appearance"><i class="icon-sun-moon"></i></button></div>
+
+<section class="sheet glass fit"><div class="grabber"></div>
+
+<div class="panel-h"><span class="ph-name">Ride On</span><button class="icon-btn" aria-label="Preferences"><i class="icon-settings"></i></button></div>
+<div class="panel-s"><div class="card empty"><div class="e-icon"><i class="icon-route"></i></div><h2>Import routes from cycle.travel</h2><p>Install the extension, open a journey on cycle.travel and save it.</p><div class="e-acts"><button class="btn tint">Add to Safari</button></div><div class="sub">Saved routes show up here and on the map straight away.</div></div></div>
+</section>
+</div>
+</div></div>
+</div>
+<p class="dv-next">Next up: the interactive prototype on live MapLibre (the 9-step happy path, desktop and mobile, light/dark toggle), then the state board and the dark map exploration. The swap popover on mobile, as a sheet, goes on the state board.</p>
+</section>
+</x-dc><script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>class Component extends DCLogic {
+  componentDidMount() {
+    const go = () => (window.RideOnMap ? window.RideOnMap.mountAll() : setTimeout(go, 50)); go();
+    // Refraction everywhere but the data-frost frames, which show what Safari and Firefox get.
+    const lens = () => (window.RideOnGlass ? document.querySelectorAll('.dv-opt:not([data-frost])').forEach((o) => window.RideOnGlass.refractAll(o)) : setTimeout(lens, 50));
+    document.fonts.ready.then(lens);
+  }
+  renderVals() {
+    const band = (s) => (s >= 75 ? 'great' : s >= 60 ? 'good' : s >= 50 ? 'fair' : 'notrec');
+    const word = { great: 'Great', good: 'Good', fair: 'Fair', notrec: 'Not recommended' };
+    const row = (s, name, dep, km, cond, delta = '', below = '') => ({ s, band: band(s), word: word[band(s)], name, dep, km, cond, delta, below, cls: '' });
+    const day = (d, s, sel) => ({ d, s: s ?? '', band: s ? band(s) : 'none', h: s ? Math.round(s * 0.26) : 3, sel: !!sel, rain: !s, cls: sel ? 'sel' : s ? '' : 'off' });
+    const shortlist = [
+        row(79, 'Windsor Great Park', '09:30 → ~12:25', '62.9 km', '9–13° · SW 18 km/h · dry', '▲ 1'),
+        row(76, 'Thames to Walton', '11:00 → ~12:10', '24.0 km', '12–13° · SW 18 km/h · dry'),
+        row(71, 'Box Hill via Leatherhead', '09:30 → ~12:20', '55.7 km', '9–12° · gusts 32 km/h · dry', '▼ 2'),
+        row(68, 'Richmond Park laps', '12:00 → ~12:45', '14.6 km', '13–14° · SW 20 km/h · dry'),
+        row(66, 'Esher & Claygate lanes', '11:30 → ~12:55', '29.0 km', '12–13° · SW 19 km/h · dry'),
+        row(63, 'Hampton Court & Bushy Park', '13:00 → ~13:30', '10.0 km', '13–14° · SW 21 km/h · dry'),
+        row(61, 'Runnymede & Staines', '10:00 → ~12:25', '52.1 km', '10–13° · SW 22 km/h · dry'),
+        row(57, 'Wimbledon Common', '12:30 → ~13:35', '21.7 km', '13–14° · gusts 34 km/h · dry'),
+        row(52, 'Ham & Petersham riverside', '13:30 → ~14:00', '10.7 km', '14° · W 24 km/h · dry'),
+        row(44, 'Epsom Downs & Headley', '09:00 → ~11:30', '45.2 km', '9–12° · SW 22 km/h · dry', '', 'Below your minimums: gusts 38 km/h'),
+    ];
+    return {
+      shortlist,
+      // 2a: Thames to Walton's line is hovered on the map, so its row lights up too.
+      shortlistHover: shortlist.map((r) => (r.name === 'Thames to Walton' ? { ...r, cls: 'hover' } : r)),
+      libraryPlain: [
+        { name: 'Barnes & Putney Bridge', facts: '21.5 km · 103 m · 27% unpaved', src: 'cycle.travel', cls: '', hover: false },
+        { name: "Chertsey & St Ann's Hill", facts: '47.5 km · 79 m · 8% unpaved', src: 'cycle.travel', cls: '', hover: false },
+        { name: 'Ranmore Common', facts: '55.8 km · 517 m · 7% unpaved', src: 'cycle.travel', cls: '', hover: false },
+      ],
+      library: [
+        { name: 'Barnes & Putney Bridge', facts: '21.5 km · 103 m · 27% unpaved', src: 'cycle.travel', cls: 'hover', hover: true },
+        { name: "Chertsey & St Ann's Hill", facts: '47.5 km · 79 m · 8% unpaved', src: 'cycle.travel', cls: '', hover: false },
+        { name: 'Ranmore Common', facts: '55.8 km · 517 m · 7% unpaved', src: 'cycle.travel', cls: '', hover: false },
+      ],
+      // 3b: a warmer ideal range re-ranks Saturday, so its best drops from 84 to 77.
+      daysCool: [day('Sat', 77, true), day('Sun', 72), day('Mon', 58), day('Tue'), day('Wed', 47), day('Thu', 66), day('Fri', 74)],
+      days: [day('Sat', 84, true), day('Sun', 72), day('Mon', 58), day('Tue'), day('Wed', 47), day('Thu', 66), day('Fri', 74)],
+    };
+  }
+}</script></body></html>

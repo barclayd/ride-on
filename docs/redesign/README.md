@@ -2,7 +2,7 @@
 
 The approved Claude Design canvas, written down screen by screen so the SwiftUI rebuild has one
 place to check against. The canvas is the visual source of truth:
-https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T (version 36). The rules behind it (materials,
+https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T (version 45). The rules behind it (materials,
 colour, type, motion, accessibility) live in [`DESIGN-SYSTEM.md`](../../DESIGN-SYSTEM.md); this
 doc is the *what*, that one is the *how*.
 
@@ -23,7 +23,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)) | #157, #164, #172 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava connection/history implemented, coordinated rollout pending ([contract](../strava.md)) | #167, #172 |
-| 6 | Widgets and Lock Screen | ⬜ | |
+| 6 | Widgets and Lock Screen | ✅ Board (A) and tracked ride (D) in every size, Lock Screen, Live Activity, Control Centre; Dan's on-device check to come | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
@@ -59,7 +59,7 @@ priority, and preserve the boolean on unrelated preference edits.
 | Saved settings (`RiderSettings`, `RiderSettingsStore`) | `app/Packages/Services/Sources/Services/RiderSettings.swift` |
 | Tabs | `app/Packages/Router/Sources/Router/AppTab.swift`: `rides`, `routes`, `preferences` |
 | Accent | `app/App/Assets.xcassets/AccentColor`: `#248A3D` light, `#30D158` dark |
-| Widgets | New widget extension target in `app/project.yml` |
+| Widgets | `app/Widgets/` (the `RideOnWidgets` extension, iOS and macOS); `app/Shared/` (App Group store, `RideLink`, map stills, compiled into the app too); `app/App/WidgetSync.swift` (writes the snapshot, renders stills, runs the Live Activity); `RideWidgetSnapshot` in Models |
 
 ---
 
@@ -469,19 +469,65 @@ Build:
 
 ## 8. Widgets and Lock Screen
 
-<img src="screens/widgets.png" width="720">
+| Light (A above, D below) | Dark (D before the start) |
+|---|---|
+| <img src="screens/widgets-light.png" width="360"> | <img src="screens/widgets-dark.png" width="360"> |
 
-- `systemSmall`: `ScoreGauge` 86, "★ Wed 09:00", "Hilly Loop", "51 km · 9–14° · Tailwind".
-- `systemMedium`: map thumbnail, "★ Best pick · Wed 14 Oct", "Hilly Loop" 86,
-  "09:00 → ~12:00 · 51 km", "9–14° · 15 km/h tailwind · Dry", runner-up "Thu · Potters Bar 79".
-- `accessoryInline`: "Wed 09:00 · Hilly Loop".
-- `accessoryCircular`: gauge 86 with "Wed".
-- `accessoryRectangular`: "Hilly Loop" / "Wed 09:00–12:00" / "9–14° · Tailwind · 86".
-- Tap opens that ride's detail.
+Canvas "A maps + D ride time". Rendered from the real views by a macOS harness, so the stills
+here are MapKit's; on iOS they're the cycle map. One adaptive widget, no configuration: the
+departure board (A) when nothing's tracked, the tracked ride (D) from the moment it's tracked
+until two hours after it ends. Tap opens that ride on Rides (`rideon://ride?pick=<id>`); Track
+opens its Track sheet (`&track=1`). No Directions anywhere.
 
-Build:
-- [ ] Widget extension target + timeline from the same `RideBoard` data
-- [ ] All five families
+**A, the board.**
+- `systemSmall` (and StandBy): map band with "★ WED 14" and ‹ ›; "09:00" and the score pill;
+  "Hilly Loop · 51 km"; "Tailwind · Dry", or the day's note.
+- `systemMedium`: "★ WED 14" and ‹ ›, "09:00 → ~12:00" and the pill, name, note, the day strip
+  (day, score; the paged day tinted); the tall map with Track.
+- `systemLarge`: the map with its hour chips, "★ Wed 09:00 → ~12:00 · Hilly Loop 86" and Track;
+  "NEXT 5 DAYS · WED 14 – SUN 18 · Updated 08:12"; a row a day (rain-outs say why), the paged
+  one highlighted. Rows and arrows page the day (`PageDay`); the app clears it when the board changes.
+- `systemExtraLarge` (iPad, Mac): the square map; the board header, "★ BEST · WED 14 OCT" and
+  Track, Flighty's leave → back row, score and conditions, then the days.
+- Lock Screen: inline "★ Wed 09:00 · 86 · Hilly Loop"; circular day, time and score;
+  rectangular the same on three lines.
+
+**D, the tracked ride.** The score and conditions lead; the ride time ("~3h ride", "2h 20m to
+go") sits where "leave in" was. The loop's ridden part turns gold, the committed colour.
+- `systemSmall`: map band with the ride time; `ScoreArc` 50 and the three condition rows (sky
+  and temperature, wind, what the last check found).
+- `systemMedium`: "🔔 HILLY LOOP · TODAY", `ScoreArc` 76, conditions, the ride time; the tall map
+  with the wind chip.
+- `systemLarge`: the map with hour chips, ride time and wind; arc, name, conditions; "Along the
+  Ride" hour cells.
+- `systemExtraLarge`: the square map; title and "Checked 07:00", arc 124, name, "51 km · 640 m ·
+  09:00 → ~12:00", conditions, hour cells.
+- Lock Screen: inline name, score, temperatures, wind; circular score gauge; rectangular "🔔 86 ·
+  Hilly Loop", conditions, ride time (a gauge left the text too narrow).
+- Live Activity and Dynamic Island: from three hours before the start (scheduled, with an alert)
+  to the finish, then "Ride over". The loop on a tile, `ScoreArc`, conditions, "3h ride · 09:00
+  → ~12:00". Compact: the loop and the score.
+- Control Centre (iOS, macOS 26): the tracked ride's name, else "Track Best".
+
+Build (where it stands, how to test it and what's left: [the widgets handoff](../widgets-handoff.md)):
+- [x] `RideOnWidgets` extension (iOS + macOS), App Group `group.com.danbarclay.rideon`
+- [x] `RideWidgetSnapshot` from `RideBoard` + `TrackedRide`, saved by the app; timeline every 5
+  minutes through the ride, at the finish, two hours on and at midnight
+- [x] Map stills rendered by the app while it's open (cycle map on iOS, MapKit on the Mac)
+- [x] Day paging and Track; deep link to Rides
+- [x] Live Activity, Dynamic Island, Control Centre control
+- [x] Simulator pass: A and D in every Home Screen size and Lock Screen accessory, Track from the
+  widget, the Live Activity, Dynamic Island and Control Centre control. Launch with
+  `--fixture-world -CycleMapTiles https://maps.ride-on.cc --fixture-now 2026-10-14T07:30:00+01:00`
+  (the fixture world drops tiles; `--fixture-now` moves the sample so that instant is now: 07:30
+  is the morning of Wed's ride, 10:30 mid-ride). Fixed: the green accent (`Color.accentColor` is system blue in a widget; use `.rideAccent`), the medium
+  board's start time truncating, "No changes" truncating, the expanded island clipping the ride time,
+  A's rectangular cutting the finish, A's inline dropping the score, D's rectangular truncating
+  beside its gauge
+- [ ] The Live Activity's Lock Screen view shows the planned "~3h ride" mid-ride while the widgets
+  say "1h 30m to go"
+- [ ] Dan's on-device check: StandBy, iPad extra large, the Mac desktop, the Live Activity's
+  scheduled start and alert
 
 ## 9. Routes (tab)
 
@@ -550,8 +596,8 @@ Build:
   save is in flight go out next. Any other failure puts the shortlist back as the API had it,
   with "Couldn't Save Your Shortlist". After a save the Rides board reloads, so the cards' status
   pills follow; until then a new card shows "Checking the forecast…".
-- The status pills and Details come from the last board Rides loaded; Routes fetches one if Rides
-  hasn't loaded yet.
+- The status pills and Details use the shared saved/fresh Rides board; Routes joins an in-flight
+  refresh, and shortlist saves force a refresh of that same store.
 - A History ride shows the route as ridden (the name, distance and climb saved with the ride),
   drawn with the saved route's path; a deleted route's ride stays, with no line. A plan the app
   can't read shows "No forecast saved". Temperature is the middle of the plan's range.
@@ -617,12 +663,15 @@ session.
 keychain; a refreshed `set-auth-token` replaces it; a 401 signs out. The `https` callback needs the
 `webcredentials:api.ride-on.cc` associated domain, in both the iOS and macOS entitlements.
 
-**Loading.** `GET /route-selection` (the extension's shortlist) → `GET /users/me` (saved
-planning days and window; presets resolved to dates the way the extension does, so "Next 5 Days"
-starts tomorrow) → in parallel `POST /recommendations {routeIds, days, previewDays: 7, riding:
-{window}}`, `POST /rides/summaries`,
-and per route `GET /routes/:id` (cycle.travel link) and `GET /routes/:id/geometry` (polyline6 for
-the map). Ride detail's elevation profile samples the geometry through Open-Meteo on first open.
+**Loading.** The app-owned `RideBoardStore` restores the account's saved board before the
+network finishes, keeps it visible while refreshing, and shares it with Routes so shortlist
+edits update both tabs. `GET /route-selection` and the shared `GET /users/me` run concurrently.
+Recommendations appear before optional history/geometry enrichment; unchanged route versions
+reuse saved geometry. Ranking reuse requires current weather, planning, profile, shortlist,
+route and history context. Activation, pull-to-refresh, settings/shortlist/window edits and
+iOS background refresh use the same store. Stale content is labelled as a saved forecast;
+failed refreshes retain it. See [app loading](../app-loading.md) for lifetimes and validation.
+Ride detail still samples elevation through Open-Meteo on first open.
 
 | UI | API |
 |---|---|
@@ -646,12 +695,12 @@ the map). Ride detail's elevation profile samples the geometry through Open-Mete
 | Factor sentences | `factors` + `conditions`; Wind and Temperature quote your limits from `resolvedPreferences` |
 | Footer | `weather.attribution` (Apple Weather when empty) |
 | Preferences, Ideal Temperature, Comfortable Wind | `GET /users/me` → `settings.riding`, `settings.preferences`, `settings.units`, `settings.display`, `preferenceLevels`, and `GET /auth/me` → `user.providers`; each edit sends `PATCH /users/me {expectedVersion, settings}` after 0.6 s (explicit `null` removes a limit or the distance range; a 409 re-reads and re-sends), then Rides reloads |
-| How Your Routes Fit | The last board Rides loaded, measured against the edited values in the app |
+| How Your Routes Fit | The restored or freshly loaded board, measured against the edited values in the app |
 
-**Not wired yet.** Unassessable routes aren't shown; a conflicting settings edit (409) keeps
-the old saved window, though that load still uses the new one; dates assume the device and the
-routes share a time zone; "Track a route" is still a no-op. Strava connection/history needs
+**Not wired yet.** Unassessable routes aren't shown; some day/time labels still use the device
+timezone. Planning choices and cache expiry use the account/response timezone. A conflicting
+window save keeps the old board and reports the error. Strava connection/history needs
 the [coordinated rollout](../strava.md); route imports and speed suggestions remain deferred. Crosswind
 Sensitivity stays hidden until the API returns a level (v0.25.0). "How Your Routes Fit" is empty
-until Rides has loaded once. The Rides day strip doesn't show the sheet's "Rain until 15:00"
+until a saved or fresh board is available. The Rides day strip doesn't show the sheet's "Rain until 15:00"
 style notes yet.

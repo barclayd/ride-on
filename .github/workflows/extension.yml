@@ -67,6 +67,7 @@ jobs:
           mkdir -p .output
           # GitHub's "Source code" archive is named ride-on-extension-v<version>.zip; point at the right one.
           { echo "Chrome Web Store upload: \`ride-on-extension-$next-chrome.zip\` (not the Source code archives)."
+            echo "Install unpacked: unzip \`ride-on-extension-$next-chrome-unpacked.zip\` and load the folder at chrome://extensions (the store zip can't sign in that way)."
             echo "Safari (TestFlight / App Store): run \`extension/safari/archive.sh\` on this tag."
             echo
             git log --no-merges --format='- %s' ${last:+"$last.."}HEAD -- "${src[@]}"; } > .output/notes.md
@@ -74,14 +75,21 @@ jobs:
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
           echo "Extension $next (changed since ${last:-no tag}: $changed)" >> "$GITHUB_STEP_SUMMARY"
 
+      # Unpacked build: keeps the manifest `key`, so a sideloaded install gets the fixed ID whose
+      # sign-in redirect the API accepts. Without it Chrome derives the ID from the folder path.
+      - run: bun run zip && mv .output/*-chrome.zip ".output/ride-on-extension-$EXTENSION_VERSION-chrome-unpacked.zip"
+        env:
+          EXTENSION_VERSION: ${{ steps.version.outputs.version }}
       # Store build: production API, computed version, no manifest `key` (the Web Store rejects it).
       - run: bun run zip
         env:
           EXTENSION_VERSION: ${{ steps.version.outputs.version }}
           STORE_BUILD: "1"
-      - run: >
-          unzip -p .output/*-chrome.zip manifest.json
+      - run: |
+          unzip -p .output/*-chrome.zip manifest.json \
           | jq -e --arg v "$EXTENSION_VERSION" '.version == $v and (has("key") | not)'
+          unzip -p .output/*-chrome-unpacked.zip manifest.json \
+          | jq -e --arg v "$EXTENSION_VERSION" '.version == $v and has("key")'
         env:
           EXTENSION_VERSION: ${{ steps.version.outputs.version }}
       - uses: actions/upload-artifact@v7
@@ -89,6 +97,7 @@ jobs:
           name: extension-zip
           path: |
             extension/.output/*-chrome.zip
+            extension/.output/*-chrome-unpacked.zip
             extension/.output/notes.md
           include-hidden-files: true # .output
           if-no-files-found: error
@@ -134,7 +143,7 @@ jobs:
         with:
           name: extension-zip
       - run: >
-          gh release create "extension-v$VERSION" ./*-chrome.zip
+          gh release create "extension-v$VERSION" ./*-chrome.zip ./*-chrome-unpacked.zip
           --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
           --title "Extension $VERSION" --notes-file notes.md
         env:

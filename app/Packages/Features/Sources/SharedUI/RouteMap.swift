@@ -45,11 +45,15 @@ public struct RouteMap: View {
     }
 
     public var body: some View {
-        switch style {
-        case .hero: map
-        case .card where Self.showsCycleMap, .thumbnail where Self.showsCycleMap: snapshot
-        case .card: map
-        case .thumbnail: outline
+        if coordinates.count < 2 {
+            Rectangle().fill(.routeLand).overlay { Image(systemName: "map").foregroundStyle(.secondary) }
+        } else {
+            switch style {
+            case .hero: map
+            case .card where Self.showsCycleMap, .thumbnail where Self.showsCycleMap: snapshot
+            case .card: map
+            case .thumbnail: outline
+            }
         }
     }
 

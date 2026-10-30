@@ -1,0 +1,9 @@
+node_modules
+.wrangler
+.dev.vars
+public/assets
+public/vendor
+public/map
+public/tokens.css
+public/favicon.png
+*.log
