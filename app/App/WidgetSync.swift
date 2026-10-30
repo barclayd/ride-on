@@ -83,7 +83,8 @@ enum WidgetSync {
 
     #if os(iOS)
     /// One activity for the tracked ride, from the morning of it (three hours before the start) until
-    /// the finish; any other ended.
+    /// the finish; any other ended. It gets no pushes, so it goes stale at the start, where the system
+    /// redraws the plan as a countdown, and once the app has seen the ride start, at the finish.
     private static func syncActivity(_ tracked: RideWidgetSnapshot.Tracked?, units: RideWidgetSnapshot.Units) async {
         // The state leaves the loop and hours to the attributes: ActivityKit caps both at 4 KB.
         let state = tracked.map { tracked -> RideWidgetSnapshot.Tracked in
@@ -93,9 +94,12 @@ enum WidgetSync {
             return state
         }
         let live = state.flatMap { Date.now < $0.ride.finish ? $0 : nil }
+        let stale = live.map { Date.now < $0.ride.start ? $0.ride.start : $0.ride.finish }
         for activity in Activity<RideActivityAttributes>.activities {
             if let live, activity.content.state.ride.id == live.ride.id {
-                if activity.content.state != live { await activity.update(ActivityContent(state: live, staleDate: live.ride.finish)) }
+                if activity.content.state != live || activity.content.staleDate != stale {
+                    await activity.update(ActivityContent(state: live, staleDate: stale))
+                }
             } else {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
@@ -104,7 +108,7 @@ enum WidgetSync {
               !Activity<RideActivityAttributes>.activities.contains(where: { $0.content.state.ride.id == live.ride.id }) else { return }
         let loop = tracked.ride.loop, step = max(1, loop.count / 30)
         let attributes = RideActivityAttributes(loop: stride(from: 0, to: loop.count, by: step).map { loop[$0] }, units: units)
-        let content = ActivityContent(state: live, staleDate: live.ride.finish)
+        let content = ActivityContent(state: live, staleDate: stale)
         let morning = live.ride.start.addingTimeInterval(-3 * 3600)
         if morning > .now {
             let alert = AlertConfiguration(title: "\(live.ride.name) today",

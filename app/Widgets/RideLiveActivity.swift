@@ -6,7 +6,7 @@ import Models
 import DesignSystem
 
 /// The tracked ride's Live Activity and Dynamic Island, in Widgets D's style (docs/redesign/README.md
-/// §8): from the morning of the ride until the finish, when it goes stale and reads "Ride over".
+/// §8): from the morning of the ride until the finish, then "Ride over".
 struct RideLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RideActivityAttributes.self) { context in
@@ -20,7 +20,7 @@ struct RideLiveActivity: Widget {
                     Label(tracked.ride.name, systemImage: "bell.fill").font(.caption.weight(.semibold)).lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.isStale ? "Ride over" : tracked.ride.rideTime(at: .now, short: true))
+                    ActivityRideTime(ride: tracked.ride, short: true)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.committed)
                         .lineLimit(1)
@@ -61,14 +61,14 @@ private struct LockScreenActivity: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.committed)
                     .lineLimit(1)
-                if context.isStale {
+                if Date.now >= ride.finish {
                     Text("Ride over").font(.headline)
                 } else {
                     HStack(spacing: 10) {
                         ScoreArc(score: tracked.score, change: tracked.change, warn: tracked.warn, size: 52)
                         Conds(tracked: tracked, units: context.attributes.units, size: 12)
                     }
-                    Label("\(ride.duration) ride · \(ride.start.clock) → ~\(ride.finish.clock)", systemImage: "timer")
+                    Label { ActivityRideTime(ride: ride) } icon: { Image(systemName: "timer") }
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.committed)
                         .lineLimit(1)
@@ -77,7 +77,35 @@ private struct LockScreenActivity: View {
             Spacer(minLength: 0)
         }
         .padding(14)
+        // As well as the tint: the scheduled start's alert resolved the tint light under dark text.
+        .background(Color.cardBackground)
         .widgetURL(RideLink(pick: ride.id).url)
+    }
+}
+
+/// The ride time, as D's widgets give it, for a view that only redraws when the app updates it or it
+/// goes stale (`WidgetSync` makes that the start, then the finish): "~3h ride · 09:00 → ~12:00"
+/// before the start, then a countdown that ticks on its own, "1:29:59 to go · back ~12:00", then
+/// "Ride over". The countdown stops at 0:00 if nothing redraws it at the finish.
+private struct ActivityRideTime: View {
+    var ride: RideWidgetSnapshot.Ride
+    /// The expanded island's trailing corner: "09:00 · ~3h ride", "1:29:59 to go".
+    var short = false
+
+    var body: some View {
+        let now = Date.now
+        if now < ride.start {
+            Text(short ? ride.rideTime(at: now, short: true) : "\(ride.duration) ride · \(ride.start.clock) → ~\(ride.finish.clock)")
+        } else if now < ride.finish {
+            let left = Text(timerInterval: ride.start...ride.finish, countsDown: true).monospacedDigit()
+            if short {
+                Text("\(left) to go")
+            } else {
+                Text("\(left) to go · back ~\(ride.finish.clock)")
+            }
+        } else {
+            Text("Ride over")
+        }
     }
 }
 
