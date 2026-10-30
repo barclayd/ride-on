@@ -158,9 +158,19 @@ export const rideRoutes = (now: () => Date) => {
     const timestamp = now();
     checkDate(input.riddenOn, input.timeZone, timestamp);
     const results = await c.env.ROUTES_DB.batch([
-      c.env.ROUTES_DB.prepare(`UPDATE rides SET plan_json = CASE WHEN ridden_on <> ? OR time_zone <> ? THEN NULL ELSE plan_json END, ridden_on = ?, time_zone = ?, version = version + 1, updated_at = ?
+      c.env.ROUTES_DB.prepare(`UPDATE rides SET
+        experience_json = CASE WHEN (ridden_on <> ? OR time_zone <> ?) AND experience_json IS NOT NULL THEN json_set(experience_json, '$.timing', NULL) ELSE experience_json END,
+        experience_version = experience_version + CASE WHEN ridden_on <> ? OR time_zone <> ? THEN 1 ELSE 0 END,
+        recommendation_id = CASE WHEN ridden_on <> ? OR time_zone <> ? THEN NULL ELSE recommendation_id END,
+        plan_json = CASE WHEN ridden_on <> ? OR time_zone <> ? THEN NULL ELSE plan_json END, ridden_on = ?, time_zone = ?, version = version + 1, updated_at = ?
         WHERE owner_id = ? AND id = ? AND version = ?
         RETURNING *, (source_hash IN (SELECT source_hash FROM ride_geometries WHERE owner_id = ?)) AS geometry_available`).bind(
+        input.riddenOn,
+        input.timeZone,
+        input.riddenOn,
+        input.timeZone,
+        input.riddenOn,
+        input.timeZone,
         input.riddenOn,
         input.timeZone,
         input.riddenOn,

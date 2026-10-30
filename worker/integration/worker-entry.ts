@@ -1,4 +1,4 @@
-import { createApp } from '../src/index.ts';
+import worker, { createApp } from '../src/index.ts';
 import {
   consumeMonitoring,
   dispatchMonitoring,
@@ -14,6 +14,7 @@ import type { Env } from '../src/types.ts';
 // Only time and request logging differ from production. Storage, authentication,
 // weather transport, source selection, caching and scoring use real defaults.
 export default {
+  scheduled: worker.scheduled,
   async fetch(
     request: Request,
     env: Env & { TEST_NOW: string },

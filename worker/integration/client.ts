@@ -184,6 +184,7 @@ const issue = z.object({
   retryAfterSeconds: z.number().optional(),
 });
 const responseSchema = z.object({
+  recommendationId: z.uuid().nullable(),
   algorithmVersion: z.string(),
   generatedAt: z.iso.datetime(),
   recommendedRouteId: z.uuid().nullable(),

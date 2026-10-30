@@ -1859,3 +1859,13 @@ through ordinary monitoring, so re-enabling does not replay observed changes.
 `fixedDeparture: true` and `alertEdits: true`. These indicate support for the
 fixed tile, better-slot suggestion and in-place switches, independently of
 monitoring configuration or notification permission. No new migration is needed.
+
+## Ride feedback and shadow learning (v0.42.0)
+
+See [ride learning](ride-learning.md) for optional completed-ride feedback, historical
+weather matching and the Tailored Rides controls. Recommendations now include an
+optional top-level `recommendationId` for diagnostic snapshots; existing per-pick
+`recommendationRef` values and tracking behaviour are unchanged. Personal learning
+does not affect live scores. `GET /users/me/learning` also returns
+`feedbackRideCount`, and paused accounts keep their counts with zero adjustments.
+Apply migration `0021_ride_learning.sql` before release.

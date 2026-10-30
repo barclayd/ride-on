@@ -12,7 +12,10 @@ const aliceToken = 'a'.repeat(40);
 const bobToken = 'b'.repeat(40);
 const env = {} as Env;
 test('health identifies the deployed build without authentication or weather calls', async () => {
-  const app = createApp({ log: false });
+  const app = createApp({
+    recordRecommendation: async () => null,
+    log: false,
+  });
   for (const tag of [undefined, '', 'synthetic-commit-sha']) {
     const response = await app.request('/health', {}, {
       ...(tag === undefined
@@ -96,6 +99,7 @@ const setup = () => {
     },
   };
   const app = createApp({
+    recordRecommendation: async () => null,
     // Unit tests isolate HTTP orchestration; real session verification and
     // owner persistence are covered against D1 in the integration suite.
     resolveAccess: async (request) => {

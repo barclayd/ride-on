@@ -11,7 +11,8 @@
     "STRAVA_ENABLED": "true",
     "STRAVA_IMPORT_ENABLED": "true",
     "GROUND_EVIDENCE_MODE": "non-commercial",
-    "RIDE_MONITORING": "enabled"
+    "RIDE_MONITORING": "enabled",
+    "RIDE_LEARNING_WEATHER_MODE": "non-commercial"
   },
   "triggers": { "crons": ["*/15 * * * *"] },
   "queues": {
