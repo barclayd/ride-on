@@ -3,6 +3,7 @@ import { cop } from 'remix/middleware/cop';
 import { type RenderFunction, render } from 'remix/middleware/render';
 import { redirect } from 'remix/response/redirect';
 import { createRouter } from 'remix/router';
+import { libraryGeometry } from './geometry.ts';
 import { Home, SignIn } from './pages.tsx';
 import { routes } from './routes.ts';
 import {
@@ -135,8 +136,19 @@ router.map(routes, {
         status: 303,
         headers: {
           'Set-Cookie': await sessionCookie.serialize('', { maxAge: 0 }),
+          // The cached geometry and colour slots are the rider's; the next rider on this browser starts clean.
+          'Clear-Site-Data': '"storage"',
         },
       });
+    },
+    async libraryGeometry(context) {
+      const ids = context.url.searchParams.get('ids');
+      return libraryGeometry(
+        env.API,
+        context.request,
+        await readToken(context.request, env.DEV_SESSION_TOKEN),
+        ids ? ids.split(',') : [],
+      );
     },
     async api(context) {
       return proxy(
