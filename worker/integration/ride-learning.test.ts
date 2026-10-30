@@ -7,7 +7,12 @@ import type { Experience } from '../src/rides/experience.ts';
 import type { RideWeatherEvidence } from '../src/rides/historical-weather.ts';
 import { recommendMetOffice } from './client.ts';
 import { metOffice } from './fixtures.ts';
-import { BOB_TOKEN, createHarness, type Harness } from './harness.ts';
+import {
+  BOB_TOKEN,
+  createHarness,
+  type Harness,
+  RIDE_DATE,
+} from './harness.ts';
 
 const experienceSchema = z.custom<Experience>();
 const evidenceSchema = z.custom<RideWeatherEvidence>();
@@ -356,18 +361,46 @@ integration(
   async (h) => {
     h.use(metOffice());
     const { route } = await create(h);
-    const first = await recommendMetOffice(h, [route.id]);
+    // Read references here without changing the shared parser used by score-equality tests.
+    const rank = async () => {
+      const response = await h.send('/recommendations', {
+        body: JSON.stringify({
+          routeIds: [route.id],
+          date: RIDE_DATE,
+          weather: { mode: 'strict', providerId: 'met-office' },
+          forecast: {
+            representation: 'deterministic',
+            freshnessBasis: 'model-run',
+          },
+        }),
+      });
+      assert.equal(response.status, 200);
+      return z
+        .object({
+          recommendationId: z.uuid().nullable(),
+          rankings: z.array(
+            z.object({
+              best: z.object({
+                score: z.number(),
+                recommendationRef: z.uuid(),
+              }),
+            }),
+          ),
+        })
+        .parse(await response.json());
+    };
+    const first = await rank();
     assert.ok(first.recommendationId);
     const db = await h.runtime.getD1Database('ROUTES_DB');
     await db
       .prepare('UPDATE recommendation_snapshots SET size_bytes = 50000000')
       .run();
-    const capped = await recommendMetOffice(h, [route.id]);
+    const capped = await rank();
     assert.equal(capped.recommendationId, null);
     assert.equal(capped.rankings[0]?.best.score, first.rankings[0]?.best.score);
     assert.ok(capped.rankings[0]?.best.recommendationRef);
     await db.prepare('DROP TABLE recommendation_snapshots').run();
-    const failed = await recommendMetOffice(h, [route.id]);
+    const failed = await rank();
     assert.equal(failed.recommendationId, null);
     assert.equal(failed.rankings[0]?.best.score, first.rankings[0]?.best.score);
     assert.ok(failed.rankings[0]?.best.recommendationRef);

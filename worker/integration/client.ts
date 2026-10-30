@@ -124,7 +124,6 @@ export const temperatureAlongRideSchema = z.object({
     .nullable(),
 });
 const candidate = z.object({
-  recommendationRef: z.uuid().nullable().optional(),
   departureAt: z.iso.datetime(),
   finishAt: z.iso.datetime(),
   score: z.number().min(0).max(100),
