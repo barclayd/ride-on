@@ -32,8 +32,7 @@ Read it with:
      - `/api/*` returns 401 without a session.
      - The Google start hop reaches accounts.google.com, which accepts the new callback.
    - A real Apple or Google sign-in still needs Dan in a browser (next steps, step 1).
-5. **Screen 1 of the v1 screens is built**: the library on the map, in identity colours. It isn't
-   deployed yet.
+5. **Screen 1 of the v1 screens is built**: the library on the map, in identity colours (#303).
    - `GET /api/library-geometry` is in `app/src/geometry.ts`. It fans out to
      `/routes/:id/geometry`, six calls at a time, and returns one FeatureCollection.
    - The client is split into:
@@ -42,6 +41,20 @@ Read it with:
      - `client/slots.ts`, which assigns the colour slots and keeps them in localStorage
    - Sign-out sends `Clear-Site-Data: "storage"`, so the next person on the device doesn't see the
      last rider's lines or colours.
+6. **Screen 2 is built**: the shortlist and scores, in the panel.
+   - `client/board.ts` holds the screen's state: the library, the shortlist, the scores, the
+     full-shortlist sheet and the undo toast. The panel, its overlays and the map share it.
+   - `client/view.ts` turns that state into what the panel shows, as plain data. `view.test.ts`
+     covers it.
+   - `client/panel.tsx` has two client entries: `Panel` (search, best pick, shortlist, Doesn't Fit
+     Your Window, library) and `Overlays` (the forecast pill, the full-shortlist sheet and the toast).
+   - Shortlist edits show at once, then save with `PUT /api/route-selection`. On a 409 the edit is
+     applied again to the server's newer list.
+   - Hovering a row lifts its line on the map, and hovering a line lights its row.
+   - Icons are inline `lucide-static` SVGs, and the tokens now have `--route-1` to `--route-12`.
+
+Screens 1 and 2 aren't deployed yet: production still runs the spike until Dan runs `bun run deploy`
+in `app/`.
 
 ## Decisions since the spec
 
@@ -116,19 +129,14 @@ Each later deploy (`bun run deploy` in `app/`) is outward-facing, so **ask Dan f
 Build them one PR at a time, in this order:
 
 1. ~~The library on the map, in identity colours.~~ Done.
-2. The shortlist and scores. Things to know before starting:
-   - **Panel colours:** add `--route-1` to `--route-12`, in light and dark, to the tokens. The map
-     already uses `HUES` from `client/slots.ts`, which holds the light values.
-   - **Swaps:** a swap has to write the outgoing route's slot to the incoming route, through the
-     stored slots in `client/slots.ts`, before `assignSlots` runs. The tests already cover it.
-   - **Shortlist changes** have to:
-     - reset the feature state
-     - re-sort the source with `setData`, so shortlisted lines still draw on top
-   - **The phone fit** already leaves room for the sheet (`padding()` in `map.ts`). Until the sheet
-     exists, the routes sit in a band at the top of the screen.
+2. ~~The shortlist and scores.~~ Done.
 3. The day strip.
+   - `board.ts` asks for recommendations with the `next` preset (today to today+4). The strip needs
+     seven days, so switch it to `days: {kind: 'range', start, end}` (SPEC §8).
 4. The detail.
+   - Removing a route from the shortlist lives here, so the panel has no remove control yet.
 5. Preferences and Pause.
+   - The settings button beside the search goes in with this screen.
    - Sign-out moves into Preferences.
    - Remove the `ponytail:` sign-out chip in `app/src/pages.tsx`.
 6. The remaining states, including the error states in SPEC §7.8.
@@ -194,6 +202,11 @@ would be cheap to add.
     `LOGIN_NOT_CONFIGURED`.
   - Locally, `DEV_SESSION_TOKEN` signs you in on localhost instead. Get one with
     `bun run dev:session`.
+- **Local scores need the Met Office.** Apple Weather isn't configured locally, so every route comes
+  back `unassessable` (`missing_weather`) unless the local user has `weatherProviderId:
+  'met-office'`. A fresh local session also needs `POST /users` first, or `/users/me` returns 404.
+- **Seed local routes** by posting GPX to `/api/routes` with `Content-Type: application/gpx+xml`.
+  Twelve or more are needed to see the full-shortlist sheet.
 - **`worker/.dev.vars` doesn't hot-reload.** Restart the API's `wrangler dev` after editing it.
 - **MapLibre is vendored**: it's imported at runtime from `/vendor/` and isn't bundled. pmtiles is
   bundled into `map.js`.

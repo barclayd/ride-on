@@ -16,6 +16,7 @@ const result = await Bun.build({
     'src/client/entry.ts',
     'src/client/cycle-map.tsx',
     'src/client/map.ts',
+    'src/client/panel.tsx',
   ],
   outdir: 'public/assets',
   target: 'browser',

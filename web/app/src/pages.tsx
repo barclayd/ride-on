@@ -1,5 +1,6 @@
 import type { Handle, RemixNode } from 'remix/component';
 import { CycleMap } from './client/cycle-map.tsx';
+import { Overlays, Panel } from './client/panel.tsx';
 import { routes } from './routes.ts';
 
 function Document(handle: Handle<{ title?: string; children?: RemixNode }>) {
@@ -50,10 +51,12 @@ export function Home() {
   return () => (
     <Document>
       <MapShell
+        panel={<Panel />}
+        overlay={<Overlays />}
         controls={
           // ponytail: sign-out moves into Preferences (SPEC §7.4) with the v1 panel.
           <form method="post" action={routes.signOut.href()}>
-            <button class="chip glass" type="submit">
+            <button class="control glass" type="submit">
               Sign out
             </button>
           </form>
@@ -75,10 +78,10 @@ export function SignIn(handle: Handle<{ next: string; error?: string }>) {
           <h1>Ride On</h1>
           <p>Your saved routes, on the cycle map.</p>
           <input type="hidden" name="next" value={handle.props.next} />
-          <button class="btn" type="submit" name="provider" value="apple">
+          <button class="btn tint" type="submit" name="provider" value="apple">
             Continue with Apple
           </button>
-          <button class="btn" type="submit" name="provider" value="google">
+          <button class="btn tint" type="submit" name="provider" value="google">
             Continue with Google
           </button>
           {handle.props.error && <p role="alert">{handle.props.error}</p>}
