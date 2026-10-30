@@ -50,25 +50,28 @@ JPEG stills the app writes into the App Group.
 
 ## What's left
 
-1. **The Live Activity's mid-ride text.**
-   - **The bug:**
-     - `LockScreenActivity` always shows the planned `"\(ride.duration) ride · start → ~finish"`, so
-       mid-ride it says "~3h ride" while the widgets say "1h 30m to go".
-     - The expanded island's trailing text calls `rideTime(at: .now)`. That won't move on its own:
-       an activity's view only redraws when the app updates its content, and there are no push
-       updates.
-   - **Likely fix:** once the ride has started, show
-     `Text(timerInterval: ride.start...ride.finish, countsDown: true)` as the time to go. It ticks
-     without updates. Before the start, keep the plan.
-   - **Check:** what that `Text` shows before the start. The view won't redraw at the start either.
-   - **When done:** tick the item in §8's checklist.
+1. **Done: the Live Activity's mid-ride text.** It used to say the planned "~3h ride" mid-ride
+   while the widgets said "1h 30m to go". Now `ActivityRideTime` in `RideLiveActivity.swift` picks
+   the text from the time it's drawn:
+   - before the start, the plan: "~3h ride · 09:00 → ~12:00";
+   - from the start, `Text(timerInterval: start...finish, countsDown: true)`, which ticks without
+     updates: "1:29:59 to go · back ~12:00";
+   - from the finish, "Ride over".
+
+   An activity only redraws when the app updates it or its stale date passes, so `WidgetSync`
+   sets the stale date to the start until the ride starts, then to the finish. The switch at the
+   start needs no app. The one at the finish needs the app to have synced mid-ride (opened, or a
+   background refresh). If it hasn't, the countdown stops at "0:00 to go" until the next sync
+   ends the activity.
 2. **Dan's on-device check:**
    - StandBy;
    - iPad extra large (`systemExtraLarge`);
    - the Mac desktop widget;
    - the Live Activity's scheduled start and alert.
 
-   The simulator pass didn't cover these.
+   The simulator pass didn't cover these. A later one saw the scheduled start come up on time
+   on a light platter under white text, so the Lock Screen view now draws its own background as
+   well as the tint. The alert's sound and banner still need a device.
 
 ## Testing on the simulator
 
@@ -88,6 +91,9 @@ Things that catch you out:
 
 - **The tracked ride doesn't survive a relaunch.** `RideTracker` keeps it in memory, so track
   again after every launch.
+- **`--fixture-now` moves the sample on every sync,** not just at launch, so the anchor is always
+  now. A ride two minutes off stays two minutes off while the app is in front. Count from the
+  app's last sync, which is usually when it leaves the screen.
 - **Widgets can show stale data.** The App Group snapshot outlives the app, and the widgets show
   whatever was saved last. If the app launches behind an open Lock Screen editor, it never
   becomes active, so the widgets keep the previous run's data. Close the editor first.

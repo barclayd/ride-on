@@ -505,8 +505,10 @@ go") sits where "leave in" was. The loop's ridden part turns gold, the committed
 - Lock Screen: inline name, score, temperatures, wind; circular score gauge; rectangular "🔔 86 ·
   Hilly Loop", conditions, ride time (a gauge left the text too narrow).
 - Live Activity and Dynamic Island: from three hours before the start (scheduled, with an alert)
-  to the finish, then "Ride over". The loop on a tile, `ScoreArc`, conditions, "3h ride · 09:00
-  → ~12:00". Compact: the loop and the score.
+  to the finish, then "Ride over". The loop on a tile, `ScoreArc`, conditions and the ride time:
+  the plan, "~3h ride · 09:00 → ~12:00", until the start, then a countdown that ticks without
+  updates, "1:29:59 to go · back ~12:00" (the expanded island's corner: "09:00 · ~3h ride", then
+  "1:29:59 to go"). Compact: the loop and the score.
 - Control Centre (iOS, macOS 26): the tracked ride's name, else "Track Best".
 
 Build (where it stands, how to test it and what's left: [the widgets handoff](../widgets-handoff.md)):
@@ -524,8 +526,12 @@ Build (where it stands, how to test it and what's left: [the widgets handoff](..
   board's start time truncating, "No changes" truncating, the expanded island clipping the ride time,
   A's rectangular cutting the finish, A's inline dropping the score, D's rectangular truncating
   beside its gauge
-- [ ] The Live Activity's Lock Screen view shows the planned "~3h ride" mid-ride while the widgets
-  say "1h 30m to go"
+- [x] The Live Activity's ride time: the plan until the start, then a countdown
+  (`Text(timerInterval:)`) that ticks without updates, then "Ride over". It used to say "~3h ride"
+  mid-ride. Its stale date is the start, so the system redraws it there without the app, then the
+  finish once the app has synced mid-ride; if the app never does, it stops at "0:00 to go" until
+  the next sync ends it. Also fixed: the scheduled start drew a light platter under white text, so
+  the view draws its own background
 - [ ] Dan's on-device check: StandBy, iPad extra large, the Mac desktop, the Live Activity's
   scheduled start and alert
 
