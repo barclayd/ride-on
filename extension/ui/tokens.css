@@ -2392,6 +2392,110 @@ a.ro-name:hover {
   color: #6b5516;
 }
 /* Design 4: ride tags, check-in, next windows, History, recently ridden */
+.ro-feedback {
+  padding: 12px;
+  border: 1px solid var(--ro-border);
+  border-radius: 10px;
+  background: var(--ro-paper, #fff);
+}
+.ro-feedback > .ro-help {
+  display: block;
+  margin-block-start: 8px;
+}
+.ro-feedback-form {
+  display: grid;
+  gap: 16px;
+  margin-block-start: 12px;
+}
+.ro-feedback-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-inline-size: 0;
+}
+.ro-feedback-form legend {
+  font-weight: 600;
+  margin-block-end: 8px;
+}
+.ro-feedback-form legend .ro-help {
+  font-weight: 400;
+}
+.ro-feedback-rating > div {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+.ro-feedback-rating label {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  min-block-size: 64px;
+  padding: 8px 2px;
+  border: 1px solid var(--ro-border-input);
+  border-radius: 6px;
+  text-align: center;
+  cursor: pointer;
+}
+.ro-feedback-rating label:has(input:checked) {
+  background: var(--ro-tint);
+  border-color: var(--ro-olive-ink);
+}
+.ro-feedback-rating small {
+  font-size: 11px;
+  line-height: 1.3;
+}
+.ro-feedback input,
+.ro-feedback select {
+  accent-color: var(--ro-olive-ink);
+}
+.ro-feedback input:focus-visible,
+.ro-feedback select:focus-visible {
+  outline: 2px solid var(--ro-olive-ink);
+  outline-offset: 3px;
+}
+.ro-feedback-reasons,
+.ro-feedback-timing {
+  display: grid;
+  gap: 12px;
+}
+.ro-feedback-reasons label,
+.ro-feedback-timing label {
+  display: grid;
+  gap: 4px;
+}
+.ro-feedback select,
+.ro-feedback input[type="time"],
+.ro-feedback input[type="number"] {
+  inline-size: 100%;
+  min-block-size: 48px;
+  font-size: 16px;
+  border: 1px solid var(--ro-border-input);
+  border-radius: 6px;
+  padding: 8px;
+  color: inherit;
+  background: transparent;
+  box-sizing: border-box;
+}
+.ro-feedback-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 48px;
+  cursor: pointer;
+}
+.ro-feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.ro-feedback-actions button {
+  min-block-size: 48px;
+}
+.ro-feedback-error {
+  color: #9f310c;
+}
 .ro-tag {
   flex: none;
   border-radius: 999px;

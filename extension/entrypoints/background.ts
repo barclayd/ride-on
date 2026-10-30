@@ -384,6 +384,7 @@ const logRide = async (
   body: Pick<Ride, 'routeId' | 'riddenOn' | 'timeZone'> & {
     expectedRouteVersion: number;
     plan?: RidePlan;
+    recommendationId?: string;
   },
   key: string,
 ) => {
@@ -420,6 +421,7 @@ const commitDeletes = async (all = false) => {
   if (!done.length) return 0;
   await update((state) => ({
     pendingDeletes: state.pendingDeletes.filter((d) => !done.includes(d.id)),
+    learning: null,
     checkin:
       state.checkin?.rideId && done.includes(state.checkin.rideId)
         ? null
@@ -1007,6 +1009,10 @@ const handle = async (message: Message, from?: Browser.tabs.Tab) => {
               riddenOn: checkin.date,
               timeZone: user.settings.timeZone,
               ...(plan && { plan }),
+              ...(plan &&
+                checkin.meta.recommendationId && {
+                  recommendationId: checkin.meta.recommendationId,
+                }),
             },
             key,
           );
@@ -1036,6 +1042,43 @@ const handle = async (message: Message, from?: Browser.tabs.Tab) => {
       }
       await loadSummaries().catch(() => {});
       return rank();
+    }
+    case 'saveRideExperience': {
+      const { ride } = await api<{ ride: Ride }>(
+        `/rides/${message.id}/experience`,
+        {
+          method: 'PUT',
+          body: {
+            expectedVersion: message.expectedVersion,
+            expectedRideVersion: message.expectedRideVersion,
+            ...message.experience,
+          },
+        },
+      );
+      await update((state) => ({
+        rides: state.rides.map((r) => (r.id === ride.id ? ride : r)),
+        learning: null,
+      }));
+      return;
+    }
+    case 'loadLearning': {
+      const learning =
+        await api<import('../lib/types').LearningProfile>('/users/me/learning');
+      return update(() => ({ learning }));
+    }
+    case 'saveLearning': {
+      const learning = await api<import('../lib/types').LearningProfile>(
+        '/users/me/learning',
+        {
+          method: 'PATCH',
+          body: {
+            expectedVersion: message.expectedVersion,
+            enabled: message.enabled,
+            reset: message.reset ?? false,
+          },
+        },
+      );
+      return update(() => ({ learning }));
     }
     case 'deleteRide':
       await update((state) => ({

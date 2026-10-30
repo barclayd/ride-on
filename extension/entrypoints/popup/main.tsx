@@ -76,6 +76,7 @@ import {
   windowWhen,
 } from '../../ui/format';
 import '../../ui/tokens.css';
+import { LearningControls, RideFeedback } from '../../ui/ride-feedback';
 
 const TABS: [Tab, string][] = [
   ['rides', 'Rides'],
@@ -599,127 +600,142 @@ const CheckIn = ({ view }: { view: View }) => {
   const done = checkin.status === 'done' && checkin.routeId;
   const pane = done ? 'done' : picking ? 'pick' : 'ask';
   const conflict = checkin.status === 'conflict' && checkin.routeId;
+  const loggedRide = view.state.rides.find(
+    (ride) => ride.id === checkin.rideId,
+  );
   const c = top.conditions;
   return (
-    <section class="ro-checkin" data-pane={pane} aria-label="Ride check-in">
-      <div class="ro-checkin-track">
-        <div class="ro-ask" aria-hidden={pane !== 'ask'} inert={pane !== 'ask'}>
-          <span class="ro-checkin-day">{checkinDay(top, view.today, tz)}</span>
-          <h2>Did you ride {name(routeId)}?</h2>
-          <p>
-            {conflict
-              ? `${name(conflict)} has changed since this plan.`
-              : routeId === top.routeId
-                ? `${alert ? 'You had alerts on for it' : `It was ${rankText(top.rank)}`}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c, view.state.units)} and ${rainText(c)}.`
-                : `${km(routes[routeId]?.distanceM ?? 0)} km · instead of ${name(top.routeId)}, ${rankText(top.rank)}`}
-          </p>
-          <div class="ro-checkin-actions">
-            {conflict ? (
-              <button
-                type="button"
-                class="ro-primary"
-                disabled={busy}
-                onClick={() => answer({ answer: 'updated' })}
-              >
-                Log the updated route
-              </button>
-            ) : (
-              <button
-                type="button"
-                class="ro-primary"
-                disabled={busy}
-                onClick={() => answer({ answer: 'yes', routeId })}
-              >
-                Yes, I rode it
-              </button>
-            )}
-            <button
-              type="button"
-              class="ro-secondary"
-              disabled={busy}
-              onClick={() => answer({ answer: 'no' })}
-            >
-              Not this time
-            </button>
-          </div>
-          <button
-            type="button"
-            class="ro-link"
-            disabled={busy}
-            onClick={() => setPicking(true)}
+    <>
+      <section class="ro-checkin" data-pane={pane} aria-label="Ride check-in">
+        <div class="ro-checkin-track">
+          <div
+            class="ro-ask"
+            aria-hidden={pane !== 'ask'}
+            inert={pane !== 'ask'}
           >
-            I rode a different route ›
-          </button>
-        </div>
-        <div
-          class="ro-pick"
-          aria-hidden={pane !== 'pick'}
-          inert={pane !== 'pick'}
-        >
-          <div class="ro-pick-head">
-            <button
-              type="button"
-              class="ro-back"
-              aria-label="Back"
-              onClick={() => setPicking(false)}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                aria-hidden="true"
-              >
-                <path
-                  d="M10 3 5 8l5 5"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
-            <h2>Which route did you ride?</h2>
-          </div>
-          <fieldset class="ro-pick-list" aria-label="Your tracked routes">
-            {(selection?.routeIds ?? []).map((id) => (
-              <label key={id}>
-                <input
-                  type="radio"
-                  name="ro-ridden-route"
-                  checked={id === routeId}
-                  onChange={() => {
-                    setChosen(id);
-                    setTimeout(() => setPicking(false), 260);
-                  }}
-                />
-                <span>{name(id)}</span>
-                <span>{km(routes[id]?.distanceM ?? 0)} km</span>
-              </label>
-            ))}
-          </fieldset>
-        </div>
-        <div
-          class="ro-done"
-          aria-hidden={pane !== 'done'}
-          inert={pane !== 'done'}
-        >
-          <div>
-            <span>
-              Nice ride on {name(checkin.routeId ?? routeId)}. Saved to History.
+            <span class="ro-checkin-day">
+              {checkinDay(top, view.today, tz)}
             </span>
+            <h2>Did you ride {name(routeId)}?</h2>
+            <p>
+              {conflict
+                ? `${name(conflict)} has changed since this plan.`
+                : routeId === top.routeId
+                  ? `${alert ? 'You had alerts on for it' : `It was ${rankText(top.rank)}`}: ${km(routes[routeId]?.distanceM ?? 0)} km, leave ${clock(top.departureAt, tz)}, ${tempText(c, view.state.units)} and ${rainText(c)}.`
+                  : `${km(routes[routeId]?.distanceM ?? 0)} km · instead of ${name(top.routeId)}, ${rankText(top.rank)}`}
+            </p>
+            <div class="ro-checkin-actions">
+              {conflict ? (
+                <button
+                  type="button"
+                  class="ro-primary"
+                  disabled={busy}
+                  onClick={() => answer({ answer: 'updated' })}
+                >
+                  Log the updated route
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  class="ro-primary"
+                  disabled={busy}
+                  onClick={() => answer({ answer: 'yes', routeId })}
+                >
+                  Yes, I rode it
+                </button>
+              )}
+              <button
+                type="button"
+                class="ro-secondary"
+                disabled={busy}
+                onClick={() => answer({ answer: 'no' })}
+              >
+                Not this time
+              </button>
+            </div>
+            <button
+              type="button"
+              class="ro-link"
+              disabled={busy}
+              onClick={() => setPicking(true)}
+            >
+              I rode a different route ›
+            </button>
           </div>
-          <button
-            type="button"
-            class="ro-link"
-            disabled={busy}
-            onClick={() => answer({ answer: 'undo' })}
+          <div
+            class="ro-pick"
+            aria-hidden={pane !== 'pick'}
+            inert={pane !== 'pick'}
           >
-            Undo
-          </button>
+            <div class="ro-pick-head">
+              <button
+                type="button"
+                class="ro-back"
+                aria-label="Back"
+                onClick={() => setPicking(false)}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M10 3 5 8l5 5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+              <h2>Which route did you ride?</h2>
+            </div>
+            <fieldset class="ro-pick-list" aria-label="Your tracked routes">
+              {(selection?.routeIds ?? []).map((id) => (
+                <label key={id}>
+                  <input
+                    type="radio"
+                    name="ro-ridden-route"
+                    checked={id === routeId}
+                    onChange={() => {
+                      setChosen(id);
+                      setTimeout(() => setPicking(false), 260);
+                    }}
+                  />
+                  <span>{name(id)}</span>
+                  <span>{km(routes[id]?.distanceM ?? 0)} km</span>
+                </label>
+              ))}
+            </fieldset>
+          </div>
+          <div
+            class="ro-done"
+            aria-hidden={pane !== 'done'}
+            inert={pane !== 'done'}
+          >
+            <div>
+              <span>
+                Nice ride on {name(checkin.routeId ?? routeId)}. Saved to
+                History.
+              </span>
+            </div>
+            <button
+              type="button"
+              class="ro-link"
+              disabled={busy}
+              onClick={() => answer({ answer: 'undo' })}
+            >
+              Undo
+            </button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+      {done && loggedRide && (
+        <RideFeedback key={loggedRide.id} ride={loggedRide} initiallyOpen />
+      )}
+    </>
   );
 };
 
@@ -1583,14 +1599,18 @@ const HistoryTab = ({ view }: { view: View }) => {
   const list = [...rides].sort(newest);
   if (!list.length)
     return (
-      <span class="ro-empty">
-        No rides yet. When a window you planned ends, Ride On asks whether you
-        rode it.
-      </span>
+      <>
+        <LearningControls view={view} />
+        <span class="ro-empty">
+          No rides yet. When a window you planned ends, Ride On asks whether you
+          rode it.
+        </span>
+      </>
     );
   const labelled = new Set<string>();
   return (
     <>
+      <LearningControls view={view} />
       {list.map((ride) => {
         const month = monthLabel(ride.riddenOn, view.today);
         const label = !labelled.has(month) && labelled.add(month);
@@ -1622,6 +1642,7 @@ const HistoryTab = ({ view }: { view: View }) => {
                   />
                 </div>
                 <span class="ro-history-line">{rideLine(ride)}</span>
+                <RideFeedback ride={ride} />
               </article>
             )}
           </Fragment>

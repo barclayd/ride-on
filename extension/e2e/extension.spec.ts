@@ -39,7 +39,7 @@ const day = (offset: number) =>
     Date.now() + offset * 86_400_000,
   );
 
-// ---- Mock Ride On API v0.41 (port baked into the e2e build) ----
+// ---- Mock Ride On API v0.42 (port baked into the e2e build) ----
 
 const APPLE_LEGAL =
   'https://developer.apple.com/weatherkit/data-source-attribution/';
@@ -95,7 +95,24 @@ let betterScore: number | null;
 let pinnedUnavailable: boolean;
 let pauseDown: boolean; // pause writes fail
 
+let learning = {
+  enabled: true,
+  settingsVersion: 0,
+  mode: 'shadow',
+  scoringApplied: false,
+  eligibleRideCount: 0,
+  status: 'assessed',
+};
+
 const reset = () => {
+  learning = {
+    enabled: true,
+    settingsVersion: 0,
+    mode: 'shadow',
+    scoringApplied: false,
+    eligibleRideCount: 0,
+    status: 'assessed',
+  };
   calls = [];
   trackedRide = null;
   trackingVersion = 0;
@@ -232,6 +249,7 @@ const PLAN = {
   conditions: CONDITIONS,
 };
 const META = {
+  recommendationId: '9c587420-0dbc-4169-b657-d781cf9a72a9',
   generatedAt: `${day(-1)}T06:00:00.000Z`,
   algorithmVersion: 'test',
   attribution: [METOFFICE],
@@ -764,6 +782,43 @@ const handle = (method: string, url: URL, body: any): [number, unknown] => {
     return [200, nextWindows(body.after)];
   if (key === 'GET /rides')
     return [200, { rides: [...rides].sort(newest), nextCursor: null }];
+  if (key === 'GET /users/me/learning') return [200, learning];
+  if (key === 'PATCH /users/me/learning') {
+    if (body.expectedVersion !== learning.settingsVersion)
+      return [409, { error: { message: 'Refresh your learning settings.' } }];
+    learning = {
+      ...learning,
+      enabled: body.enabled,
+      settingsVersion: learning.settingsVersion + 1,
+      eligibleRideCount: body.reset ? 0 : learning.eligibleRideCount,
+    };
+    return [200, learning];
+  }
+  const experience = key.match(/^PUT \/rides\/(.+)\/experience$/);
+  if (experience) {
+    const index = rides.findIndex((r) => r.id === experience[1]);
+    if (index < 0) return [404, { error: { message: 'Ride not found' } }];
+    const current = rides[index];
+    if (body.expectedVersion !== (current.experienceVersion ?? 0))
+      return [
+        409,
+        { error: { message: 'Feedback changed. Refresh before saving.' } },
+      ];
+    rides[index] = {
+      ...current,
+      experienceVersion: (current.experienceVersion ?? 0) + 1,
+      experience:
+        body.feedback || body.timing
+          ? {
+              timing: body.timing,
+              feedback: body.feedback,
+              firstSubmittedAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          : null,
+    };
+    return [200, { ride: rides[index], scoringApplied: false }];
+  }
   if (key === 'POST /rides/summaries')
     return [
       200,
@@ -833,7 +888,11 @@ base.beforeAll(async () => {
     res.end(JSON.stringify(json));
   });
   await new Promise<void>((resolve) =>
-    server.listen(8787, '127.0.0.1', resolve),
+    server.listen(
+      Number(new URL(process.env.WXT_API_URL ?? 'http://127.0.0.1:8787').port),
+      '127.0.0.1',
+      resolve,
+    ),
   );
 });
 base.afterAll(
@@ -867,6 +926,14 @@ const test = base.extend<{
   context: async ({}, use) => {
     const context = await chromium.launchPersistentContext('', {
       channel: 'chromium',
+      ...(process.env.RIDE_ON_REVIEW_VIDEO && {
+        recordVideo: {
+          dir: process.env.RIDE_ON_REVIEW_VIDEO,
+          size: { width: 380, height: 600 },
+        },
+        viewport: { width: 380, height: 600 },
+        slowMo: 180,
+      }),
       // An English, metric region: the units default to °C and km/h (en-US would pick °F and mph).
       locale: 'en-IE',
       args: [
@@ -1962,6 +2029,7 @@ test('ended window: check-in, a different route, then the next windows', async (
   const [logged] = rideCalls('POST');
   expect(logged.key).toMatch(/^[0-9a-f-]{36}$/);
   expect(logged.body).toEqual({
+    recommendationId: META.recommendationId,
     routeId: 'r101',
     expectedRouteVersion: 1,
     riddenOn: day(-1),
@@ -2007,6 +2075,89 @@ test('ended window: check-in, a different route, then the next windows', async (
     days: { kind: 'range', start: day(1), end: day(1) },
     riding: { window: { start: '08:00', end: '14:00' } },
   });
+});
+
+test('optional ride feedback saves after the ride, can be edited or removed, and learning can be paused', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  await signIn(worker);
+  await worker.evaluate(
+    `chrome.storage.local.set({ state: { shown: ${JSON.stringify(SHOWN)} } })`,
+  );
+  const page = await openPopup(context, extensionId);
+  await page.getByRole('button', { name: 'Yes, I rode it' }).click();
+  await expect(page.locator('.ro-checkin')).toHaveAttribute(
+    'data-pane',
+    'done',
+  );
+  expect(rideCalls('POST')).toHaveLength(1);
+  const form = page.locator('.ro-feedback-form');
+  await expect(form).toBeVisible();
+  await form.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: test.info().outputPath('ride-feedback-start.png'),
+  });
+  await page.getByRole('button', { name: 'Skip for now' }).click();
+  expect(calls.filter((c) => c.path.endsWith('/experience'))).toHaveLength(0);
+  await page.getByRole('button', { name: 'How was your ride?' }).click();
+  await form
+    .getByRole('group', { name: /How much did you enjoy/ })
+    .locator('input[value="5"]')
+    .check();
+  await form
+    .getByRole('group', { name: /How comfortable was the weather/ })
+    .locator('input[value="2"]')
+    .check();
+  await form.getByLabel('Reason 1').selectOption('wind:negative');
+  await form.getByLabel('Add the time I actually rode').check();
+  await form.getByLabel('Started at').fill('09:15');
+  await form.getByLabel('Duration, in minutes').fill('125');
+  await form.getByLabel('Did you follow the saved route?').selectOption('yes');
+  await page.screenshot({
+    path: test.info().outputPath('ride-feedback.png'),
+    fullPage: true,
+  });
+  await form.getByRole('button', { name: 'Save feedback' }).click();
+  await expect(form).toHaveCount(0);
+  expect(rideCalls('POST')[0]?.body.recommendationId).toBe(
+    META.recommendationId,
+  );
+  const saved = calls.find((c) => c.path.endsWith('/experience'));
+  expect(saved?.body).toMatchObject({
+    expectedVersion: 0,
+    expectedRideVersion: 1,
+    timing: {
+      startTime: '09:15',
+      durationMinutes: 125,
+      precision: 'approximate',
+      routeFollowed: 'yes',
+    },
+    feedback: {
+      enjoyment: 5,
+      weatherComfort: 2,
+      reasons: [{ factor: 'wind', impact: 'negative' }],
+      includeInLearning: true,
+    },
+  });
+  expect(rideCalls('POST')).toHaveLength(1);
+  await page.getByRole('tab', { name: 'History' }).click();
+  await page.getByRole('button', { name: 'Learning from your rides' }).click();
+  await expect(page.getByLabel('Learn from my ride feedback')).toBeVisible();
+  await page.getByRole('button', { name: 'Edit ride feedback' }).click();
+  await expect(page.getByLabel('Started at')).toHaveValue('09:15');
+  await page.getByRole('button', { name: 'Remove feedback' }).click();
+  await expect(
+    page.getByRole('button', { name: 'How was your ride?' }),
+  ).toBeVisible();
+  expect(rides).toHaveLength(1);
+  expect(rides[0].experience).toBeNull();
+  await page.getByLabel('Learn from my ride feedback').uncheck();
+  await expect(
+    page.getByLabel('Learn from my ride feedback'),
+  ).not.toBeChecked();
+  expect(learning.enabled).toBe(false);
 });
 
 test('a route changed since the plan is logged only when asked', async ({
@@ -2085,7 +2236,7 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   freshFor = -1; // stale at once, so every open would normally rank again
   const page = await openPopup(context, extensionId);
   await expect(page.locator('.ro-ride').first()).toContainText('Hilly Loop');
-  expect(recCalls()).toHaveLength(1);
+  await expect.poll(() => recCalls().length).toBe(1);
 
   await page.getByRole('tab', { name: 'Preferences' }).click();
   const card = page.locator('.ro-pause');
@@ -2162,7 +2313,7 @@ test('pausing hides forecasts until Ride On turns back on', async ({
   await page.getByRole('button', { name: 'Turn back on' }).click();
   await expect(page.locator('.ro-ride').first()).toContainText('Hilly Loop');
   await expect(pill).toHaveCount(0);
-  expect(recCalls()).toHaveLength(2);
+  await expect.poll(() => recCalls().length).toBe(2);
   await expect.poll(pauseCalls).toEqual([day(7), day(3), null, 'DELETE']);
   await page.getByRole('tab', { name: 'When' }).click();
   await expect(dims.first()).toHaveCSS('opacity', '1');

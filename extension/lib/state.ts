@@ -9,11 +9,13 @@ import type {
   Climbing,
   Conditions,
   Departure,
+  LearningProfile,
   NextWindows,
   Pause,
   PreferencesPatch,
   Recommendations,
   Ride,
+  RideExperience,
   RideSummary,
   RouteSummary,
   Selection,
@@ -86,6 +88,7 @@ export type Shown = {
 };
 // The response the picks came from, sent with a logged ride's plan.
 export type PlanMeta = {
+  recommendationId?: string | null;
   generatedAt: string;
   algorithmVersion: string;
   attribution: Attribution[];
@@ -133,6 +136,7 @@ export type State = {
   checkin: Checkin | null;
   next: NextWindows | null; // suggestions while expired
   rides: Ride[]; // newest first
+  learning: LearningProfile | null;
   ridesCursor: string | null;
   summaries: Record<string, RideSummary>; // by route ID, for ride tags
   pendingDeletes: { id: string; at: number }[]; // removed in History, sent after the undo window
@@ -147,6 +151,7 @@ export type State = {
 
 export const initialState: State = {
   auth: 'signed-out',
+  learning: null,
   signingInWith: null,
   signInError: null,
   user: null,
@@ -259,7 +264,21 @@ export type Message =
   | { type: 'checkin'; answer: 'no' | 'undo' | 'updated' }
   | { type: 'deleteRide'; id: string }
   | { type: 'undoDelete'; id: string }
-  | { type: 'moreRides' };
+  | { type: 'moreRides' }
+  | {
+      type: 'saveRideExperience';
+      id: string;
+      expectedVersion: number;
+      expectedRideVersion: number;
+      experience: RideExperience;
+    }
+  | { type: 'loadLearning' }
+  | {
+      type: 'saveLearning';
+      expectedVersion: number;
+      enabled: boolean;
+      reset?: boolean;
+    };
 
 export type JourneyGpx = {
   externalId: string;
