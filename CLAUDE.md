@@ -97,6 +97,18 @@ macOS build:
 xcodebuild -project app/RideOn.xcodeproj -scheme RideOn -destination 'platform=macOS' build
 ```
 
+Run on Dan's phone — **always** this way, never by building another checkout or worktree:
+
+```
+app/scripts/run-on-device.sh                  # Dan’s iPhone Duo
+app/scripts/run-on-device.sh "Other device"   # or set RIDEON_DEVICE
+```
+
+It fast-forwards `main` (or refuses a branch that's behind `origin/main`), regenerates the project,
+closes every other `RideOn.xcodeproj` open in Xcode and runs through the Xcode app. Device builds
+can't use `xcodebuild` or the Xcode MCP: Xcode 27 keeps the Apple Account where only the app can
+see it, so they fail with "No Accounts" and can't add a new device to the provisioning profile.
+
 Worker commands: see `worker/CLAUDE.md`. The API-first rebuild is implemented
 with `/routes`, `/recommendations`, `/users`, `/route-imports`, `/route-sources`
 and `/route-selection`; the API is deployed at
