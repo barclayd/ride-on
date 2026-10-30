@@ -1,0 +1,30 @@
+name: web-ci
+
+on:
+  pull_request:
+    paths:
+      - "web/app/**"
+      - "web/design-system/**"
+      # build.ts copies the cycle map style and the favicon from these.
+      - "app/Packages/Features/Sources/SharedUI/CycleMap/**"
+      - "extension/public/icon/32.png"
+      - ".github/workflows/web-ci.yml"
+      - ".github/workflows/web-deploy.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build:check

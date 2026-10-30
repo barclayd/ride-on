@@ -1,6 +1,6 @@
 # app.ride-on.cc: handoff
 
-This is where the web app stood on 27 October 2026, written for whoever picks it up next.
+This is where the web app stood on 30 October 2026, written for whoever picks it up next.
 
 Read it with:
 
@@ -24,7 +24,41 @@ Read it with:
    - An empty `MapShell` on the cycle map.
 
    Everything is verified locally except a full Apple or Google sign-in (see Gotchas).
-4. **Nothing is deployed yet.** app.ride-on.cc isn't live.
+4. **app.ride-on.cc is live** with the spike. It was deployed on 30 October 2026, as version
+   `7c8a8607`.
+   - The production `AUTH_CONFIG_JSON` now has the app's origin and callback.
+   - The smoke checks pass:
+     - `/` redirects to sign-in.
+     - `/api/*` returns 401 without a session.
+     - The Google start hop reaches accounts.google.com, which accepts the new callback.
+   - A real Apple or Google sign-in still needs Dan in a browser (next steps, step 1).
+5. **Screen 1 of the v1 screens is built**: the library on the map, in identity colours (#303).
+   - `GET /api/library-geometry` is in `app/src/geometry.ts`. It fans out to
+     `/routes/:id/geometry`, six calls at a time, and returns one FeatureCollection.
+   - The client is split into:
+     - `client/library.ts`, which loads the library
+     - `client/geometry-cache.ts`, the IndexedDB line cache, keyed `routeId@version`
+     - `client/slots.ts`, which assigns the colour slots and keeps them in localStorage
+   - Sign-out sends `Clear-Site-Data: "storage"`, so the next person on the device doesn't see the
+     last rider's lines or colours.
+6. **Screen 2 is built**: the shortlist and scores, in the panel.
+   - `client/board.ts` holds the screen's state: the library, the shortlist, the scores, the
+     full-shortlist sheet and the undo toast. The panel, its overlays and the map share it.
+   - `client/view.ts` turns that state into what the panel shows, as plain data. `view.test.ts`
+     covers it.
+   - `client/panel.tsx` has two client entries: `Panel` (search, best pick, shortlist, Doesn't Fit
+     Your Window, library) and `Overlays` (the forecast pill, the full-shortlist sheet and the toast).
+   - Shortlist edits show at once, then save with `PUT /api/route-selection`. On a 409 the edit is
+     applied again to the server's newer list.
+   - Hovering a row lifts its line on the map, and hovering a line lights its row.
+   - Icons are inline `lucide-static` SVGs, and the tokens now have `--route-1` to `--route-12`.
+7. **Screens 1 and 2 are live.** They were deployed on 30 October 2026, as version `cdad6479`.
+8. **CI deploys the app.**
+   - `web-ci` runs `bun run check` and `bun run build:check` on every PR that touches the app.
+   - `web-deploy` deploys on every merge to `main`, tagged with the commit. It then checks that the
+     edge serves that build's client bundle and that `/` and `/api/*` still need a session.
+   - Both workflows also watch the files `build.ts` copies in: SharedUI's cycle map style and the
+     extension's favicon.
 
 ## Decisions since the spec
 
@@ -82,31 +116,31 @@ which colour is which ride.
 
 ## Next steps, in order
 
-### 1. Go live
+### 1. Finish checking go-live
 
-This is outward-facing, so **ask Dan first**. He hasn't given the go-ahead yet.
+The secret and the deploy are done. These checks need a real account, so Dan has to do them in a
+browser:
 
-1. **Update the production `AUTH_CONFIG_JSON`**, the API's Worker secret. See
-   [docs/authentication.md](../docs/authentication.md) under "Secret configuration".
-   - Add `https://app.ride-on.cc` to `trustedOrigins`.
-   - Add `https://app.ride-on.cc/auth/callback` to `clientRedirects`.
-   - From `worker/`, run `bunx wrangler secret put AUTH_CONFIG_JSON`.
-2. **Deploy:** run `bun run deploy` in `app/`. The `custom_domain` route creates app.ride-on.cc.
-3. **Check:**
-   - Apple sign-in, end to end.
-   - Google sign-in, end to end.
-   - Sign-out.
-   - `/api/*` with the session.
+- Apple sign-in, end to end.
+- Google sign-in, end to end.
+- Sign-out.
+- `/api/*` with the session.
+
+Merging to `main` now deploys the app, so there's no separate deploy step.
 
 ### 2. The v1 screens (SPEC §14 step 6)
 
 Build them one PR at a time, in this order:
 
-1. The library on the map, in identity colours.
-2. The shortlist and scores.
+1. ~~The library on the map, in identity colours.~~ Done.
+2. ~~The shortlist and scores.~~ Done.
 3. The day strip.
+   - `board.ts` asks for recommendations with the `next` preset (today to today+4). The strip needs
+     seven days, so switch it to `days: {kind: 'range', start, end}` (SPEC §8).
 4. The detail.
+   - Removing a route from the shortlist lives here, so the panel has no remove control yet.
 5. Preferences and Pause.
+   - The settings button beside the search goes in with this screen.
    - Sign-out moves into Preferences.
    - Remove the `ponytail:` sign-out chip in `app/src/pages.tsx`.
 6. The remaining states, including the error states in SPEC §7.8.
@@ -123,7 +157,6 @@ Port each piece from `design/`:
 
 Also on the way:
 
-- `GET /api/library-geometry` (SPEC §12.4)
 - `/api/client-errors` and Web Analytics (SPEC §11.3)
 - passkeys (SPEC §11.2)
 
@@ -151,11 +184,6 @@ This is SPEC §13 step 2.
   with Dan first. Once it's live, the app stops copying SharedUI's style.
 - **Create `packages/core` (`@ride-on/core`)** and move the extension onto it.
 
-### 6. CI
-
-No CI covers `web/` yet. A workflow that runs `bun run check` and `bun run build:check` in `app/`
-would be cheap to add.
-
 ## Gotchas from the spike
 
 - **`wrangler dev` rewrites `request.url` and `Host`** to the first route's host, app.ride-on.cc,
@@ -173,6 +201,11 @@ would be cheap to add.
     `LOGIN_NOT_CONFIGURED`.
   - Locally, `DEV_SESSION_TOKEN` signs you in on localhost instead. Get one with
     `bun run dev:session`.
+- **Local scores need the Met Office.** Apple Weather isn't configured locally, so every route comes
+  back `unassessable` (`missing_weather`) unless the local user has `weatherProviderId:
+  'met-office'`. A fresh local session also needs `POST /users` first, or `/users/me` returns 404.
+- **Seed local routes** by posting GPX to `/api/routes` with `Content-Type: application/gpx+xml`.
+  Twelve or more are needed to see the full-shortlist sheet.
 - **`worker/.dev.vars` doesn't hot-reload.** Restart the API's `wrangler dev` after editing it.
 - **MapLibre is vendored**: it's imported at runtime from `/vendor/` and isn't bundled. pmtiles is
   bundled into `map.js`.
@@ -189,7 +222,7 @@ would be cheap to add.
   `gh pr merge --merge`.
 - **Ask Dan before anything outward-facing:**
   - production secrets
-  - deploys
+  - manual deploys (`bun run deploy`). Deploys through `web-deploy` on merge are agreed.
   - publishing to the maps.ride-on.cc bucket
 - **Secrets** go in an ignored `.dev.vars` or in Worker secrets.
 - **Never log** tokens, GPX bodies, forecast bodies or auth headers (`worker/CLAUDE.md`).

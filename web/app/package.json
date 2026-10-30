@@ -16,6 +16,7 @@
     "bindings": "wrangler types src/env.d.ts --include-runtime false"
   },
   "dependencies": {
+    "lucide-static": "0.469.0",
     "maplibre-gl": "6.11.2",
     "pmtiles": "4.5.0",
     "remix": "3.1.0"
