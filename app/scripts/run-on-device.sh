@@ -24,25 +24,15 @@ if ! git merge-base --is-ancestor origin/main HEAD; then
   exit 1
 fi
 
-(cd app && xcodegen generate --quiet)
-
-echo "Building $(git rev-parse --short HEAD) for ${device}…"
-# Every checkout's project is called RideOn.xcodeproj and Xcode's scripting looks documents up by
-# name, so the other copies are closed first. That also stops ⌘R in a stale window.
-result="$(osascript - "$project" "$device" <<'APPLESCRIPT'
-on run argv
-	set projectPath to item 1 of argv
-	set deviceName to item 2 of argv
-	tell application "Xcode"
-		close (workspace documents whose name is "RideOn.xcodeproj" and path is not projectPath) saving yes
-		set ws to open projectPath
-		repeat 120 times
-			if loaded of ws then exit repeat
-			delay 1
-		end repeat
-		set active scheme of ws to scheme "RideOn" of ws
-		set active run destination of ws to (first run destination of ws whose name is deviceName)
-		-- Stopping an earlier run is asynchronous and cancels a build started before it lands.
+# Xcode reloads a project regenerated under it, and the reload cancels the build ("cancelled", or
+# "Could not compute dependency graph"), so every copy is closed before generating. Every checkout's
+# project is called RideOn.xcodeproj and Xcode's scripting looks documents up by name, so closing
+# the other copies also stops ⌘R in a stale window.
+if pgrep -xq Xcode; then
+  osascript <<'APPLESCRIPT'
+tell application "Xcode"
+	repeat with ws in (workspace documents whose name is "RideOn.xcodeproj")
+		-- Stopping is asynchronous: wait, or closing asks whether to stop.
 		stop ws
 		repeat 30 times
 			try
@@ -52,17 +42,46 @@ on run argv
 			end try
 			delay 1
 		end repeat
-		set r to build ws
-		repeat 900 times
-			if completed of r then exit repeat
+	end repeat
+	close (workspace documents whose name is "RideOn.xcodeproj") saving yes
+end tell
+APPLESCRIPT
+fi
+
+(cd app && xcodegen generate --quiet)
+
+echo "Building $(git rev-parse --short HEAD) for ${device}…"
+result="$(osascript - "$project" "$device" <<'APPLESCRIPT'
+on run argv
+	set projectPath to item 1 of argv
+	set deviceName to item 2 of argv
+	tell application "Xcode"
+		set ws to open projectPath
+		repeat 120 times
+			if loaded of ws then exit repeat
 			delay 1
 		end repeat
-		set out to status of r as text
-		try
-			repeat with e in build errors of r
-				set out to out & linefeed & "error: " & (message of e)
+		set active scheme of ws to scheme "RideOn" of ws
+		set active run destination of ws to (first run destination of ws whose name is deviceName)
+		-- A project Xcode has only just opened can still fail a build with no compile errors
+		-- ("cancelled", "error occurred", "Could not compute dependency graph"); the next one works.
+		repeat 3 times
+			set r to build ws
+			repeat 900 times
+				if completed of r then exit repeat
+				delay 1
 			end repeat
-		end try
+			set out to status of r as text
+			set settling to out is not "succeeded"
+			try
+				repeat with e in build errors of r
+					set out to out & linefeed & "error: " & (message of e)
+					if message of e does not start with "Could not compute dependency graph" then set settling to false
+				end repeat
+			end try
+			if not settling then exit repeat
+			delay 2
+		end repeat
 		return out
 	end tell
 end run
