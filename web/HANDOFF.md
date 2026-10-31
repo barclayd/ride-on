@@ -208,9 +208,13 @@ This is SPEC §13 step 2.
     `LOGIN_NOT_CONFIGURED`.
   - Locally, `DEV_SESSION_TOKEN` signs you in on localhost instead. Get one with
     `bun run dev:session`.
-- **Local scores need the Met Office.** Apple Weather isn't configured locally, so every route comes
-  back `unassessable` (`missing_weather`) unless the local user has `weatherProviderId:
-  'met-office'`. A fresh local session also needs `POST /users` first, or `/users/me` returns 404.
+- **Local scores use Apple Weather**, the default for new riders.
+  - `worker/.dev.vars` needs `APPLE_WEATHER_CONFIG_JSON`: the WeatherKit key `8DTB7B2CC6` with the
+    `com.danbarclay.rideon.web` Services ID (see `docs/apple-weather.md`). Without it, every route
+    comes back `unassessable` (`missing_weather`).
+  - Keep the local rider on Apple Weather. The Met Office BPF key allows 55 calls a day, and local
+    runs that use it can leave nothing for the live board.
+  - A fresh local session also needs `POST /users` first, or `/users/me` returns 404.
 - **Seed local routes** by posting GPX to `/api/routes` with `Content-Type: application/gpx+xml`.
   Twelve or more are needed to see the full-shortlist sheet.
 - **`worker/.dev.vars` doesn't hot-reload.** Restart the API's `wrangler dev` after editing it.
