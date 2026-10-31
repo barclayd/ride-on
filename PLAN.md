@@ -334,7 +334,7 @@ Routes are built elsewhere (Strava, cycle.travel, Garmin) and imported; Ride On 
 
 | Area | Decision |
 |---|---|
-| Platform | Native SwiftUI multiplatform: iOS 26 + macOS 26, one codebase. iPhone-first layouts, `NavigationSplitView` on iPad/Mac |
+| Platform | Native SwiftUI multiplatform: iOS 27.1 + macOS 27.0, one codebase. iPhone-first layouts, `NavigationSplitView` on iPad/Mac |
 | Project | XcodeGen (`project.yml`), app name **Ride On**, bundle `com.danbarclay.rideon`, module `RideOn` |
 | Persistence | SwiftData + CloudKit mirroring from day one (models CloudKit-safe: optionals/defaults, no unique constraints) |
 | Import | GPX file import (Files/share sheet) + Strava OAuth route sync. FIT + Garmin Courses API = backlog (Garmin dev program currently closed to new applicants) |
@@ -361,7 +361,7 @@ Routes are built elsewhere (Strava, cycle.travel, Garmin) and imported; Ride On 
 ## Architecture
 
 ```
-RideOn (SwiftUI, iOS 26 + macOS 26)
+RideOn (SwiftUI, iOS 27.1 + macOS 27.0)
 ├─ RideOnCore (SPM package: models, engine, GPX parsing — platform-free, fully unit-tested)
 │   ├─ Models: Route, RideLog, Bike, Preferences, SavedPlace, DailyContext
 │   ├─ Engine: FactorScore providers → WeightedScorer → RankedRecommendation(+ reasons)

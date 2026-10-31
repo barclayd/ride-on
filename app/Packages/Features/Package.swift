@@ -11,7 +11,7 @@ let baseDeps: [PackageDescription.Target.Dependency] = [
 
 let package = Package(
     name: "Features",
-    platforms: [.iOS("26.0"), .macOS("26.0")],
+    platforms: [.iOS("27.1"), .macOS("27.0")],
     products: [
         .library(name: "RideUI", type: .static, targets: ["RideUI"]),
         .library(name: "RoutesUI", type: .static, targets: ["RoutesUI"]),

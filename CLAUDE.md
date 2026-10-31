@@ -1,6 +1,6 @@
 # Ride On
 
-Cycling route recommender. SwiftUI multiplatform (iOS 26 + macOS 26) app + a Cloudflare Worker.
+Cycling route recommender. SwiftUI multiplatform (iOS 27.1 + macOS 27.0) app + a Cloudflare Worker.
 Full spec: `PLAN.md`. All UI decisions: `DESIGN-SYSTEM.md` — **every screen must follow it**, no exceptions.
 Screen-by-screen visual targets and the SwiftUI rebuild checklist: `docs/redesign/README.md` — update it in every redesign PR.
 
@@ -12,7 +12,7 @@ Do not use the Modern Web Guidance skill in this project unless Dan explicitly a
 
 Modular local SPM package architecture (keepfresh-ios style, adopted Phase 2.5): a thin `App/`
 shell composes packages under `Packages/`. Every package: swift-tools-version 6.2,
-`.library(type: .static)`, platforms `.iOS("26.0")` + `.macOS("26.0")`.
+`.library(type: .static)`, platforms `.iOS("27.1")` + `.macOS("27.0")`.
 
 ```
 app/
