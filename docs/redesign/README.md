@@ -28,9 +28,10 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
 | 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The only map on iOS: the Routes map, and snapshots on the Rides hero, cards and thumbnails, and live on Ride detail, with cycle lanes, hillshade and contours; the Mac stays on MapKit until a `WKWebView` with MapLibre GL JS replaces it. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
-| 11 | iPhone Duo ([canvas](https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz), [§10](#10-iphone-duo)): iOS 27.1, the rail, every pose | 🟡 Rides, Ride detail, Routes and Preferences in every pose; onboarding, the sheets on the rail, History's ride beside History and the tracked ride's tent glance to come | #316, #317, #318 |
+| 11 | iPhone Duo ([canvas](https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz), [§10](#10-iphone-duo)): iOS 27.1, the rail, every pose | 🟡 Rides, Ride detail, Routes, Preferences and onboarding in every pose; the sheets on the rail, History's ride beside History and the tracked ride's tent glance to come | #316, #317, #318 |
 
-Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
+Not in scope yet: Onboarding's redesign (it keeps its dials and copy; on the iPhone Duo it's laid
+out beside the rail, [§10](#10-iphone-duo)).
 
 API v0.29.0 adds [route outlines and wind sections](../extension-api-brief-v7.md)
 for the wind dropdown, without changing scoring. Short headwind/crosswind sections
@@ -663,12 +664,12 @@ every screen in each pose, the fold prototype and the rail audit. The rules are 
 DESIGN-SYSTEM.md §2 (the rail), §5 (shapes and panes) and §6 #19 (`PaneBar`). The app targets
 iOS 27.1, where the rail's APIs are, and macOS 27.0 (the newest Mac SDK in Xcode 27.1).
 
-| Pose | Size (pt) | `PaneShape` | Rides | Ride detail | Routes | Preferences |
-|---|---|---|---|---|---|---|
-| Closed | 466 × 678 | narrow | the board as on any iPhone | floating panel with detents | floating panel with detents; "+" at the foot of the rail | the list; rows push their page |
-| Open, landscape | 951 × 669 | wide | leading pane under `PaneBar`, the ride beside it | narrow (half pane) or wide (Full Screen): 380pt column | library and history leading under `PaneBar` ("+") and search; the map trailing with the selected route's `RouteCard` | the list leading under `PaneBar`, the open page trailing under its own |
-| Tent, closed landscape | 678 × 466 | tent | two columns: best pick with a 92pt score; Your Window, Other Tracked Routes | 310pt column docked leading, 92pt score | 310pt panel column docked leading; "+" on the rail | as closed |
-| Open, portrait | 669 × 951 | portrait | grid: best pick across the top with its map; Your Window, Doesn't Fit; Other Tracked Routes | map on top, panel docked below, cards in two columns | map on the top half, panel docked below; "+" in the navigation bar | as closed |
+| Pose | Size (pt) | `PaneShape` | Rides | Ride detail | Routes | Preferences | Onboarding |
+|---|---|---|---|---|---|---|---|
+| Closed | 466 × 678 | narrow | the board as on any iPhone | floating panel with detents | floating panel with detents; "+" at the foot of the rail | the list; rows push their page | one centred column; Back, Continue and Skip on the rail |
+| Open, landscape | 951 × 669 | wide | leading pane under `PaneBar`, the ride beside it | narrow (half pane) or wide (Full Screen): 380pt column | library and history leading under `PaneBar` ("+") and search; the map trailing with the selected route's `RouteCard` | the list leading under `PaneBar`, the open page trailing under its own | the question leading, the dial trailing; the rail as closed |
+| Tent, closed landscape | 678 × 466 | tent | two columns: best pick with a 92pt score; Your Window, Other Tracked Routes | 310pt column docked leading, 92pt score | 310pt panel column docked leading; "+" on the rail | as closed | as open, landscape |
+| Open, portrait | 669 × 951 | portrait | grid: best pick across the top with its map; Your Window, Doesn't Fit; Other Tracked Routes | map on top, panel docked below, cards in two columns | map on the top half, panel docked below; "+" in the navigation bar | as closed | one centred column with the steps' own Continue and Skip |
 
 **Path.** Rides → Ride detail. Closed shows one, open shows both, split evenly; until a ride is
 chosen the best pick fills the trailing pane, marked with a 2.5pt accent ring. Opening the phone
@@ -688,13 +689,17 @@ Temperature until another is picked, its row tinted. Opening the phone with a pa
 it beside the list; closing pushes it again. The list is the same `Form` in every shape, so its
 scroll is kept, and each page saves as it changes, so nothing is lost.
 
+Onboarding is one step at a time, so closed and open show the same step. The step is the view's
+state and every answer saves to `PreferencesStore` as it changes, so folding only changes the
+layout. Back slides the pages the other way.
+
 Where the build differs from the canvas:
 - Tent keeps the Apple Weather attribution and "Updated" line, below the fold (WeatherKit
   requires it wherever its data shows).
 - The best pick's bell sits in the corner of the card's text, beside "Meets your preferences",
   never over the banner's map in open portrait: clear glass there loses its white glyph.
 - The app supports landscape (`UISupportedInterfaceOrientations`), so any iPhone turned sideways
-  gets the tent layouts too. Onboarding isn't laid out for it yet.
+  gets the tent layouts too, onboarding's included.
 - Routes keeps "Shortlist" and "Add to Shortlist" (the canvas says "Tracked"), as the rest of the
   app does, and Delete Route is in "…" but disabled until the API can delete a route.
 - Details from the `RouteCard` pushes Ride detail over both panes; History's ride beside History is
@@ -703,8 +708,13 @@ Where the build differs from the canvas:
   one, and its page gets a `PaneBar` title too, as the rail shows none. Never Colder Than, Never
   Hotter Than and Gust Limit open Ideal Temperature and Comfortable Wind without tinting their
   rows. Monthly floors push over both panes.
+- Onboarding keeps its own dials and copy, not the canvas's new temperature dial, and closed it
+  stays centred rather than the canvas's leading column. Skip sits at the rail's foot, not under
+  Continue: `.topBarPinnedTrailing` never shows alone on the closed rail, so Continue is the
+  `.confirmationAction` (prominent there by itself), and a `.primaryAction` Skip lands between Back
+  and Continue. Without the rail there's still no Back.
 
-**Rail audit** (Rides, Ride detail, Routes, Preferences):
+**Rail audit** (Rides, Ride detail, Routes, Preferences, Onboarding):
 
 | Item | Symbol | Where | Priority |
 |---|---|---|---|
@@ -720,6 +730,9 @@ Where the build differs from the canvas:
 | Add to / Remove from Shortlist | `star` / `star.fill` | Routes beside the library, a library route selected | high |
 | Open in cycle.travel, Delete Route | `arrow.up.forward.square`, `trash` | Routes beside the library, always in "…" (Delete disabled) | – |
 | My Location | `location` | on the map: a pane control | – |
+| Back | `chevron.left` | Onboarding: top of the rail, after Welcome (`.navigation`) | – |
+| Continue | `arrow.right` | Onboarding: under Back, prominent (`.confirmationAction`) | high |
+| Skip | `forward` | Onboarding: foot of the rail, after Welcome (`.bottomBar`) | – |
 
 - [x] iOS 27.1 and macOS 27.0 deployment targets
 - [x] `PaneShape` from the container size; iPhone Duo keeps the tab bar (`TabRoot`), never the split view
@@ -731,7 +744,7 @@ Where the build differs from the canvas:
 - [x] Routes: library leading, map trailing, Full Screen, tent and portrait
 - [ ] History ride beside History
 - [x] Preferences beside Ideal Temperature
-- [ ] Onboarding: question leading, dial trailing; Back, Continue and Skip on the rail
+- [x] Onboarding: question leading, dial trailing; Back, Continue and Skip on the rail
 - [ ] Tracked ride: tent glance with the countdown at display size
 - [ ] Partially folded and Split View checks, and Dan's on-device check
 

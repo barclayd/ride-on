@@ -81,7 +81,9 @@ Rules:
   does it through `accessibleGlass(_:in:fallback:)`.
 - **The rail** (iPhone Duo). Build every bar from the system toolbar so it can move there: write
   items as `Button("Title", systemImage:)` (title-only items and custom views stay out of the
-  rail), keep the prominent action in `.topBarPinnedTrailing`, and give items
+  rail), keep the prominent action in `.topBarPinnedTrailing` (in `.confirmationAction` when
+  it's the screen's only action: alone on the closed rail, `.topBarPinnedTrailing` never shows),
+  and give items
   `.visibilityPriority` so the least used overflow first, from the bottom up, into the system "…".
   Secondary actions go straight into "…" with `ToolbarOverflowMenu`; anything destructive lives
   there. The ellipsis is only ever the system's overflow. The rail belongs to the trailing pane:
@@ -352,7 +354,9 @@ before adding a custom component in code.
     2h 40m", "Last ridden 12 Oct" or "Never ridden") and, when Rides has a pick for it, a
     full-width "See Wednesday's Ride" that pushes Ride detail.
 
-Kept until onboarding is redesigned: **`DialScreen`** (with `AmbianceStyle`).
+Kept until onboarding is redesigned: **`DialScreen`** (with `AmbianceStyle`). On the iPhone Duo,
+in `.wide` and `.tent`, it puts the question (page dots, title, blurb) leading and its control
+trailing; with `continuesFromRail` set, the rail carries Continue and it leaves its own out.
 
 ## 7. Motion
 
@@ -408,5 +412,5 @@ glass transitions use `.materialize`.
 | **Comfortable Wind** (push) | `WindEnvelope` → "Limits" sliders (headwind, crosswind, gusts) and crosswind sensitivity → "How Your Routes Fit". Saves automatically. |
 | **Widgets & Lock Screen** | One adaptive widget, no configuration. Nothing tracked: the departure board (A) — the best ride's map, time and score, the days with ‹ › paging, a Track link. A tracked ride (D), until two hours after it ends: the score (`ScoreArc`) and conditions lead, the ride time where "leave in" was, the ridden part of the loop in gold. Every Home Screen size (and StandBy, and XL on iPad and Mac), Lock Screen inline/circular/rectangular, a Live Activity and Dynamic Island from three hours before the start to the finish, and a Control Centre control. Tap opens the ride on Rides; Track opens its Track sheet. Layouts in docs/redesign/README.md §8. |
 | **Routes** (tab) | Full-screen `RoutesMap`, the cycle map on iOS and satellite on the Mac (shortlist in white, selected route in the accent, callout, start marker; `MapControls` top trailing) under the `FloatingPanel`: search capsule ("Search Routes") and "+" menu (Import GPX File, From cycle.travel, Connect Strava) pinned → "Shortlist" with "4 of 12" → `ShortlistCard` carousel → segmented Library N / History N → Library rows, or History rows grouped by month ("October 1 ride") ending with "Weather is the forecast from when you planned each ride, not what you rode in." Selecting a card or row shows it on the map. Focusing search expands the panel. No navigation bar, except on the iPhone Duo: on the rail ("+" at its foot) and in open portrait ("+" trailing); open, in landscape, the library is the leading pane under a `PaneBar` and the map the trailing one with a `RouteCard`, the rail holding Full Screen, Add to Shortlist and "…" (Open in cycle.travel, Delete Route). The tab bar never minimises. |
-| **Onboarding** | Not yet redesigned: one control per screen (`DialScreen`), permissions primed one sentence before each system prompt, location on first Rides entry, Health before ride matching. |
+| **Onboarding** | Not yet redesigned: one control per screen (`DialScreen`), permissions primed one sentence before each system prompt, location on first Rides entry, Health before ride matching. iPhone Duo: on the rail, Back at the top (after Welcome), Continue under it as the prominent action and Skip at the foot, with the steps' own Continue and Skip left out; open in landscape and in tent, the question leads and the dial trails. No tab bar. |
 | **Weather attribution** | Apple Weather mark + "Other data sources" link (https://developer.apple.com/weatherkit/data-source-attribution/) wherever forecast data shows, via `WeatherService.attribution`. |
