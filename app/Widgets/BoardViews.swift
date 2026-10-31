@@ -13,6 +13,8 @@ struct BoardView: View {
     var day: RideWidgetSnapshot.Day
     var date: Date
 
+    @Environment(\.widgetRenderingMode) private var mode
+
     var body: some View {
         let days = snapshot.days(from: date)
         let link = day.ride.map { RideLink(pick: $0.id).url } ?? URL(string: "rideon://ride")
@@ -232,7 +234,7 @@ struct BoardView: View {
                     .foregroundStyle(.tint)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .background(onMap ? AnyShapeStyle(.white) : AnyShapeStyle(Color.rideAccent.opacity(0.12)), in: .capsule)
+                    .background(onMap ? AnyShapeStyle(mode.onMap) : AnyShapeStyle(Color.rideAccent.opacity(0.12)), in: .capsule)
             }
         }
     }
@@ -282,6 +284,8 @@ private struct Pager: View {
     var shown: Date
     var onMap: Bool
 
+    @Environment(\.widgetRenderingMode) private var mode
+
     var body: some View {
         let index = days.firstIndex { $0.date == shown } ?? 0
         HStack(spacing: 4) {
@@ -296,7 +300,7 @@ private struct Pager: View {
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(onMap ? AnyShapeStyle(.black) : AnyShapeStyle(.primary))
                 .frame(width: 20, height: 20)
-                .background(onMap ? AnyShapeStyle(.white) : AnyShapeStyle(.fill.tertiary), in: .circle)
+                .background(onMap ? AnyShapeStyle(mode.onMap) : AnyShapeStyle(.fill.tertiary), in: .circle)
         }
         .buttonStyle(.plain)
         .disabled(day == nil)
