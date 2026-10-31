@@ -1099,6 +1099,7 @@ export const shownOf = (state: State, now: Date): Shown | null => {
         : [],
     ),
     meta: {
+      recommendationId: recs.recommendationId ?? null,
       generatedAt: recs.generatedAt,
       algorithmVersion: recs.algorithmVersion,
       attribution: recs.weather.attribution,

@@ -115,6 +115,33 @@ export const Segmented = <T extends string>(props: {
   </fieldset>
 );
 
+// Named by its own label, or by visible text through labelledBy. inactive keeps it focusable
+// (aria-disabled) so a rider can still find out why it won't move.
+export const Switch = (props: {
+  on: boolean;
+  label?: string;
+  labelledBy?: string;
+  disabled?: boolean;
+  inactive?: boolean;
+  busy?: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    type="button"
+    class="ro-switch"
+    role="switch"
+    aria-checked={props.on}
+    aria-label={props.label}
+    aria-labelledby={props.labelledBy}
+    aria-disabled={props.inactive || undefined}
+    aria-busy={props.busy || undefined}
+    disabled={props.disabled}
+    onClick={() => !props.inactive && props.onClick()}
+  >
+    <span />
+  </button>
+);
+
 // "Ride On is paused until Sun 18 Oct." and a link that turns it back on (handoff v6 §4).
 export const PausedLine = ({ view }: { view: View }) => {
   const until = view.paused?.until;
