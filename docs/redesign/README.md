@@ -28,7 +28,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
 | 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The only map on iOS: the Routes map, and snapshots on the Rides hero, cards and thumbnails, and live on Ride detail, with cycle lanes, hillshade and contours; the Mac stays on MapKit until a `WKWebView` with MapLibre GL JS replaces it. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
-| 11 | iPhone Duo ([canvas](https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz), [§10](#10-iphone-duo)): iOS 27.1, the rail, every pose | 🟡 Rides, Ride detail and Routes in every pose; Preferences, onboarding, the sheets on the rail, History's ride beside History and the tracked ride's tent glance to come | #316, #317 |
+| 11 | iPhone Duo ([canvas](https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz), [§10](#10-iphone-duo)): iOS 27.1, the rail, every pose | 🟡 Rides, Ride detail, Routes and Preferences in every pose; onboarding, the sheets on the rail, History's ride beside History and the tracked ride's tent glance to come | #316, #317, #318 |
 
 Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
@@ -663,12 +663,12 @@ every screen in each pose, the fold prototype and the rail audit. The rules are 
 DESIGN-SYSTEM.md §2 (the rail), §5 (shapes and panes) and §6 #19 (`PaneBar`). The app targets
 iOS 27.1, where the rail's APIs are, and macOS 27.0 (the newest Mac SDK in Xcode 27.1).
 
-| Pose | Size (pt) | `PaneShape` | Rides | Ride detail | Routes |
-|---|---|---|---|---|---|
-| Closed | 466 × 678 | narrow | the board as on any iPhone | floating panel with detents | floating panel with detents; "+" at the foot of the rail |
-| Open, landscape | 951 × 669 | wide | leading pane under `PaneBar`, the ride beside it | narrow (half pane) or wide (Full Screen): 380pt column | library and history leading under `PaneBar` ("+") and search; the map trailing with the selected route's `RouteCard` |
-| Tent, closed landscape | 678 × 466 | tent | two columns: best pick with a 92pt score; Your Window, Other Tracked Routes | 310pt column docked leading, 92pt score | 310pt panel column docked leading; "+" on the rail |
-| Open, portrait | 669 × 951 | portrait | grid: best pick across the top with its map; Your Window, Doesn't Fit; Other Tracked Routes | map on top, panel docked below, cards in two columns | map on the top half, panel docked below; "+" in the navigation bar |
+| Pose | Size (pt) | `PaneShape` | Rides | Ride detail | Routes | Preferences |
+|---|---|---|---|---|---|---|
+| Closed | 466 × 678 | narrow | the board as on any iPhone | floating panel with detents | floating panel with detents; "+" at the foot of the rail | the list; rows push their page |
+| Open, landscape | 951 × 669 | wide | leading pane under `PaneBar`, the ride beside it | narrow (half pane) or wide (Full Screen): 380pt column | library and history leading under `PaneBar` ("+") and search; the map trailing with the selected route's `RouteCard` | the list leading under `PaneBar`, the open page trailing under its own |
+| Tent, closed landscape | 678 × 466 | tent | two columns: best pick with a 92pt score; Your Window, Other Tracked Routes | 310pt column docked leading, 92pt score | 310pt panel column docked leading; "+" on the rail | as closed |
+| Open, portrait | 669 × 951 | portrait | grid: best pick across the top with its map; Your Window, Doesn't Fit; Other Tracked Routes | map on top, panel docked below, cards in two columns | map on the top half, panel docked below; "+" in the navigation bar | as closed |
 
 **Path.** Rides → Ride detail. Closed shows one, open shows both, split evenly; until a ride is
 chosen the best pick fills the trailing pane, marked with a 2.5pt accent ring. Opening the phone
@@ -683,25 +683,34 @@ pushing Ride detail. Full Screen gives the map the library's half; Show Library 
 Selection, segment, search, the panel's detent and scroll (`FloatingPanel` scroll offset, or the
 library pane's) and the map camera are the view's state, so folding only changes the layout.
 
+Preferences → a page. Open, the list leads and the page it opened sits beside it, Ideal
+Temperature until another is picked, its row tinted. Opening the phone with a page pushed moves
+it beside the list; closing pushes it again. The list is the same `Form` in every shape, so its
+scroll is kept, and each page saves as it changes, so nothing is lost.
+
 Where the build differs from the canvas:
 - Tent keeps the Apple Weather attribution and "Updated" line, below the fold (WeatherKit
   requires it wherever its data shows).
 - The best pick's bell sits in the corner of the card's text, beside "Meets your preferences",
   never over the banner's map in open portrait: clear glass there loses its white glyph.
 - The app supports landscape (`UISupportedInterfaceOrientations`), so any iPhone turned sideways
-  gets the tent layouts too. Preferences and onboarding aren't laid out for it yet.
+  gets the tent layouts too. Onboarding isn't laid out for it yet.
 - Routes keeps "Shortlist" and "Add to Shortlist" (the canvas says "Tracked"), as the rest of the
   app does, and Delete Route is in "…" but disabled until the API can delete a route.
 - Details from the `RouteCard` pushes Ride detail over both panes; History's ride beside History is
   still to come.
+- Preferences keeps the app's list (Riding, Units, Connections, Account), not the canvas's shorter
+  one, and its page gets a `PaneBar` title too, as the rail shows none. Never Colder Than, Never
+  Hotter Than and Gust Limit open Ideal Temperature and Comfortable Wind without tinting their
+  rows. Monthly floors push over both panes.
 
-**Rail audit** (Rides, Ride detail, Routes):
+**Rail audit** (Rides, Ride detail, Routes, Preferences):
 
 | Item | Symbol | Where | Priority |
 |---|---|---|---|
 | Ride Window | `calendar` | Rides: top of the rail (the window capsule in horizontal bars); open, in `PaneBar` | high |
 | Track a Route | `plus` | Rides: foot of the rail, by the thumb; open, in `PaneBar` | high |
-| Back | system | Ride detail, pushed | – |
+| Back | system | Ride detail and Preferences' pages, pushed | – |
 | Full Screen / Show Rides | `arrow.up.left.and.arrow.down.right` / `arrow.down.right.and.arrow.up.left` | Ride detail beside Rides, first | high |
 | Send to a Bike Computer | `square.and.arrow.up` | Ride detail | high |
 | Add to Calendar, Open in cycle.travel | `calendar.badge.plus`, `arrow.up.forward.square` | Ride detail, always in "…" | – |
@@ -721,7 +730,7 @@ Where the build differs from the canvas:
 - [ ] Ride Window and Track a Route sheets on the rail (Close at the top, Done under it); open, Ride Window over the Rides pane
 - [x] Routes: library leading, map trailing, Full Screen, tent and portrait
 - [ ] History ride beside History
-- [ ] Preferences beside Ideal Temperature
+- [x] Preferences beside Ideal Temperature
 - [ ] Onboarding: question leading, dial trailing; Back, Continue and Skip on the rail
 - [ ] Tracked ride: tent glance with the countdown at display size
 - [ ] Partially folded and Split View checks, and Dan's on-device check
