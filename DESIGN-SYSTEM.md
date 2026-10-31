@@ -181,6 +181,10 @@ en-GB ("Wednesday 14 October", "Wed 14 – Sun 18").
   the navigation bar; open landscape, the library and history leading (`PaneBar` with "+",
   search under it) and the map trailing with the selected route's `RouteCard`. Full Screen in
   the rail gives the map the whole width and Show Library brings it back.
+- **Preferences** on the open iPhone Duo, in landscape: the list is the leading pane under a
+  `PaneBar` and the page it opens the trailing one under its own (Ideal Temperature until
+  another is picked), its row tinted in the accent at 15%. Closed, in tent and open portrait,
+  rows push their page as on any iPhone.
 - **Ride detail** is the route's map under the same panel, with no tab bar: medium 58% of the
   height, large 8pt under the navigation bar, collapsed just its header. The map frames the route
   in what's left above medium (above the header when collapsed, under the wind key when it
@@ -337,7 +341,8 @@ before adding a custom component in code.
     on the trailing. Pinned at the top of the pane in `.safeAreaBar(edge: .top)`, so the pane
     scrolls under it with the system edge effect. Shown only while the pane is beside another;
     closed, the same controls are back in the toolbar. Routes reuses it (with the "+" menu as a
-    circle too).
+    circle too), and Preferences puts one over each pane with no controls, as the rail shows no
+    title for the page beside the list.
 20. **`RouteCard`** — the selected route over the Routes map on the open iPhone Duo, where the
     panel's selection has no room to show beside the library: up to 400pt wide, 8pt in from the
     map pane's bottom leading corner, 30pt radius, regular glass (it's the map's chrome, like the
@@ -398,7 +403,7 @@ glass transitions use `.materialize`.
 | **Window sheet** | Large detent (the days list plus Hours need the height). Grabber, Cancel (glass circle, `xmark`) leading, centred "Ride Window", Done (tinted circle, `checkmark`) trailing. Quick picks (Tomorrow, This Weekend, Next 5 Days) → "Days" multi-select list, each day showing its best route and score, sky and temperature → "Hours": segmented Daylight / Custom, Leave After and Back By (`DatePicker(.hourAndMinute)` when Custom). |
 | **Track sheet** | Content-height detent, floating glass. Grabber, Close (glass circle, `xmark`) leading → gold star medal → "Track This Ride" and one sentence → "Replaces Your Tracked Ride" card when another ride is tracked → ride card (thumbnail, name, day and times, 40pt `ScoreGauge`) → "We'll Check If" rows (rain, gusts over your limit, below your minimum, a better time or day) and a footnote → "Start Tracking" (`.glassProminent`, the one tinted action) and "Not Now". Tracking mode: "Tracking This Ride" and what the latest check found, "We'll Check If", "Stop Tracking" (`.glass`, red label). Once the API notifies: a bell badge on the medal, "Notify Me If" / "We'll Notify You If", the evening-before footnote and a Notifications Are Off card when denied. |
 | **Window passed** | Rides when the saved window is in the past. No hero, so the toolbar is regular glass and the capsule shows the stale range. `ContentUnavailableView` ("Your Window Has Passed", one sentence, "Choose Dates" as the one `.borderedProminent` button) → "Quick Picks" rows with each range's best route and score. |
-| **Preferences** (tab) | `Form` with a large title and subtitle "Changes re-rank your rides straight away." Sections: What Makes a Good Ride (Ideal Temperature and Comfortable Wind push to their screens; Sunshine, Rain, Climbing, Recently Ridden are menus; Distance), Deal-Breakers, Riding (average speed stepper, "Use My Strava Average", departure interval), Units (segmented), Connections (Strava, Apple Health), Account. Plumbing is plain settings rows; taste gets a visual screen. |
+| **Preferences** (tab) | `Form` with a large title and subtitle "Changes re-rank your rides straight away." Sections: What Makes a Good Ride (Ideal Temperature and Comfortable Wind push to their screens; Sunshine, Rain, Climbing, Recently Ridden are menus; Distance), Deal-Breakers, Riding (average speed stepper, "Use My Strava Average", departure interval), Units (segmented), Connections (Strava, Apple Health), Account. Plumbing is plain settings rows; taste gets a visual screen. iPhone Duo: open, in landscape, the list is the leading pane under a `PaneBar` with the page it opens beside it (Ideal Temperature until another is picked); no rail items. |
 | **Ideal Temperature** (push) | Big range readout, `TemperatureRange`, one-line explanation → "How Your Routes Fit" range bars per route → "Deal-Breakers" steppers. Saves automatically; no Done. |
 | **Comfortable Wind** (push) | `WindEnvelope` → "Limits" sliders (headwind, crosswind, gusts) and crosswind sensitivity → "How Your Routes Fit". Saves automatically. |
 | **Widgets & Lock Screen** | One adaptive widget, no configuration. Nothing tracked: the departure board (A) — the best ride's map, time and score, the days with ‹ › paging, a Track link. A tracked ride (D), until two hours after it ends: the score (`ScoreArc`) and conditions lead, the ride time where "leave in" was, the ridden part of the loop in gold. Every Home Screen size (and StandBy, and XL on iPad and Mac), Lock Screen inline/circular/rectangular, a Live Activity and Dynamic Island from three hours before the start to the finish, and a Control Centre control. Tap opens the ride on Rides; Track opens its Track sheet. Layouts in docs/redesign/README.md §8. |
