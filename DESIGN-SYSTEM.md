@@ -1,11 +1,14 @@
 # Ride On — Design System
 
-iOS 26 / macOS 26, SwiftUI, Liquid Glass. Every screen is built from this document. When in
+iOS 27.1 / macOS 27.0, SwiftUI, Liquid Glass. Every screen is built from this document. When in
 doubt, use the stock component and do nothing custom.
 
 Source of truth for visuals: the **Ride On iOS Redesign** design canvas
 (https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T, October 2026), with every screen in light
-and dark. The canvas's Design Language board is this document in picture form.
+and dark. The canvas's Design Language board is this document in picture form. iPhone Duo's
+poses (closed, open side by side, full screen, tent, open portrait) are on the **Ride On for
+iPhone Duo** canvas (https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz, October 2026), with its
+rail audit.
 
 HIG references: [Materials](https://developer.apple.com/design/human-interface-guidelines/materials),
 [Adopting Liquid Glass](https://developer.apple.com/documentation/TechnologyOverviews/adopting-liquid-glass),
@@ -49,7 +52,9 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 |---|---|---|
 | Tab bar (Rides, Routes, Preferences) | System glass; shrinks to the selected tab's icon on scroll. Never on Routes, where the panel scrolls rather than the screen | `TabView` + `.tabBarMinimizeBehavior(.onScrollDown)` (`.never` on Routes) |
 | Toolbars | System glass. At most 3 groups. Icons only, each with an accessibility label. Related actions share one capsule (share + more) | `.toolbar`, `ToolbarItemGroup`, `ToolbarSpacer` |
-| Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
+| Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet. On the rail it's the Ride Window button (`calendar`) instead | `ToolbarItem(placement: .navigation)` + `.sheet` |
+| Rail (iPhone Duo) | The system's vertical bar down the trailing edge: Back or Close at the top, then the prominent action, then the rest in their groups, the tab bar below. Icons only; every item has a title and a symbol | system toolbar and `TabView`; `@Environment(\.toolbarVerticalEdge)` says whether it's there |
+| Pane bar (iPhone Duo, open) | The leading pane's own title and controls when the rail belongs to the trailing pane: "Rides" with Ride Window and Track a Route in glass circles | `PaneBar` (§6) in `.safeAreaBar(edge: .top)` |
 | Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero track bell `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while tracked |
 | Routes panel | **Regular** glass floating over the map, 8pt from the screen edges and 14pt above the tab bar; grabber, search and "+" pinned, everything else scrolling beneath and fading into the bottom edge | `FloatingPanel` (§6): `.glassEffect(.regular, in: .rect(cornerRadius: 34))`, `.safeAreaBar(edge: .top)` |
 | Ride detail panel | **Regular** glass over the route's map, 8pt from the screen's sides and bottom; grabber and header (eyebrow, name, times and distance, `ScoreGauge`, conditions chips) pinned, the cards scrolling beneath. Collapsed it's just the header | `FloatingPanel` (§6) |
@@ -74,6 +79,15 @@ Rules:
 - **Accessibility fallbacks** (§8): Reduce Transparency → opaque; Increase Contrast → solid
   with a border. Custom glass must branch on `accessibilityReduceTransparency` itself; Routes
   does it through `accessibleGlass(_:in:fallback:)`.
+- **The rail** (iPhone Duo). Build every bar from the system toolbar so it can move there: write
+  items as `Button("Title", systemImage:)` (title-only items and custom views stay out of the
+  rail), keep the prominent action in `.topBarPinnedTrailing`, and give items
+  `.visibilityPriority` so the least used overflow first, from the bottom up, into the system "…".
+  Secondary actions go straight into "…" with `ToolbarOverflowMenu`; anything destructive lives
+  there. The ellipsis is only ever the system's overflow. The rail belongs to the trailing pane:
+  controls that act on the leading pane sit at the top of that pane (`PaneBar`). Text and buttons
+  stay clear of the rail; maps and the hero run under it. Never opt a screen out of the rail.
+  Navigation-led screens keep the tab bar when the rail runs short (the default).
 - **Map attribution stays visible.** Anywhere a map shows, its attribution sits at least 10pt
   from custom content: "Apple Maps" and the Legal link for MapKit (a live `Map` gets this for
   free). The live cycle map (`CycleMap`) shows "© OpenStreetMap", linking to
@@ -167,8 +181,26 @@ en-GB ("Wednesday 14 October", "Wed 14 – Sun 18").
   in what's left above medium (above the header when collapsed, under the wind key when it
   shows), so opening the panel all the way doesn't squeeze it. On iPad and Mac the panel is the
   same 380pt column and the map frames the route beside it.
-- Breakpoints: iPhone = tab bar; iPad/Mac = `NavigationSplitView` with the same screens in
-  the detail column.
+- Breakpoints: iPhone (iPhone Duo included) = tab bar; iPad/Mac = `NavigationSplitView` with
+  the same screens in the detail column.
+- **iPhone Duo shapes.** Lay out from the container, never the device: `PaneShape(size)` (in
+  DesignSystem) is `wide` at 700 × 560pt and up (open, landscape), `tent` when wider than tall
+  (closed landscape, tent, any iPhone in landscape), `portrait` at 600pt wide and up (open,
+  portrait), otherwise `narrow` (closed, and a half pane when open). Narrow and wide are the real
+  layouts; tent is narrow reflowed into two columns with the one number that matters big; open
+  portrait is a two-column grid under horizontal bars.
+- **iPhone Duo panes.** Closed shows the last screen; open shows the last two, general leading
+  and specific trailing, split evenly: Rides beside the ride it opened (the best pick until one is
+  chosen, marked with a 2.5pt accent ring). Full Screen in the rail gives the ride the whole width
+  and the same button, Show Rides, brings Rides back. Opening and closing the phone keeps
+  everything: the ride, its departure, scrub, panel detent and scroll, map camera and the Rides
+  scroll. Panes are hidden, never removed, so folding doesn't rebuild them. Side by side, the
+  navigation bar stays put (`toolbarMinimizationBehavior(.never)`) and neither pane draws the top
+  scroll edge effect. A single column of cards never runs wider than 640pt.
+- **Ride detail by shape.** Narrow: the floating panel with its detents. Wide (full screen): the
+  380pt column, as on iPad. Tent: a 310pt column docked leading with the score at 92pt. Open
+  portrait: the map on top, half the height, and the panel docked below it with the cards in two
+  columns.
 
 ## 6. Components (the complete custom inventory)
 
@@ -222,7 +254,9 @@ before adding a custom component in code.
     (`Motion.panelDetent`). Tapping the grabber toggles medium and large; pulling the content down
     past its top lets it go a detent, like a sheet. The scrolling content fades out as the panel
     closes on its header, so it never shows through. On iPad and Mac it's a fixed full-height
-    column with no grabber.
+    column with no grabber, and so is Ride detail's on iPhone Duo in tent and full screen (a
+    310pt or 380pt column) and in open portrait (docked under the map). Its scroll offset can be
+    held outside it, so the phone opening or closing doesn't lose the place.
 11. **`ShortlistCard`** — a shortlisted route in the panel's carousel (272 × 158pt, card
     radius): its loop on a `CycleMap` snapshot (satellite imagery on the Mac), a status pill
     ("Best pick · Wed", "Thu 09:00", "Below your minimums", "Too long for your window",
@@ -291,6 +325,14 @@ before adding a custom component in code.
     day rows and pager (`Button(intent:)`, the paged day stays until the board changes) and map chips
     (white capsules with black text, over the map in both appearances, as the map is light). No glass.
 
+19. **`PaneBar`** — the leading pane's bar on the open iPhone Duo, where the rail belongs to the
+    pane beside it (§2): the screen's title in `.largeTitle` bold, then its controls as 44pt
+    regular glass circles (`Button("Ride Window", systemImage: "calendar")`,
+    `Button("Track a Route", systemImage: "plus")` on Rides), 20pt in on the leading side and 16pt
+    on the trailing. Pinned at the top of the pane in `.safeAreaBar(edge: .top)`, so the pane
+    scrolls under it with the system edge effect. Shown only while the pane is beside another;
+    closed, the same controls are back in the toolbar. Routes reuses it.
+
 Kept until onboarding is redesigned: **`DialScreen`** (with `AmbianceStyle`).
 
 ## 7. Motion
@@ -312,6 +354,8 @@ hand-roll `.animation()` calls.
 | Routes panel settling on a detent | `Motion.panelDetent(velocity:)`: a spring (response 0.35, damping 0.86) starting at the drag's release velocity; `.smooth` with Reduce Motion |
 | Shortlist card press, row selection | `Motion.glassTapLayout` |
 | Star turning gold once the Track sheet has gone | `.contentTransition(.symbolEffect(.replace))` + `.symbolEffect(.bounce)`, `.sensoryFeedback(.success)` |
+| iPhone Duo opening, closing or rotating | system (the resize). Moving the open ride between the navigation stack and the pane beside Rides happens without animation, so nothing slides in that was already on screen |
+| Full Screen ↔ Show Rides | `.smooth` (`Motion.paneResize`); Rides fades, the ride widens |
 
 Reduce Motion: the zoom falls back to a cross-fade, re-rank slides become cross-fades,
 glass transitions use `.materialize`.
@@ -327,15 +371,16 @@ glass transitions use `.materialize`.
   09:00 to about 12:00, 51 kilometres, 640 metres climbing, score 86."
 - **Reduce Transparency**: glass becomes opaque (`systemBackground`-family solid).
   **Increase Contrast**: glass becomes solid with a visible border.
-- Every icon-only control has an accessibility label ("Rides", "Track a route", "Share",
-  "More", "Send route to a bike computer", "Track Hilly Loop on Wednesday 14 October").
+- Every icon-only control has a title, which is its accessibility label and its name in the
+  "…" menu ("Ride Window", "Track a Route", "Send to a Bike Computer", "More", "Full Screen",
+  "Show Rides", "Track Hilly Loop on Wednesday 14 October"). Toolbar titles are Title Case.
 
 ## 9. Screen ↔ pattern map
 
 | Screen | What's on it |
 |---|---|
-| **Rides** (tab) | `RideHero` for the best pick in the window → conditions card (date, then 09:00 Leave ┄ 🚲 about 3h ┄ ~12:00 Back, then "✓ Meets your preferences", last ridden, `ConditionChip`s, score with bar and change badge) → "Your Window" `DayStrip` → "Other Tracked Routes" rows (route thumbnail, name, departure → return · distance, conditions or "Below your minimums", score) → "Doesn't Fit Your Window" → Apple Weather attribution, "Updated 08:12. Pull down to refresh." Toolbar: window capsule (leading), "+" track a route (trailing). Pull to refresh. |
-| **Ride detail** (push, zoom from hero) | The route on a full-screen live map (cycle map on iOS, standard MapKit on the Mac; Wind and Fit capsule top trailing, the wind key top leading when shown) under the `FloatingPanel`. Pinned header: "★ Best pick · Wednesday 14 October", the route name, "09:00 → ~12:00 · 51 km · 640 m", `ScoreGauge`, then `ConditionChip`s (temperature, wind, sky, rain). Scrolling beneath: verdict card (verdict, change since last update, last ridden, one or two notes) → "Departure" `DeparturePicker` → "Along the Route" `RouteProfile` (scrubbing pins the map) → "Forecast on the Ride" hourly grid → "Sky on the Ride" (symbol and summary, sun `ShareBar`, legend) → "Wind on the Ride" ("Wind from the south-west" beside a `WindCompass`, wind `ShareBar`, legend with speeds, gusts row, "Show Wind on Map") → "Why It Scored 86" `FactorRow`s → Add to Calendar, Open in cycle.travel (accent list buttons) → Apple Weather attribution. Toolbar: back (leading), share + more in one capsule (trailing), no title or tab bar. |
+| **Rides** (tab) | `RideHero` for the best pick in the window → conditions card (date, then 09:00 Leave ┄ 🚲 about 3h ┄ ~12:00 Back, then "✓ Meets your preferences", last ridden, `ConditionChip`s, score with bar and change badge) → "Your Window" `DayStrip` → "Other Tracked Routes" rows (route thumbnail, name, departure → return · distance, conditions or "Below your minimums", score) → "Doesn't Fit Your Window" → Apple Weather attribution, "Updated 08:12. Pull down to refresh." Toolbar: window capsule (leading), "+" Track a Route (trailing); on the rail, Ride Window (`calendar`) at the top and Track a Route at the foot. Pull to refresh. iPhone Duo: tent reflows it into two columns (the best pick, its score at 92pt, then Your Window and Other Tracked Routes); open portrait into a grid (the best pick across the top, its map beside the conditions, then Your Window and Doesn't Fit beside Other Tracked Routes); open, it's the leading pane beside the ride, under a `PaneBar`. |
+| **Ride detail** (push, zoom from hero) | The route on a full-screen live map (cycle map on iOS, standard MapKit on the Mac; Wind and Fit capsule top trailing, the wind key top leading when shown) under the `FloatingPanel`. Pinned header: "★ Best pick · Wednesday 14 October", the route name, "09:00 → ~12:00 · 51 km · 640 m", `ScoreGauge`, then `ConditionChip`s (temperature, wind, sky, rain). Scrolling beneath: verdict card (verdict, change since last update, last ridden, one or two notes) → "Departure" `DeparturePicker` → "Along the Route" `RouteProfile` (scrubbing pins the map) → "Forecast on the Ride" hourly grid → "Sky on the Ride" (symbol and summary, sun `ShareBar`, legend) → "Wind on the Ride" ("Wind from the south-west" beside a `WindCompass`, wind `ShareBar`, legend with speeds, gusts row, "Show Wind on Map") → "Why It Scored 86" `FactorRow`s → Add to Calendar, Open in cycle.travel (accent list buttons) → Apple Weather attribution. Toolbar: back (leading), Send to a Bike Computer and the system "…" (Add to Calendar, Open in cycle.travel) in one capsule (trailing), no title or tab bar; the rail has them in that order. Beside Rides on the open iPhone Duo, Full Screen (Show Rides once full screen) comes first and there's no back. |
 | **Window sheet** | Large detent (the days list plus Hours need the height). Grabber, Cancel (glass circle, `xmark`) leading, centred "Ride Window", Done (tinted circle, `checkmark`) trailing. Quick picks (Tomorrow, This Weekend, Next 5 Days) → "Days" multi-select list, each day showing its best route and score, sky and temperature → "Hours": segmented Daylight / Custom, Leave After and Back By (`DatePicker(.hourAndMinute)` when Custom). |
 | **Track sheet** | Content-height detent, floating glass. Grabber, Close (glass circle, `xmark`) leading → gold star medal → "Track This Ride" and one sentence → "Replaces Your Tracked Ride" card when another ride is tracked → ride card (thumbnail, name, day and times, 40pt `ScoreGauge`) → "We'll Check If" rows (rain, gusts over your limit, below your minimum, a better time or day) and a footnote → "Start Tracking" (`.glassProminent`, the one tinted action) and "Not Now". Tracking mode: "Tracking This Ride" and what the latest check found, "We'll Check If", "Stop Tracking" (`.glass`, red label). Once the API notifies: a bell badge on the medal, "Notify Me If" / "We'll Notify You If", the evening-before footnote and a Notifications Are Off card when denied. |
 | **Window passed** | Rides when the saved window is in the past. No hero, so the toolbar is regular glass and the capsule shows the stale range. `ContentUnavailableView` ("Your Window Has Passed", one sentence, "Choose Dates" as the one `.borderedProminent` button) → "Quick Picks" rows with each range's best route and score. |

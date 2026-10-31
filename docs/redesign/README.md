@@ -28,6 +28,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
 | 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The only map on iOS: the Routes map, and snapshots on the Rides hero, cards and thumbnails, and live on Ride detail, with cycle lanes, hillshade and contours; the Mac stays on MapKit until a `WKWebView` with MapLibre GL JS replaces it. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
+| 11 | iPhone Duo ([canvas](https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz), [§10](#10-iphone-duo)): iOS 27.1, the rail, every pose | 🟡 Rides and Ride detail in every pose; Routes, Preferences, onboarding, the sheets on the rail and the tracked ride's tent glance to come | #PR |
 
 Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
@@ -59,6 +60,9 @@ priority, and preserve the boolean on unrelated preference edits.
 | Saved settings (`RiderSettings`, `RiderSettingsStore`) | `app/Packages/Services/Sources/Services/RiderSettings.swift` |
 | Tabs | `app/Packages/Router/Sources/Router/AppTab.swift`: `rides`, `routes`, `preferences` |
 | Accent | `app/App/Assets.xcassets/AccentColor`: `#248A3D` light, `#30D158` dark |
+| iPhone Duo shapes (`PaneShape`, `measuresPaneShape()`) | `app/Packages/DesignSystem/Sources/DesignSystem/PaneShape.swift` |
+| A pane's own controls (`PaneBar`, §6 #19) | `app/Packages/Features/Sources/SharedUI/PaneBar.swift` |
+| Ride detail's kept state (`RideDetailState`, one per pick) | `app/Packages/Features/Sources/RideUI/RideDetailState.swift` |
 | Widgets | `app/Widgets/` (the `RideOnWidgets` extension, iOS and macOS); `app/Shared/` (App Group store, `RideLink`, map stills, compiled into the app too); `app/App/WidgetSync.swift` (writes the snapshot, renders stills, runs the Live Activity); `RideWidgetSnapshot` in Models |
 
 ---
@@ -306,7 +310,7 @@ leaves. On iPad and Mac the panel is a 380pt column down the leading edge.
 Chrome: back (44pt circle, `chevron.left`, label "Rides") leading; one capsule with share and
 more (`ellipsis`) trailing, held light over a 64pt fade of the map's paper colour. No title (the
 panel carries the name) and no tab bar. The map's own controls, Wind (`wind`, accent when on) and
-Fit (`arrow.up.left.and.arrow.down.right`, "Show the whole route"), share one regular-glass
+Fit (`viewfinder`, "Show the whole route"), share one regular-glass
 capsule at its top trailing corner, hidden at large.
 
 Build:
@@ -649,6 +653,60 @@ Build:
   and the map controls light regular glass, in Dark Mode too, with no dimming under the status bar; in
   Dark Mode the tab bar's labels are still white over the light map
   ([WS2.7](../maps/README.md#ws2-style-for-maplibre-native-1-week)).
+
+## 10. iPhone Duo
+
+The **Ride On for iPhone Duo** canvas (https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz) has
+every screen in each pose, the fold prototype and the rail audit. The rules are in
+DESIGN-SYSTEM.md §2 (the rail), §5 (shapes and panes) and §6 #19 (`PaneBar`). The app targets
+iOS 27.1, where the rail's APIs are, and macOS 27.0 (the newest Mac SDK in Xcode 27.1).
+
+| Pose | Size (pt) | `PaneShape` | Rides | Ride detail |
+|---|---|---|---|---|
+| Closed | 466 × 678 | narrow | the board as on any iPhone | floating panel with detents |
+| Open, landscape | 951 × 669 | wide | leading pane under `PaneBar`, the ride beside it | narrow (half pane) or wide (Full Screen): 380pt column |
+| Tent, closed landscape | 678 × 466 | tent | two columns: best pick with a 92pt score; Your Window, Other Tracked Routes | 310pt column docked leading, 92pt score |
+| Open, portrait | 669 × 951 | portrait | grid: best pick across the top with its map; Your Window, Doesn't Fit; Other Tracked Routes | map on top, panel docked below, cards in two columns |
+
+**Path.** Rides → Ride detail. Closed shows one, open shows both, split evenly; until a ride is
+chosen the best pick fills the trailing pane, marked with a 2.5pt accent ring. Opening the phone
+with a ride pushed moves it beside Rides; closing pushes it again. Its departure, scrub, wind,
+panel detent and scroll and map camera live in `RideDetailState`, one per pick, held by Rides, so
+none of it resets.
+
+Where the build differs from the canvas:
+- Tent keeps the Apple Weather attribution and "Updated" line, below the fold (WeatherKit
+  requires it wherever its data shows).
+- The best pick's bell sits in the corner of the card's text, beside "Meets your preferences",
+  never over the banner's map in open portrait: clear glass there loses its white glyph.
+- The app supports landscape (`UISupportedInterfaceOrientations`), so any iPhone turned sideways
+  gets the tent layouts too. Routes, Preferences and onboarding aren't laid out for it yet.
+
+**Rail audit** (Rides, Ride detail):
+
+| Item | Symbol | Where | Priority |
+|---|---|---|---|
+| Ride Window | `calendar` | Rides: top of the rail (the window capsule in horizontal bars); open, in `PaneBar` | high |
+| Track a Route | `plus` | Rides: foot of the rail, by the thumb; open, in `PaneBar` | high |
+| Back | system | Ride detail, pushed | – |
+| Full Screen / Show Rides | `arrow.up.left.and.arrow.down.right` / `arrow.down.right.and.arrow.up.left` | Ride detail beside Rides, first | high |
+| Send to a Bike Computer | `square.and.arrow.up` | Ride detail | high |
+| Add to Calendar, Open in cycle.travel | `calendar.badge.plus`, `arrow.up.forward.square` | Ride detail, always in "…" | – |
+| Wind, Fit Route | | on the map: pane controls, not rail items | – |
+
+- [x] iOS 27.1 and macOS 27.0 deployment targets
+- [x] `PaneShape` from the container size; iPhone Duo keeps the tab bar (`TabRoot`), never the split view
+- [x] Rides: tent, open portrait and the open leading pane with `PaneBar` and the selected ring
+- [x] Ride detail: sheet, side, tent and portrait layouts; pushed and pane chrome; Full Screen / Show Rides
+- [x] Rail items with titles, symbols and priorities; Add to Calendar and Open in cycle.travel in "…"
+- [x] Mid-journey state kept across opening and closing (`RideDetailState`, `FloatingPanel` scroll offset)
+- [ ] Ride Window and Track a Route sheets on the rail (Close at the top, Done under it); open, Ride Window over the Rides pane
+- [ ] Routes: library leading, map trailing, Full Screen, tent and portrait
+- [ ] History ride beside History
+- [ ] Preferences beside Ideal Temperature
+- [ ] Onboarding: question leading, dial trailing; Back, Continue and Skip on the rail
+- [ ] Tracked ride: tent glance with the countdown at display size
+- [ ] Partially folded and Split View checks, and Dan's on-device check
 
 ## Design language board
 
