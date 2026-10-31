@@ -28,7 +28,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
 | 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The only map on iOS: the Routes map, and snapshots on the Rides hero, cards and thumbnails, and live on Ride detail, with cycle lanes, hillshade and contours; the Mac stays on MapKit until a `WKWebView` with MapLibre GL JS replaces it. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
-| 11 | iPhone Duo ([canvas](https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz), [§10](#10-iphone-duo)): iOS 27.1, the rail, every pose | 🟡 Rides, Ride detail, Routes, Preferences and onboarding in every pose; the sheets on the rail, History's ride beside History and the tracked ride's tent glance to come | #316, #317, #318 |
+| 11 | iPhone Duo ([canvas](https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz), [§10](#10-iphone-duo)): iOS 27.1, the rail, every pose | 🟡 Rides, Ride detail, Routes, Preferences and onboarding in every pose; the sheets on the rail, History's ride beside History and the tracked ride's tent glance to come | #316, #317, #318, #319 |
 
 Not in scope yet: Onboarding's redesign (it keeps its dials and copy; on the iPhone Duo it's laid
 out beside the rail, [§10](#10-iphone-duo)).
