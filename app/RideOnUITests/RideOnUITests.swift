@@ -157,9 +157,9 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 5))
     }
 
-    /// The Routes map's default Cycle look (docs/maps/README.md, WS3), on the fixture world's offline
-    /// style: drawn with OpenStreetMap's credit, its snapshots on the shortlist cards, and swapped for
-    /// MapKit from the style menu.
+    /// The Routes map's Cycle look (docs/maps/README.md, WS3), on the fixture world's offline style:
+    /// drawn with OpenStreetMap's credit and its snapshots on the shortlist cards. It's the only look
+    /// on iOS, so there's no style menu.
     func testRoutesCycleMapShowsWithItsAttribution() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]
@@ -174,9 +174,7 @@ final class RideOnUITests: XCTestCase {
         XCTAssertTrue(app.links[credit].exists || app.buttons[credit].exists)
         XCTAssertTrue(routeButton(in: app, startingWith: "Hilly Loop").exists)
 
-        app.buttons["Map style"].tap()
-        app.buttons["Satellite"].tap()
-        XCTAssertTrue(map.waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Map style"].exists)
     }
 
     func testPreferencesMapsListsTheMapCredits() {

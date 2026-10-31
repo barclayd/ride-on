@@ -3,13 +3,13 @@ import DesignSystem
 import MapKit
 import Models
 
-/// One route drawn in the accent on a white casing. Not a §6 component. The hero is a
-/// non-interactive `Map`, which keeps the Maps attribution visible (§2); a thumbnail is just
-/// the route's outline on a plain fill, as on the canvas, since a 56pt map is all labels and
-/// Legal link. With the cycle map (`showsCycleMap`), cards and thumbnails are `CycleMap`
-/// snapshots instead (§6 #17), and a card carries the attribution itself.
+/// One route drawn in the accent on a white casing. Not a §6 component. On iOS (`showsCycleMap`)
+/// every style is a `CycleMap` snapshot (§6 #17), and the hero and a card carry the attribution
+/// themselves. The Mac stays on MapKit: the hero and a card are a non-interactive satellite `Map`,
+/// which keeps the Maps attribution visible (§2), and a thumbnail is just the route's outline on a
+/// plain fill, as on the canvas, since a 56pt map is all labels and Legal link.
 public struct RouteMap: View {
-    /// Whether cards and thumbnails are cycle-map snapshots: on iOS; the Mac stays on MapKit.
+    /// Whether every style is a cycle-map snapshot: on iOS; the Mac stays on MapKit.
     public static var showsCycleMap: Bool {
         #if os(iOS)
         true
@@ -19,8 +19,8 @@ public struct RouteMap: View {
     }
 
     public enum Style {
-        /// Satellite imagery with a start marker; the route sits in the band between the
-        /// toolbar and the hero's title block.
+        /// The route with its start marked, sitting in the band between the toolbar and the
+        /// hero's title block.
         case hero
         /// The hero's look, smaller, for a Routes shortlist card: the route sits above the
         /// card's title block.
@@ -47,11 +47,11 @@ public struct RouteMap: View {
     public var body: some View {
         if coordinates.count < 2 {
             Rectangle().fill(.routeLand).overlay { Image(systemName: "map").foregroundStyle(.secondary) }
+        } else if Self.showsCycleMap {
+            snapshot
         } else {
             switch style {
-            case .hero: map
-            case .card where Self.showsCycleMap, .thumbnail where Self.showsCycleMap: snapshot
-            case .card: map
+            case .hero, .card: map
             case .thumbnail: outline
             }
         }
@@ -59,10 +59,15 @@ public struct RouteMap: View {
 
     @ViewBuilder private var snapshot: some View {
         #if os(iOS)
+        let look: CycleMapSnapshot.Look = switch style {
+        case .hero: .hero
+        case .card: .card
+        case .thumbnail: .thumbnail
+        }
         // The thumbnail's route fills the middle 68%, as `outline` does.
         CycleMapSnapshot(coordinates: route,
-                         framing: style == .card ? framingRect : framing(top: 0.16, bottom: 0.16, side: 0.16),
-                         look: style == .card ? .card : .thumbnail, tint: tint.resolve(in: environment))
+                         framing: style == .thumbnail ? framing(top: 0.16, bottom: 0.16, side: 0.16) : framingRect,
+                         look: look, tint: tint.resolve(in: environment))
         #endif
     }
 

@@ -5,20 +5,31 @@ import MapLibre
 import Models
 import DesignSystem
 
-/// `CycleMap` as a still image (DESIGN-SYSTEM.md §6 #17), for a Routes shortlist card or a thumbnail:
-/// lists never hold live maps. `MLNMapSnapshotter` draws the route on the cycle map once per route,
-/// framing, look, tint, size and scale, and the image is kept in memory. Until it's ready, or if it
-/// fails, the route is drawn on the map's land colour exactly where the snapshot puts it.
+/// `CycleMap` as a still image (DESIGN-SYSTEM.md §6 #17), for the Ride hero, a Routes shortlist card,
+/// a thumbnail or under `WindRouteMap`: none of them is a map to move, and lists never hold live maps.
+/// `MLNMapSnapshotter` draws the route on the cycle map once per route, framing, look, tint, size and
+/// scale, and the image is kept in memory. Until it's ready, or if it fails, the route is drawn on the
+/// map's land colour exactly where the snapshot puts it.
 ///
-/// Without labels, as the satellite cards were: the card's own text sits over it, and a still render
+/// Without labels, as the satellite stills were: the view's own text sits over it, and a still render
 /// fails outright on any missing resource, such as the glyphs for a name in a script the bundled
 /// Montserrat ranges don't cover.
 struct CycleMapSnapshot: View {
     enum Look: Hashable {
+        /// The Ride hero's: the card's look, larger, with the hills shaded.
+        case hero
         /// A shortlist card's: the route with its start marked, as `RouteMap`'s card.
         case card
         /// A list row's: the line alone.
         case thumbnail
+        /// The map alone and quieter, for `WindRouteMap` to draw over: no route, and none of the
+        /// cycling overlay, whose colours would read as the wind's.
+        case muted
+
+        var drawsRoute: Bool { self != .muted }
+        var marksStart: Bool { self == .hero || self == .card }
+        /// At a card's size the shading and contours are noise under its text.
+        var showsTerrain: Bool { self == .hero }
     }
 
     var coordinates: [Coordinate]
@@ -98,11 +109,19 @@ struct SnapshotRequest: Hashable {
         self.scale = scale
     }
 
-    var isDrawable: Bool { coordinates.count > 1 && width >= 1 && height >= 1 && framing.width > 0 && framing.height > 0 }
+    var isDrawable: Bool {
+        (coordinates.count > 1 || !look.drawsRoute) && width >= 1 && height >= 1 && framing.width > 0 && framing.height > 0
+    }
 
     /// The line and casing widths, and the start marker's diameter and ring, as `RouteMap` draws them.
-    var line: (width: Double, casing: Double) { look == .card ? (4, 7) : (3.5, 6.5) }
-    static let marker = (diameter: 12.0, ring: 2.5)
+    var line: (width: Double, casing: Double) {
+        switch look {
+        case .hero: (5, 8)
+        case .card: (4, 7)
+        case .thumbnail, .muted: (3.5, 6.5)
+        }
+    }
+    var marker: (diameter: Double, ring: Double) { look == .hero ? (16, 3) : (12, 2.5) }
 
     /// MapLibre draws nothing smaller than 64pt a side, so a thumbnail is drawn larger at a lower
     /// scale: the same pixels, its lines widened to match.
@@ -218,7 +237,7 @@ private final class SnapshotRender: NSObject, @preconcurrency MLNMapSnapshotterD
         options.coordinateBounds = MLNCoordinateBounds(sw: MKMapPoint(x: framing.minX, y: framing.maxY).coordinate,
                                                        ne: MKMapPoint(x: framing.maxX, y: framing.minY).coordinate)
         options.scale = request.scale / request.enlarged
-        // A card carries the attribution itself, clear of its title (§2); a thumbnail is too small for it.
+        // The view carries the attribution itself, clear of its text (§2); a thumbnail is too small for it.
         options.showsLogo = false
         options.showsAttribution = false
         let snapshotter = MLNMapSnapshotter(options: options)
@@ -233,12 +252,15 @@ private final class SnapshotRender: NSObject, @preconcurrency MLNMapSnapshotterD
     }
 
     func mapSnapshotter(_ snapshotter: MLNMapSnapshotter, didFinishLoading style: MLNStyle) {
-        // Nor terrain: at a card's size the shading and contours are noise under its text.
-        for layer in style.layers where layer is MLNSymbolStyleLayer || layer is MLNHillshadeStyleLayer
-            || layer.identifier.hasPrefix("ct_contour") {
-            layer.isVisible = false
+        let look = request.look
+        for layer in style.layers {
+            let terrain = layer is MLNHillshadeStyleLayer || layer.identifier.hasPrefix("ct_contour")
+            let overlay = (layer as? MLNForegroundStyleLayer)?.sourceIdentifier == "cycling"
+            if layer is MLNSymbolStyleLayer || terrain && !look.showsTerrain || overlay && look == .muted {
+                layer.isVisible = false
+            }
         }
-        guard !request.coordinates.isEmpty else { return }
+        guard look.drawsRoute, !request.coordinates.isEmpty else { return }
         let (tint, enlarged) = (UIColor(request.tint.color), request.enlarged)
         var coordinates = request.coordinates.map(CLLocationCoordinate2D.init)
         // As given: a still render otherwise simplifies a loop's curves into corners.
@@ -248,16 +270,17 @@ private final class SnapshotRender: NSObject, @preconcurrency MLNMapSnapshotterD
         style.addSource(route)
         style.addLayer(MLNLineStyleLayer(route: "ride-on-route-casing", source: route, width: request.line.casing * enlarged, colour: .white))
         style.addLayer(MLNLineStyleLayer(route: "ride-on-route", source: route, width: request.line.width * enlarged, colour: tint))
-        if request.look == .card {
+        if look.marksStart {
             let point = MLNPointFeature()
             point.coordinate = coordinates[0]
             let source = MLNShapeSource(identifier: "ride-on-start", shape: point)
             style.addSource(source)
             // A circle's stroke is outside its radius; SwiftUI's is centred on the edge.
             let start = MLNCircleStyleLayer(identifier: "ride-on-start", source: source)
-            start.circleRadius = NSExpression(forConstantValue: (SnapshotRequest.marker.diameter - SnapshotRequest.marker.ring) / 2 * enlarged)
+            let marker = request.marker
+            start.circleRadius = NSExpression(forConstantValue: (marker.diameter - marker.ring) / 2 * enlarged)
             start.circleColor = NSExpression(forConstantValue: tint)
-            start.circleStrokeWidth = NSExpression(forConstantValue: SnapshotRequest.marker.ring * enlarged)
+            start.circleStrokeWidth = NSExpression(forConstantValue: marker.ring * enlarged)
             start.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
             style.addLayer(start)
         }
@@ -269,7 +292,7 @@ private final class SnapshotRender: NSObject, @preconcurrency MLNMapSnapshotterD
 }
 
 /// The route on the map's land colour, projected as the snapshot projects it: Web Mercator, the
-/// framing fitted and centred.
+/// framing fitted and centred. `.muted` is the land alone.
 private struct SnapshotPlaceholder: View {
     var request: SnapshotRequest
     var size: CGSize
@@ -279,15 +302,18 @@ private struct SnapshotPlaceholder: View {
         let route = Path { $0.addLines(points) }
         let tint = request.tint.color
         let stroke = { (width: Double) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
+        let marker = request.marker
         ZStack(alignment: .topLeading) {
             CycleMap.land
-            route.stroke(.white, style: stroke(request.line.casing))
-            route.stroke(tint, style: stroke(request.line.width))
-            if request.look == .card, let start = points.first {
+            if request.look.drawsRoute {
+                route.stroke(.white, style: stroke(request.line.casing))
+                route.stroke(tint, style: stroke(request.line.width))
+            }
+            if request.look.marksStart, let start = points.first {
                 Circle()
                     .fill(tint)
-                    .stroke(.white, lineWidth: SnapshotRequest.marker.ring)
-                    .frame(width: SnapshotRequest.marker.diameter, height: SnapshotRequest.marker.diameter)
+                    .stroke(.white, lineWidth: marker.ring)
+                    .frame(width: marker.diameter, height: marker.diameter)
                     .position(start)
             }
         }

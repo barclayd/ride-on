@@ -34,9 +34,19 @@ public struct RideHero: View {
                 .init(color: .black.opacity($1), location: Double($0) / 10)
             }, startPoint: .top, endPoint: .bottom))
             .frame(maxWidth: .infinity, minHeight: height, alignment: .bottom)
+            .overlay(alignment: .bottomLeading) {
+                #if os(iOS)
+                // In the band under the title block, at least 10pt clear of it (§2). Not read out:
+                // the hero is a link to Ride detail, and the credits are in Preferences → Maps.
+                CycleMapAttribution(.card)
+                    .padding(.leading, 20)
+                    .padding(.bottom, 6)
+                    .accessibilityHidden(true)
+                #endif
+            }
             .background {
                 // Art, not a control: taps belong to whatever the hero opens (Rides links it to
-                // Ride detail). The Maps attribution stays visible, just not tappable.
+                // Ride detail). On the Mac the Maps attribution stays visible, just not tappable.
                 RouteMap(pick.route.coordinates, style: .hero, tint: pick.meetsMinimums ? .accentColor : .gray)
                     .id(pick.route.coordinates)
                     .overlay(alignment: .top) {
