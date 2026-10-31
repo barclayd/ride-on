@@ -3,6 +3,7 @@ import SwiftData
 import Models
 import Router
 import Services
+import DesignSystem
 import SharedUI
 import RideUI
 import RoutesUI
@@ -202,14 +203,24 @@ private struct RoutesPage: View {
     }
 }
 
-/// One tab's `NavigationStack`.
+/// One tab's `NavigationStack`. On iPhone it hands its screens their `PaneShape`, measured beside
+/// the rail (DESIGN-SYSTEM.md §5, iPhone Duo).
 private struct TabPage: View {
     var tab: AppTab
 
     var body: some View {
-        NavigationStack {
+        let stack = NavigationStack {
             destination(for: tab)
         }
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            stack.measuresPaneShape()
+        } else {
+            stack
+        }
+        #else
+        stack
+        #endif
     }
 }
 
@@ -229,8 +240,9 @@ private struct AppRootSwitch: View {
     }
 }
 
-/// Tabs on iPhone/compact width; `NavigationSplitView` sidebar on Mac and
-/// iPad regular width, per DESIGN-SYSTEM.md §5 breakpoints.
+/// Tabs on every iPhone (an open iPhone Duo too: its screens lay out side by side themselves)
+/// and iPad compact width; `NavigationSplitView` sidebar on Mac and iPad regular width, per
+/// DESIGN-SYSTEM.md §5 breakpoints.
 struct RootView: View {
 #if os(macOS)
     var body: some View { SplitRoot() }
@@ -238,7 +250,7 @@ struct RootView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
-        if horizontalSizeClass == .compact {
+        if UIDevice.current.userInterfaceIdiom == .phone || horizontalSizeClass == .compact {
             TabRoot()
         } else {
             SplitRoot()

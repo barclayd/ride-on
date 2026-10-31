@@ -20,6 +20,9 @@ public struct FloatingPanel<Header: View, Content: View>: View {
     var heights: ClosedRange<CGFloat>?
     /// Called when the panel settles below large, so search can give up focus.
     var collapsed: () -> Void
+    /// How far the content is scrolled, kept by the caller so a panel rebuilt for a new shape
+    /// (an iPhone Duo opening) comes back where it was.
+    var scrollOffset: Binding<CGFloat>?
     var header: Header
     var content: Content
 
@@ -27,6 +30,7 @@ public struct FloatingPanel<Header: View, Content: View>: View {
         _ label: String,
         detent: Binding<PanelDetent>,
         heights: ClosedRange<CGFloat>?,
+        scrollOffset: Binding<CGFloat>? = nil,
         collapsed: @escaping () -> Void = {},
         @ViewBuilder header: () -> Header,
         @ViewBuilder content: () -> Content
@@ -34,6 +38,7 @@ public struct FloatingPanel<Header: View, Content: View>: View {
         self.label = label
         _detent = detent
         self.heights = heights
+        self.scrollOffset = scrollOffset
         self.collapsed = collapsed
         self.header = header()
         self.content = content()
@@ -42,6 +47,7 @@ public struct FloatingPanel<Header: View, Content: View>: View {
     @State private var drag: CGFloat = 0
     @State private var pull: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
+    @State private var position = ScrollPosition(edge: .top)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public var body: some View {
@@ -54,9 +60,14 @@ public struct FloatingPanel<Header: View, Content: View>: View {
                 .accessibilityHidden(detent == .collapsed && heights != nil)
         }
         .scrollDismissesKeyboard(.interactively)
+        .scrollPosition($position)
         // Pulled down past the top, the panel lets go a detent, like a sheet.
         .onScrollGeometryChange(for: CGFloat.self) { -($0.contentOffset.y + $0.contentInsets.top) } action: { _, pull in
             self.pull = pull
+            scrollOffset?.wrappedValue = max(-pull, 0)
+        }
+        .onAppear {
+            if let offset = scrollOffset?.wrappedValue, offset > 0 { position.scrollTo(y: offset) }
         }
         .onScrollPhaseChange { old, _ in
             if old == .interacting, pull > 60, detent != .collapsed, heights != nil {

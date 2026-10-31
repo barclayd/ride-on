@@ -11,33 +11,56 @@ import Services
 /// its conditions) and stays put when the panel is collapsed to show the map. Below it: the verdict,
 /// the departures, Along the Route (its scrubbing pins the point on the map), the forecast, the sky,
 /// the wind (which can colour the route on the map), the factors and the actions.
+///
+/// On an iPhone Duo it takes the shape it's given (DESIGN-SYSTEM.md §5): the floating panel when
+/// narrow, a 380pt column beside the map when wide, a 310pt column with the score at display size
+/// in tent, and the map above a two-column panel in open portrait.
 public struct RideDetailView: View {
     var incomingBoard: RideBoard
     var suppliedPreviousPlan: Bool
     var pick: RideBoard.Pick
-    @State private var savedBoard: RideBoard
+    /// Beside Rides on an open iPhone Duo: whether the ride has the whole screen. Nil when pushed.
+    var fullScreen: Binding<Bool>?
+    @State private var state: RideDetailState
+    private var savedBoard: RideBoard { state.savedBoard }
     private var board: RideBoard { incomingBoard.details[pick.id] == nil ? savedBoard : incomingBoard }
     private var previousPlan: Bool {
         suppliedPreviousPlan || (incomingBoard.details[pick.id] == nil && savedBoard.details[pick.id] != nil)
     }
     private var detail: RideDetail { board.details[pick.id] ?? .sample(for: pick, on: board) }
-    @State private var selection: Date
-    @State private var addedToCalendar: Date?
+    private var selection: Date {
+        get { state.selection }
+        nonmutating set { state.selection = newValue }
+    }
+    private var addedToCalendar: Date? {
+        get { state.addedToCalendar }
+        nonmutating set { state.addedToCalendar = newValue }
+    }
+    private var elevation: [RideDetail.ElevationPoint] {
+        get { state.elevation }
+        nonmutating set { state.elevation = newValue }
+    }
+    private var detent: PanelDetent {
+        get { state.detent }
+        nonmutating set { state.detent = newValue }
+    }
+    private var showsWind: Bool {
+        get { state.showsWind }
+        nonmutating set { state.showsWind = newValue }
+    }
+    private var scrubKm: Double? {
+        get { state.scrubKm }
+        nonmutating set { state.scrubKm = newValue }
+    }
     @State private var calendarFailed = false
-    @State private var elevation: [RideDetail.ElevationPoint]
-    @State private var detent: PanelDetent = .medium
-    /// The route coloured by the wind's effect, with its key.
-    @State private var showsWind = false
-    /// Where the finger is on Along the Route's profile, in km.
-    @State private var scrubKm: Double?
+    /// Whether the panel floats with its detents, for Show Wind on Map.
+    @State private var floating = false
     @State private var headerHeight: CGFloat = 0
     @State private var windKeyHeight: CGFloat = 0
     #if os(iOS)
-    @State private var camera: CycleMap.Camera
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    #else
-    @State private var position: MapCameraPosition
     #endif
+    @Environment(\.paneShape) private var paneShape
     @Environment(\.services) private var services
     @Environment(\.speedSystem) private var speedSystem
     @Environment(\.unitSystem) private var unitSystem
@@ -45,21 +68,15 @@ public struct RideDetailView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.self) private var environment
 
-    public init(board: RideBoard, pick: RideBoard.Pick, previousPlan: Bool = false) {
+    /// `state` carries the ride across presentations (Rides keeps one per pick); without it the
+    /// view keeps its own.
+    public init(board: RideBoard, pick: RideBoard.Pick, previousPlan: Bool = false, state: RideDetailState? = nil,
+                fullScreen: Binding<Bool>? = nil) {
         self.incomingBoard = board
         self.suppliedPreviousPlan = previousPlan
-        _savedBoard = State(initialValue: board)
         self.pick = pick
-        // The fixture board carries no details; it keeps the sample.
-        let detail = board.details[pick.id] ?? .sample(for: pick, on: board)
-        _elevation = State(initialValue: detail.elevation)
-        _selection = State(initialValue: pick.start)
-        let frame = Self.frame(of: pick.route.coordinates)
-        #if os(iOS)
-        _camera = State(initialValue: frame.map { .rect($0) } ?? .automatic)
-        #else
-        _position = State(initialValue: frame.map { .rect($0) } ?? .automatic)
-        #endif
+        self.fullScreen = fullScreen
+        _state = State(initialValue: state ?? RideDetailState(board: board, pick: pick))
     }
 
     private var departure: RideDetail.Departure {
@@ -78,7 +95,10 @@ public struct RideDetailView: View {
     public var body: some View {
         GeometryReader { proxy in
             let safeArea = proxy.safeAreaInsets
-            if floats {
+            let layout = layout(in: proxy.size)
+            Group {
+            switch layout {
+            case .floating:
                 // The panel sits 8pt off the screen's bottom edge; large reaches 8pt under the
                 // navigation bar and medium leaves the top 42% for the map.
                 let large = max(proxy.size.height + safeArea.bottom - 16, 0)
@@ -87,7 +107,8 @@ public struct RideDetailView: View {
                 // frame it above medium, so opening the panel all the way doesn't squeeze the map.
                 let covered = detent == .collapsed ? min(headerHeight + 20, medium) : medium
                 ZStack(alignment: .bottom) {
-                    map(padding: EdgeInsets(top: safeArea.top + 8 + keyInset, leading: 0, bottom: 16 + covered, trailing: 0))
+                    map(padding: EdgeInsets(top: safeArea.top + 8 + keyInset, leading: safeArea.leading,
+                                            bottom: 16 + covered, trailing: safeArea.trailing))
                     mapOverlays
                         .padding(.top, 8)
                         .padding(.horizontal, 16)
@@ -97,25 +118,44 @@ public struct RideDetailView: View {
                         .padding(.bottom, 8)
                         .ignoresSafeArea(.container, edges: .bottom)
                 }
-            } else {
+            case .side(let width):
+                // The panel is a column the map's height; the route frames beside it.
                 ZStack(alignment: .topLeading) {
-                    map(padding: EdgeInsets(top: safeArea.top + 8 + keyInset, leading: safeArea.leading + 8 + Self.sidePanelWidth + 8,
-                                            bottom: safeArea.bottom + 8, trailing: 8))
+                    map(padding: EdgeInsets(top: safeArea.top + 8 + keyInset, leading: safeArea.leading + 8 + width + 8,
+                                            bottom: safeArea.bottom + 8, trailing: safeArea.trailing + 8))
                     mapOverlays
                         .padding(.top, 8)
-                        .padding(.leading, Self.sidePanelWidth + 16)
+                        .padding(.leading, width + 16)
                         .padding(.trailing, 16)
                     panel(heights: nil, bottomInset: 0)
-                        .frame(width: Self.sidePanelWidth)
+                        .frame(width: width)
                         .padding(8)
                 }
+            case .portrait:
+                // The map takes the top half of the screen and the panel the bottom, in two columns.
+                let full = proxy.size.height + safeArea.top + safeArea.bottom
+                let panelTop = (full / 2).rounded() + 8 - safeArea.top
+                let panelHeight = max(proxy.size.height - 8 - panelTop, 0)
+                ZStack(alignment: .bottom) {
+                    map(padding: EdgeInsets(top: safeArea.top + 8 + keyInset, leading: safeArea.leading + 8,
+                                            bottom: safeArea.bottom + 8 + panelHeight + 16, trailing: safeArea.trailing + 8))
+                    mapOverlays
+                        .padding(.top, 8)
+                        .padding(.horizontal, 16)
+                    panel(heights: nil, bottomInset: 0, columns: true)
+                        .frame(height: panelHeight)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 8)
+                }
             }
+            }
+            .onChange(of: layout == .floating, initial: true) { floating = $1 }
         }
         .onChange(of: incomingBoard) { _, latest in
-            if latest.details[pick.id] != nil { savedBoard = latest }
+            if latest.details[pick.id] != nil { state.savedBoard = latest }
         }
         .onChange(of: selection) { scrubKm = nil }
-        .navigationTitle(pick.route.name)
+        .modifier(DetailChrome(title: pick.route.name, pushed: fullScreen == nil))
         .task(id: pick.route.coordinates) {
             // Route changes invalidate the old elevation; unchanged geometry keeps it on screen.
             guard detail.elevation.isEmpty, !pick.route.coordinates.isEmpty else { return }
@@ -124,57 +164,89 @@ public struct RideDetailView: View {
             guard !Task.isCancelled else { return }
             elevation = points
         }
-        #if os(iOS)
-        // The panel's header carries the name; the bar keeps only back and the actions, in glass
-        // over the map, which stays light in Dark Mode (docs/maps/README.md, WS2.7).
-        .toolbarTitleDisplayMode(.inline)
-        .toolbar(removing: .title)
-        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
-        .toolbarColorScheme(.light, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
-        #endif
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                ShareLink(item: RouteGPX(route: pick.route), preview: SharePreview(pick.route.name)) {
-                    Label("Send route to a bike computer", systemImage: "square.and.arrow.up")
-                }
-                .disabled(pick.route.coordinates.count < 2)
-                Menu("More", systemImage: "ellipsis") {
-                    calendarButton
-                    cycleTravelLink
-                }
-            }
-        }
+        .toolbar { toolbarItems }
         .alert("Couldn't add to Calendar", isPresented: $calendarFailed) {} message: {
             Text("Allow Ride On to add events in Settings › Privacy & Security › Calendars.")
         }
     }
 
-    /// iPhone (and compact iPad): the panel floats at the bottom with detents.
-    private var floats: Bool {
+    // MARK: Layout
+
+    private enum Layout: Equatable {
+        /// The panel floats over the map with its detents.
+        case floating
+        /// The panel is a column beside the map: 380pt, or 310pt in tent.
+        case side(width: CGFloat)
+        /// Open portrait: the map above, the panel below in two columns.
+        case portrait
+    }
+
+    /// iPhone lays out by the shape the ride is given (an iPhone Duo's half pane is narrow, its
+    /// full screen wide); iPad and the Mac by size class.
+    private func layout(in size: CGSize) -> Layout {
+        if paneShape != nil {
+            return switch PaneShape(size) {
+            case .narrow: .floating
+            case .tent: .side(width: Self.tentPanelWidth)
+            case .portrait: .portrait
+            case .wide: .side(width: Self.sidePanelWidth)
+            }
+        }
         #if os(iOS)
-        horizontalSizeClass == .compact
+        return horizontalSizeClass == .compact ? .floating : .side(width: Self.sidePanelWidth)
         #else
-        false
+        return .side(width: Self.sidePanelWidth)
         #endif
     }
 
+    /// Tent: the ride standing on a desk, where the score is the number that matters.
+    private var isTent: Bool { paneShape == .tent }
+
     private static let sidePanelWidth: CGFloat = 380
+    private static let tentPanelWidth: CGFloat = 310
 
     /// The wind's key and the gap under it, so the route frames below the key rather than under it.
     private var keyInset: CGFloat { windShown == nil ? 0 : windKeyHeight + 8 }
 
-    // MARK: Map
+    // MARK: Toolbar
 
-    /// The route's bounding box with a margin, or nil without a line to frame.
-    private static func frame(of coordinates: [Coordinate]) -> MKMapRect? {
-        guard coordinates.count > 1 else { return nil }
-        let box = coordinates.reduce(MKMapRect.null) { box, coordinate in
-            let point = MKMapPoint(CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude))
-            return box.union(MKMapRect(origin: point, size: MKMapSize(width: 0, height: 0)))
+    /// Pushed: Send to a Bike Computer, then "…" (Add to Calendar, Open in cycle.travel). Beside
+    /// Rides on an open iPhone Duo, Full Screen (or Show Rides) comes first.
+    @ToolbarContentBuilder
+    private var toolbarItems: some ToolbarContent {
+        if let fullScreen {
+            ToolbarItem(placement: .primaryAction) {
+                let isFull = fullScreen.wrappedValue
+                Button(isFull ? "Show Rides" : "Full Screen",
+                       systemImage: isFull ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
+                    withAnimation(Motion.paneResize) { fullScreen.wrappedValue.toggle() }
+                }
+            }
+            .visibilityPriority(.high)
         }
-        return box.insetBy(dx: -box.width * 0.08, dy: -box.height * 0.08)
+        ToolbarItem(placement: .primaryAction) {
+            ShareLink(item: RouteGPX(route: pick.route), preview: SharePreview(pick.route.name)) {
+                Label("Send to a Bike Computer", systemImage: "square.and.arrow.up")
+            }
+            .disabled(pick.route.coordinates.count < 2)
+        }
+        .visibilityPriority(.high)
+        #if os(iOS)
+        ToolbarOverflowMenu {
+            calendarButton
+            cycleTravelLink
+        }
+        #else
+        ToolbarItem(placement: .primaryAction) {
+            Menu("More", systemImage: "ellipsis") {
+                calendarButton
+                cycleTravelLink
+            }
+        }
+        #endif
     }
+
+    // MARK: Map
 
     /// The departure's wind, when its stretches are placed along the route.
     private var mapWind: RideDetail.WindBreakdown? {
@@ -240,8 +312,8 @@ public struct RideDetailView: View {
                         selected: coordinates.count > 1 ? CycleMap.Line(id: pick.route.id, coordinates: coordinates) : nil,
                         stretches: windRuns.map { CycleMap.Stretch(coordinates: $0.coordinates, color: $0.color) },
                         pin: scrubPoint.map { CycleMap.Pin(coordinate: $0.coordinate, label: $0.label) },
-                        camera: camera,
-                        moved: { camera = .rect($0) })
+                        camera: state.camera,
+                        moved: { state.camera = .rect($0) })
     }
     #else
     private var routeMap: some View {
@@ -249,7 +321,7 @@ public struct RideDetailView: View {
         let locations = pick.route.coordinates.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
         // A polyline keeps its first stroke, so the resolved colours are part of each one's identity.
         let runs = windRuns.map { WindRun(coordinates: $0.coordinates, color: Color($0.color.resolve(in: environment))) }
-        return Map(position: $position) {
+        return Map(position: $state.position) {
             if let start = locations.first, locations.count > 1 {
                 ForEach([SelectedKey(id: pick.route.id, accent: accent)], id: \.self) { _ in
                     MapPolyline(coordinates: locations)
@@ -302,21 +374,14 @@ public struct RideDetailView: View {
     }
 
     /// Frames the whole route again.
-    private func fit() {
-        let frame = Self.frame(of: pick.route.coordinates)
-        #if os(iOS)
-        camera = frame.map { .rect($0) } ?? .automatic
-        #else
-        position = frame.map { .rect($0) } ?? .automatic
-        #endif
-    }
+    private func fit() { state.fit(pick.route) }
 
     /// From Wind on the Ride: the wind on the route, the panel out of its way and the whole route
     /// in view.
     private func showWindOnMap() {
         withAnimation(Motion.panelDetent()) {
             showsWind = true
-            if floats { detent = .collapsed }
+            if floating { detent = .collapsed }
             fit()
         }
     }
@@ -363,7 +428,7 @@ public struct RideDetailView: View {
             Button {
                 withAnimation(Motion.panelMaterialize) { fit() }
             } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                Image(systemName: "viewfinder")
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
@@ -396,8 +461,9 @@ public struct RideDetailView: View {
 
     // MARK: Panel
 
-    private func panel(heights: ClosedRange<CGFloat>?, bottomInset: CGFloat) -> some View {
-        FloatingPanel(pick.route.name, detent: $detent, heights: heights) {
+    /// The ride's panel; `columns` splits its content in two (open portrait).
+    private func panel(heights: ClosedRange<CGFloat>?, bottomInset: CGFloat, columns: Bool = false) -> some View {
+        FloatingPanel(pick.route.name, detent: $state.detent, heights: heights, scrollOffset: $state.scrollY) {
             header
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
                 .contentShape(.rect)
@@ -407,7 +473,7 @@ public struct RideDetailView: View {
                     }
                 }
         } content: {
-            content
+            content(columns: columns)
                 .padding(.bottom, bottomInset)
         }
     }
@@ -429,7 +495,7 @@ public struct RideDetailView: View {
                         .monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                ScoreGauge(score: departure.score, tint: departure.score >= 70 ? .accentColor : .belowMinimums, size: 64)
+                ScoreGauge(score: departure.score, tint: departure.score >= 70 ? .accentColor : .belowMinimums, size: isTent ? 92 : 64)
             }
             ScrollView(.horizontal) {
                 HStack(spacing: 6) { chips }
@@ -493,22 +559,44 @@ public struct RideDetailView: View {
 
     // MARK: Content
 
-    private var content: some View {
-        VStack(alignment: .leading, spacing: 16) {
+    /// One column, or in open portrait the plan (verdict, departure, route, forecast) beside the
+    /// conditions (sky, wind, the factors) and the actions.
+    private func content(columns: Bool) -> some View {
+        Group {
+            if columns && !dynamicTypeSize.isAccessibilitySize {
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 16) { planSections }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 16) { conditionSections }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    planSections
+                    conditionSections
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private var planSections: some View {
             if previousPlan {
                 Label("From your saved forecast. Update Rides for current conditions.", systemImage: "clock")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             verdictCard
             RideSection("Departure") {
-                DeparturePicker(departures: detail.departures, selection: $selection)
+                DeparturePicker(departures: detail.departures, selection: $state.selection)
                 footnote(departureFootnote)
             }
             if !elevation.isEmpty {
                 RideSection("Along the Route") {
                     VStack(alignment: .leading, spacing: 10) {
                         scrubReadout
-                        RouteProfile(elevation: elevation, wind: departure.wind, selection: $scrubKm)
+                        RouteProfile(elevation: elevation, wind: departure.wind, selection: $state.scrubKm)
                     }
                     .padding(16)
                     .card()
@@ -520,6 +608,10 @@ public struct RideDetailView: View {
                     footnote("Wind from the \(windFrom).")
                 }
             }
+    }
+
+    @ViewBuilder
+    private var conditionSections: some View {
             if let sky = departure.sky {
                 RideSection("Sky on the Ride") {
                     SkyOnTheRide(sky: sky, start: departure.start, finish: departure.finish)
@@ -540,9 +632,6 @@ public struct RideDetailView: View {
             }
             actionsCard
             footer
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
     }
 
     /// The scrubbed point's distance, height and felt wind, or how to scrub; one line either way, so
@@ -868,6 +957,37 @@ extension RideBoard.Sky {
         case .cloudy: "cloud"
         case .rain: "cloud.rain"
         }
+    }
+}
+
+/// Pushed, the ride hides the tab bar and its bar keeps only back and the actions, in glass over
+/// the map, which stays light in Dark Mode (docs/maps/README.md, WS2.7). Beside Rides it shares
+/// Rides' bar, so it leaves the title and the tab bar alone.
+private struct DetailChrome: ViewModifier {
+    var title: String
+    var pushed: Bool
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        let content = content
+            .toolbarTitleDisplayMode(.inline)
+            .toolbar(removing: .title)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
+        if pushed {
+            content
+                .navigationTitle(title)
+                .toolbar(.hidden, for: .tabBar)
+        } else {
+            content
+        }
+        #else
+        if pushed {
+            content.navigationTitle(title)
+        } else {
+            content
+        }
+        #endif
     }
 }
 

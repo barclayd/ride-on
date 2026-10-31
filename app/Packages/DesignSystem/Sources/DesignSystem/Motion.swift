@@ -16,6 +16,9 @@ public enum Motion {
     /// Score-ring fill on first appearance (Fitness-style: the score reads
     /// as computed, not painted).
     public static let ringFill: Animation = .smooth(duration: 0.8)
+    /// A pane taking the whole screen or giving it back (iPhone Duo's Full Screen and Show Rides):
+    /// the other pane fades as this one widens.
+    public static let paneResize: Animation = .smooth
     /// The Routes panel settling on a detent. `velocity` carries the drag's speed into the
     /// spring, as a fraction of the distance left per second, so release has no seam.
     public static func panelDetent(velocity: Double = 0) -> Animation {

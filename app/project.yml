@@ -2,8 +2,8 @@ name: RideOn
 options:
   bundleIdPrefix: com.danbarclay
   deploymentTarget:
-    iOS: "26.0"
-    macOS: "26.0"
+    iOS: "27.1"
+    macOS: "27.0"
 
 configs:
   Debug: debug
@@ -55,6 +55,17 @@ targets:
         # resolution — without this key the app runs letterboxed in
         # compatibility mode.
         UILaunchScreen: {}
+        # Without this key an iPhone app is portrait only, so an iPhone Duo never
+        # reaches tent or the open landscape split (DESIGN-SYSTEM.md §5).
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         # Lets CloudKit's silent pushes wake the app so SwiftData pulls
         # remote changes in the background (iOS-only key, ignored on macOS).
         UIBackgroundModes: [remote-notification, fetch]
