@@ -532,6 +532,11 @@ Build (where it stands, how to test it and what's left: [the widgets handoff](..
   finish once the app has synced mid-ride; if the app never does, it stops at "0:00 to go" until
   the next sync ends it. Also fixed: the scheduled start drew a light platter under white text, so
   the view draws its own background
+- [x] The tinted and clear Home Screens (`.accented`), which draw every colour white and an opaque
+  image solid white: the map was a white slab and the best score pill blank. The still now goes
+  white with the map's brightness as its opacity (land a faint wash, roads and water clear, as
+  Apple's Maps widget), the land fill and the loop's casing drop, the chips, ‹ › and Track sit on
+  translucent white, the best pill's fill goes translucent, and the loop stops at the hour chips
 - [ ] Dan's on-device check: StandBy, iPad extra large, the Mac desktop, the Live Activity's
   scheduled start and alert
 

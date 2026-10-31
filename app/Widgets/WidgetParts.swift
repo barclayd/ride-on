@@ -76,14 +76,17 @@ struct MapPanel: View {
     var hours = false
 
     @Environment(\.displayScale) private var scale
+    @Environment(\.widgetRenderingMode) private var mode
 
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
             let rect = ride.map { WidgetMap.framing($0.loop, shape) } ?? .null
             let still = rect.isNull ? nil : Self.still(WidgetMap.url(rect, shape), pixels: max(size.width, size.height) * scale)
+                .flatMap { mode == .accented ? Self.ghost($0) : $0 }
             ZStack(alignment: .topLeading) {
-                Color.routeLand
+                // The tinted and clear Home Screens draw every colour white: the land would be a white slab.
+                if mode != .accented { Color.routeLand }
                 if let still {
                     Image(decorative: still, scale: scale)
                         .resizable()
@@ -93,8 +96,21 @@ struct MapPanel: View {
                 }
                 if let ride, !rect.isNull {
                     let path = Path { $0.addLines(WidgetMap.project(ride.loop, in: rect, size: size)) }
-                    Loop(path: path, progress: progress)
-                    if hours { HourChips(ride: ride, path: path, size: size, units: units) }
+                    ZStack(alignment: .topLeading) {
+                        Color.clear
+                        if hours { HourChips(ride: ride, path: path, size: size, units: units) }
+                    }
+                    // Tinted, the chips go translucent and their text white: the loop stops at them rather than run
+                    // through it.
+                    .backgroundPreferenceValue(ChipBounds.self) { chips in
+                        GeometryReader { proxy in
+                            Loop(path: path, progress: progress)
+                                .clipShape(Path { cut in
+                                    cut.addRect(CGRect(origin: .zero, size: proxy.size))
+                                    for chip in chips { cut.addPath(Capsule().path(in: proxy[chip])) }
+                                }, style: FillStyle(eoFill: true))
+                        }
+                    }
                 }
                 if still != nil {
                     Text(Self.attribution)
@@ -123,6 +139,33 @@ struct MapPanel: View {
                        kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options)
     }
+
+    /// The still for the tinted and clear Home Screens, which draw an opaque image solid white and keep only
+    /// its transparency: the map's brightness becomes white's opacity, its narrow band of light tones spread
+    /// from clear (roads, water) to a faint land, as Apple's Maps widget looks there.
+    static func ghost(_ still: CGImage) -> CGImage? {
+        let width = still.width, height = still.height
+        guard let gray = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                                   space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue),
+              let white = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(),
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let tones = gray.data?.bindMemory(to: UInt8.self, capacity: width * height),
+              let pixels = white.data?.bindMemory(to: UInt8.self, capacity: width * height * 4) else { return nil }
+        gray.draw(still, in: CGRect(x: 0, y: 0, width: width, height: height))
+        for i in 0..<width * height {
+            // Premultiplied, white at any opacity has every channel equal to it.
+            let alpha = ghostTones[Int(tones[i])]
+            for channel in 0..<4 { pixels[i * 4 + channel] = alpha }
+        }
+        return white.makeImage()
+    }
+
+    /// 0.6 and darker clear, the land (about 0.94) at 0.4.
+    private static let ghostTones: [UInt8] = (0...255).map { (tone: Int) -> UInt8 in
+        let land: Double = min(max((Double(tone) / 255 - 0.6) / 0.35, 0), 1)
+        return UInt8((land * 0.42 * 255).rounded())
+    }
 }
 
 /// The loop, cased as `RouteMap` draws it, its start marked; the ridden part gold.
@@ -130,10 +173,13 @@ private struct Loop: View {
     var path: Path
     var progress: Double?
 
+    @Environment(\.widgetRenderingMode) private var mode
+
     var body: some View {
         let line = { (width: CGFloat) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
         ZStack(alignment: .topLeading) {
-            path.stroke(.white, style: line(5.5))
+            // Tinted, the casing would merge with the line.
+            if mode != .accented { path.stroke(.white, style: line(5.5)) }
             path.stroke(Color.rideAccent, style: line(3)).widgetAccentable()
             if let progress, progress > 0 {
                 path.trimmedPath(from: 0, to: progress).stroke(Color.committed, style: line(3))
@@ -180,21 +226,45 @@ private struct HourChips: View {
             }
             .mapChip(size: 9)
             .fixedSize()
+            .anchorPreference(key: ChipBounds.self, value: .bounds) { [$0] }
             .alignmentGuide(.leading) { d in left ? d.width - at.x + 6 : -at.x - 6 }
             .alignmentGuide(.top) { d in d.height / 2 - at.y }
         }
     }
 }
 
+/// Where the hour chips sit, so the loop can stop at them.
+private struct ChipBounds: PreferenceKey {
+    static var defaultValue: [Anchor<CGRect>] { [] }
+    static func reduce(value: inout [Anchor<CGRect>], nextValue: () -> [Anchor<CGRect>]) { value += nextValue() }
+}
+
 extension View {
     /// A white capsule over the map.
     func mapChip(size: CGFloat = 10) -> some View {
-        font(.system(size: size, weight: .semibold))
+        modifier(MapChip(size: size))
+    }
+}
+
+private struct MapChip: ViewModifier {
+    var size: CGFloat
+
+    @Environment(\.widgetRenderingMode) private var mode
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: size, weight: .semibold))
             .foregroundStyle(.black)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(.white, in: .capsule)
+            .background(mode.onMap, in: .capsule)
     }
+}
+
+extension WidgetRenderingMode {
+    /// What a chip or button over the map sits on: white, but translucent in the tinted and clear Home
+    /// Screens, which draw every colour white (Calendar's event chip does the same).
+    var onMap: Color { self == .accented ? .white.opacity(0.25) : .white }
 }
 
 /// The ride's loop alone, for the Lock Screen and the Dynamic Island: no image there.
@@ -217,6 +287,8 @@ struct ScorePill: View {
     var meetsMinimums: Bool
     var best: Bool
 
+    @Environment(\.widgetRenderingMode) private var mode
+
     var body: some View {
         Text("\(score)")
             .font(.system(size: 11, weight: .bold))
@@ -224,8 +296,10 @@ struct ScorePill: View {
             .foregroundStyle(!meetsMinimums ? Color.belowMinimums : best ? .white : .primary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
+            // Tinted, the text and the fill take the same colour, so the fill goes translucent.
             .background(!meetsMinimums ? AnyShapeStyle(Color.belowMinimums.opacity(0.15))
-                        : best ? AnyShapeStyle(Color.rideAccent) : AnyShapeStyle(.fill.tertiary), in: .capsule)
+                        : best ? AnyShapeStyle(Color.rideAccent.opacity(mode == .accented ? 0.25 : 1))
+                        : AnyShapeStyle(.fill.tertiary), in: .capsule)
             .widgetAccentable(best)
     }
 }

@@ -159,6 +159,16 @@ Watch out for:
     `.widgetAccentable()`.
   - Width is tight. Use `ViewThatFits` so the least important part drops before anything
     truncates (A's rectangular drops "back ~…" before the name).
+- **The tinted and clear Home Screens:** the widget renders `.accented`, which draws every colour
+  white keeping only its opacity, and an opaque image solid white.
+  - Anything white on the map (a chip, a button, the best score pill's fill) goes translucent, or
+    the white text on it vanishes: `WidgetRenderingMode.onMap`.
+  - `MapPanel.ghost` turns the still into white with the map's brightness as its opacity.
+    `.widgetAccentedRenderingMode(.desaturated)` alone still draws it solid white.
+  - Blend modes (`.destinationOut`) don't reach the widget's render. The loop stops at the hour
+    chips with an even-odd clip from their anchor bounds instead.
+  - Testing in the simulator: `xcodebuild test` on a SpringBoard-only UI test doesn't reinstall
+    the app, so the widget keeps running the old build. Install it with `xcrun simctl install`.
 - **ActivityKit's 4 KB limit:** `WidgetSync` strips the loop and the hours from the activity's
   state and puts a loop of about 30 points in the attributes.
 - **New files:** after adding or removing files, run `cd app && xcodegen generate`.
