@@ -51,18 +51,18 @@ HIG references: [Materials](https://developer.apple.com/design/human-interface-g
 | Window capsule (Rides) | Toolbar item showing the window ("Wed 14 – Sun 18"); opens the window sheet | `ToolbarItem(placement: .navigation)` + `.sheet` |
 | Controls over the hero map | **Clear** glass with a dimming layer under the status bar; turn regular once content scrolls under them | system toolbar over `.backgroundExtensionEffect()`; hero track bell `.glassEffect(.clear.interactive())`, `.clear.tint(.committed)` while tracked |
 | Routes panel | **Regular** glass floating over the map, 8pt from the screen edges and 14pt above the tab bar; grabber, search and "+" pinned, everything else scrolling beneath and fading into the bottom edge | `FloatingPanel` (§6): `.glassEffect(.regular, in: .rect(cornerRadius: 34))`, `.safeAreaBar(edge: .top)` |
-| Controls over the Routes map (map style, my location) | **Clear** glass capsule, white glyphs, held at a fixed size like MapKit's own. Over the light cycle map (`CycleMap`, §6), **regular** glass with `.primary` glyphs instead, held light in Dark Mode as the map is | `.glassEffect(.clear.interactive(), in: .capsule)` (`.regular.interactive()` and `.environment(\.colorScheme, .light)` over the cycle map), `.dynamicTypeSize(...xLarge)` + `.accessibilityShowsLargeContentViewer()` |
+| Controls over the Routes map (my location; the map style too on the Mac) | Over the light cycle map (`CycleMap`, §6, iOS), **regular** glass with `.primary` glyphs, held light in Dark Mode as the map is, at a fixed size like MapKit's own. Over the Mac's satellite map, a **clear** glass capsule with white glyphs | `.glassEffect(.clear.interactive(), in: .capsule)` (`.regular.interactive()` and `.environment(\.colorScheme, .light)` over the cycle map), `.dynamicTypeSize(...xLarge)` + `.accessibilityShowsLargeContentViewer()` |
 | Sheets | System glass; Cancel leading, Done trailing | `.presentationDetents`, `Button(role: .cancel)`, `Button(role: .confirm)` |
 | Partial-height sheets (Track) | System glass, floating inset over the dimmed screen; Close leading, actions as full-width capsules at the bottom | `.presentationDetents([.height(content)])`, `Button(role: .close)`, `.glassProminent` / `.glass` capsules |
 | Pushed screens' back button | 44pt glass circle, chevron only | stock `NavigationStack` back button |
 | Cards, rows, chips, badges | **Not glass.** Solid `secondarySystemGroupedBackground` | `.background(.background.secondary, in: .rect(cornerRadius: 26))` |
 
 Rules:
-- **Regular glass by default.** Clear glass only over rich media (the hero map, the Routes
-  map), with a ~35% dark gradient behind it on the hero so white glyphs stay legible (the
-  Routes map's satellite looks are dark enough on their own). The cycle map is light, so controls
-  over it use regular glass, held light in Dark Mode; nothing dims it, and the status bar's glyphs
-  go dark over it (`.toolbarColorScheme(.light, for: .navigationBar)`).
+- **Regular glass by default.** Clear glass only over rich media (the hero map, the Mac's
+  satellite Routes map), with a ~35% dark gradient behind it on the hero so white glyphs stay
+  legible over the light cycle map (the satellite Routes map is dark enough on its own). On the
+  Routes tab's live cycle map, controls use regular glass, held light in Dark Mode; nothing dims
+  it, and the status bar's glyphs go dark over it (`.toolbarColorScheme(.light, for: .navigationBar)`).
 - **Scroll edge effects, not dividers.** No hairlines under toolbars or between sections; the
   system edge effect separates scrolling content from chrome.
 - **Group glass that can touch or morph** in one `GlassEffectContainer` (glass can't sample glass).
@@ -81,7 +81,9 @@ Rules:
   Preferences → Maps, each linking to its terms. Snapshots shown larger than a
   thumbnail carry it too: a shortlist card's cycle-map snapshot, drawn without terrain, has "©
   OpenStreetMap" and "Protomaps" as plain text in the card's white, 10pt under its stats (the card is
-  a button, so no links); thumbnails are too small for it.
+  a button, so no links); the hero's, with its hills shaded, has the same in the band under its
+  title block, 20pt in (the hero is a link too); Wind on the Ride's has "© OpenStreetMap" in
+  `.caption2` `.secondary` at its bottom leading corner, 12pt in; thumbnails are too small for it.
 
 ## 3. Colour
 
@@ -150,7 +152,7 @@ en-GB ("Wednesday 14 October", "Wed 14 – Sun 18").
 - **Minimum target 44pt.** Toolbar circles are 44pt; the hero track star is 48pt.
 - **The hero** (Rides and Ride detail): the map is full-bleed under the status bar and
   toolbar (`.ignoresSafeArea(edges: .top)` + `.backgroundExtensionEffect()`), with a bottom
-  scrim for the title block and the Maps attribution row along the bottom edge.
+  scrim for the title block and the map's attribution along the bottom edge.
 - **Edge-to-edge scrolling** under the tab bar and toolbars; the system scroll edge effect
   handles legibility. Custom bottom bars use `.safeAreaBar(edge: .bottom)`.
 - **Routes** is a full-screen map with the panel floating over it: 34pt radius, medium detent
@@ -165,14 +167,15 @@ en-GB ("Wednesday 14 October", "Wed 14 – Sun 18").
 Anything not listed here is a stock SwiftUI component. The list is closed: add to it here
 before adding a custom component in code.
 
-1. **`RideHero`** — the best pick for the window, full-bleed: a non-interactive `Map`
-   (`.mapStyle(.imagery)`, route polyline in the accent with a white casing, start marker),
+1. **`RideHero`** — the best pick for the window, full-bleed: a `CycleMap` snapshot with its
+   hills shaded on iOS, a non-interactive satellite `Map` on the Mac (route in the accent with a
+   white casing, start marker),
    an eased bottom scrim (at least 340pt, black 0 → 80% on eased stops, no visible top edge),
    the title block (a "Best pick" / "Best that day" accent pill, the route name, then
    ↔ "51 km" and `mountain.2` "640 m climb" in `.subheadline` white 88%, with a soft text
-   shadow) and the Maps attribution row. No date or times on the map: they lead the card below. The map ignores touches
-   (taps belong to whatever the hero opens), so the attribution shows but Legal isn't tappable
-   there. On Rides the hero is a `NavigationLink` and the `matchedTransitionSource` for the
+   shadow) and the map's attribution (§2). No date or times on the map: they lead the card below. The map ignores touches
+   (taps belong to whatever the hero opens), so on the Mac the Maps attribution shows but Legal
+   isn't tappable there. On Rides the hero is a `NavigationLink` and the `matchedTransitionSource` for the
    zoom into Ride detail; the clear-glass track star ("Track Hilly Loop on Wednesday 14
    October"; opens the Track sheet; `star.fill` on gold-tinted glass while tracked) is overlaid beside the link, not inside it, so VoiceOver reaches both. Ride detail shows the same map,
    400pt instead of 480pt, so the zoom lands on the same image. Pulled down past the top (pull to
@@ -218,9 +221,9 @@ before adding a custom component in code.
 12. **`RoutesMap`** — the Routes tab's live map: other shortlisted routes in white, the selected
     one in the accent with a white casing and start marker, and a callout over its northernmost
     point ("Hilly Loop 51 km", or the ride's date from History). Tapping within 22pt of a line
-    selects that route. `MapControls` (style menu, my location) sit at its top trailing corner.
-    The style menu offers Cycle (`CycleMap`), the look at launch, then Satellite, Hybrid and
-    Standard. The Mac has no Cycle look and opens on Satellite.
+    selects that route. `MapControls` sit at its top trailing corner. On iOS the map is always
+    the cycle map (`CycleMap`), so they're just my location; on the Mac a style menu (Satellite,
+    the look at launch, then Hybrid and Standard) sits above it.
 13. **Panel rows** (`LibraryRow`, `HistoryRow`) — a 48pt route thumbnail, name, "42 km · 180 m ·
     46% unpaved", then the source and last ride (Library) or the forecast saved when the ride
     was planned (History; never the weather on the day). Selected, the row fills with
@@ -239,19 +242,24 @@ before adding a custom component in code.
     header beside it says the same.
 16. **`WindRouteMap`** — "Wind on the Ride"'s map: the route coloured by the wind's effect (`ShareBar`'s
     wind colours, white casing), Start marker, and Finish unless the ride ends where it started. A
-    muted standard map without points of interest, ignoring touches, 180pt, flush with the top of
-    its card. Where the road is ridden twice the return is drawn 3pt to the right of the way out, as
+    muted `CycleMap` snapshot on iOS (no cycling overlay, labels or terrain, held light in Dark
+    Mode, "© OpenStreetMap" at its bottom leading corner) with the route, markers and their titles
+    drawn over it, so a new forecast needs no new image; the muted standard map without points of
+    interest on the Mac. Ignores touches, 180pt, flush with the top of its card. Where the road is ridden twice the return is drawn 3pt to the right of the way out, as
     on a transit map, so both colours show. Shown only when the API placed the wind stretches along
     the route. VoiceOver reads the journey: "Heads north-east with the wind behind, then …".
 17. **`CycleMap`** — a map that looks like cycle.travel's: OpenStreetMap data in our own style,
     cycle routes as dots over the road beneath them, route-number badges, cycle paths by surface,
     labels in Montserrat (§4). MapLibre Native on iOS, drawing Ride On's own vector tiles with a
-    style bundled in the app. The Mac stays on MapKit for the first release: no Cycle look, satellite
-    cards and outline thumbnails. Routes are drawn as map layers below the labels, in the same
-    colours and white casing as on MapKit. Live and interactive as
-    `RoutesMap`'s Cycle look; cards and thumbnails get static snapshots of it, never live maps:
-    `MLNMapSnapshotter` draws each once per route, framing, tint, size and scale, without labels or
-    terrain, and keeps it in memory. Until one is ready the route stands on the style's land colour exactly
+    style bundled in the app. On iOS it's the only map: no Apple Maps anywhere. The Mac stays on
+    MapKit for now (a satellite hero, cards and Routes map, outline thumbnails, the muted standard
+    map for Wind on the Ride) until MapLibre GL JS in a `WKWebView` replaces it. Routes are drawn as
+    map layers below the labels, in the same colours and white casing as on MapKit. Live and
+    interactive as `RoutesMap`; the hero, cards, thumbnails and Wind on the Ride get static
+    snapshots of it, never live maps: `MLNMapSnapshotter` draws each once per route, framing, tint,
+    size and scale, without labels, and keeps it in memory. Only the hero's has terrain (hillshade
+    and contours); Wind on the Ride's has no route or cycling overlay, as SwiftUI draws the wind's
+    colours over it. Until one is ready the route stands on the style's land colour exactly
     where the snapshot will put it, then the snapshot fades in (`Motion.panelMaterialize`).
     Hills are shaded and carry 10 m contours, as on cycle.travel. "© OpenStreetMap" sits in
     `.caption2` `.secondary` at the safe area's bottom leading corner, 12pt in, held at a fixed size
@@ -260,8 +268,6 @@ before adding a custom component in code.
     route's callout is pinned over its northernmost point as on MapKit. In the fixture world it
     draws the style's land colour only, offline. Plan, data pipeline and open decisions in
     [`docs/maps/README.md`](docs/maps/README.md).
-    `RideHero` stays on satellite imagery and `WindRouteMap` on the muted standard map until
-    those decisions say otherwise.
 18. **Widget parts** (`app/Widgets/`, docs/redesign/README.md §8) — the widget extension can't link
     SharedUI, so its pieces are its own: `MapPanel` (a map still the app renders into the App Group,
     the cycle map on iOS and MapKit on the Mac, with the loop drawn over it, the ridden part in

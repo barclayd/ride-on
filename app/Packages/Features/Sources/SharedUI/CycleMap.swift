@@ -136,8 +136,9 @@ public struct CycleMap: View {
 
 /// The cycle map's credit (§2). On the live map, "© OpenStreetMap" linking to its terms in the map's
 /// own light scheme; the rest (Protomaps, and the terrain's Mapterhorn and Ordnance Survey) are in
-/// Preferences → Maps. On a card's snapshot, which is a button and has no terrain, "© OpenStreetMap"
-/// and "Protomaps" as plain text in the card's white.
+/// Preferences → Maps (Wind on the Ride's snapshot uses it too). On a snapshot that's a button or a
+/// link (a card, the Rides hero), "© OpenStreetMap" and "Protomaps" as plain text in white; the hero's
+/// terrain is credited in Preferences → Maps with the rest.
 public struct CycleMapAttribution: View {
     public enum Placement { case map, card }
 

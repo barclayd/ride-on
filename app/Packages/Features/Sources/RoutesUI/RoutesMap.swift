@@ -11,11 +11,11 @@ enum MapLook: String, CaseIterable, Identifiable {
 
     var id: Self { self }
 
-    /// The looks the menu offers: Cycle first on iOS. The Mac keeps MapKit's three
-    /// (docs/maps/README.md, WS3.6).
+    /// The looks the menu offers: Cycle alone on iOS, so there's no menu. The Mac keeps MapKit's
+    /// three until it has the cycle map (docs/maps/README.md, WS3.6).
     static var offered: [MapLook] {
         #if os(iOS)
-        allCases
+        [.cycle]
         #else
         allCases.filter { $0 != .cycle }
         #endif
@@ -62,11 +62,7 @@ struct RoutesMap: View {
         // drops back to system blue for `.accentColor` (see `RouteMap`).
         let accent = Color.accentColor.resolve(in: environment)
         #if os(iOS)
-        if look == .cycle {
-            cycleMap(accent: accent)
-        } else {
-            mapKit(accent: accent)
-        }
+        cycleMap(accent: accent)
         #else
         mapKit(accent: accent)
         #endif
@@ -89,8 +85,7 @@ struct RoutesMap: View {
         if let rect = camera.rect { return .rect(rect) }
         return .automatic
     }
-    #endif
-
+    #else
     private func mapKit(accent: Color.Resolved) -> some View {
         MapReader { proxy in
             Map(position: $camera) {
@@ -158,6 +153,7 @@ struct RoutesMap: View {
         var id: UUID
         var accent: Color.Resolved
     }
+    #endif
 }
 
 /// "Hilly Loop 51 km" in a bubble pointing down at the route's northernmost point.
@@ -203,7 +199,7 @@ private struct CalloutPointer: Shape {
 
 /// Map style and my location, stacked in glass at the map's top trailing corner: clear with white
 /// glyphs over imagery; over the light cycle map regular with `.primary` glyphs, kept light in Dark
-/// Mode as the map is (docs/maps/README.md, WS2.7).
+/// Mode as the map is (docs/maps/README.md, WS2.7). With one look offered (iOS), my location alone.
 struct MapControls: View {
     @Binding var look: MapLook
     var overLightMap = false
@@ -213,21 +209,23 @@ struct MapControls: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Menu {
-                Picker("Map style", selection: $look) {
-                    ForEach(MapLook.offered) { Text($0.title).tag($0) }
+            if MapLook.offered.count > 1 {
+                Menu {
+                    Picker("Map style", selection: $look) {
+                        ForEach(MapLook.offered) { Text($0.title).tag($0) }
+                    }
+                } label: {
+                    Image(systemName: "square.2.layers.3d")
+                        .frame(width: 44, height: 44)
+                        .contentShape(.rect)
                 }
-            } label: {
-                Image(systemName: "square.2.layers.3d")
-                    .frame(width: 44, height: 44)
-                    .contentShape(.rect)
+                .accessibilityLabel("Map style")
+                Rectangle()
+                    .fill(overLightMap ? Color.primary.opacity(0.2) : .white.opacity(0.4))
+                    .frame(height: 0.5)
+                    .padding(.horizontal, 9)
+                    .accessibilityHidden(true)
             }
-            .accessibilityLabel("Map style")
-            Rectangle()
-                .fill(overLightMap ? Color.primary.opacity(0.2) : .white.opacity(0.4))
-                .frame(height: 0.5)
-                .padding(.horizontal, 9)
-                .accessibilityHidden(true)
             Button(action: locate) {
                 Image(systemName: "location")
                     .frame(width: 44, height: 44)

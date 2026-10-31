@@ -7,7 +7,7 @@ produced it.
 
 | | |
 |---|---|
-| Status | Built, 19 October 2026: every workstream in the [PR sequence](#suggested-pr-sequence) is done. On iOS the cycle map is the Routes map's default look (`CycleMap`), with snapshots on shortlist cards and thumbnails; the Mac stays on MapKit ([decision 2](#open-decisions)). Tiles are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)), rebuilt monthly by the `maps-tiles` workflow once its R2 secrets are added. Open before release: [decision 1](#open-decisions) (asking cycle.travel) and Dan's on-device check (the six comparison views, frame rate, memory). Open after: decision 6 (a dark variant) |
+| Status | Built, 19 October 2026: every workstream in the [PR sequence](#suggested-pr-sequence) is done. On iOS the cycle map (`CycleMap`) is the only map: the Routes map, and snapshots on the Rides hero, shortlist cards, thumbnails and Wind on the Ride (31 October 2026); the Mac stays on MapKit ([decision 2](#open-decisions)) until a `WKWebView` with MapLibre GL JS replaces it. Tiles are on R2 at `maps.ride-on.cc` ([`maps/README.md`](../../maps/README.md)), rebuilt monthly by the `maps-tiles` workflow once its R2 secrets are added. Open before release: [decision 1](#open-decisions) (asking cycle.travel) and Dan's on-device check (the six comparison views, frame rate, memory). Open after: decision 6 (a dark variant) |
 | Estimate | 4–6 weeks for one person |
 | Style spec | [`cycle-travel-style.md`](cycle-travel-style.md): every measured rule, the palette and the known gaps |
 | Prototype | [`prototype/README.md`](prototype/README.md): how to run it and how the comparison screenshots were taken |
@@ -445,8 +445,8 @@ coordinates), the selected line, a tint, a camera (`.rect`, `.automatic` for eve
 - Location shows once it's allowed (a `CLLocationManager` delegate); until then `.userLocation` frames
   every line, as MapKit's `.userLocation(fallback: .automatic)` does.
 - Left out until a surface needs them: a style URL parameter (it's always the bundled style) and
-  interaction on/off. The only live surface is interactive; the hero stays satellite
-  ([decision 3](#open-decisions)) and cards get snapshots.
+  interaction on/off. The only live surface is interactive; the hero, cards and Wind on the Ride get
+  snapshots ([decision 3](#open-decisions)).
 
 **3.3 Flag.** `--cycle-map` launch argument, read the way `--fixture-world` is
 (`ProcessInfo.processInfo.arguments.contains(...)`, `FixtureWorld.swift:12`; `--reset-onboarding` in
@@ -458,11 +458,11 @@ a flag; `-CycleMapCamera` opens on Routes instead, for screenshots.
 
 | Surface | Today (main) | Change |
 |---|---|---|
-| Routes tab map | `RoutesMap` in `app/Packages/Features/Sources/RoutesUI/RoutesMap.swift:31`: `MapReader` at :47, `Map(position:)` at :48, `.mapStyle(look.style)` at :80, tap at :81 with `proxy.convert` at :91; `MapLook` enum at :7 (satellite/hybrid/standard); `RouteCallout` :116, `MapControls` :157. Used at `RoutesView.swift:106` | Add a `cycle` `MapLook` behind the flag, then make it the default. The interactive surface where the cycle map matters most. **Done**: Cycle is first in the menu and the look at launch on iOS (`MapLook.offered`, `.initial`); behind the flag until WS4b |
+| Routes tab map | `RoutesMap` in `app/Packages/Features/Sources/RoutesUI/RoutesMap.swift:31`: `MapReader` at :47, `Map(position:)` at :48, `.mapStyle(look.style)` at :80, tap at :81 with `proxy.convert` at :91; `MapLook` enum at :7 (satellite/hybrid/standard); `RouteCallout` :116, `MapControls` :157. Used at `RoutesView.swift:106` | Add a `cycle` `MapLook` behind the flag, then make it the default. The interactive surface where the cycle map matters most. **Done**: Cycle is first in the menu and the look at launch on iOS (`MapLook.offered`, `.initial`); behind the flag until WS4b. Since 31 October 2026 it's the only look on iOS, so there's no style menu |
 | Shortlist cards | `RouteMap(…, style: .card)` at `RoutesUI/ShortlistCard.swift:75` | Static image: `MLNMapSnapshotter`, cached per route + size + scale. **Done** |
 | Thumbnails | `RouteMap(…, style: .thumbnail)` at `RoutesUI/RouteRows.swift:202`, `RideUI/TrackRideSheet.swift:165`, `RideUI/RidesView.swift:382` | Same snapshots. Many per screen: never live map views in lists. **Done** |
-| Ride hero | `RouteMap(…, style: .hero, tint:)` at `SharedUI/RideHero.swift:40`; `RouteMap.swift`: `Map(initialPosition: .rect(framingRect), interactionModes: [])` at :56, `.mapStyle(.imagery)` at :75, `RouteOutline` shape at :93 | [Decision 3](#open-decisions): satellite or cycle map. If cycle map, a non-interactive live view or a snapshot; keep the zoom transition source |
-| Wind on the Ride | `WindRouteMap` at `SharedUI/WindRouteMap.swift:45`, `.mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))` at :60; used at `RideUI/RideBreakdownCards.swift:79` | Keep MapKit, or a muted variant of the cycle style (fewer layers, no routes) so the wind colours stay readable |
+| Ride hero | `RouteMap(…, style: .hero, tint:)` at `SharedUI/RideHero.swift:40`; `RouteMap.swift`: `Map(initialPosition: .rect(framingRect), interactionModes: [])` at :56, `.mapStyle(.imagery)` at :75, `RouteOutline` shape at :93 | [Decision 3](#open-decisions): satellite or cycle map. If cycle map, a non-interactive live view or a snapshot; keep the zoom transition source. **Done**, 31 October 2026: a snapshot (`CycleMapSnapshot.Look.hero`) with hillshade and contours, "© OpenStreetMap Protomaps" in the band under the title block |
+| Wind on the Ride | `WindRouteMap` at `SharedUI/WindRouteMap.swift:45`, `.mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))` at :60; used at `RideUI/RideBreakdownCards.swift:79` | Keep MapKit, or a muted variant of the cycle style (fewer layers, no routes) so the wind colours stay readable. **Done**, 31 October 2026: a `.muted` snapshot (no cycling overlay, labels or terrain), with the route, markers and titles drawn over it in SwiftUI so a new forecast needs no new image |
 
 Other `import MapKit` files: `RoutesView.swift` (camera types), `LiveETAProvider.swift` (directions,
 stays), `RouteSnapshotService.swift` (MapKit snapshots, only used by tests; replace or leave).
@@ -496,13 +496,15 @@ current hero layout is probably nicer. Snapshots need attribution too where they
 leading corner, inside the safe area, so 8pt clear of the panel plus its own 4pt, fading it once the map
 is moved or after 5 seconds; Preferences → Maps has the full credits with links. A
 shortlist card's snapshot carries the same names (`CycleMapAttribution(.card)`) as plain text, since
-the card is a button, 10pt under its stats; thumbnails are too small for it.
+the card is a button, 10pt under its stats; the hero has it in the band under its title block, and
+Wind on the Ride has "© OpenStreetMap" in its bottom leading corner; thumbnails are too small for it.
 
 **3.6 macOS.** **Done**, 19 October 2026, with option 1 [below](#macos): the Mac stays on MapKit.
 `CycleMap` and `CycleMapSnapshot` compile for iOS only and MapLibre is linked for iOS only, so on the Mac
 the Routes map's style menu offers Satellite (selected at launch), Hybrid and Standard with no Cycle
-look, shortlist cards are satellite `Map`s with Apple's attribution, and thumbnails are the route's
-outline on the land fill. The macOS build is checked. The style bundle still ships
+look, the hero and shortlist cards are satellite `Map`s with Apple's attribution, thumbnails are the
+route's outline on the land fill, and Wind on the Ride is the muted standard map. A `WKWebView` with
+MapLibre GL JS (option 2) follows to bring the cycle map to the Mac. The macOS build is checked. The style bundle still ships
 (2.9 MB of glyphs, unused): SwiftPM resources can't be per-platform.
 
 **3.7 Fixture world.** `RideOnUITests` never touch the network. Options: a tiny bundled PMTiles
@@ -512,13 +514,14 @@ screenshot-diff in XCUITest.
 **Done** with the second: in the fixture world `CycleMap` keeps only the style's background layer and
 drops its sources, unless `-CycleMapTiles` names a tile host (`capture/app-sim.sh` passes
 `https://maps.ride-on.cc`). `testRoutesCycleMapShowsWithItsAttribution` checks the map and both
-attribution links, and that Satellite swaps it for MapKit.
+attribution links, and that there's no style menu (Cycle is the only look on iOS).
 
 Done when every surface above uses the cycle map on iOS behind the flag, tests are green
 (`xcodebuild … -destination 'platform=iOS Simulator,name=iPhone 17' test`), and the flag is removed.
 **Done**, 19 October 2026 (WS4b): the Routes map, shortlist cards and thumbnails draw the cycle map on
 iOS with no flag, the hero and Wind on the Ride stay on MapKit ([decision 3](#open-decisions)), and the
-suite passes on the iPhone 17 Simulator.
+suite passes on the iPhone 17 Simulator. 31 October 2026: the hero and Wind on the Ride moved over too,
+and the Routes map lost its MapKit looks, so iOS shows no Apple Maps.
 
 ### WS4: Spec and docs (1–2 days)
 
@@ -628,7 +631,7 @@ dark mode, §6 `CycleMap`, `RideHero`, `WindRouteMap`).
 |---|---|---|---|
 | 1 | Ask Richard Fairhurst (cycle.travel) before shipping a look this close? | **Open.** Recommended: yes, a short email explaining Ride On links to cycle.travel. Blocks release, not development | — |
 | 2 | macOS: MapKit fallback, WKWebView + GL JS, or Catalyst/source build | Default: MapKit on macOS behind `CycleMap` for the first release; WKWebView + GL JS if Dan wants parity. Built in WS3.6 | MapKit on macOS |
-| 3 | Ride hero: satellite, or the cycle map | Default: stays satellite. Revisit once the Routes map has shipped | Satellite |
+| 3 | Ride hero: satellite, or the cycle map | **Decided** (Dan, 31 October 2026): the cycle map, with Wind on the Ride, so iOS shows no Apple Maps | Cycle map |
 | 4 | Coverage: GB only, or Europe (EuroVelo, Avenue Verte into France) | Default: Great Britain. Basemap bbox −8.7, 49.8 → 1.9, 60.9 (3.0 GB); overlay from Geofabrik's GB extract | GB |
 | 5 | Small labels: Montserrat, or Open Sans like cycle.travel | **Decided** (Dan): Montserrat throughout | Montserrat |
 | 6 | Dark mode: a dark variant, or the map stays light | Default: stays light in Dark Mode; a dark variant later. Checked in [2.7](#ws2-style-for-maplibre-native-1-week): status bar and map controls held light; the system tab bar keeps white labels over the light map (1.4:1), which only a dark variant fixes cleanly | Light only |

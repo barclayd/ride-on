@@ -27,7 +27,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
-| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The Routes map's default look on iOS, with snapshots on cards and thumbnails, cycle lanes, hillshade and contours; the Mac stays on MapKit. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
+| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The only map on iOS: the Routes map, and snapshots on the Rides hero, cards, thumbnails and Wind on the Ride, with cycle lanes, hillshade and contours; the Mac stays on MapKit until a `WKWebView` with MapLibre GL JS replaces it. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
 
 Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
@@ -72,8 +72,9 @@ priority, and preserve the boolean on unrelated preference edits.
 Top to bottom:
 
 1. **Hero** (`RideHero`, at least 480pt, taller when large text needs it; edge to edge under the
-   status bar). A non-interactive satellite `Map` of the best pick with the route in accent on a
-   white casing and a start marker; an eased black scrim (at least 340pt, 0 → 80% with no
+   status bar). A cycle-map snapshot of the best pick with its hills shaded (a non-interactive
+   satellite `Map` on the Mac), the route in accent on a white casing and a start marker,
+   "© OpenStreetMap  Protomaps" in the band under the title block; an eased black scrim (at least 340pt, 0 → 80% with no
    visible top edge) sized to the title block. The hero follows canvas board
    `HeroD.dc.html` ("3b"), which supersedes the hero in the screenshots above.
    - "★ Best pick" pill (a small `star.fill`, `.caption2` bold at `.small` scale, 4pt before the
@@ -250,7 +251,8 @@ matched by `routeId@departure`, not by reference. The limits come from `RiderSet
    "Sun and cloud", "Cloudy", "Overcast", "Fog". No card when nothing is forecast, or when the
    sky is mostly showers or night (the forecast grid already says so).
 6. **"Wind on the Ride"** card, the extension's wind panel as a block:
-   - `WindRouteMap`: the loop in tailwind green, crosswind orange and headwind red, Start marker.
+   - `WindRouteMap`: the loop in tailwind green, crosswind orange and headwind red, Start marker,
+     drawn over a muted cycle-map snapshot (no cycling overlay; the muted standard map on the Mac).
      Only when the API placed the wind stretches (`windStretches`); ride hours alone don't place
      the wind finely enough to colour the road.
    - "Wind from the south-west" (`.headline`), "Then from the west." under it, a `WindCompass`
@@ -552,8 +554,8 @@ floating over it, 8pt from the screen edges and 14pt above the tab bar. No navig
 1. **Map** (`RoutesMap`): the other shortlisted routes in white, the selected one in the accent
    with a white casing and a start marker, and a callout over its northernmost point ("Hilly
    Loop 51 km"; from History, the ride's date: "Hilly Loop 29 Sep"). Tapping near a line selects
-   it. Top trailing: the Map Style menu (Cycle on iOS, Satellite, Hybrid, Standard) and My Location,
-   in regular glass held light over the cycle map and clear glass over the others.
+   it. Top trailing: My Location, in regular glass held light over the cycle map; on the Mac
+   the Map Style menu (Satellite, Hybrid, Standard) above it, in clear glass.
 2. **Panel** (`FloatingPanel`): medium detent 56% of the height, large up to the safe-area top,
    and collapsed to just the grabber and header, leaving the map. Drag the header (1:1,
    rubber-banded, momentum picks the detent), tap the grabber (collapsed and large go to medium,
@@ -612,17 +614,18 @@ Build:
 - The panel can't be grabbed mid-settle; a new drag starts from the detent.
 - The map uses flat `.imagery`/`.hybrid`/`.standard`; `elevation: .realistic` dropped the
   annotations and blurred the lines.
-- On iOS the map opens in its Cycle look, first in the Map Style menu: `CycleMap`, MapLibre Native
+- On iOS the map is always the cycle map, so there's no Map Style menu: `CycleMap`, MapLibre Native
   drawing the cycle map with the shortlist, the selected route's start marker and callout,
   tap-to-select and "© OpenStreetMap", which fades once the map is moved or after 5 seconds; the
   full credits (OpenStreetMap, Protomaps, Mapterhorn and the OS statement for the terrain) are in
-  Preferences → Maps ([WS3](../maps/README.md#ws3-app-integration-115-weeks)). Picking Satellite,
-  Hybrid or Standard goes back to MapKit; the Mac has only those three and opens on Satellite
-  ([decision 2](../maps/README.md#open-decisions)). On iOS shortlist cards and every route thumbnail
+  Preferences → Maps ([WS3](../maps/README.md#ws3-app-integration-115-weeks)). The Mac keeps
+  MapKit's Satellite, Hybrid and Standard and opens on Satellite
+  ([decision 2](../maps/README.md#open-decisions)) until it gets the cycle map in a `WKWebView`. On iOS shortlist cards and every route thumbnail
   (Routes rows, the Rides list, Track a Ride) are cycle-map snapshots, without labels or terrain; the
   card carries "© OpenStreetMap  Protomaps" under its stats, so its bottom padding is 4pt rather than
-  the 30pt that clears MapKit's logo on the Mac. The Rides hero stays satellite
-  ([decision 3](../maps/README.md#open-decisions)). Over the cycle map the status bar's glyphs are dark
+  the 30pt that clears MapKit's logo on the Mac. The Rides hero is a snapshot too, with hillshade and
+  contours ([decision 3](../maps/README.md#open-decisions)), and Wind on the Ride a muted one with the
+  wind's colours drawn over it in SwiftUI. Over the cycle map the status bar's glyphs are dark
   and the map controls light regular glass, in Dark Mode too, with no dimming under the status bar; in
   Dark Mode the tab bar's labels are still white over the light map
   ([WS2.7](../maps/README.md#ws2-style-for-maplibre-native-1-week)).
