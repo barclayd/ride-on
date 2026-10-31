@@ -175,7 +175,12 @@ en-GB ("Wednesday 14 October", "Wed 14 – Sun 18").
 - **Routes** is a full-screen map with the panel floating over it: 34pt radius, medium detent
   56% of the height above the tab bar, large up to the safe-area top. Selected rows use a 22pt
   radius, row thumbnails 11pt (`CornerRadius.floatingPanel` / `.selectedRow` /
-  `.panelThumbnail`). On iPad and Mac the panel is a 380pt column down the leading edge.
+  `.panelThumbnail`). On iPad and Mac the panel is a 380pt column down the leading edge. On the
+  iPhone Duo: closed, the floating panel, with "+" at the foot of the rail; tent, a 310pt column
+  docked leading; open portrait, the map on the top half and the panel docked below it, "+" in
+  the navigation bar; open landscape, the library and history leading (`PaneBar` with "+",
+  search under it) and the map trailing with the selected route's `RouteCard`. Full Screen in
+  the rail gives the map the whole width and Show Library brings it back.
 - **Ride detail** is the route's map under the same panel, with no tab bar: medium 58% of the
   height, large 8pt under the navigation bar, collapsed just its header. The map frames the route
   in what's left above medium (above the header when collapsed, under the wind key when it
@@ -331,7 +336,16 @@ before adding a custom component in code.
     `Button("Track a Route", systemImage: "plus")` on Rides), 20pt in on the leading side and 16pt
     on the trailing. Pinned at the top of the pane in `.safeAreaBar(edge: .top)`, so the pane
     scrolls under it with the system edge effect. Shown only while the pane is beside another;
-    closed, the same controls are back in the toolbar. Routes reuses it.
+    closed, the same controls are back in the toolbar. Routes reuses it (with the "+" menu as a
+    circle too).
+20. **`RouteCard`** — the selected route over the Routes map on the open iPhone Duo, where the
+    panel's selection has no room to show beside the library: up to 400pt wide, 8pt in from the
+    map pane's bottom leading corner, 30pt radius, regular glass (it's the map's chrome, like the
+    panel, §2). A kicker (the shortlist status in the accent, with a star for the best pick;
+    "Library"; or "Ridden 12 Oct"), the name in `.title2` bold, "42 km · 180 m · 46% unpaved",
+    the `ScoreGauge` at 56pt when the route is ranked, `ConditionChip`s (Shortlisted, "About
+    2h 40m", "Last ridden 12 Oct" or "Never ridden") and, when Rides has a pick for it, a
+    full-width "See Wednesday's Ride" that pushes Ride detail.
 
 Kept until onboarding is redesigned: **`DialScreen`** (with `AmbianceStyle`).
 
@@ -388,6 +402,6 @@ glass transitions use `.materialize`.
 | **Ideal Temperature** (push) | Big range readout, `TemperatureRange`, one-line explanation → "How Your Routes Fit" range bars per route → "Deal-Breakers" steppers. Saves automatically; no Done. |
 | **Comfortable Wind** (push) | `WindEnvelope` → "Limits" sliders (headwind, crosswind, gusts) and crosswind sensitivity → "How Your Routes Fit". Saves automatically. |
 | **Widgets & Lock Screen** | One adaptive widget, no configuration. Nothing tracked: the departure board (A) — the best ride's map, time and score, the days with ‹ › paging, a Track link. A tracked ride (D), until two hours after it ends: the score (`ScoreArc`) and conditions lead, the ride time where "leave in" was, the ridden part of the loop in gold. Every Home Screen size (and StandBy, and XL on iPad and Mac), Lock Screen inline/circular/rectangular, a Live Activity and Dynamic Island from three hours before the start to the finish, and a Control Centre control. Tap opens the ride on Rides; Track opens its Track sheet. Layouts in docs/redesign/README.md §8. |
-| **Routes** (tab) | Full-screen `RoutesMap`, the cycle map on iOS and satellite on the Mac (shortlist in white, selected route in the accent, callout, start marker; `MapControls` top trailing) under the `FloatingPanel`: search capsule ("Search Routes") and "+" menu (Import GPX File, From cycle.travel, Connect Strava) pinned → "Shortlist" with "4 of 12" → `ShortlistCard` carousel → segmented Library N / History N → Library rows, or History rows grouped by month ("October 1 ride") ending with "Weather is the forecast from when you planned each ride, not what you rode in." Selecting a card or row shows it on the map. Focusing search expands the panel. No navigation bar; the tab bar never minimises. |
+| **Routes** (tab) | Full-screen `RoutesMap`, the cycle map on iOS and satellite on the Mac (shortlist in white, selected route in the accent, callout, start marker; `MapControls` top trailing) under the `FloatingPanel`: search capsule ("Search Routes") and "+" menu (Import GPX File, From cycle.travel, Connect Strava) pinned → "Shortlist" with "4 of 12" → `ShortlistCard` carousel → segmented Library N / History N → Library rows, or History rows grouped by month ("October 1 ride") ending with "Weather is the forecast from when you planned each ride, not what you rode in." Selecting a card or row shows it on the map. Focusing search expands the panel. No navigation bar, except on the iPhone Duo: on the rail ("+" at its foot) and in open portrait ("+" trailing); open, in landscape, the library is the leading pane under a `PaneBar` and the map the trailing one with a `RouteCard`, the rail holding Full Screen, Add to Shortlist and "…" (Open in cycle.travel, Delete Route). The tab bar never minimises. |
 | **Onboarding** | Not yet redesigned: one control per screen (`DialScreen`), permissions primed one sentence before each system prompt, location on first Rides entry, Health before ride matching. |
 | **Weather attribution** | Apple Weather mark + "Other data sources" link (https://developer.apple.com/weatherkit/data-source-attribution/) wherever forecast data shows, via `WeatherService.attribution`. |
