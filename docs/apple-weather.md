@@ -115,7 +115,10 @@ file and pipe its contents to Wrangler, never put the key in command arguments:
 bunx wrangler secret put APPLE_WEATHER_CONFIG_JSON < /path/to/private/weatherkit-config.json
 ```
 
-For local development, set the same secret in ignored `.dev.vars`. JWTs are signed
+For local development, set the same secret in ignored `.dev.vars`, on one line in
+single quotes: double quotes turn the PEM's `\n` escapes into real newlines, which
+breaks the JSON. Local riders default to Apple Weather, so this keeps local
+scoring off the Met Office's daily quota. JWTs are signed
 server-side using ES256, valid for 15 minutes, and shared across the locations of
 one forecast request. Tokens travel only in the Authorization header to the fixed
 Apple endpoint. Redirects are rejected and upstream errors are sanitized.

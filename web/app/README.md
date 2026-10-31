@@ -22,6 +22,10 @@ bun run dev:session   # writes worker/.local-session.json
 bun run dev           # :8787
 ```
 
+Scores come from Apple Weather, so `worker/.dev.vars` needs `APPLE_WEATHER_CONFIG_JSON` (see
+`docs/apple-weather.md`). Keep the local rider on Apple Weather: the Met Office key has a small
+daily quota.
+
 Then the app:
 
 ```sh
