@@ -25,6 +25,9 @@ public struct PaneBar<Actions: View>: View {
             actions
                 .labelStyle(.iconOnly)
                 .buttonStyle(PaneBarButtonStyle())
+                // A menu ("+" on Routes) takes the same circle.
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
         }
         .padding(.top, 10)
         .padding(.leading, 20)
