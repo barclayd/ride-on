@@ -2,6 +2,7 @@ import SwiftUI
 import Models
 import Services
 import SharedUI
+import DesignSystem
 
 /// The Preferences tab (docs/redesign/README.md §5): plain settings rows for the plumbing, a
 /// visual screen for taste. Every change saves itself and re-ranks Rides.
@@ -12,10 +13,98 @@ public struct PreferencesView: View {
     @Environment(\.speedSystem) private var speedSystem
     @Environment(\.locale) private var locale
     @State private var isHealthPrimingPresented = false
+    /// The screen someone opened: beside Preferences when they're side by side, pushed otherwise.
+    @State private var opened: PreferencesPage?
+    /// `opened` while Preferences has the screen to itself.
+    @State private var pushed: PreferencesPage?
+    @Environment(\.paneShape) private var paneShape
 
     public init() {}
 
+    /// Preferences and a screen it opens side by side: the open phone in landscape.
+    private var isSplit: Bool { paneShape == .wide }
+
+    /// The screen beside Preferences: the one opened, or Ideal Temperature until one is.
+    private var shown: PreferencesPage? {
+        if let opened, isAvailable(opened) { return opened }
+        if store.settings != nil { return .temperature }
+        return store.phase == .loading ? nil : .about
+    }
+
+    /// The screen beside Preferences, marked where Preferences lists it.
+    private var selected: PreferencesPage? { isSplit ? shown : nil }
+
     public var body: some View {
+        layout
+            .navigationTitle("Preferences")
+            .navigationSubtitle("Changes re-rank your rides straight away.")
+            // Side by side, each pane has its own title, and the rail keeps no title.
+            .toolbar(removing: isSplit ? .title : nil)
+            .navigationDestination(item: $pushed) { page in
+                content(page)
+            }
+            // Opening or closing the phone moves the open screen between the pane and the stack,
+            // without a push or a pop: it was already on screen.
+            .onChange(of: isSplit) { _, split in
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    pushed = split ? nil : opened
+                }
+            }
+            // Back from the pushed screen closes it, so opening the phone shows Ideal Temperature.
+            .onChange(of: pushed) { _, page in
+                if page == nil && !isSplit { opened = nil }
+            }
+            .task { await store.load() }
+            .sheet(isPresented: $isHealthPrimingPresented) {
+                PermissionPrimingSheet(
+                    symbol: "heart.fill",
+                    title: "Match Your Rides",
+                    message: "Ride On reads your cycling workouts from Health to automatically log rides against your routes.",
+                    onAllow: {
+                        local.hasPrimedHealthPermission = true
+                        local.isRideMatchingEnabled = true
+                        #if os(iOS)
+                        Task { try? await HealthAuthorization.requestCyclingAuthorization() }
+                        #endif
+                    },
+                    onNotNow: { local.hasPrimedHealthPermission = true }
+                )
+            }
+    }
+
+    /// One structure in every shape, so the list keeps its scroll as the phone opens and closes.
+    /// Open in landscape, Preferences takes the leading half, up to the fold, and the screen it
+    /// opened the trailing half.
+    private var layout: some View {
+        GeometryReader { proxy in
+            let insets = proxy.safeAreaInsets
+            let full = proxy.size.width + insets.leading + insets.trailing
+            let listWidth = isSplit ? (full / 2).rounded(.down) - insets.leading : proxy.size.width
+            HStack(spacing: 0) {
+                list
+                    .safeAreaBar(edge: .top) {
+                        if isSplit { PaneBar("Preferences") {} }
+                    }
+                    .frame(width: listWidth)
+                if isSplit, let shown {
+                    content(shown)
+                        .id(shown)
+                        .safeAreaBar(edge: .top) { PaneBar(shown.title) {} }
+                        .frame(maxWidth: .infinity)
+                        .overlay(alignment: .leading) {
+                            Rectangle()
+                                .fill(.separator)
+                                .frame(width: 0.5)
+                                .ignoresSafeArea()
+                        }
+                }
+            }
+        }
+    }
+
+    private var list: some View {
         Form {
             if store.settings != nil {
                 goodRide
@@ -29,24 +118,44 @@ public struct PreferencesView: View {
             account
         }
         .formStyle(.grouped)
-        .navigationTitle("Preferences")
-        .navigationSubtitle("Changes re-rank your rides straight away.")
-        .task { await store.load() }
-        .sheet(isPresented: $isHealthPrimingPresented) {
-            PermissionPrimingSheet(
-                symbol: "heart.fill",
-                title: "Match Your Rides",
-                message: "Ride On reads your cycling workouts from Health to automatically log rides against your routes.",
-                onAllow: {
-                    local.hasPrimedHealthPermission = true
-                    local.isRideMatchingEnabled = true
-                    #if os(iOS)
-                    Task { try? await HealthAuthorization.requestCyclingAuthorization() }
-                    #endif
-                },
-                onNotNow: { local.hasPrimedHealthPermission = true }
-            )
+    }
+
+    /// Opens a screen: beside Preferences when there's room, pushed otherwise.
+    private func open(_ page: PreferencesPage) {
+        opened = page
+        if !isSplit { pushed = page }
+    }
+
+    private func isAvailable(_ page: PreferencesPage) -> Bool {
+        switch page {
+        case .temperature, .wind, .distance: store.settings != nil
+        case .account: store.phase == .loaded
+        case .strava, .about, .maps: true
         }
+    }
+
+    @ViewBuilder private func content(_ page: PreferencesPage) -> some View {
+        switch page {
+        case .temperature: IdealTemperatureView()
+        case .wind: ComfortableWindView()
+        case .distance: DistanceView()
+        case .strava: StravaConnectionView(live: !FixtureWorld.isEnabled)
+        case .account: AccountView()
+        case .about: AboutView()
+        case .maps:
+            #if os(iOS)
+            MapCreditsView()
+            #else
+            EmptyView()
+            #endif
+        }
+    }
+
+    /// A row that opens `page`, with its label. Only a page's own row shows it's open in the
+    /// split, not the deal-breakers that open it too.
+    private func link(_ page: PreferencesPage, marksOpen: Bool = true,
+                      @ViewBuilder label: () -> some View) -> some View {
+        PageLink(page: page, selected: marksOpen ? selected : nil, open: open, label: label(), destination: content(page))
     }
 
     private var settings: Binding<RiderSettings> { store.binding }
@@ -56,7 +165,7 @@ public struct PreferencesView: View {
 
     private var goodRide: some View {
         Section {
-            NavigationLink { IdealTemperatureView() } label: {
+            link(.temperature) {
                 LabeledContent {
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(UnitFormat.temperatureRange(c: preferences.temperature.comfortMinC...preferences.temperature.comfortMaxC, locale: locale))
@@ -67,7 +176,7 @@ public struct PreferencesView: View {
                     Row("Ideal Temperature", "thermometer.medium", .orange)
                 }
             }
-            NavigationLink { ComfortableWindView() } label: {
+            link(.wind) {
                 LabeledContent {
                     Text("Up to \(UnitFormat.speed(kph: preferences.wind.comfortableHeadwindKph, system: speedSystem, locale: locale))")
                 } label: {
@@ -97,7 +206,7 @@ public struct PreferencesView: View {
             } label: {
                 Row("Climbing", "mountain.2.fill", .green)
             }
-            NavigationLink { DistanceView() } label: {
+            link(.distance) {
                 LabeledContent {
                     Text(preferences.distance.map { distanceRange($0.minKm...$0.maxKm) } ?? "Any")
                 } label: {
@@ -122,7 +231,7 @@ public struct PreferencesView: View {
 
     private var dealBreakers: some View {
         Section {
-            NavigationLink { IdealTemperatureView() } label: {
+            link(.temperature, marksOpen: false) {
                 LabeledContent {
                     Text(preferences.minimumStandards.minimumTemperature.map { floor in
                         floor.isMonthly ? "By Month" : floor.valueC.map { UnitFormat.degrees(c: $0, locale: locale) } ?? "None"
@@ -131,14 +240,14 @@ public struct PreferencesView: View {
                     Row("Never Colder Than", "snowflake", .indigo)
                 }
             }
-            NavigationLink { IdealTemperatureView() } label: {
+            link(.temperature, marksOpen: false) {
                 LabeledContent {
                     Text(preferences.minimumStandards.maximumTemperatureC.map { UnitFormat.degrees(c: $0, locale: locale) } ?? "None")
                 } label: {
                     Row("Never Hotter Than", "thermometer.high", .red)
                 }
             }
-            NavigationLink { ComfortableWindView() } label: {
+            link(.wind, marksOpen: false) {
                 LabeledContent {
                     Text(preferences.minimumStandards.maximumGustKph.map { UnitFormat.speed(kph: $0, system: speedSystem, locale: locale) } ?? "None")
                 } label: {
@@ -203,9 +312,7 @@ public struct PreferencesView: View {
 
     private var connections: some View {
         Section("Connections") {
-            NavigationLink {
-                StravaConnectionView(live: !FixtureWorld.isEnabled)
-            } label: {
+            link(.strava) {
                 Row("Strava", "figure.outdoor.cycle", .orange, subtitle: "Connection and completed rides")
             }
             #if os(iOS)
@@ -219,7 +326,7 @@ public struct PreferencesView: View {
     private var account: some View {
         Section {
             if store.phase == .loaded {
-                NavigationLink { AccountView() } label: {
+                link(.account) {
                     LabeledContent {
                         Text("Signed In")
                     } label: {
@@ -232,11 +339,11 @@ public struct PreferencesView: View {
                     }
                 }
             }
-            NavigationLink { AboutView() } label: {
+            link(.about) {
                 Row("About Ride On", "info.circle", .gray)
             }
             #if os(iOS)
-            NavigationLink { MapCreditsView() } label: {
+            link(.maps) {
                 Row("Maps", "map.fill", .green, subtitle: "Map data and credits")
             }
             #endif
@@ -289,6 +396,55 @@ public struct PreferencesView: View {
                 }
             }
         )
+    }
+}
+
+/// A screen Preferences opens: pushed over it, or beside it on the open iPhone Duo.
+enum PreferencesPage: Hashable {
+    case temperature, wind, distance, strava, account, about, maps
+
+    var title: String {
+        switch self {
+        case .temperature: "Ideal Temperature"
+        case .wind: "Comfortable Wind"
+        case .distance: "Distance"
+        case .strava: "Strava"
+        case .account: "Account"
+        case .about: "About"
+        case .maps: "Maps"
+        }
+    }
+}
+
+/// A Preferences row that opens a screen. On iPhone it's a button, so the screen can move between
+/// the stack and the pane beside Preferences as the phone opens and closes; the one beside is
+/// marked. The Mac keeps a plain link.
+private struct PageLink<Label: View, Destination: View>: View {
+    var page: PreferencesPage
+    var selected: PreferencesPage?
+    var open: (PreferencesPage) -> Void
+    var label: Label
+    var destination: Destination
+
+    var body: some View {
+        #if os(macOS)
+        NavigationLink { destination } label: { label }
+        #else
+        let isSelected = selected == page
+        Button { open(page) } label: {
+            HStack(spacing: 8) {
+                label
+                Image(systemName: "chevron.forward")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(.primary)
+            .contentShape(.rect)
+        }
+        .listRowBackground(isSelected ? Color.accentColor.opacity(0.15) : nil)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        #endif
     }
 }
 
@@ -516,6 +672,14 @@ struct AccountView: View {
 
 #Preview {
     NavigationStack { PreferencesView() }
+        .environment(RiderSettingsStore(live: false))
+        .environment(PreferencesStore())
+}
+
+// The open iPhone Duo beside the rail (PaneShape), for the canvas: the simulator can't fold.
+#Preview("Open, landscape", traits: .fixedLayout(width: 879, height: 669)) {
+    NavigationStack { PreferencesView() }
+        .measuresPaneShape()
         .environment(RiderSettingsStore(live: false))
         .environment(PreferencesStore())
 }
