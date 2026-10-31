@@ -448,7 +448,8 @@ public struct RidesView: View {
     }
 }
 
-private extension RideBoard.Sky {
+extension RideBoard.Sky {
+    /// The sky chip's symbol colour (Rides cards, ride detail's header).
     var tint: Color {
         switch self {
         case .sunny, .sunnySpells: .yellow

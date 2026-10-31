@@ -1,34 +1,56 @@
 import SwiftUI
 import DesignSystem
 
-/// The heights the Routes panel rests at on iPhone. Collapsed is just the header, so the map has
+/// The heights a floating panel rests at on iPhone. Collapsed is just the header, so the map has
 /// the screen.
-enum PanelDetent: Hashable {
+public enum PanelDetent: Hashable, Sendable {
     case collapsed, medium, large
 }
 
-/// The Routes panel: regular glass floating over the map, a pinned header (grabber, search, add)
-/// and everything else scrolling beneath it. On iPhone it rests collapsed or at `heights`' two ends
-/// and tracks a drag on its header 1:1, settling on the detent the drag was heading for; with
-/// `heights` nil (iPad, Mac) it fills the height it's given and has no grabber.
-struct FloatingPanel<Header: View, Content: View>: View {
+/// The panel over a full-screen map (Routes, ride detail): regular glass, a pinned header (the
+/// grabber and whatever the screen puts there) and everything else scrolling beneath it. On iPhone
+/// it rests collapsed or at `heights`' two ends and tracks a drag on its header 1:1, settling on
+/// the detent the drag was heading for; with `heights` nil (iPad, Mac) it fills the height it's
+/// given and has no grabber. DESIGN-SYSTEM.md §2.
+public struct FloatingPanel<Header: View, Content: View>: View {
+    /// What VoiceOver calls the panel ("Routes", the route's name).
+    var label: String
     @Binding var detent: PanelDetent
     /// Medium...large, or nil for a fixed panel.
     var heights: ClosedRange<CGFloat>?
     /// Called when the panel settles below large, so search can give up focus.
     var collapsed: () -> Void
-    @ViewBuilder var header: Header
-    @ViewBuilder var content: Content
+    var header: Header
+    var content: Content
+
+    public init(
+        _ label: String,
+        detent: Binding<PanelDetent>,
+        heights: ClosedRange<CGFloat>?,
+        collapsed: @escaping () -> Void = {},
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.label = label
+        _detent = detent
+        self.heights = heights
+        self.collapsed = collapsed
+        self.header = header()
+        self.content = content()
+    }
 
     @State private var drag: CGFloat = 0
     @State private var pull: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
+    public var body: some View {
         ScrollView {
             content
                 .padding(.bottom, 14)
+                // Gone as the panel closes on its header, so scrolled content never shows through
+                // the header's scroll edge.
+                .opacity(heights.map { min(max((height(in: $0) - headerHeight) / 44, 0), 1) } ?? 1)
                 .accessibilityHidden(detent == .collapsed && heights != nil)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -69,7 +91,7 @@ struct FloatingPanel<Header: View, Content: View>: View {
         .clipShape(.rect(cornerRadius: CornerRadius.floatingPanel))
         .accessibleGlass(.regular, in: .rect(cornerRadius: CornerRadius.floatingPanel), fallback: .groupedBackground)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Routes")
+        .accessibilityLabel(label)
     }
 
     private var grabber: some View {
@@ -144,7 +166,7 @@ struct FloatingPanel<Header: View, Content: View>: View {
     }
 }
 
-extension View {
+public extension View {
     /// Glass, or with Reduce Transparency an opaque `fallback`, and with Increase Contrast the
     /// fallback with a border (DESIGN-SYSTEM.md §2, §8).
     func accessibleGlass(_ glass: Glass, in shape: some InsettableShape, fallback: Color) -> some View {

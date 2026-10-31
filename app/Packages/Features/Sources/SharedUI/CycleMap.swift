@@ -8,8 +8,10 @@ import Services
 
 /// A map in cycle.travel's look (DESIGN-SYSTEM.md §6 #17): MapLibre Native drawing Ride On's own
 /// tiles with the style `maps/style` builds into `CycleMap/`. Routes are map layers under the labels:
-/// the others in white, the selected one in the tint on a white casing with its start marked. Like
-/// `Map`, it fills the screen and frames inside the safe area. "© OpenStreetMap" sits in the safe
+/// the others in white, the selected one in the tint on a white casing with its start marked, or in
+/// `stretches`' colours (the wind on ride detail), with an optional `pin` on it. Like `Map`, it fills
+/// the screen and frames inside the safe area, framing again when the safe area changes unless the
+/// user has moved the map. "© OpenStreetMap" sits in the safe
 /// area's bottom leading corner until the map is moved or for 5 seconds, then fades; the full credits
 /// are in Preferences → Maps (§2).
 ///
@@ -23,6 +25,29 @@ public struct CycleMap: View {
         public init(id: UUID, coordinates: [Coordinate]) {
             self.id = id
             self.coordinates = coordinates
+        }
+    }
+
+    /// Part of the selected line drawn in its own colour, over the tint.
+    public struct Stretch: Equatable {
+        public var coordinates: [Coordinate]
+        public var color: Color
+
+        public init(coordinates: [Coordinate], color: Color) {
+            self.coordinates = coordinates
+            self.color = color
+        }
+    }
+
+    /// A point on the selected line with a callout above it: where the finger is on Along the
+    /// Route's profile.
+    public struct Pin: Equatable {
+        public var coordinate: Coordinate
+        public var label: String
+
+        public init(coordinate: Coordinate, label: String) {
+            self.coordinate = coordinate
+            self.label = label
         }
     }
 
@@ -47,6 +72,8 @@ public struct CycleMap: View {
 
     var lines: [Line]
     var selected: Line?
+    var stretches: [Stretch]
+    var pin: Pin?
     var tint: Color
     var camera: Camera
     var callout: AnyView?
@@ -58,14 +85,19 @@ public struct CycleMap: View {
 
     /// - Parameters:
     ///   - lines: Drawn white; `selected` is drawn over them.
+    ///   - stretches: Drawn over `selected` in their own colours; the tint is hidden under them.
+    ///   - pin: A white dot ringed in the tint, with its label in a callout above.
     ///   - callout: Pinned above the selected line's northernmost point.
     ///   - moved: The user moved the map; the rect now in view inside the safe area.
     ///   - select: The line within 22pt of a tap, the closest if several are.
-    public init(lines: [Line], selected: Line? = nil, tint: Color = .accentColor, camera: Camera,
+    public init(lines: [Line], selected: Line? = nil, stretches: [Stretch] = [], pin: Pin? = nil,
+                tint: Color = .accentColor, camera: Camera,
                 callout: AnyView? = nil, moved: @escaping (MKMapRect) -> Void = { _ in },
                 select: @escaping (UUID) -> Void = { _ in }) {
         self.lines = lines
         self.selected = selected
+        self.stretches = stretches
+        self.pin = pin
         self.tint = tint
         self.camera = camera
         self.callout = callout
@@ -77,7 +109,9 @@ public struct CycleMap: View {
         // Read inside the safe area, so the insets reach the map as its content inset.
         GeometryReader { geometry in
             ZStack(alignment: .bottomLeading) {
-                MapView(lines: lines, selected: selected, tint: UIColor(Color(tint.resolve(in: environment))),
+                MapView(lines: lines, selected: selected,
+                        stretches: stretches.map { .init(coordinates: $0.coordinates, colour: uiColor($0.color)) },
+                        pin: pin, tint: uiColor(tint),
                         camera: camera, callout: callout, insets: geometry.safeAreaInsets,
                         moved: { uncredit(); moved($0) }, select: select)
                     .ignoresSafeArea()
@@ -92,6 +126,10 @@ public struct CycleMap: View {
         .task {
             if (try? await Task.sleep(for: .seconds(5))) != nil { uncredit() }
         }
+    }
+
+    private func uiColor(_ color: Color) -> UIColor {
+        UIColor(Color(color.resolve(in: environment)))
     }
 
     /// OpenStreetMap's guidelines let an interactive map's credit go once the map is in use or after
@@ -168,9 +206,17 @@ public struct CycleMapAttribution: View {
     }
 }
 
+/// A `CycleMap.Stretch` with its colour resolved.
+private struct ResolvedStretch: Equatable {
+    var coordinates: [Coordinate]
+    var colour: UIColor
+}
+
 private struct MapView: UIViewRepresentable {
     var lines: [CycleMap.Line]
     var selected: CycleMap.Line?
+    var stretches: [ResolvedStretch]
+    var pin: CycleMap.Pin?
     var tint: UIColor
     var camera: CycleMap.Camera
     var callout: AnyView?
@@ -213,11 +259,13 @@ private struct MapView: UIViewRepresentable {
         coordinator.moved = moved
         coordinator.select = select
         coordinator.camera = camera
-        coordinator.draw(lines: lines, selected: selected, tint: tint, in: view)
+        coordinator.draw(lines: lines, selected: selected, stretches: stretches, tint: tint, in: view)
         coordinator.show(callout, in: view)
+        coordinator.show(pin, tint: tint, in: view)
         let contentInset = UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing)
-        if view.contentInset != contentInset { view.setContentInset(contentInset, animated: false, completionHandler: nil) }
-        coordinator.frame(view)
+        let insetChanged = view.contentInset != contentInset
+        if insetChanged { view.setContentInset(contentInset, animated: false, completionHandler: nil) }
+        coordinator.frame(view, refit: insetChanged)
     }
 
     @MainActor
@@ -228,20 +276,28 @@ private struct MapView: UIViewRepresentable {
         var pin: (center: CLLocationCoordinate2D, zoom: Double)?
         private var lines: [CycleMap.Line] = []
         private var selected: CycleMap.Line?
+        private var stretches: [ResolvedStretch] = []
         private var tint = UIColor.systemGreen
         /// The camera last framed; the map only moves when `camera` differs from it.
         private var shown: CycleMap.Camera?
+        /// The user has moved the map since it last framed `camera`, so a new safe area leaves it be.
+        private var userMoved = false
         private var pinned = false
         private weak var mapView: MLNMapView?
         private let locationManager = CLLocationManager()
         private let calloutAnnotation = MLNPointAnnotation()
         private let calloutView = MLNAnnotationView(annotation: nil, reuseIdentifier: nil)
         private var calloutHost: UIHostingController<AnyView>?
+        private let pinAnnotation = MLNPointAnnotation()
+        private let pinView = MLNAnnotationView(annotation: nil, reuseIdentifier: nil)
+        private var pinHost: UIHostingController<AnyView>?
+        private var shownPin: CycleMap.Pin?
 
         private enum Layer {
             static let others = "ride-on-others", othersCasing = "ride-on-others-casing"
             static let selected = "ride-on-selected", selectedCasing = "ride-on-selected-casing"
             static let start = "ride-on-start", startDot = "ride-on-start-dot"
+            static let stretches = "ride-on-stretches-"
             static let routes: Set<String> = [others, othersCasing, selected, selectedCasing]
         }
 
@@ -253,9 +309,10 @@ private struct MapView: UIViewRepresentable {
 
         // MARK: Camera
 
-        /// Moves the camera to `camera` if it hasn't been shown yet. Waits for a laid-out view: a camera
-        /// set on a zero-size view comes out at the wrong zoom.
-        func frame(_ mapView: MLNMapView) {
+        /// Moves the camera to `camera` if it hasn't been shown yet, or again for a new safe area
+        /// (`refit`) if the user hasn't moved the map. Waits for a laid-out view: a camera set on a
+        /// zero-size view comes out at the wrong zoom.
+        func frame(_ mapView: MLNMapView, refit: Bool = false) {
             guard !mapView.bounds.isEmpty, !pinned else { return }
             // The core map's size only catches up with the view's bounds in layoutSubviews.
             mapView.layoutIfNeeded()
@@ -264,8 +321,9 @@ private struct MapView: UIViewRepresentable {
                 pinned = true
                 return
             }
-            guard camera != shown else { return }
+            guard camera != shown || (refit && !userMoved && shown != nil) else { return }
             let animated = shown != nil
+            userMoved = false
             switch camera {
             case .userLocation where !mapView.showsUserLocation:
                 // Every line until location is allowed, as MapKit's `.userLocation(fallback: .automatic)`;
@@ -310,6 +368,7 @@ private struct MapView: UIViewRepresentable {
             let rect = MKMapRect(x: southWest.x, y: northEast.y, width: northEast.x - southWest.x, height: southWest.y - northEast.y)
             // Already in view: handing it back as the camera mustn't move the map.
             shown = .rect(rect)
+            userMoved = true
             camera = .rect(rect)
             moved(rect)
         }
@@ -328,7 +387,11 @@ private struct MapView: UIViewRepresentable {
 
         // MARK: Lines
 
-        func draw(lines: [CycleMap.Line], selected: CycleMap.Line?, tint: UIColor, in mapView: MLNMapView) {
+        func draw(lines: [CycleMap.Line], selected: CycleMap.Line?, stretches: [ResolvedStretch], tint: UIColor, in mapView: MLNMapView) {
+            if stretches != self.stretches {
+                self.stretches = stretches
+                drawStretches(mapView)
+            }
             guard lines != self.lines || selected != self.selected || tint != self.tint else { return }
             (self.lines, self.selected, self.tint) = (lines, selected, tint)
             redraw(mapView)
@@ -360,6 +423,7 @@ private struct MapView: UIViewRepresentable {
             dot.circleColor = NSExpression(forConstantValue: tint)
             insert(dot)
             redraw(mapView)
+            drawStretches(mapView)
             frame(mapView)
         }
 
@@ -375,10 +439,34 @@ private struct MapView: UIViewRepresentable {
             start.shape = selected?.coordinates.first == nil ? nil : marker
             for id in [Layer.selected, Layer.startDot] {
                 switch style.layer(withIdentifier: id) {
-                case let line as MLNLineStyleLayer: line.lineColor = NSExpression(forConstantValue: tint)
+                case let line as MLNLineStyleLayer:
+                    line.lineColor = NSExpression(forConstantValue: tint)
+                    line.lineOpacity = NSExpression(forConstantValue: stretches.isEmpty ? 1 : 0)
                 case let circle as MLNCircleStyleLayer: circle.circleColor = NSExpression(forConstantValue: tint)
                 default: break
                 }
+            }
+        }
+
+        /// The stretches over the selected line, under its start: a source and layer per colour, as
+        /// there are only a handful (the wind's four effects).
+        private func drawStretches(_ mapView: MLNMapView) {
+            guard let style = mapView.style, let start = style.layer(withIdentifier: Layer.start) else { return }
+            for layer in style.layers where layer.identifier.hasPrefix(Layer.stretches) { style.removeLayer(layer) }
+            for source in style.sources where source.identifier.hasPrefix(Layer.stretches) { style.removeSource(source) }
+            var colours: [UIColor] = []
+            for stretch in stretches where !colours.contains(stretch.colour) { colours.append(stretch.colour) }
+            for (index, colour) in colours.enumerated() {
+                let shapes = stretches.filter { $0.colour == colour }.map { stretch in
+                    var coordinates = stretch.coordinates.map(CLLocationCoordinate2D.init)
+                    return MLNPolylineFeature(coordinates: &coordinates, count: UInt(coordinates.count))
+                }
+                let source = MLNShapeSource(identifier: "\(Layer.stretches)\(index)", shape: MLNShapeCollectionFeature(shapes: shapes))
+                style.addSource(source)
+                style.insertLayer(MLNLineStyleLayer(route: source.identifier, source: source, width: 5.5, colour: colour), below: start)
+            }
+            if let line = style.layer(withIdentifier: Layer.selected) as? MLNLineStyleLayer {
+                line.lineOpacity = NSExpression(forConstantValue: stretches.isEmpty ? 1 : 0)
             }
         }
 
@@ -440,8 +528,39 @@ private struct MapView: UIViewRepresentable {
             if mapView.annotations?.contains(where: { $0 === calloutAnnotation }) != true { mapView.addAnnotation(calloutAnnotation) }
         }
 
+        /// Puts the pin on its point, or takes it away.
+        func show(_ pin: CycleMap.Pin?, tint: UIColor, in mapView: MLNMapView) {
+            guard pin != shownPin else { return }
+            shownPin = pin
+            guard let pin else {
+                if mapView.annotations?.contains(where: { $0 === pinAnnotation }) == true { mapView.removeAnnotation(pinAnnotation) }
+                return
+            }
+            let content = AnyView(RoutePin(pin.label).tint(Color(uiColor: tint)))
+            if let pinHost {
+                pinHost.rootView = content
+            } else {
+                let host = UIHostingController(rootView: content)
+                host.view.backgroundColor = .clear
+                pinView.addSubview(host.view)
+                pinView.isEnabled = false
+                pinView.isUserInteractionEnabled = false
+                pinView.scalesWithViewingDistance = false
+                pinHost = host
+            }
+            let size = pinHost!.sizeThatFits(in: UIView.layoutFittingExpandedSize)
+            pinView.bounds = CGRect(origin: .zero, size: size)
+            pinHost!.view.frame = pinView.bounds
+            // The dot's centre on the point.
+            pinView.centerOffset = CGVector(dx: 0, dy: -(size.height / 2 - RoutePin.anchor))
+            pinAnnotation.coordinate = CLLocationCoordinate2D(pin.coordinate)
+            if mapView.annotations?.contains(where: { $0 === pinAnnotation }) != true { mapView.addAnnotation(pinAnnotation) }
+        }
+
         func mapView(_ mapView: MLNMapView, viewFor annotation: any MLNAnnotation) -> MLNAnnotationView? {
-            annotation === calloutAnnotation ? calloutView : nil
+            if annotation === calloutAnnotation { return calloutView }
+            if annotation === pinAnnotation { return pinView }
+            return nil
         }
 
         func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: any Error) {
