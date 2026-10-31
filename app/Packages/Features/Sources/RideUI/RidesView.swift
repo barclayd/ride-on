@@ -7,7 +7,9 @@ import DesignSystem
 import SharedUI
 
 /// The Rides tab (docs/redesign/README.md §1): the window's best ride as a hero, its conditions,
-/// the window's days, then every other tracked route.
+/// the window's days, then every other tracked route. Its layout follows the space it's given
+/// (DESIGN-SYSTEM.md §5, iPhone Duo): one column, two columns standing in a tent, a grid on the
+/// open phone in portrait, and Rides beside the open ride on the open phone in landscape.
 public struct RidesView: View {
     var board: RideBoard
     var refreshStatus: String?
@@ -20,9 +22,21 @@ public struct RidesView: View {
     @State private var tracking: RideBoard.Pick?
     /// The tracked ride's `Pick.id` as the bell shows it: it follows `RideTracker` once the sheet has gone.
     @State private var shownTracked: String?
+    /// The ride someone opened: beside Rides when they're side by side, pushed over it otherwise.
+    @State private var opened: RideBoard.Pick?
+    /// `opened` while Rides has the screen to itself.
+    @State private var pushed: RideBoard.Pick?
+    /// The ride beside Rides has the whole screen (Full Screen; Show Rides gives it back).
+    @State private var fullScreen = false
+    /// Where each opened ride's detail is, so it comes back as it was when the phone opens or closes.
+    @State private var states = RideDetailStates()
     @Namespace private var zoom
     @Environment(RideTracker.self) private var tracker: RideTracker?
     @Environment(RideRequest.self) private var request: RideRequest?
+    @Environment(\.paneShape) private var paneShape
+    #if os(iOS)
+    @Environment(\.toolbarVerticalEdge) private var toolbarVerticalEdge
+    #endif
     @Environment(\.unitSystem) private var unitSystem
     @Environment(\.speedSystem) private var speedSystem
     @Environment(\.locale) private var locale
@@ -47,15 +61,150 @@ public struct RidesView: View {
         board.days.first { $0.date == selectedDay }?.best ?? board.picks.first
     }
 
+    /// The Mac and iPad keep the one-column layout.
+    private var shape: PaneShape { paneShape ?? .narrow }
+
+    /// Rides and a ride side by side: the open phone in landscape.
+    private var isSplit: Bool { shape == .wide }
+
+    /// The ride shown beside Rides: the one opened, or the hero until one is.
+    private var shown: RideBoard.Pick? { opened ?? hero }
+
+    /// The ride whose detail is beside Rides, marked where Rides lists it.
+    private var selectedID: RideBoard.Pick.ID? { isSplit && !fullScreen ? shown?.id : nil }
+
     public var body: some View {
+        layout
+            .background(.groupedBackground)
+            // Titled for the detail's back button; the hero is the visible title.
+            .navigationTitle("Rides")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar(removing: .title)
+            .navigationDestination(item: $pushed) { pick in
+                detail(pick)
+                    .zoomTransition(from: pick.id, in: zoom)
+            }
+            // Opening or closing the phone moves the open ride between the pane and the stack,
+            // without a push or a pop: it was already on screen.
+            .onChange(of: isSplit) { _, split in
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    if split {
+                        pushed = nil
+                    } else {
+                        fullScreen = false
+                        pushed = opened
+                    }
+                }
+            }
+            // Back from the pushed ride closes it, so opening the phone shows Rides' own pick.
+            .onChange(of: pushed) { _, pick in
+                if pick == nil && !isSplit { opened = nil }
+            }
+            .onChange(of: board.days.map(\.date)) { _, dates in
+                if !dates.contains(selectedDay) {
+                    selectedDay = board.days.first { $0.best?.id == board.picks.first?.id }?.date ?? dates.first ?? board.window.start
+                }
+            }
+            .sheet(isPresented: $choosingWindow) { RideWindowSheet(board: board, apply: apply) }
+            // The bell changes once the sheet has gone, so the change is seen.
+            .sheet(item: $tracking, onDismiss: showTracked) { pick in
+                TrackRideSheet(pick: pick, isTracking: shownTracked == pick.id, replacing: replacing(pick))
+            }
+            .onAppear { shownTracked = tracker?.ride?.pickID }
+            .onChange(of: request?.pickID, initial: true) { _, id in
+                guard let id, let request else { return }
+                let track = request.track
+                request.pickID = nil
+                guard let pick = (board.picks + board.days.compactMap(\.best)).first(where: { $0.id == id }) else { return }
+                if let day = board.days.first(where: { $0.best?.id == id }) ?? board.days.first(where: { Calendar.current.isDate($0.date, inSameDayAs: pick.start) }) {
+                    selectedDay = day.date
+                }
+                // Beside Rides, the requested day's best ride takes the pane.
+                if isSplit { opened = nil }
+                if track { tracking = trackable(pick) }
+            }
+            .onChange(of: tracker?.ride?.pickID) { if tracking == nil { showTracked() } }
+            .toolbar { toolbarItems }
+    }
+
+    /// Opens a ride: beside Rides when there's room, pushed otherwise.
+    private func open(_ pick: RideBoard.Pick) {
+        opened = pick
+        if !isSplit { pushed = pick }
+    }
+
+    private func detail(_ pick: RideBoard.Pick, fullScreen: Binding<Bool>? = nil) -> some View {
+        RideDetailView(board: board, pick: board.details[pick.id]?.pick ?? pick, previousPlan: previousPlan,
+                       state: states.state(for: pick, on: board), fullScreen: fullScreen)
+    }
+
+    @ViewBuilder private var layout: some View {
+        switch shape {
+        case .narrow: column
+        case .tent: tent
+        case .portrait: portrait
+        case .wide: split
+        }
+    }
+
+    // MARK: Toolbar
+
+    @ToolbarContentBuilder private var toolbarItems: some ToolbarContent {
+        // Side by side, the rail belongs to the ride; Rides' buttons are in its pane bar.
+        if !isSplit {
+            #if os(iOS)
+            if toolbarVerticalEdge != nil {
+                // On the rail: symbols only, and the create action at the bottom, by the thumb.
+                ToolbarItem(placement: .navigation) { rideWindowButton }
+                ToolbarItem(placement: .bottomBar) { trackRouteButton }
+            } else {
+                ToolbarItem(placement: .navigation) { windowCapsule }
+                ToolbarItem(placement: .primaryAction) { trackRouteButton }
+            }
+            #else
+            ToolbarItem(placement: .navigation) { windowCapsule }
+            ToolbarItem(placement: .primaryAction) { trackRouteButton }
+            #endif
+        }
+    }
+
+    private var windowCapsule: some View {
+        Button { choosingWindow = true } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "calendar")
+                Text(windowTitle).monospacedDigit()
+                Image(systemName: "chevron.up.chevron.down").font(.caption.weight(.semibold))
+            }
+        }
+        .accessibilityLabel("Ride window, \(windowTitle)")
+    }
+
+    private var rideWindowButton: some View {
+        Button("Ride Window", systemImage: "calendar") { choosingWindow = true }
+            .accessibilityValue(windowTitle)
+    }
+
+    private var trackRouteButton: some View {
+        // ponytail: no-op until tracking a route is redesigned.
+        Button("Track a Route", systemImage: "plus") {}
+    }
+
+    // MARK: Layouts
+
+    /// One column, under the hero's map: the closed phone, any other iPhone in portrait, the Mac.
+    private var column: some View {
         ScrollView {
             // ponytail: no picks is the Window passed screen, built with the Ride Window sheet (PR 4);
             // LiveRidesView covers it with an empty state meanwhile.
             if let hero {
                 VStack(spacing: 16) {
                     ZStack(alignment: .bottomTrailing) {
-                        NavigationLink(value: hero) {
-                            RideHero(pick: hero, eyebrow: previousPlan ? "Previous pick" : hero.id == board.picks.first?.id ? "Best pick" : "Best that day")
+                        Button { open(hero) } label: {
+                            RideHero(pick: hero, eyebrow: eyebrow(hero))
                                 .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
@@ -63,30 +212,19 @@ public struct RidesView: View {
 
                         // Beside the link, not inside it, so VoiceOver reaches both.
                         // ponytail: a tracked ride that isn't the hero has no bell to show it.
-                        if shownTracked == hero.id || tracker?.canTrack(trackable(hero)) ?? true {
-                            trackButton(hero)
+                        if showsBell(hero) {
+                            trackButton(hero, onMap: true)
                                 .padding(.trailing, 20)
                                 .padding(.bottom, 38)
                         }
                     }
 
                     Group {
-                        if let refreshStatus {
-                            Text(refreshStatus)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .accessibilityIdentifier("rides.refreshStatus")
-                        }
+                        status
                         conditionsCard(hero)
-                        RideSection("Your Window") { windowCard }
-                        let others = board.picks.filter { $0.route.id != hero.route.id }
-                        if !others.isEmpty {
-                            RideSection("Other Tracked Routes") { rows(others, content: pickRow) }
-                        }
-                        if !board.unfit.isEmpty {
-                            RideSection("Doesn't Fit Your Window") { rows(board.unfit, content: unfitRow) }
-                        }
+                        windowSection
+                        othersSection(hero)
+                        unfitSection
                         footer
                     }
                     .padding(.horizontal, 16)
@@ -95,57 +233,159 @@ public struct RidesView: View {
             }
         }
         .ignoresSafeArea(edges: .top)
-        .background(.groupedBackground)
-        // Titled for the detail's back button; the hero is the visible title.
-        .navigationTitle("Rides")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .toolbar(removing: .title)
-        .navigationDestination(for: RideBoard.Pick.self) { pick in
-            let current = board.details[pick.id]?.pick ?? pick
-            RideDetailView(board: board, pick: current, previousPlan: previousPlan)
-                .zoomTransition(from: pick.id, in: zoom)
+        .refreshable { await refresh() }
+    }
+
+    /// Standing in a tent: read at arm's length, so two columns with the score big and nothing
+    /// to scroll for but the other routes (iPhone Duo's tent pose; any iPhone in landscape).
+    private var tent: some View {
+        ScrollView {
+            if let hero {
+                VStack(alignment: .leading, spacing: 14) {
+                    status
+                    HStack(alignment: .top, spacing: 16) {
+                        heroCard(hero, style: .tent)
+                            .frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: 14) {
+                            windowSection
+                            othersSection(hero)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    // WeatherKit's attribution stays, below the fold.
+                    footer
+                }
+                .padding(.top, 14)
+                .padding(.leading, 18)
+                .padding(.trailing, 16)
+                .padding(.bottom, 20)
+            }
         }
         .refreshable { await refresh() }
-        .onChange(of: board.days.map(\.date)) { _, dates in
-            if !dates.contains(selectedDay) {
-                selectedDay = board.days.first { $0.best?.id == board.picks.first?.id }?.date ?? dates.first ?? board.window.start
-            }
-        }
-        .sheet(isPresented: $choosingWindow) { RideWindowSheet(board: board, apply: apply) }
-        // The bell changes once the sheet has gone, so the change is seen.
-        .sheet(item: $tracking, onDismiss: showTracked) { pick in
-            TrackRideSheet(pick: pick, isTracking: shownTracked == pick.id, replacing: replacing(pick))
-        }
-        .onAppear { shownTracked = tracker?.ride?.pickID }
-        .onChange(of: request?.pickID, initial: true) { _, id in
-            guard let id, let request else { return }
-            let track = request.track
-            request.pickID = nil
-            guard let pick = (board.picks + board.days.compactMap(\.best)).first(where: { $0.id == id }) else { return }
-            if let day = board.days.first(where: { $0.best?.id == id }) ?? board.days.first(where: { Calendar.current.isDate($0.date, inSameDayAs: pick.start) }) {
-                selectedDay = day.date
-            }
-            if track { tracking = trackable(pick) }
-        }
-        .onChange(of: tracker?.ride?.pickID) { if tracking == nil { showTracked() } }
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button { choosingWindow = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "calendar")
-                        Text(windowTitle).monospacedDigit()
-                        Image(systemName: "chevron.up.chevron.down").font(.caption.weight(.semibold))
+    }
+
+    /// The open phone in portrait: the hero across the top, then two columns.
+    private var portrait: some View {
+        ScrollView {
+            if let hero {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Rides")
+                        .font(.largeTitle.bold())
+                        .accessibilityAddTraits(.isHeader)
+                        .padding(.horizontal, 4)
+                    status
+                    heroCard(hero, style: .banner)
+                    HStack(alignment: .top, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            windowSection
+                            unfitSection
+                        }
+                        .frame(maxWidth: .infinity)
+                        othersSection(hero)
+                            .frame(maxWidth: .infinity)
                     }
+                    footer
                 }
-                .accessibilityLabel("Ride window, \(windowTitle)")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                // ponytail: no-op until tracking a route is redesigned.
-                Button("Track a route", systemImage: "plus") {}
+                .padding(.top, 8)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
             }
         }
+        .refreshable { await refresh() }
+    }
+
+    /// The open phone in landscape: Rides on the leading half, up to the fold, with the ride it
+    /// opened beside it. Full Screen gives the ride Rides' half too.
+    private var split: some View {
+        GeometryReader { proxy in
+            let insets = proxy.safeAreaInsets
+            let full = proxy.size.width + insets.leading + insets.trailing
+            let ridesWidth = (full / 2).rounded(.down) - insets.leading
+            ZStack(alignment: .trailing) {
+                ridesPane
+                    .frame(width: ridesWidth)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(fullScreen ? 0 : 1)
+                    .allowsHitTesting(!fullScreen)
+                    .accessibilityHidden(fullScreen)
+                if let shown {
+                    detail(shown, fullScreen: $fullScreen)
+                        .id(shown.id)
+                        .frame(width: fullScreen ? proxy.size.width : proxy.size.width - ridesWidth)
+                }
+            }
+        }
+        #if os(iOS)
+        // The rail keeps the ride's actions however Rides scrolls.
+        .toolbarMinimizationBehavior(.never, for: .navigationBar)
+        #endif
+    }
+
+    /// Rides beside the open ride: its own bar on top, since the rail belongs to the ride.
+    private var ridesPane: some View {
+        ScrollView {
+            if let hero {
+                VStack(alignment: .leading, spacing: 16) {
+                    status
+                    heroCard(hero, style: .column)
+                    windowSection
+                    othersSection(hero)
+                    unfitSection
+                    footer
+                }
+                .padding(.top, 4)
+                .padding(.leading, 20)
+                .padding(.trailing, 16)
+                .padding(.bottom, 28)
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .safeAreaBar(edge: .top) {
+            PaneBar("Rides") {
+                rideWindowButton
+                trackRouteButton
+            }
+        }
+        .refreshable { await refresh() }
+    }
+
+    // MARK: Sections
+
+    @ViewBuilder private var status: some View {
+        if let refreshStatus {
+            Text(refreshStatus)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("rides.refreshStatus")
+        }
+    }
+
+    private var windowSection: some View {
+        RideSection("Your Window") { windowCard }
+    }
+
+    @ViewBuilder private func othersSection(_ hero: RideBoard.Pick) -> some View {
+        let others = board.picks.filter { $0.route.id != hero.route.id }
+        if !others.isEmpty {
+            RideSection("Other Tracked Routes") { rows(others, selected: selectedID, content: pickRow) }
+        }
+    }
+
+    @ViewBuilder private var unfitSection: some View {
+        if !board.unfit.isEmpty {
+            RideSection("Doesn't Fit Your Window") { rows(board.unfit, content: unfitRow) }
+        }
+    }
+
+    private func eyebrow(_ pick: RideBoard.Pick) -> String {
+        previousPlan ? "Previous pick" : pick.id == board.picks.first?.id ? "Best pick" : "Best that day"
+    }
+
+    /// Whether the hero shows its bell: it can be tracked, or it already is.
+    private func showsBell(_ pick: RideBoard.Pick) -> Bool {
+        shownTracked == pick.id || tracker?.canTrack(trackable(pick)) ?? true
     }
 
     private func showTracked() {
@@ -167,8 +407,9 @@ public struct RidesView: View {
         return [name, when].compactMap(\.self).joined(separator: " · ")
     }
 
-    /// Opens the Track sheet for the hero's ride; gold glass while it's tracked.
-    private func trackButton(_ pick: RideBoard.Pick) -> some View {
+    /// Opens the Track sheet for the hero's ride. Over the hero's map it's clear glass, gold while
+    /// the ride is tracked; on a card it's a filled circle, gold while tracked.
+    private func trackButton(_ pick: RideBoard.Pick, onMap: Bool) -> some View {
         let isOn = shownTracked == pick.id
         let day = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
         return Button {
@@ -176,19 +417,222 @@ public struct RidesView: View {
         } label: {
             Image(systemName: isOn ? "bell.fill" : "bell")
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(onMap || isOn ? AnyShapeStyle(.white) : AnyShapeStyle(.tint))
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: isOn)
                 .padding(8)
                 .frame(minWidth: 48, minHeight: 48)
-                .glassEffect(isOn ? .clear.tint(.committed).interactive() : .clear.interactive(), in: .circle)
-                .shadow(color: isOn ? Color.committed.opacity(0.45) : .clear, radius: 8, y: 4)
+                .modifier(BellBackground(onMap: onMap, isOn: isOn))
         }
         .buttonStyle(.plain)
         .sensoryFeedback(trigger: isOn) { _, on in on ? .success : .selection }
         .accessibilityLabel(isOn ? "Tracking \(pick.route.name) on \(day)" : "Track \(pick.route.name) on \(day)")
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .accessibilityIdentifier("track-bell")
+    }
+
+    // MARK: Hero card
+
+    enum HeroCardStyle {
+        /// Name and score, the route's map, then the conditions: beside the open ride.
+        case column
+        /// No map, a bigger score: standing in a tent.
+        case tent
+        /// The text beside the route's map: across the open phone in portrait.
+        case banner
+    }
+
+    /// The best ride as a card, where Rides has no room for (or no need of) the full-bleed hero.
+    private func heroCard(_ pick: RideBoard.Pick, style: HeroCardStyle) -> some View {
+        let isSelected = selectedID == pick.id
+        let bell = showsBell(pick)
+        return Button { open(pick) } label: {
+            heroCardContent(pick, style: style, bellRoom: bell)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .card()
+                .clipShape(.rect(cornerRadius: 26))
+                .contentShape(.rect(cornerRadius: 26))
+        }
+        .buttonStyle(.plain)
+        .matchedTransitionSource(id: pick.id, in: zoom)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("rides-hero")
+        // The bell in the corner of the card's text, so never on the banner's light map, where
+        // clear glass would lose its white glyph.
+        .overlay {
+            if bell {
+                HStack(spacing: 0) {
+                    trackButton(pick, onMap: false)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    if style == .banner {
+                        Color.clear.allowsHitTesting(false)
+                    }
+                }
+            }
+        }
+        // The ride beside Rides: ringed in the accent, outside the card.
+        .background {
+            RoundedRectangle(cornerRadius: 28.5)
+                .fill(.tint)
+                .padding(-2.5)
+                .opacity(isSelected ? 1 : 0)
+        }
+    }
+
+    @ViewBuilder
+    private func heroCardContent(_ pick: RideBoard.Pick, style: HeroCardStyle, bellRoom: Bool) -> some View {
+        let tint: Color = pick.meetsMinimums ? .accentColor : .gray
+        let kickerLabel = HStack(spacing: 4) {
+            Image(systemName: "star.fill")
+                .font(.caption2.weight(.bold))
+                .imageScale(.small)
+            Text(kicker(pick, short: style == .tent))
+        }
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(.tint)
+        let nameLabel = Text(pick.route.name)
+            .font(.title.bold())
+            .fixedSize(horizontal: false, vertical: true)
+        let metaLabel = Text(meta(pick))
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+            .fixedSize(horizontal: false, vertical: true)
+
+        let header = Group {
+            if style != .column {
+                // Half a display: only the name shares a line with the score.
+                VStack(alignment: .leading, spacing: 4) {
+                    kickerLabel
+                    HStack(spacing: 12) {
+                        nameLabel
+                        Spacer(minLength: 0)
+                        ScoreGauge(score: pick.score, tint: tint, size: style == .tent ? 92 : 64)
+                    }
+                    metaLabel
+                }
+                .padding([.horizontal, .top], 16)
+                .padding(.bottom, 12)
+            } else {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        kickerLabel
+                        nameLabel
+                        metaLabel
+                    }
+                    Spacer(minLength: 0)
+                    ScoreGauge(score: pick.score, tint: tint, size: 64)
+                }
+                .padding([.horizontal, .top], 16)
+                .padding(.bottom, 12)
+            }
+        }
+
+        let conditions = Group {
+            if style != .column {
+                // The chips get the card's width; the verdict shares the bell's row.
+                VStack(alignment: .leading, spacing: 10) {
+                    heroChips(pick)
+                        .padding(.trailing, 16)
+                    meetsLine(pick)
+                        .padding(.trailing, bellRoom ? 72 : 16)
+                        .frame(minHeight: bellRoom ? 48 : 0, alignment: .leading)
+                }
+                .padding(.leading, 16)
+                .padding(.bottom, bellRoom ? 12 : 14)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    heroChips(pick)
+                    meetsLine(pick)
+                }
+                .padding(.top, 12)
+                .padding(.leading, 16)
+                // Clear of the bell in the card's corner.
+                .padding(.trailing, bellRoom ? 72 : 16)
+                .padding(.bottom, 14)
+                .frame(minHeight: bellRoom ? 72 : 0, alignment: .top)
+            }
+        }
+
+        let thumb = RouteMap(pick.route.coordinates, style: .card, tint: tint)
+            .id(pick.route.coordinates)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+
+        switch style {
+        case .column:
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                thumb.aspectRatio(386 / 236, contentMode: .fit)
+                conditions
+            }
+        case .tent:
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                conditions
+            }
+        case .banner:
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    header
+                    conditions
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                thumb
+                    .frame(maxWidth: .infinity, minHeight: 236, maxHeight: .infinity)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// "Best pick · Wednesday 14 October"; standing in a tent, just the weekday.
+    private func kicker(_ pick: RideBoard.Pick, short: Bool) -> String {
+        let day = short
+            ? pick.start.formatted(.dateTime.weekday(.wide))
+            : pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        return "\(eyebrow(pick)) · \(day)"
+    }
+
+    /// "09:00 → ~12:00 · 51 km · 640 m".
+    private func meta(_ pick: RideBoard.Pick) -> String {
+        let start = pick.start.formatted(.clockTime)
+        let finish = pick.finish.formatted(.clockTime)
+        let distance = UnitFormat.distance(km: pick.route.distanceKm, system: unitSystem, fractionDigits: 0)
+        let climb = UnitFormat.elevation(m: pick.route.ascentM, system: unitSystem)
+        return "\(start) → ~\(finish) · \(distance) · \(climb)"
+    }
+
+    private func heroChips(_ pick: RideBoard.Pick) -> some View {
+        let conditions = pick.conditions
+        return FlowLayout {
+            ConditionChip(UnitFormat.temperatureRange(c: conditions.temperatureC, locale: locale), systemImage: "thermometer.medium", tint: .orange)
+            ConditionChip("\(UnitFormat.speed(kph: conditions.windKph, system: speedSystem)) \(conditions.wind.rawValue)", systemImage: "wind", tint: .blue)
+            ConditionChip("Gusts \(UnitFormat.speed(kph: conditions.gustKph, system: speedSystem))")
+            ConditionChip(conditions.sky.title, systemImage: conditions.sky.systemImage, tint: conditions.sky.tint)
+        }
+    }
+
+    /// "Meets your preferences · Last ridden 29 Sep · ▲ 4".
+    private func meetsLine(_ pick: RideBoard.Pick) -> some View {
+        let verdict = previousPlan ? "From your saved forecast"
+            : pick.meetsMinimums ? "Meets your preferences" : "Below your minimums"
+        var line = Text(verdict)
+            .foregroundStyle(pick.meetsMinimums || previousPlan ? AnyShapeStyle(.secondary) : AnyShapeStyle(.belowMinimums))
+        if let ridden = pick.lastRidden {
+            line = Text("\(line) · Last ridden \(ridden.formatted(.dateTime.day().month(.abbreviated)))")
+        }
+        if let change = pick.change, change != 0 {
+            let badge = Text("\(change > 0 ? "▲" : "▼") \(abs(change))")
+                .fontWeight(.semibold)
+                .foregroundStyle(.tint)
+                .accessibilityLabel("\(change > 0 ? "up" : "down") \(abs(change)) since the last forecast")
+            line = Text("\(line) · \(badge)")
+        }
+        return line
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
     }
 
     // MARK: Conditions
@@ -297,6 +741,7 @@ public struct RidesView: View {
             Text(windowFootnote)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 6)
         }
         .padding([.horizontal, .top], 10)
@@ -318,7 +763,8 @@ public struct RidesView: View {
 
     // MARK: Rows
 
-    private func rows<Item: Identifiable, Row: View>(_ items: [Item], @ViewBuilder content: @escaping (Item) -> Row) -> some View {
+    /// `selected` is the row whose ride is open beside Rides.
+    private func rows<Item: Identifiable, Row: View>(_ items: [Item], selected: Item.ID? = nil, @ViewBuilder content: @escaping (Item) -> Row) -> some View {
         VStack(spacing: 0) {
             ForEach(items) { item in
                 if item.id != items.first?.id {
@@ -328,9 +774,12 @@ public struct RidesView: View {
                     .padding(.vertical, 12)
                     .padding(.leading, 12)
                     .padding(.trailing, 16)
+                    .background(item.id == selected ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.clear))
+                    .accessibilityAddTraits(item.id == selected ? .isSelected : [])
             }
         }
         .card()
+        .clipShape(.rect(cornerRadius: 26))
     }
 
     private func pickRow(_ pick: RideBoard.Pick) -> some View {
@@ -338,7 +787,7 @@ public struct RidesView: View {
         let start = pick.start.formatted(.clockTime)
         let finish = pick.finish.formatted(.clockTime)
         let distance = UnitFormat.distance(km: pick.route.distanceKm, system: unitSystem, fractionDigits: 0)
-        return NavigationLink(value: pick) {
+        return Button { open(pick) } label: {
             row(pick.route, tint: pick.meetsMinimums ? .accentColor : .gray) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(pick.route.name).font(.headline)
@@ -516,6 +965,24 @@ struct ChangeBadge: View {
     }
 }
 
+/// The track bell's circle: clear glass over the hero's map (a control on the map, §2), a solid
+/// fill on a card, where glass would be on content. Gold while the ride is tracked.
+private struct BellBackground: ViewModifier {
+    var onMap: Bool
+    var isOn: Bool
+
+    func body(content: Content) -> some View {
+        if onMap {
+            content
+                .glassEffect(isOn ? .clear.tint(.committed).interactive() : .clear.interactive(), in: .circle)
+                .shadow(color: isOn ? Color.committed.opacity(0.45) : .clear, radius: 8, y: 4)
+        } else {
+            content
+                .background(isOn ? AnyShapeStyle(Color.committed) : AnyShapeStyle(.fill.tertiary), in: .circle)
+        }
+    }
+}
+
 private extension View {
     /// Ride detail zooms out of the hero or row it opened from (iOS; macOS pushes).
     @ViewBuilder
@@ -552,6 +1019,25 @@ struct RouteGPX: Transferable {
         RidesView(board: .sample)
     }
     .environment(RideTracker(live: false))
+}
+
+// The iPhone Duo's poses beside the rail (PaneShape), for the canvas: the simulator can't fold.
+#Preview("Tent", traits: .fixedLayout(width: 606, height: 466)) {
+    NavigationStack { RidesView(board: .sample) }
+        .measuresPaneShape()
+        .environment(RideTracker(live: false))
+}
+
+#Preview("Open, landscape", traits: .fixedLayout(width: 879, height: 669)) {
+    NavigationStack { RidesView(board: .sample) }
+        .measuresPaneShape()
+        .environment(RideTracker(live: false))
+}
+
+#Preview("Open, portrait", traits: .fixedLayout(width: 669, height: 951)) {
+    NavigationStack { RidesView(board: .sample) }
+        .measuresPaneShape()
+        .environment(RideTracker(live: false))
 }
 
 /// A widget tap (docs/redesign/README.md §8): Rides shows the ride's day, and with `track` opens its
