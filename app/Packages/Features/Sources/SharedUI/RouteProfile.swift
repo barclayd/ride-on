@@ -3,18 +3,30 @@ import Charts
 import Models
 
 /// DESIGN-SYSTEM.md §6 component 6: "Along the Route". Elevation with its peak marked, over a
-/// strip of the felt wind on the same distance axis, a worded legend, and scrubbing.
+/// strip of the felt wind on the same distance axis, a worded legend, and scrubbing. Scrubbed on its
+/// own, the point shows in a readout on the chart; with `selection` bound, the screen shows it
+/// (ride detail writes it above the chart and pins it on the map) and the chart marks the point.
 public struct RouteProfile: View {
     var elevation: [RideDetail.ElevationPoint]
     var wind: [RideDetail.WindStretch]
-    @State private var selection: Double?
+    /// The scrubbed distance in km, when the screen shows it.
+    var scrub: Binding<Double?>?
+    @State private var ownSelection: Double?
     @Environment(\.unitSystem) private var unitSystem
     /// The peak label draws above the plot; the card's padding fits it at default sizes.
     @ScaledMetric(relativeTo: .caption) private var peakLabelHeight = 16.0
 
-    public init(elevation: [RideDetail.ElevationPoint], wind: [RideDetail.WindStretch]) {
+    public init(elevation: [RideDetail.ElevationPoint], wind: [RideDetail.WindStretch], selection: Binding<Double?>? = nil) {
         self.elevation = elevation
         self.wind = wind
+        self.scrub = selection
+    }
+
+    /// The chart's selection, in display units.
+    private var selection: Binding<Double?> {
+        guard let scrub else { return $ownSelection }
+        let along = along
+        return Binding { scrub.wrappedValue.map { $0 * along } } set: { scrub.wrappedValue = $0.map { $0 / along } }
     }
 
     public var body: some View {
@@ -62,7 +74,15 @@ public struct RouteProfile: View {
                     .accessibilityLabel(stretch.wind.title)
                     .accessibilityValue(UnitFormat.distance(km: stretch.endKm - stretch.startKm, system: unitSystem, fractionDigits: 0))
             }
-            if let selection, let point = points.min(by: { abs($0.x - selection) < abs($1.x - selection) }) {
+            if let selection = selection.wrappedValue, scrub != nil,
+               let point = points.min(by: { abs($0.x - selection) < abs($1.x - selection) }) {
+                RuleMark(x: .value("Distance", point.x))
+                    .foregroundStyle(.secondary)
+                PointMark(x: .value("Distance", point.x), y: .value("Elevation", point.y))
+                    .symbolSize(48)
+                    .foregroundStyle(Color.accentColor)
+            } else if let selection = selection.wrappedValue,
+                      let point = points.min(by: { abs($0.x - selection) < abs($1.x - selection) }) {
                 RuleMark(x: .value("Distance", point.x))
                     .foregroundStyle(.secondary)
                     .annotation(position: .top, spacing: 4, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
@@ -113,7 +133,7 @@ public struct RouteProfile: View {
                 }
             }
         }
-        .chartXSelection(value: $selection)
+        .chartXSelection(value: selection)
         .frame(height: 190)
         // Room for the peak label once it outgrows the card's padding.
         .padding(.top, max(0, peakLabelHeight - 16))

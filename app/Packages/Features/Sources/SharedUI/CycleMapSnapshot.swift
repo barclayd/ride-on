@@ -6,7 +6,7 @@ import Models
 import DesignSystem
 
 /// `CycleMap` as a still image (DESIGN-SYSTEM.md §6 #17), for the Ride hero, a Routes shortlist card,
-/// a thumbnail or under `WindRouteMap`: none of them is a map to move, and lists never hold live maps.
+/// or a thumbnail: none of them is a map to move, and lists never hold live maps.
 /// `MLNMapSnapshotter` draws the route on the cycle map once per route, framing, look, tint, size and
 /// scale, and the image is kept in memory. Until it's ready, or if it fails, the route is drawn on the
 /// map's land colour exactly where the snapshot puts it.
@@ -22,11 +22,7 @@ struct CycleMapSnapshot: View {
         case card
         /// A list row's: the line alone.
         case thumbnail
-        /// The map alone and quieter, for `WindRouteMap` to draw over: no route, and none of the
-        /// cycling overlay, whose colours would read as the wind's.
-        case muted
 
-        var drawsRoute: Bool { self != .muted }
         var marksStart: Bool { self == .hero || self == .card }
         /// At a card's size the shading and contours are noise under its text.
         var showsTerrain: Bool { self == .hero }
@@ -110,7 +106,7 @@ struct SnapshotRequest: Hashable {
     }
 
     var isDrawable: Bool {
-        (coordinates.count > 1 || !look.drawsRoute) && width >= 1 && height >= 1 && framing.width > 0 && framing.height > 0
+        coordinates.count > 1 && width >= 1 && height >= 1 && framing.width > 0 && framing.height > 0
     }
 
     /// The line and casing widths, and the start marker's diameter and ring, as `RouteMap` draws them.
@@ -118,7 +114,7 @@ struct SnapshotRequest: Hashable {
         switch look {
         case .hero: (5, 8)
         case .card: (4, 7)
-        case .thumbnail, .muted: (3.5, 6.5)
+        case .thumbnail: (3.5, 6.5)
         }
     }
     var marker: (diameter: Double, ring: Double) { look == .hero ? (16, 3) : (12, 2.5) }
@@ -255,12 +251,11 @@ private final class SnapshotRender: NSObject, @preconcurrency MLNMapSnapshotterD
         let look = request.look
         for layer in style.layers {
             let terrain = layer is MLNHillshadeStyleLayer || layer.identifier.hasPrefix("ct_contour")
-            let overlay = (layer as? MLNForegroundStyleLayer)?.sourceIdentifier == "cycling"
-            if layer is MLNSymbolStyleLayer || terrain && !look.showsTerrain || overlay && look == .muted {
+            if layer is MLNSymbolStyleLayer || terrain && !look.showsTerrain {
                 layer.isVisible = false
             }
         }
-        guard look.drawsRoute, !request.coordinates.isEmpty else { return }
+        guard !request.coordinates.isEmpty else { return }
         let (tint, enlarged) = (UIColor(request.tint.color), request.enlarged)
         var coordinates = request.coordinates.map(CLLocationCoordinate2D.init)
         // As given: a still render otherwise simplifies a loop's curves into corners.
@@ -292,7 +287,7 @@ private final class SnapshotRender: NSObject, @preconcurrency MLNMapSnapshotterD
 }
 
 /// The route on the map's land colour, projected as the snapshot projects it: Web Mercator, the
-/// framing fitted and centred. `.muted` is the land alone.
+/// framing fitted and centred.
 private struct SnapshotPlaceholder: View {
     var request: SnapshotRequest
     var size: CGSize
@@ -305,10 +300,8 @@ private struct SnapshotPlaceholder: View {
         let marker = request.marker
         ZStack(alignment: .topLeading) {
             CycleMap.land
-            if request.look.drawsRoute {
-                route.stroke(.white, style: stroke(request.line.casing))
-                route.stroke(tint, style: stroke(request.line.width))
-            }
+            route.stroke(.white, style: stroke(request.line.casing))
+            route.stroke(tint, style: stroke(request.line.width))
             if request.look.marksStart, let start = points.first {
                 Circle()
                     .fill(tint)

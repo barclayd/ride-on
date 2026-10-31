@@ -3,7 +3,7 @@ import Models
 import DesignSystem
 
 /// DESIGN-SYSTEM.md §6 component 1: a ride shown full-bleed on its route's map, with the title
-/// block over a bottom scrim. At least `height` tall, taller when large text needs the room. The
+/// block over a bottom scrim. At least 480pt tall, taller when large text needs the room. The
 /// caller places it under the status bar and toolbar, and overlays anything tappable (the track
 /// bell on Rides) bottom trailing, clear of the title's trailing 84pt. The date and times live in
 /// the caller's card below, not on the map.
@@ -11,14 +11,12 @@ public struct RideHero: View {
     var pick: RideBoard.Pick
     /// "Best pick", shown starred in an accent pill above the name; `nil` shows no pill.
     var eyebrow: String?
-    var height: CGFloat
 
     @Environment(\.unitSystem) private var unitSystem
 
-    public init(pick: RideBoard.Pick, eyebrow: String?, height: CGFloat = 480) {
+    public init(pick: RideBoard.Pick, eyebrow: String?) {
         self.pick = pick
         self.eyebrow = eyebrow
-        self.height = height
     }
 
     public var body: some View {
@@ -33,7 +31,7 @@ public struct RideHero: View {
             .background(LinearGradient(stops: [0, 0.03, 0.1, 0.2, 0.33, 0.45, 0.55, 0.63, 0.7, 0.76, 0.8].enumerated().map {
                 .init(color: .black.opacity($1), location: Double($0) / 10)
             }, startPoint: .top, endPoint: .bottom))
-            .frame(maxWidth: .infinity, minHeight: height, alignment: .bottom)
+            .frame(maxWidth: .infinity, minHeight: 480, alignment: .bottom)
             .overlay(alignment: .bottomLeading) {
                 #if os(iOS)
                 // In the band under the title block, at least 10pt clear of it (§2). Not read out:

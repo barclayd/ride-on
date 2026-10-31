@@ -155,7 +155,7 @@ public struct RoutesView: View {
     // MARK: Panel
 
     private func panel(heights: ClosedRange<CGFloat>?) -> some View {
-        FloatingPanel(detent: $detent, heights: heights) {
+        FloatingPanel("Routes", detent: $detent, heights: heights) {
             searching = false
         } header: {
             HStack(spacing: 10) {

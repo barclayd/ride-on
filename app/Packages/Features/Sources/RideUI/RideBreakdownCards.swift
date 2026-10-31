@@ -63,28 +63,19 @@ struct SkyOnTheRide: View {
     }
 }
 
-/// "Wind on the Ride" (docs/redesign/README.md §2): the route coloured by the wind's effect, where it
-/// blows from, each effect's share and the gusts.
+/// "Wind on the Ride" (docs/redesign/README.md §2): where the wind blows from, each effect's share
+/// and the gusts, and a button that colours the route by the wind on the map behind the panel.
 struct WindOnTheRide: View {
     var wind: RideDetail.WindBreakdown
-    var coordinates: [Coordinate]
     var start: Date
     var finish: Date
+    /// Shows the wind on the screen's map; nil when its stretches can't be placed on the route.
+    var showOnMap: (() -> Void)? = nil
     @Environment(\.speedSystem) private var speedSystem
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if wind.exact, coordinates.count > 1 {
-                WindRouteMap(coordinates, runs: wind.runs.map { WindRouteMap.Run(from: $0.from, to: $0.to, color: $0.effect.tint) },
-                             showsFinish: wind.roundTrip != true)
-                    .frame(height: 180)
-                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 26, topTrailingRadius: 26, style: .continuous))
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(wind.journey(along: coordinates))
-                    .accessibilityAddTraits(.isImage)
-            }
-
             VStack(alignment: .leading, spacing: 14) {
                 header
 
@@ -128,6 +119,18 @@ struct WindOnTheRide: View {
                 }
             }
             .padding(16)
+
+            if let showOnMap {
+                Divider()
+                Button("Show Wind on Map", systemImage: "map", action: showOnMap)
+                    .labelStyle(IconColumn())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()

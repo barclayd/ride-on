@@ -20,14 +20,14 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 0 | This doc and reference images | ✅ Done | #154 |
 | 1 | Foundation: green accent, Rides/Routes/Preferences tabs, `RideBoard` sample data | ✅ Done | #155 |
 | 2 | Rides screen and Track sheet | ✅ Done; tracking wired to API v0.28.0 ([contract](../ride-tracking-api.md)); notifications wait on the API | #155, #176, #185 |
-| 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)) | #157, #164, #172 |
+| 3 | Ride detail | ✅ Done; wind direction and score change wired to API v0.25.0 ([contract](ride-detail-api-requests.md)); rebuilt as the route's live map under a floating panel ([design](https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T)) | #157, #164, #172 |
 | 4 | Ride Window sheet and Window passed | 🟡 Sheet done; Window passed remaining | #162 |
 | 5 | Preferences, Ideal Temperature, Comfortable Wind | ✅ Done, live, on API v0.25.0 (points lost, crosswind levels, sign-in methods, monthly limits, separate units); Strava connection/history implemented, coordinated rollout pending ([contract](../strava.md)) | #167, #172 |
 | 6 | Widgets and Lock Screen | ✅ Board (A) and tracked ride (D) in every size, Lock Screen, Live Activity, Control Centre; Dan's on-device check to come | |
 | 7 | Remove the old UI (RideView, RideCard, BestDayBadge, ScoreRing…) | 🟡 YouUI gone (PreferencesUI replaced it) | #167 |
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
-| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The only map on iOS: the Routes map, and snapshots on the Rides hero, cards, thumbnails and Wind on the Ride, with cycle lanes, hillshade and contours; the Mac stays on MapKit until a `WKWebView` with MapLibre GL JS replaces it. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
+| 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The only map on iOS: the Routes map, and snapshots on the Rides hero, cards and thumbnails, and live on Ride detail, with cycle lanes, hillshade and contours; the Mac stays on MapKit until a `WKWebView` with MapLibre GL JS replaces it. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
 
 Not in scope yet: Onboarding (not redesigned; it keeps working as it is).
 
@@ -221,19 +221,35 @@ matched by `routeId@departure`, not by reference. The limits come from `RiderSet
 
 ## 2. Ride detail (push from the hero, zoom transition)
 
-| Light | Dark |
+| Medium | Wind on the map |
 |---|---|
-| <img src="screens/ride-detail-light.png" width="300"> | <img src="screens/ride-detail-dark.png" width="300"> |
+| <img src="screens/ride-detail-light.png" width="300"> | <img src="screens/ride-detail-wind.png" width="300"> |
 
-1. **Hero**, 400pt, same art and title block as Rides, no track bell in the hero.
-2. **Verdict card**: `ScoreGauge` (64pt ring, 86), "✓ Meets your preferences", "▲ 4 since 07:00 ·
-   last ridden 29 Sep". Then notes with symbols:
+Design: [Ride detail on the map](https://claude.ai/artifact/9rYWTxdZVkx21dpJRrue7T) (Claude Design).
+The route's live map fills the screen (the cycle map on iOS, standard MapKit without points of
+interest on the Mac, both held light) with a `FloatingPanel` over it, as on Routes. On iPhone the
+panel rests at medium (58% of the height), large (8pt under the navigation bar) or collapsed to its
+header, so a swipe down gives the map the screen; the map frames the route in what the panel
+leaves. On iPad and Mac the panel is a 380pt column down the leading edge.
+
+1. **Panel header** (pinned): "★ Best pick · Wednesday 14 October" (clock and "Previous pick" for
+   a previous plan), the route name (`.title` bold), "09:00 → ~12:00 · 51 km · 640 m", the
+   `ScoreGauge` (64pt ring, 86) trailing, then a row of `ConditionChip`s: 9–14°, "15 km/h
+   tailwind", "Sunny spells", "Dry". Tapping it while collapsed opens medium.
+2. **Verdict card**: "✓ Meets your preferences" (≥80; "Mostly meets…" ≥70, "Misses some…"
+   under it, "Below your minimums" when a check fails), "▲ 4 since 07:00 · last ridden 29 Sep".
+   Then notes with symbols:
    - 🌡 "Starts at 9°, a degree under your ideal range."
    - 💨 "Headwind for the last 9 km back into town."
 3. **"Departure"**: `DeparturePicker`, four tiles: Wed 14 09:00 86 (selected), Wed 14 10:00 82,
    Thu 15 09:30 74, Sat 17 10:00 64. Footnote: "The best time, then the next three in your window.
    Choosing one updates everything below."
-4. **"Forecast on the Ride"** card: one column per ride hour.
+4. **"Along the Route"**: `RouteProfile`. Elevation area chart 0–200 m over 0–50 km, peak marker
+   "186 m" at ~31 km; under it a wind strip (accent tailwind 0–32 km, yellow crosswind 32–42 km,
+   red headwind 42–51 km) and a legend: Tailwind "First 32 km", Crosswind "Next 10 km", Headwind
+   "Last 9 km". Scrubbing writes the point above the chart ("20 km · 63 m") and pins
+   it on the map (`RoutePin`); changing departure clears it.
+5. **"Forecast on the Ride"** card: one column per ride hour.
 
    | Time | Sky | Temp | Wind | Gusts | Rain |
    |---|---|---|---|---|---|
@@ -243,18 +259,14 @@ matched by `routeId@departure`, not by reference. The limits come from `RiderSet
    | 12:00 | sun behind cloud | 14° | 16 km/h | 27 | 5% |
 
    Footnote: "Wind from the west-south-west.", only when there's no "Wind on the Ride" below.
-5. **"Sky on the Ride"** card, the extension's sun chip as a block: multicolour `cloud.sun` and
+6. **"Sky on the Ride"** card, the extension's sun chip as a block: multicolour `cloud.sun` and
    "Sun and sunny intervals" (`.headline`; "Part of the ride isn't forecast yet." under it when
    some isn't), a `ShareBar` of sunny / sunny intervals / cloud / not forecast yet in ride order,
    "09:00" and "~12:00" under its ends, then the legend: ● Sunny ~75%, ● Sunny intervals ~25%.
    Summaries follow the extension: "Sunny throughout", "Sunny where forecast", "Sunny intervals",
    "Sun and cloud", "Cloudy", "Overcast", "Fog". No card when nothing is forecast, or when the
    sky is mostly showers or night (the forecast grid already says so).
-6. **"Wind on the Ride"** card, the extension's wind panel as a block:
-   - `WindRouteMap`: the loop in tailwind green, crosswind orange and headwind red, Start marker,
-     drawn over a muted cycle-map snapshot (no cycling overlay; the muted standard map on the Mac).
-     Only when the API placed the wind stretches (`windStretches`); ride hours alone don't place
-     the wind finely enough to colour the road.
+7. **"Wind on the Ride"** card, the extension's wind panel as a block:
    - "Wind from the south-west" (`.headline`), "Then from the west." under it, a `WindCompass`
      (arrow towards the north-east, "10 mph") trailing. Light all the way: "Light wind", "Under
      10 km/h all the way.", no arrow. Stacks at accessibility sizes.
@@ -266,10 +278,12 @@ matched by `routeId@departure`, not by reference. The limits come from `RiderSet
      behind you, so they help. At most 28 km/h against you." Over your comfort or limit the
      symbol turns orange and the sentence says where: "From the side on the way back,
      10:31–11:40. Over your 35 km/h comfort."
-7. **"Along the Route"**: `RouteProfile`. Elevation area chart 0–200 m over 0–50 km, peak marker
-   "186 m" at ~31 km; under it a wind strip (accent tailwind 0–32 km, yellow crosswind 32–42 km,
-   red headwind 42–51 km) and a legend: Tailwind "First 32 km", Crosswind "Next 10 km", Headwind
-   "Last 9 km".
+   - Divider, then "Show Wind on Map" (accent list button): collapses the panel and colours the
+     route on the map in tailwind green, crosswind orange and headwind red, with the `WindKey`
+     ("Wind from the south-west, then west": Tailwind "First 32 km", Crosswind "Next 10 km",
+     Headwind "Last 9 km") top leading and
+     the map's Wind control on. Only when the API placed the wind stretches (`windStretches`);
+     ride hours alone don't place the wind finely enough to colour the road.
 8. **"Why It Scored 86"**: one `FactorRow` per factor, name + score + bar + one sentence.
 
    | Factor | Score | Sentence |
@@ -290,15 +304,21 @@ matched by `routeId@departure`, not by reference. The limits come from `RiderSet
    provider's own line, such as "Powered by Met Office data"); "Updated 08:12."
 
 Chrome: back (44pt circle, `chevron.left`, label "Rides") leading; one capsule with share and
-more (`ellipsis`) trailing. Clear glass over the hero, regular from about 260–320pt of scroll; the
-inline title "Hilly Loop" fades in at about 290–330pt.
+more (`ellipsis`) trailing, held light over a 64pt fade of the map's paper colour. No title (the
+panel carries the name) and no tab bar. The map's own controls, Wind (`wind`, accent when on) and
+Fit (`arrow.up.left.and.arrow.down.right`, "Show the whole route"), share one regular-glass
+capsule at its top trailing corner, hidden at large.
 
 Build:
-- [x] Hero (reuse `RideHero`, 400pt variant). The hero map ignores touches, so Legal shows but
-      isn't tappable on either screen
+- [x] Live route map (`CycleMap` on iOS, MapKit on the Mac) under a shared `FloatingPanel`
+      (moved to SharedUI from Routes), collapsed / medium / large on iPhone, a column on iPad and Mac
+- [x] Panel header: eyebrow, name, times and distance, `ScoreGauge`, conditions chips
+- [x] Wind on the map (`CycleMap` stretches, `WindKey`), Wind and Fit controls, route framed
+      around the panel and the key
+- [x] Scrubbing "Along the Route" pins the map (`CycleMap.Pin`, `RoutePin`)
 - [x] Toolbar: back + share/more capsule (more holds Add to Calendar and Open in cycle.travel),
-      inline title fades in at 290–330pt. Clear → regular glass is left to the system
-- [x] Verdict card with `ScoreGauge`
+      no title, no tab bar
+- [x] Verdict card
 - [x] `DeparturePicker`; selection swaps the forecast, profile wind strip and factors
 - [x] Forecast grid (rows instead of columns at accessibility sizes)
 - [x] `RouteProfile` (Swift Charts area + wind strip, scrubbing)
@@ -315,7 +335,7 @@ Build:
       `conditions.skyConditionShares` per ride hour and for the ride, `sunshineAssessment` for
       the part of the ride with no sky data (`RideDetail.SkyBreakdown`)
 - [x] "Wind on the Ride": the extension's wind panel (`extension/ui/wind.ts`) over `windStretches`,
-      falling back to `rideHours[]` without the map; gusts sentence against your comfort and limit
+      falling back to `rideHours[]` without "Show Wind on Map"; gusts sentence against your comfort and limit
       in your units and the response time zone (`RideDetail.WindBreakdown`)
 - [x] Both checked in light, dark and at accessibility sizes on the simulator
 - [x] "▲ 4 since 07:00" badge from `best.previous`, only when the rounded change is at least 1 (§2)
