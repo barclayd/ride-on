@@ -5,7 +5,7 @@ changes below. The extension is being built against these contracts in parallel,
 so keep the field names and shapes as written. If something must change, update
 this file in the same PR.
 
-Read `worker/CLAUDE.md`, `docs/api.md` and `docs/authentication.md` first. The
+Read `api/CLAUDE.md`, `docs/api.md` and `docs/authentication.md` first. The
 existing conventions still apply: Zod-validated strict input, functional
 TypeScript, synthetic-weather tests, docs updated with the code, no logging of
 tokens, GPX or forecast bodies.

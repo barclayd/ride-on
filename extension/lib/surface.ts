@@ -1,33 +1,9 @@
 // Isolated adapter for cycle.travel's saved-journey directions, inspected 2026-10-12.
 // These are website formats, not a stable public API. Unknown stays unknown.
-export type SurfaceKind =
-  | 'paved'
-  | 'compacted'
-  | 'gravel'
-  | 'rough-unpaved'
-  | 'earth'
-  | 'dirt'
-  | 'grass'
-  | 'sand'
-  | 'unpaved'
-  | 'unknown'
-  | 'non-cycling';
-export type SurfaceInput = {
-  schemaVersion: 1;
-  source: {
-    providerId: 'cycle-travel';
-    method: 'route-instructions';
-    formatVersion: 1 | 2;
-    mappingVersion: 1;
-  };
-  geometryDistanceM: number;
-  sections: {
-    fromM: number;
-    toM: number;
-    surface: SurfaceKind;
-    sourceCode: string;
-  }[];
-};
+import type { components } from '../../api/contracts/client';
+
+export type SurfaceInput = components['schemas']['SurfaceInput'];
+export type SurfaceKind = SurfaceInput['sections'][number]['surface'];
 
 // Upgrade old timestamp-only markers once, including journeys with no surface data.
 export const surfaceSeenKey = (externalId: string) =>

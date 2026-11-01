@@ -53,18 +53,18 @@ priority, and preserve the boolean on unrelated preference edits.
 
 | What | Where |
 |---|---|
-| Presentation value types + `.sample` | `app/Packages/Models/Sources/Models/RideBoard.swift` |
-| The nine components (DESIGN-SYSTEM.md §6) | `app/Packages/Features/Sources/SharedUI/` |
-| Rides, Ride detail, Window sheet, Window passed | `app/Packages/Features/Sources/RideUI/` |
-| Preferences, Ideal Temperature, Comfortable Wind | `app/Packages/Features/Sources/PreferencesUI/` (replaced YouUI; About moved here) |
-| Routes: map, panel, cards, rows | `app/Packages/Features/Sources/RoutesUI/`; data in `app/Packages/Models/Sources/Models/RouteLibrary.swift` (`RouteLibrary.sample`, `SampleRoutes`) |
-| Saved settings (`RiderSettings`, `RiderSettingsStore`) | `app/Packages/Services/Sources/Services/RiderSettings.swift` |
-| Tabs | `app/Packages/Router/Sources/Router/AppTab.swift`: `rides`, `routes`, `preferences` |
-| Accent | `app/App/Assets.xcassets/AccentColor`: `#248A3D` light, `#30D158` dark |
-| iPhone Duo shapes (`PaneShape`, `measuresPaneShape()`) | `app/Packages/DesignSystem/Sources/DesignSystem/PaneShape.swift` |
-| A pane's own controls (`PaneBar`, §6 #19) | `app/Packages/Features/Sources/SharedUI/PaneBar.swift` |
-| Ride detail's kept state (`RideDetailState`, one per pick) | `app/Packages/Features/Sources/RideUI/RideDetailState.swift` |
-| Widgets | `app/Widgets/` (the `RideOnWidgets` extension, iOS and macOS); `app/Shared/` (App Group store, `RideLink`, map stills, compiled into the app too); `app/App/WidgetSync.swift` (writes the snapshot, renders stills, runs the Live Activity); `RideWidgetSnapshot` in Models |
+| Presentation value types + `.sample` | `apple/Packages/Models/Sources/Models/RideBoard.swift` |
+| The nine components (DESIGN-SYSTEM.md §6) | `apple/Packages/Features/Sources/SharedUI/` |
+| Rides, Ride detail, Window sheet, Window passed | `apple/Packages/Features/Sources/RideUI/` |
+| Preferences, Ideal Temperature, Comfortable Wind | `apple/Packages/Features/Sources/PreferencesUI/` (replaced YouUI; About moved here) |
+| Routes: map, panel, cards, rows | `apple/Packages/Features/Sources/RoutesUI/`; data in `apple/Packages/Models/Sources/Models/RouteLibrary.swift` (`RouteLibrary.sample`, `SampleRoutes`) |
+| Saved settings (`RiderSettings`, `RiderSettingsStore`) | `apple/Packages/Services/Sources/Services/RiderSettings.swift` |
+| Tabs | `apple/Packages/Router/Sources/Router/AppTab.swift`: `rides`, `routes`, `preferences` |
+| Accent | `apple/app/App/Assets.xcassets/AccentColor`: `#248A3D` light, `#30D158` dark |
+| iPhone Duo shapes (`PaneShape`, `measuresPaneShape()`) | `apple/Packages/DesignSystem/Sources/DesignSystem/PaneShape.swift` |
+| A pane's own controls (`PaneBar`, §6 #19) | `apple/Packages/Features/Sources/SharedUI/PaneBar.swift` |
+| Ride detail's kept state (`RideDetailState`, one per pick) | `apple/Packages/Features/Sources/RideUI/RideDetailState.swift` |
+| Widgets | `apple/app/Widgets/` (the `RideOnWidgets` extension, iOS and macOS); `apple/app/Shared/` (App Group store, `RideLink`, map stills, compiled into the app too); `apple/app/App/WidgetSync.swift` (writes the snapshot, renders stills, runs the Live Activity); `RideWidgetSnapshot` in Models |
 
 ---
 

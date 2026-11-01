@@ -1,7 +1,7 @@
 import type { Target } from './style.ts'
 
 /** The app's copy of the style, glyphs and sprite: SharedUI's `CycleMap` resources. */
-export const appResources = new URL('../../../app/Packages/Features/Sources/SharedUI/CycleMap/', import.meta.url)
+export const appResources = new URL('../../../apple/Packages/Features/Sources/SharedUI/CycleMap/', import.meta.url)
 
 /** Where the app reads the style's files from. */
 export const native: Target = {

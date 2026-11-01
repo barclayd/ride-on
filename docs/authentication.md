@@ -43,7 +43,7 @@ route access. Route-source connections remain a separate concern.
 ## Secret configuration
 
 `AUTH_CONFIG_JSON` is one Worker secret. Keep its local source in ignored
-`worker/.auth-config.json` with owner-only file permissions, and never commit it.
+`api/.auth-config.json` with owner-only file permissions, and never commit it.
 A configuration has this shape (the placeholders below are not usable secrets):
 
 ```json
@@ -68,7 +68,7 @@ providers: it signs sessions and encrypts provider access/refresh tokens. Accoun
 ID tokens are stored by Better Auth in D1; they are never returned by product APIs.
 Keep database access restricted. The API does not expose provider-token endpoints.
 
-From `worker/`, after preparing the file securely:
+From `api/`, after preparing the file securely:
 
 ```sh
 bunx wrangler secret put AUTH_CONFIG_JSON < .auth-config.json

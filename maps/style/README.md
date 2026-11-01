@@ -16,13 +16,13 @@ cycling overlay from [`maps/tiles/`](../tiles/README.md), set in Montserrat. The
 | `scripts/glyphs.sh` | Builds the Montserrat glyph PBFs into the app |
 | `test/style.test.ts` | Validation, glyph coverage, archive URLs, sprite coverage, and a check that the app's style and sprite are up to date |
 
-Bun 1.4, TypeScript (tsgo), Biome, as in `worker/`.
+Bun 1.4, TypeScript (tsgo), Biome, as in `api/`.
 
 ## Outputs
 
 | Target | Command | Writes | Glyphs and sprite | Tiles |
 |---|---|---|---|---|
-| `native` | `bun run build` | `style.json`, `sprite@2x.json` and `sprite@2x.png` in `app/Packages/Features/Sources/SharedUI/CycleMap/` | `bundle://glyphs/…`, `bundle://sprite`, rewritten to the resource bundle by the app at load | `https://maps.ride-on.cc` |
+| `native` | `bun run build` | `style.json`, `sprite@2x.json` and `sprite@2x.png` in `apple/Packages/Features/Sources/SharedUI/CycleMap/` | `bundle://glyphs/…`, `bundle://sprite`, rewritten to the resource bundle by the app at load | `https://maps.ride-on.cc` |
 | `web` | `bun src/cli.ts web <out> <origin> [<tiles>]` | The prototype's `style.json` (`bun run style` there) | `<origin>/glyphs/…`, `<origin>/sprite` | `https://maps.ride-on.cc`, or `<tiles>` |
 
 Both read the archives named in `archives` in `src/style.ts`: dated keys, never overwritten. After

@@ -24,7 +24,7 @@ of this; it is waiting on the data below.
 Complete forecasts already work: `conditions.skyConditionDistanceFractions` exists
 both overall and on every `rideHours[].conditions`. The gap appears when any
 sampled row has `skyCondition: null`. `summarize` in
-`worker/src/recommendations/engine.ts` then returns
+`api/src/recommendations/engine.ts` then returns
 `skyConditionDistanceFractions: null` for the whole summary.
 
 A row's sky symbol can be missing while its essential weather is present, so the
@@ -32,7 +32,7 @@ departure is still scored (`sunshineAssessment.status: 'partial'`). Since Apple
 Weather became a provider, the gap isn't only at the forecast horizon:
 `appleSkyCondition` maps wind and heat codes (`Windy`, `Hot`…), and sun codes
 whose daylight is unknown, to null, so the gap can fall mid-ride.
-`worker/test/sunshine-coverage.test.ts` already covers partial sunshine for
+`api/test/sunshine-coverage.test.ts` already covers partial sunshine for
 scoring. As a result:
 
 - `best.conditions` loses every sky share, so the legend can't show the sunny and
@@ -64,7 +64,7 @@ winners, and every non-null `rideHours[].conditions`.
 }
 ```
 
-- **Keys:** every `skyConditions` category (`worker/src/weather/conditions.ts`)
+- **Keys:** every `skyConditions` category (`api/src/weather/conditions.ts`)
   plus `unknown`.
   - Each value is that category's share of the summary's own sampled distance: the
     whole route for `best.conditions`, that hour's distance for a ride hour.
@@ -82,9 +82,9 @@ winners, and every non-null `rideHours[].conditions`.
     the iOS app (`RideBoardLoader.swift`) already read it.
   - `factors.sunshine`, which stays null whenever the fractions are.
 - **Schema:** add the field to `conditionsSchema` in
-  `worker/src/recommendations/conditions.ts`.
+  `api/src/recommendations/conditions.ts`.
   - Make it optional, like `windDistanceFractions`. Ride plans saved through
-    `worker/src/rides/plan.ts` store `conditions` in that strict schema, so
+    `api/src/rides/plan.ts` store `conditions` in that strict schema, so
     historical plans must still parse.
   - Allow `unknown` as well as the eight categories.
 
@@ -98,7 +98,7 @@ change.
     distance received each category";
   - add it to the `best.conditions`, `best.rideHours` row of the response table;
   - add a changelog line at the top.
-- In `worker/test/sunshine-coverage.test.ts`, add one test with a ride whose sky
+- In `api/test/sunshine-coverage.test.ts`, add one test with a ride whose sky
   symbols stop partway through. Check that:
   - `best.conditions` and the ride hour containing the boundary carry sunny and
     unknown shares;

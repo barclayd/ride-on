@@ -4,10 +4,10 @@ DerivedData/
 xcuserdata/
 *.xcscmblueprint
 
-# XcodeGen: project.pbxproj is generated from app/project.yml — regenerate
+# XcodeGen: project.pbxproj is generated from apple/app/project.yml — regenerate
 # with `xcodegen generate`, don't hand-edit or commit it.
-app/RideOn.xcodeproj/
-app/Generated/
+apple/app/RideOn.xcodeproj/
+apple/app/Generated/
 
 # Swift Package Manager
 .build/

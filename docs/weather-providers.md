@@ -227,7 +227,7 @@ and the distinction between advertised capability and available evidence.
 
 ## Internal contracts
 
-The types are in [`worker/src/weather/contracts.ts`](../worker/src/weather/contracts.ts).
+The types are in [`api/src/weather/contracts.ts`](../api/src/weather/contracts.ts).
 Runtime request validation, adapter response validation and source selection
 are now implemented beside them. Only the required envelope, units and selected
 values are checked; unrelated new upstream fields are tolerated.
@@ -379,7 +379,7 @@ Global Spot hourly still reports
 missing coverage beyond its horizon; no lower-resolution feed is substituted.
 
 For an explicit live diagnostic, supply a JSON `ForecastRequest` and run from
-`worker/` (this consumes API quota):
+`api/` (this consumes API quota):
 
 ```sh
 bun --env-file=.dev.vars scripts/probe-weather.ts request.json report.json

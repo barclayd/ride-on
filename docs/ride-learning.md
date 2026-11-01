@@ -1,6 +1,6 @@
 # Ride feedback and shadow personalisation
 
-API v0.42.0, 30 October 2026. Apply `worker/migrations/0021_ride_learning.sql`
+API v0.42.0, 30 October 2026. Apply `api/migrations/0021_ride_learning.sql`
 before the Worker release. The production scoring algorithm remains `comfort-v0.15`.
 This release collects evidence and evaluates personal adjustments; **it does not
 apply them to recommendations or overwrite saved preferences**.

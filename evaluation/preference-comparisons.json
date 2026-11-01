@@ -7,7 +7,7 @@
   "implementation_2026_10_14": {
     "algorithm_version": "comfort-v0.13",
     "status": "implemented_with_synthetic_calibration",
-    "test_file": "worker/test/wind-exposure.test.ts",
+    "test_file": "api/test/wind-exposure.test.ts",
     "changes": [
       "Bounded sustained-tailwind benefit using distance-weighted assistance strength; gust peaks do not earn assistance.",
       "Gust comfort uses an adverse component estimated from prevailing wind direction; raw gust limits stay independent.",
@@ -19,7 +19,7 @@
   "follow_up_2026_10_14": {
     "algorithm_version": "comfort-v0.14",
     "status": "implemented_with_synthetic_calibration_and_saved_live_replay",
-    "test_file": "worker/test/wind-exposure.test.ts",
+    "test_file": "api/test/wind-exposure.test.ts",
     "problem": "The saved route-level replay gave Horsham no assistance benefit: v0.13 subtracted lateral wind from the forward component, then gated the mean assistance a second time.",
     "changes": [
       "Score sustained forward assistance independently of lateral discomfort, including diagonal tailwinds.",
@@ -45,7 +45,7 @@
   "temperature_sunshine_follow_up_2026_10_14": {
     "algorithm_version": "comfort-v0.14",
     "status": "existing_preferences_match_confirmed_intent",
-    "test_file": "worker/test/temperature-sunshine-calibration.test.ts",
+    "test_file": "api/test/temperature-sunshine-calibration.test.ts",
     "scoring_changed": false,
     "profile_settings_changed": false,
     "product_constraint": "Calibration behavior must follow the rider's saved preferences. Do not treat generic defaults or another rider's answers as explicit user intent.",

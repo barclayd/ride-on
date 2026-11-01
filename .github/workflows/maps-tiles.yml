@@ -168,7 +168,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
-          git add maps/style/src/style.ts app/Packages/Features/Sources/SharedUI/CycleMap/style.json docs/maps/prototype/style.json
+          git add maps/style/src/style.ts apple/Packages/Features/Sources/SharedUI/CycleMap/style.json docs/maps/prototype/style.json
           git commit -m "Point the cycle map at ${keys[*]}"
           git push --force origin "$branch"
           if [[ -n $(gh pr list --head "$branch" --json number --jq '.[]') ]]; then

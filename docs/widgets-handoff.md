@@ -34,16 +34,16 @@ Dan's decisions, so they aren't reopened:
 
 | Path | What it does |
 |---|---|
-| `app/Packages/Models/Sources/Models/RideWidgetSnapshot.swift` | The Codable data the widgets read: the board's days, the tracked ride and the units. Also the text helpers `rideTime(at:short:)` and `duration`. Tested in `ModelsTests/RideWidgetSnapshotTests.swift` |
-| `app/App/WidgetSync.swift` | The app side, which:<br>• builds the snapshot from `RideBoard` and `TrackedRide`, and saves it to the App Group only when it changed;<br>• renders map stills while the app is in front (`CycleMapStill` on iOS, `MKMapSnapshotter` on the Mac);<br>• reloads timelines and controls;<br>• starts, updates and ends the Live Activity.<br>In the fixture world it moves the snapshot to `--fixture-now` with `snapshot.current()` |
-| `app/Shared/WidgetShared.swift` | Compiled into the app and the extension: `WidgetStore` (App Group defaults and container), `RideLink` deep links, `OpenRideIntent`, `RideActivityAttributes` |
-| `app/Shared/WidgetMap.swift` | The still shapes (band, tall, square), their framing and file URLs, and projecting the loop onto them |
-| `app/Widgets/RideWidget.swift` | The widget, its timeline and the `PageDay` intent. The timeline has entries every five minutes through the ride, at the finish, two hours on and at midnight |
-| `app/Widgets/BoardViews.swift` | A, in every family including the Lock Screen accessories |
-| `app/Widgets/TrackedViews.swift` | D, in every family including the Lock Screen accessories |
-| `app/Widgets/WidgetParts.swift` | Shared parts: `MapPanel`, `ScorePill`, `ScoreArc`, `Conds`, `HourCells`, `Color.rideAccent` |
-| `app/Widgets/RideLiveActivity.swift` | The Live Activity's Lock Screen view and the Dynamic Island |
-| `app/Widgets/RideControl.swift` | The Control Centre control: the tracked ride's name, otherwise "Track Best" |
+| `apple/Packages/Models/Sources/Models/RideWidgetSnapshot.swift` | The Codable data the widgets read: the board's days, the tracked ride and the units. Also the text helpers `rideTime(at:short:)` and `duration`. Tested in `ModelsTests/RideWidgetSnapshotTests.swift` |
+| `apple/app/App/WidgetSync.swift` | The app side, which:<br>• builds the snapshot from `RideBoard` and `TrackedRide`, and saves it to the App Group only when it changed;<br>• renders map stills while the app is in front (`CycleMapStill` on iOS, `MKMapSnapshotter` on the Mac);<br>• reloads timelines and controls;<br>• starts, updates and ends the Live Activity.<br>In the fixture world it moves the snapshot to `--fixture-now` with `snapshot.current()` |
+| `apple/app/Shared/WidgetShared.swift` | Compiled into the app and the extension: `WidgetStore` (App Group defaults and container), `RideLink` deep links, `OpenRideIntent`, `RideActivityAttributes` |
+| `apple/app/Shared/WidgetMap.swift` | The still shapes (band, tall, square), their framing and file URLs, and projecting the loop onto them |
+| `apple/app/Widgets/RideWidget.swift` | The widget, its timeline and the `PageDay` intent. The timeline has entries every five minutes through the ride, at the finish, two hours on and at midnight |
+| `apple/app/Widgets/BoardViews.swift` | A, in every family including the Lock Screen accessories |
+| `apple/app/Widgets/TrackedViews.swift` | D, in every family including the Lock Screen accessories |
+| `apple/app/Widgets/WidgetParts.swift` | Shared parts: `MapPanel`, `ScorePill`, `ScoreArc`, `Conds`, `HourCells`, `Color.rideAccent` |
+| `apple/app/Widgets/RideLiveActivity.swift` | The Live Activity's Lock Screen view and the Dynamic Island |
+| `apple/app/Widgets/RideControl.swift` | The Control Centre control: the tracked ride's name, otherwise "Track Best" |
 
 The extension links only Models and DesignSystem, never SharedUI or MapLibre. Maps reach it as
 JPEG stills the app writes into the App Group.
@@ -171,4 +171,4 @@ Watch out for:
     the app, so the widget keeps running the old build. Install it with `xcrun simctl install`.
 - **ActivityKit's 4 KB limit:** `WidgetSync` strips the loop and the hours from the activity's
   state and puts a loop of about 30 points in the attributes.
-- **New files:** after adding or removing files, run `cd app && xcodegen generate`.
+- **New files:** after adding or removing files, run `cd apple/app && xcodegen generate`.

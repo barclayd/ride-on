@@ -62,7 +62,7 @@ mean daily maximum is around 15°C. The model uses the baseline to express
 seasonal tolerance, not to apply a second weather-anomaly penalty.
 
 No extra weather requests, climate service dependency, or forecast-cache expiry
-are required. `worker/scripts/import-seasonal-climate.ts` is an explicit
+are required. `api/scripts/import-seasonal-climate.ts` is an explicit
 maintenance command, not a build/CI step. It validates the source's 1,707 cells,
 records hashes of the downloaded maximum and minimum responses, and rounds coordinates to six decimals
 and temperatures to three. It matches minimums by grid ID and verifies identical

@@ -4,13 +4,13 @@ on:
   pull_request:
     paths:
       - "landing/**"
-      - "app/Packages/Features/Sources/SharedUI/CycleMap/**" # copied in by scripts/copy-map.ts
+      - "apple/Packages/Features/Sources/SharedUI/CycleMap/**" # copied in by scripts/copy-map.ts
       - ".github/workflows/landing.yml"
   push:
     branches: [main]
     paths:
       - "landing/**"
-      - "app/Packages/Features/Sources/SharedUI/CycleMap/**"
+      - "apple/Packages/Features/Sources/SharedUI/CycleMap/**"
       - ".github/workflows/landing.yml"
   workflow_dispatch:
 

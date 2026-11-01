@@ -6,17 +6,17 @@ The research below explains the design; there is no production-device timing cla
 
 ## Implementation
 
-- [`RideBoardStore`](../app/Packages/Services/Sources/Services/RideBoardStore.swift) is owned
+- [`RideBoardStore`](../apple/Packages/Services/Sources/Services/RideBoardStore.swift) is owned
   by the app, shared across windows and view recreation. It separates content, refresh,
   failure and authentication state. Foreground activation revalidates data; pull-to-refresh
   and settings/shortlist/window edits request fresh rankings. Concurrent loads coalesce; newer edits
   supersede older work. Routes uses the same store, while tracked-ride reads remain independent. Failed refreshes keep the board visible and retry after a minute.
-- [`RideBoardRepository`](../app/Packages/Services/Sources/Services/RideBoardRepository.swift)
+- [`RideBoardRepository`](../apple/Packages/Services/Sources/Services/RideBoardRepository.swift)
   performs restoration, mapping, network orchestration and atomic writes off the UI actor.
   Profile and selection load concurrently. Recommendations can appear before optional
   geometry/history enrichment finishes. The first successful recommendation is saved even
   before maps arrive; later interrupted refreshes preserve the previous snapshot.
-- [`RideBoardSnapshot`](../app/Packages/Services/Sources/Services/RideBoardSnapshot.swift)
+- [`RideBoardSnapshot`](../apple/Packages/Services/Sources/Services/RideBoardSnapshot.swift)
   stores a versioned envelope in `Caches/RideBoards`. It contains raw recommendation/profile
   JSON, decoded route geometry, summaries and request context. Presentation prose is rebuilt
   from canonical data and the current locale on restoration. Empty shortlists are saved too.
@@ -29,12 +29,12 @@ The research below explains the design; there is no production-device timing cla
   windows offer new dates even when the stored forecast is entirely in the past. Existing
   selection and open ride details survive refresh; a removed recommendation retains its
   last real detail instead of falling back to sample data.
-- [`RideOnSession`](../app/Packages/Services/Sources/Services/RideOnSession.swift) persists
+- [`RideOnSession`](../apple/Packages/Services/Sources/Services/RideOnSession.swift) persists
   a login ID separately from rotating tokens. Snapshots are scoped to account and login;
   sign-out clears the board and rejects late results. Old responses cannot rotate the
   current login's token or sign out a newer login. Concurrent profile reads share one
   request, with a two-second startup reuse window invalidated by profile writes.
-- [`RideBoardBackgroundRefresh`](../app/App/RideBoardBackgroundRefresh.swift) submits the
+- [`RideBoardBackgroundRefresh`](../apple/app/App/RideBoardBackgroundRefresh.swift) submits the
   iOS refresh request. The app scene handles it through SwiftUI, cancels actual network
   work on expiration, and reschedules. The `fetch` mode and permitted identifier are in
   `project.yml`. macOS shares disk caching and activation refresh.
@@ -76,18 +76,18 @@ when returning to the foreground. This is the foundation for the proposed experi
 
 | Finding | Consequence | Source |
 | --- | --- | --- |
-| The view starts in `.loading`, with no disk restoration. | Every process launch waits for the network before showing rides. | [LiveRidesView](../app/Packages/Features/Sources/RideUI/LiveRidesView.swift) |
-| Shortlist loads first, then settings, then recommendations, history summaries and all route metadata/geometry. | Three dependent stages; the final stage waits for its slowest request. A nonempty shortlist of N routes makes 2N + 4 requests per normal board load. | [RideBoardLoader.load and routeInfo](../app/Packages/Services/Sources/Services/RideBoardLoader.swift) |
-| App startup separately loads settings and account information. | `/users/me` is fetched twice across the board and settings flows. | [RideOnApp](../app/App/RideOnApp.swift), [RiderSettingsStore.load](../app/Packages/Services/Sources/Services/RiderSettings.swift) |
+| The view starts in `.loading`, with no disk restoration. | Every process launch waits for the network before showing rides. | [LiveRidesView](../apple/Packages/Features/Sources/RideUI/LiveRidesView.swift) |
+| Shortlist loads first, then settings, then recommendations, history summaries and all route metadata/geometry. | Three dependent stages; the final stage waits for its slowest request. A nonempty shortlist of N routes makes 2N + 4 requests per normal board load. | [RideBoardLoader.load and routeInfo](../apple/Packages/Services/Sources/Services/RideBoardLoader.swift) |
+| App startup separately loads settings and account information. | `/users/me` is fetched twice across the board and settings flows. | [RideOnApp](../apple/app/App/RideOnApp.swift), [RiderSettingsStore.load](../apple/Packages/Services/Sources/Services/RiderSettings.swift) |
 | Route geometry is downloaded and decoded on every reload. | Unchanged routes add network and CPU work each time. | `RideBoardLoader.routeInfo` |
 | A refresh error replaces an already loaded board with a full-screen failure. | A temporary connection problem removes useful content. | `LiveRidesView.load` |
 | Reloading is driven by view appearance/settings revision, with no scene activation refresh. | Returning to a surviving view can leave old results on screen. | `LiveRidesView.body` |
 | The API sends `weather.refreshAt`, but the app's response model only retains attribution from `weather`. | The app cannot tell when it can reuse the forecast-backed ranking. | `RideBoardLoader.Weather`, [API contract](api.md) |
-| The Worker sets `Cache-Control: no-store`. | Increasing `URLCache` capacity alone will not solve this flow. Explicit application data persistence is needed. | [Worker middleware](../worker/src/index.ts) |
+| The Worker sets `Cache-Control: no-store`. | Increasing `URLCache` capacity alone will not solve this flow. Explicit application data persistence is needed. | [Worker middleware](../api/src/index.ts) |
 
-The existing in-memory [LiveWeatherProvider](../app/Packages/Services/Sources/Services/LiveWeatherProvider.swift)
+The existing in-memory [LiveWeatherProvider](../apple/Packages/Services/Sources/Services/LiveWeatherProvider.swift)
 cache is for direct WeatherKit calls; the live Rides board uses the API instead. Route
-thumbnails already have a [disk cache](../app/Packages/Services/Sources/Services/RouteSnapshotService.swift),
+thumbnails already have a [disk cache](../apple/Packages/Services/Sources/Services/RouteSnapshotService.swift),
 but that cannot restore the board. The extension offers a useful local precedent:
 [persisted state](../extension/lib/state.ts), forecast expiry checks, and preservation of
 results during refresh in [background.ts](../extension/entrypoints/background.ts).
@@ -140,7 +140,7 @@ The server already varies forecast refresh thresholds by ride date and provider 
 use its deadline instead of a client-wide arbitrary TTL. `generatedAt` describes the
 assessment, not necessarily when upstream weather was retrieved. See
 [planning and forecast caching](planning-api.md#provider-capabilities-caching-and-attribution)
-and [the refreshAt calculation](../worker/src/recommendations/service.ts).
+and [the refreshAt calculation](../api/src/recommendations/service.ts).
 
 Refresh failures should leave content visible with a small retry message. Use a dated
 "Last updated" label when the data is from another day. Preserve provider attribution
@@ -162,7 +162,7 @@ up to 30 seconds and chooses when it runs; this is suitable for preparing saved 
 
 Implementation touchpoints:
 
-- In [project.yml](../app/project.yml), add `fetch` alongside the existing
+- In [project.yml](../apple/app/project.yml), add `fetch` alongside the existing
   `remote-notification` background mode and a `BGTaskSchedulerPermittedIdentifiers`
   entry such as `com.danbarclay.rideon.refresh`. Regenerate the Xcode project.
   [Apple: Configuring background tasks](https://developer.apple.com/documentation/uikit/using-background-tasks-to-update-your-app).
@@ -193,7 +193,7 @@ on a physical device before making a speed-up claim.
 Instrument launch-to-first-usable-board separately from time-to-fresh-board, plus cache
 read/decode, request count, response bytes and each endpoint's latency. Use Instruments
 on a physical device with a Release build. The existing
-[`testColdLaunchPerformance`](../app/RideOnUITests/RideOnUITests.swift) uses a fixture board
+[`testColdLaunchPerformance`](../apple/app/RideOnUITests/RideOnUITests.swift) uses a fixture board
 and bypasses `LiveRidesView`, so it cannot measure this network/loading experience.
 
 Acceptance coverage should exercise the real store with injected network and clock:

@@ -26,7 +26,7 @@ const plan = {
 The additional metadata fields are required whenever `plan` is present. Retain
 all attribution fields, including logos and notices. Do not copy the full weather
 response or provider payloads. Conditions use the shared provider-neutral schema
-in `worker/src/recommendations/conditions.ts`, unchanged from `best.conditions`.
+in `api/src/recommendations/conditions.ts`, unchanged from `best.conditions`.
 `schemaVersion` defaults to 1; unsupported versions and unknown fields fail.
 Attribution is 1–10 entries, HTTPS URLs only; strings and the JSON body are bounded.
 

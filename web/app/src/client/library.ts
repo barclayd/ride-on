@@ -1,3 +1,4 @@
+import type { components } from '../../../../api/contracts/client';
 import type { LibraryGeometry, Line } from '../geometry.ts';
 import { cachedLines, saveLines } from './geometry-cache.ts';
 
@@ -13,7 +14,10 @@ export type LibraryRoute = {
   source: { providerId: string; externalId: string } | null;
   surfaceSummary: { unpavedFraction: number | null } | null;
 };
-export type Selection = { version: number; routeIds: string[] };
+export type Selection = Pick<
+  components['schemas']['SelectionResponse']['selection'],
+  'version' | 'routeIds'
+>;
 export type Library = {
   routes: LibraryRoute[];
   /** Shortlisted route ids, in the rider's order. */

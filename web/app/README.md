@@ -15,14 +15,14 @@ of `ride-on-api`, reached over the `API` service binding, and serves the map she
 Run the API first, so the service binding has something to connect to:
 
 ```sh
-cd worker
+cd api
 bun install
 bun run migrate:local
-bun run dev:session   # writes worker/.local-session.json
+bun run dev:session   # writes api/.local-session.json
 bun run dev           # :8787
 ```
 
-Scores come from Apple Weather, so `worker/.dev.vars` needs `APPLE_WEATHER_CONFIG_JSON` (see
+Scores come from Apple Weather, so `api/.dev.vars` needs `APPLE_WEATHER_CONFIG_JSON` (see
 `docs/apple-weather.md`). Keep the local rider on Apple Weather: the Met Office key has a small
 daily quota.
 

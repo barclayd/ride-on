@@ -476,7 +476,7 @@ real reports.
 - **The client:** `build.ts` bundles the client entries with `Bun.build` into `public/`, and
   Workers static assets serve them (no `remix/assets`). MapLibre is vendored there as its ESM
   build and imported at runtime, so the hydrated entry stays small and the map loads after it.
-- **Tooling:** Bun, Biome and TypeScript, as in `extension/` and `worker/`.
+- **Tooling:** Bun, Biome and TypeScript, as in `extension/` and `api/`.
 
 ### 11.2 Auth: same-origin BFF
 

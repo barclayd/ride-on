@@ -60,7 +60,7 @@ actual passage times and samples 2–12 positions in a chosen distance interval.
 This does not change the API's 5 MB upload limit or enable historical API requests.
 
 ```sh
-cd worker
+cd api
 bun scripts/calibrate-ground.ts \
   --gpx /path/to/recorded-ride.gpx \
   --out ../evaluation/ground-calibration/example \
@@ -111,7 +111,7 @@ saved 15-minute rainfall measure metadata and a readings snapshot; it makes no
 network requests and does not affect the API, caches or scores.
 
 ```sh
-cd worker
+cd api
 bun scripts/audit-ground-gauge.ts \
   --measure /private/case/measure.json \
   --readings /private/case/readings.json \

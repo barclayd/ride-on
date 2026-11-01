@@ -332,7 +332,7 @@ before adding a custom component in code.
     route's callout is pinned over its northernmost point as on MapKit. In the fixture world it
     draws the style's land colour only, offline. Plan, data pipeline and open decisions in
     [`docs/maps/README.md`](docs/maps/README.md).
-18. **Widget parts** (`app/Widgets/`, docs/redesign/README.md §8) — the widget extension can't link
+18. **Widget parts** (`apple/app/Widgets/`, docs/redesign/README.md §8) — the widget extension can't link
     SharedUI, so its pieces are its own: `MapPanel` (a map still the app renders into the App Group,
     the cycle map on iOS and MapKit on the Mac, with the loop drawn over it, the ridden part in
     `.committed` gold, optional hour chips), `ScorePill` (the score on an accent capsule, grey below
@@ -365,7 +365,7 @@ trailing; with `continuesFromRail` set, the rail carries Continue and it leaves 
 
 ## 7. Motion
 
-Use the tokens in `app/Packages/DesignSystem/Sources/DesignSystem/Motion.swift`; don't
+Use the tokens in `apple/Packages/DesignSystem/Sources/DesignSystem/Motion.swift`; don't
 hand-roll `.animation()` calls.
 
 | Moment | Token |

@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "extension/**"
+      - "api/contracts/client.d.ts"
       - ".github/workflows/extension.yml"
   push:
     branches: [main]
     paths:
       - "extension/**"
+      - "api/contracts/client.d.ts"
       - ".github/workflows/extension.yml"
   workflow_dispatch:
 

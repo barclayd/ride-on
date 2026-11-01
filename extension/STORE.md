@@ -84,7 +84,7 @@ publishes automatically once it passes. Its sign-in redirect is already in
 | Small promo tile | 440×280 | yes | `store/promo-small-440x280.png` |
 | Marquee promo tile | 1400×560 | no | `store/promo-marquee-1400x560.png` |
 
-The icon and small tile are made from the app logo (`app/RideOn.icon`) with the extension's fonts
+The icon and small tile are made from the app logo (`apple/app/RideOn.icon`) with the extension's fonts
 and colours. The screenshots and the marquee's right half are the real extension (the e2e build
 against a mock API, with made-up routes and rider) over a saved copy of the Journeys page: the
 page with its tracked-route tiles, the popup's Rides, the alerts dialog, the popup's check-in and

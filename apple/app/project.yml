@@ -1,0 +1,253 @@
+name: RideOn
+options:
+  bundleIdPrefix: com.danbarclay
+  deploymentTarget:
+    iOS: "27.1"
+    macOS: "27.0"
+
+configs:
+  Debug: debug
+  Release: release
+
+packages:
+  Domain:
+    path: ../Packages/Domain
+  Infrastructure:
+    path: ../Packages/Infrastructure
+  Models:
+    path: ../Packages/Models
+  Engine:
+    path: ../Packages/Engine
+  Services:
+    path: ../Packages/Services
+  Router:
+    path: ../Packages/Router
+  DesignSystem:
+    path: ../Packages/DesignSystem
+  Features:
+    path: ../Packages/Features
+
+targets:
+  RideOn:
+    type: application
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: App
+      - path: Shared
+      - path: RideOn.icon
+    dependencies:
+      - target: RideOnWidgets
+      - package: Router
+      - package: Domain
+      - package: Models
+      - package: Engine
+      - package: DesignSystem
+      - package: Infrastructure
+        product: Networking
+      - package: Infrastructure
+        product: Persistence
+      - package: Infrastructure
+        product: PlatformServices
+      - package: Features
+        product: SharedUI
+      - package: Services
+      - package: Features
+        product: RideUI
+      - package: Features
+        product: RoutesUI
+      - package: Features
+        product: PreferencesUI
+      - package: Features
+        product: OnboardingUI
+    # GENERATE_INFOPLIST_FILE only supports flat string/bool keys via
+    # INFOPLIST_KEY_* — the GPX document-type declarations below are arrays
+    # of dicts, so XcodeGen generates a real Info.plist from `properties`
+    # instead. Output path is outside `sources: App` so it isn't also
+    # swept in as a resource.
+    info:
+      path: Generated/RideOn-Info.plist
+      properties:
+        # Declares a (blank) launch screen so iOS renders the app at native
+        # resolution — without this key the app runs letterboxed in
+        # compatibility mode.
+        UILaunchScreen: {}
+        # Without this key an iPhone app is portrait only, so an iPhone Duo never
+        # reaches tent or the open landscape split (DESIGN-SYSTEM.md §5).
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Lets CloudKit's silent pushes wake the app so SwiftData pulls
+        # remote changes in the background (iOS-only key, ignored on macOS).
+        UIBackgroundModes: [remote-notification, fetch]
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.danbarclay.rideon.refresh
+        # Opened GPX/FIT files are imported as copies (app-owned data), never
+        # edited in place. Declaring UISupportsDocumentBrowser silences Xcode's
+        # "doesn't declare opening in place" iOS warning; it's a UIKit key, so
+        # macOS ignores it (LSSupportsOpeningDocumentsInPlace = NO fails the
+        # macOS build).
+        UISupportsDocumentBrowser: false
+        NSLocationWhenInUseUsageDescription: "Ride On uses your location to find rides near you and estimate travel time."
+        NSHealthShareUsageDescription: "Ride On reads your cycling workouts to match them to your saved routes and log rides automatically."
+        NSHealthUpdateUsageDescription: "Ride On may save ride data it records back to Health."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Ride On adds the rides you choose to your calendar."
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: com.topografix.gpx
+            UTTypeDescription: "GPX Route"
+            UTTypeConformsTo: [public.xml]
+            UTTypeTagSpecification:
+              public.filename-extension: [gpx]
+          - UTTypeIdentifier: com.garmin.fit
+            UTTypeDescription: "FIT Route"
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [fit]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: "GPX Route"
+            LSItemContentTypes: [com.topografix.gpx]
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+          - CFBundleTypeName: "FIT Route"
+            LSItemContentTypes: [com.garmin.fit]
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+        # `rideon://strava-callback` — Strava app-to-app OAuth return
+        # (StravaAuthCallbackRouter) on iOS; the web-based
+        # ASWebAuthenticationSession flow (both platforms) also redirects here.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.danbarclay.rideon.strava
+            CFBundleURLSchemes: [rideon]
+        # The tracked ride's Live Activity (RideLiveActivity, iOS only).
+        NSSupportsLiveActivities: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danbarclay.rideon
+        PRODUCT_NAME: RideOn
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: RideOn
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # Real team (Dan's paid Apple Developer membership): automatic signing
+        # with full iCloud/WeatherKit/HealthKit entitlements in Debug AND
+        # Release, so live WeatherKit works in day-to-day dev builds.
+        # See CLAUDE.md "Signing" section.
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: NO
+        DEVELOPMENT_TEAM: R2GGK3VN2C
+        CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: App/RideOn-iOS.entitlements
+        CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: App/RideOn-iOS.entitlements
+        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: App/RideOn-macOS.entitlements
+
+  # The widget, its Lock Screen forms, the Control Centre control and the Live
+  # Activity (docs/redesign/README.md §8). Links only Models and DesignSystem:
+  # SharedUI brings MapLibre, too heavy for a widget's memory.
+  RideOnWidgets:
+    type: app-extension
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Widgets
+      - path: Shared
+      - path: App/Assets.xcassets
+    dependencies:
+      - package: Domain
+      - package: DesignSystem
+    info:
+      path: Generated/RideOnWidgets-Info.plist
+      properties:
+        CFBundleDisplayName: Ride On
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danbarclay.rideon.widgets
+        PRODUCT_NAME: RideOnWidgets
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: NO
+        DEVELOPMENT_TEAM: R2GGK3VN2C
+        CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: Widgets/RideOnWidgets-iOS.entitlements
+        CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: Widgets/RideOnWidgets-iOS.entitlements
+        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: Widgets/RideOnWidgets-macOS.entitlements
+
+  RideOnTests:
+    type: bundle.unit-test
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: RideOnTests
+    dependencies:
+      - target: RideOn
+      # RideOn (the test host) already links these statically; re-linking
+      # them into the test bundle duplicates symbols (Xcode 15+ hard error).
+      # `link: false` compiles against the module without re-linking it.
+      - package: Models
+        link: false
+      - package: Services
+        link: false
+      - package: Domain
+        link: false
+      - package: Engine
+        link: false
+      - package: Infrastructure
+        product: Networking
+        link: false
+      - package: Infrastructure
+        product: Persistence
+        link: false
+      - package: Infrastructure
+        product: PlatformServices
+        link: false
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: NO
+        DEVELOPMENT_TEAM: R2GGK3VN2C
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/RideOn.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RideOn"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+  RideOnUITests:
+    type: bundle.ui-testing
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: RideOnUITests
+    dependencies:
+      - target: RideOn
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: NO
+        DEVELOPMENT_TEAM: R2GGK3VN2C
+
+schemes:
+  RideOn:
+    build:
+      targets:
+        RideOn: all
+        RideOnTests: [test]
+        RideOnUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      testPlans:
+        - path: RideOn.xctestplan
+          defaultPlan: true
+    archive:
+      config: Release

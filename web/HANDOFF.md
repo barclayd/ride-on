@@ -209,7 +209,7 @@ This is SPEC §13 step 2.
   - Locally, `DEV_SESSION_TOKEN` signs you in on localhost instead. Get one with
     `bun run dev:session`.
 - **Local scores use Apple Weather**, the default for new riders.
-  - `worker/.dev.vars` needs `APPLE_WEATHER_CONFIG_JSON`: the WeatherKit key `8DTB7B2CC6` with the
+  - `api/.dev.vars` needs `APPLE_WEATHER_CONFIG_JSON`: the WeatherKit key `8DTB7B2CC6` with the
     `com.danbarclay.rideon.web` Services ID (see `docs/apple-weather.md`). Without it, every route
     comes back `unassessable` (`missing_weather`).
   - Keep the local rider on Apple Weather. The Met Office BPF key allows 55 calls a day, and local
@@ -217,7 +217,7 @@ This is SPEC §13 step 2.
   - A fresh local session also needs `POST /users` first, or `/users/me` returns 404.
 - **Seed local routes** by posting GPX to `/api/routes` with `Content-Type: application/gpx+xml`.
   Twelve or more are needed to see the full-shortlist sheet.
-- **`worker/.dev.vars` doesn't hot-reload.** Restart the API's `wrangler dev` after editing it.
+- **`api/.dev.vars` doesn't hot-reload.** Restart the API's `wrangler dev` after editing it.
 - **Remix fetches same-origin links and form posts.** A form that redirects off-site (sign-in) or
   must drop the page's memory (sign-out) needs `data-rmx-document`, or it fails with "Failed to
   fetch". See `remix/guides/05-interactivity.md`.
@@ -239,6 +239,6 @@ This is SPEC §13 step 2.
   - manual deploys (`bun run deploy`). Deploys through `web-deploy` on merge are agreed.
   - publishing to the maps.ride-on.cc bucket
 - **Secrets** go in an ignored `.dev.vars` or in Worker secrets.
-- **Never log** tokens, GPX bodies, forecast bodies or auth headers (`worker/CLAUDE.md`).
+- **Never log** tokens, GPX bodies, forecast bodies or auth headers (`api/CLAUDE.md`).
 - **Don't use the Modern Web Guidance skill** unless Dan asks for it.
 - **The Claude Design rules** are in [`design/README.md`](design/README.md).

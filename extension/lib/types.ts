@@ -1,4 +1,5 @@
-// Live API contracts (v0.12.0): worker/src/recommendations/input.ts, docs/api.md and docs/ride-history.md.
+import type { components } from '../../api/contracts/client';
+// Live API contracts (v0.12.0): api/src/recommendations/input.ts, docs/api.md and docs/ride-history.md.
 // Fields the extension needs but the API lacks are in docs/extension-api-brief-v2.md, -v3.md and -v4.md.
 import type { SurfaceInput } from './surface';
 
@@ -131,11 +132,7 @@ export type RouteSummary = {
     capturedAt: string | null;
   };
 };
-export type Selection = {
-  version: number;
-  routeIds: string[];
-  updatedAt: string | null;
-};
+export type Selection = components['schemas']['SelectionResponse']['selection'];
 
 export type Standard =
   | 'minimumTemperatureC'

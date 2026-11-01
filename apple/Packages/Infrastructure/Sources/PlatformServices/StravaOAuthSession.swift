@@ -1,0 +1,111 @@
+import Networking
+import Foundation
+import AuthenticationServices
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
+
+/// `ASWebAuthenticationSession`-backed authorization-code fetch, with an
+/// app-to-app fast path on iOS when the Strava app is installed (PLAN.md:
+/// "+ app-to-app when the Strava app present"). macOS has no Strava app, so
+/// it always goes through the web session — `ASWebAuthenticationSession` is
+/// cross-platform, so that path works fine there too.
+@MainActor
+public final class StravaOAuthSession: NSObject {
+    public override init() {}
+
+    public func requestAuthorizationCode() async throws -> String {
+        #if os(iOS)
+        if UIApplication.shared.canOpenURL(StravaAuthConfig.appAuthorizeURL) {
+            return try await requestAppToAppCode()
+        }
+        #endif
+        return try await requestWebCode()
+    }
+
+    #if os(iOS)
+    private func requestAppToAppCode() async throws -> String {
+        async let callback = StravaAuthCallbackRouter.shared.awaitCallback()
+        await UIApplication.shared.open(StravaAuthConfig.appAuthorizeURL)
+        return try await callback
+    }
+    #endif
+
+    private func requestWebCode() async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            let session = ASWebAuthenticationSession(
+                url: StravaAuthConfig.webAuthorizeURL,
+                callbackURLScheme: StravaAuthConfig.redirectScheme
+            ) { @Sendable callbackURL, error in
+                // ASWebAuthenticationSession invokes this on a background XPC
+                // queue on macOS; @Sendable opts out of the class's @MainActor
+                // isolation (resuming a continuation is safe from any thread).
+                if let error {
+                    if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
+                        continuation.resume(throwing: StravaAuthError.cancelled)
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
+                    return
+                }
+                guard let callbackURL else {
+                    continuation.resume(throwing: StravaAuthError.missingCode)
+                    return
+                }
+                switch StravaAuthConfig.authorizationCode(from: callbackURL) {
+                case .success(let code): continuation.resume(returning: code)
+                case .failure(let error): continuation.resume(throwing: error)
+                }
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = false
+            session.start()
+        }
+    }
+}
+
+extension StravaOAuthSession: ASWebAuthenticationPresentationContextProviding {
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        #if os(iOS)
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let keyWindow = scenes.lazy.compactMap(\.keyWindow).first { return keyWindow }
+        // OAuth is user-initiated from a visible scene, so one always exists.
+        guard let scene = scenes.first else { preconditionFailure("Strava OAuth started with no window scene") }
+        return ASPresentationAnchor(windowScene: scene)
+        #else
+        NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first ?? ASPresentationAnchor()
+        #endif
+    }
+}
+
+#if os(iOS)
+/// Routes the Strava app's app-to-app OAuth return (a normal `openURL` back
+/// into `StravaAuthConfig.redirectURI`) to whichever `StravaOAuthSession` call is
+/// waiting on it. Wired from `RideOnApp.onOpenURL`. iOS only — app-to-app
+/// OAuth only exists on iOS (no Strava app on Mac).
+@MainActor
+public final class StravaAuthCallbackRouter {
+    public static let shared = StravaAuthCallbackRouter()
+    private var continuation: CheckedContinuation<String, Error>?
+    private init() {}
+
+    public func awaitCallback() async throws -> String {
+        try await withCheckedThrowingContinuation { self.continuation = $0 }
+    }
+
+    /// Returns `true` if `url` was a Strava callback (so `RideOnApp` knows
+    /// not to also try treating it as a GPX file open).
+    @discardableResult
+    public func handle(url: URL) -> Bool {
+        guard url.scheme == StravaAuthConfig.redirectScheme else { return false }
+        switch StravaAuthConfig.authorizationCode(from: url) {
+        case .success(let code): continuation?.resume(returning: code)
+        case .failure(let error): continuation?.resume(throwing: error)
+        }
+        continuation = nil
+        return true
+    }
+}
+#endif
