@@ -28,7 +28,8 @@ export const pauseSchema = z
 export type Pause = z.infer<typeof pauseSchema>;
 export const publicUserSchema = userSchema
   .extend({
-    pause: pauseSchema.nullable(),
+    // Keep null on this property; nullable() widens the named Pause component.
+    pause: z.union([pauseSchema, z.null()]),
     weatherProviderId: z.string().nullable(),
     preferenceLevels: z.object({
       sunshine: z.string(),

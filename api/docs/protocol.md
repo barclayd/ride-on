@@ -45,6 +45,11 @@ including null/omitted required keys, numeric bounds and error envelopes. All
 300 existing integration scenarios remain relevant, including endpoints outside
 the new generated contract.
 
+With `@hono/zod-openapi` 1.6.3, `.nullable()` on the named `Pause` schema
+widens the shared component. `User.pause` uses an explicit union with null so
+only that property accepts null. A Zod/JSON Schema regression checks both the
+nullable property and the non-null shared component.
+
 Schemas under `src/schemas` contain only shape dependencies. Keep storage,
 provider calls and HTTP composition above them. The route registry must not
 import service implementations just to obtain a request schema: consumers and

@@ -351,7 +351,7 @@ export interface components {
                     windSpeed: "kmh" | "mph";
                 };
             };
-            pause: components["schemas"]["Pause"];
+            pause: components["schemas"]["Pause"] | null;
             weatherProviderId: string | null;
             preferenceLevels: {
                 sunshine: string;
@@ -363,7 +363,7 @@ export interface components {
             until: string | null;
             resumesAt: string | null;
             pausedAt: string;
-        } | null;
+        };
         Error: {
             error: {
                 code: string;

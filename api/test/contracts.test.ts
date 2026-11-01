@@ -5,10 +5,13 @@ import { createApp } from '../src/app.ts';
 import { AppError } from '../src/errors.ts';
 import { libraryRoutes } from '../src/http/library.ts';
 import { createRouter, registerRoute } from '../src/http/routes.ts';
+import { defaultSettings } from '../src/recommendations/input.ts';
 import { readJsonBody } from '../src/request.ts';
 import {
   errorSchema,
+  pauseSchema,
   selectionResponseSchema,
+  userResponseSchema,
 } from '../src/schemas/library.ts';
 import { updateSelectionSchema } from '../src/schemas/selection.ts';
 
@@ -25,6 +28,41 @@ const validator = (name: string) =>
   });
 
 describe('portable wire contracts', () => {
+  test('nullable named references keep null without weakening the shared schema', () => {
+    const validate = validator('UserResponse');
+    const user = {
+      schemaVersion: 1,
+      id: 'contract-user',
+      version: 1,
+      displayName: 'Contract rider',
+      createdAt: '2026-10-14T12:00:00.000Z',
+      updatedAt: '2026-10-14T12:00:00.000Z',
+      settings: defaultSettings,
+      weatherProviderId: null,
+      preferenceLevels: {
+        sunshine: 'medium',
+        rain: 'medium',
+        crosswind: 'medium',
+      },
+    };
+    const pause = { until: null, resumesAt: null, pausedAt: user.createdAt };
+    for (const value of [null, pause]) {
+      const response = { user: { ...user, pause: value } };
+      expect(userResponseSchema.safeParse(response).success).toBe(true);
+      expect(validate(response)).toBe(true);
+    }
+    for (const invalid of [user, { ...user, pause: false }]) {
+      expect(userResponseSchema.safeParse({ user: invalid }).success).toBe(
+        false,
+      );
+      expect(validate({ user: invalid })).toBe(false);
+    }
+    expect(pauseSchema.safeParse(pause).success).toBe(true);
+    expect(validator('Pause')(pause)).toBe(true);
+    expect(pauseSchema.safeParse(null).success).toBe(false);
+    expect(validator('Pause')(null)).toBe(false);
+  });
+
   test('null is accepted only where declared and required keys stay required', async () => {
     const validate = validator('SelectionResponse');
     for (const name of ['selection-empty', 'selection-saved']) {

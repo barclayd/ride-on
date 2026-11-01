@@ -666,7 +666,14 @@
             "additionalProperties": false
           },
           "pause": {
-            "$ref": "#/components/schemas/Pause"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Pause"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "weatherProviderId": {
             "type": [
@@ -709,10 +716,7 @@
         "additionalProperties": false
       },
       "Pause": {
-        "type": [
-          "object",
-          "null"
-        ],
+        "type": "object",
         "properties": {
           "until": {
             "type": [
