@@ -1,6 +1,6 @@
 # Safari web extensions ship inside an app. This builds the WXT extension (bun run build:safari)
 # into RideOnExtension and wraps it in a small app that explains how to turn it on.
-# It has the main app's identity, so these targets move into app/project.yml when that ships.
+# It has the main app's identity, so these targets move into apple/app/project.yml when that ships.
 name: RideOn
 options:
   bundleIdPrefix: com.danbarclay
@@ -26,7 +26,7 @@ targets:
     sources:
       - path: App
       - path: Shared
-      - path: ../../app/RideOn.icon
+      - path: ../../apple/app/RideOn.icon
     dependencies:
       - target: RideOnExtension
     info:

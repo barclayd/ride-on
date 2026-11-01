@@ -2,7 +2,7 @@
 // modules into public/vendor so its worker resolves next to it, as web/app/build.ts does.
 import { cp, rm } from 'node:fs/promises';
 
-const style = '../app/Packages/Features/Sources/SharedUI/CycleMap';
+const style = '../apple/Packages/Features/Sources/SharedUI/CycleMap';
 const maplibre = 'node_modules/maplibre-gl/dist';
 
 await rm('public/map', { recursive: true, force: true });

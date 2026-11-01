@@ -113,7 +113,7 @@ export const span = (start: string, end: string) => {
   return dates;
 };
 
-// The planned dates as the API resolves them (worker/src/recommendations/planning.ts); null once passed.
+// The planned dates as the API resolves them (api/src/recommendations/planning.ts); null once passed.
 // Next 5 days starts tomorrow: the API's next-five-days, not its next, which starts today.
 export const planningDates = (
   planned: Days,

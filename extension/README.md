@@ -39,7 +39,7 @@ signed-in account, with **Sign Out**; **Notifications** holds this Mac's Ride al
 and Sound switches; **Help** lists the setup steps. On iOS it's a one-screen guide with **Enable
 notifications**. It has the main app's identity
 (`com.danbarclay.rideon`, extension `com.danbarclay.rideon.Extension`), so these targets move into
-`app/project.yml` when the full app ships as an update to the same App Store record.
+`apple/app/project.yml` when the full app ships as an update to the same App Store record.
 
 ```sh
 bun run safari       # WXT Safari build + xcodegen → open safari/RideOn.xcodeproj, run RideOn

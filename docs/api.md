@@ -59,7 +59,7 @@ remain deferred.
 
 ## Run locally
 
-Use Node.js 24+ and Bun 1.4.0. From `worker/`:
+Use Node.js 24+ and Bun 1.4.0. From `api/`:
 
 ```sh
 bun install --frozen-lockfile
@@ -558,7 +558,7 @@ discard successful imports. No extension UI is implemented yet.
 
 ### Adapter boundary and account connections
 
-`RouteSourceProvider` in `worker/src/routes/sources.ts` owns source identifiers,
+`RouteSourceProvider` in `api/src/routes/sources.ts` owns source identifiers,
 capability metadata and normalization into the shared `Route` contract. The
 application accepts a replaceable provider registry; persistence, shortlists,
 weather sampling and ranking do not switch on website names. A contract test uses
@@ -1373,7 +1373,7 @@ The 14 October follow-up confirms that Dan's existing 16–32°C band means equa
 temperature preference throughout. With his saved weights, the current algorithm
 already prefers 8°C sunny over 12°C with sunny intervals, 14°C with intervals over
 8°C sunny, and 16°C sunny over 20°C with intervals (likewise 22°C over 26°C).
-`worker/test/temperature-sunshine-calibration.test.ts` preserves these comparisons
+`api/test/temperature-sunshine-calibration.test.ts` preserves these comparisons
 and verifies that another ideal band, zero sunshine importance or zero temperature
 importance changes the outcome. No scoring change or algorithm-version bump is
 needed for this calibration.
@@ -1444,7 +1444,7 @@ are never retrospectively rescored. The extension retains the raw gust chip but
 uses estimated adverse gust exposure for comfort colouring; a breached explicit
 raw-gust limit still colours it amber. Persisted recommendations use a new cache key.
 
-Synthetic checks in `worker/test/wind-exposure.test.ts` cover all six interview
+Synthetic checks in `api/test/wind-exposure.test.ts` cover all six interview
 answers, ceiling ties, sustained opposing winds, tiny exposures, segmentation
 invariance, gust limits, missing data, zero wind weight and saved-plan compatibility.
 The town-forecast examples use synthetic headings and one location: they support
@@ -1595,7 +1595,7 @@ applies the SQL migrations, and exercises the API over HTTP. MSW 3.0.2 handlers
 resolve the Met Office subrequests through Miniflare's outbound service; an
 unmatched request fails the test and has no network fallback. Only the clock and
 request logging are overridden in the test entry point. No personal files or real
-credentials are read. See `worker/integration/README.md` for scope and conventions.
+credentials are read. See `api/integration/README.md` for scope and conventions.
 `bun run build:check` verifies the production Worker bundle. Live checks are explicit:
 
 ```sh
@@ -1692,7 +1692,7 @@ workload requires Workers Paid limits, particularly for weather subrequests.
 No subscription or plan was changed. See [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
 
 CI checks and bundles the Worker on pull requests, with Node 24 and Bun 1.4.0.
-Changes to `worker/**` or its deployment workflow merged to main automatically
+Changes to `api/**` or its deployment workflow merged to main automatically
 run checks, apply pending D1 migrations, and publish the Worker. Deployment uses
 the GitHub `CLOUDFLARE_API_TOKEN` secret, which needs Workers deployment (including
 its custom domain and KV binding) and D1 migration permissions for the configured
@@ -1706,7 +1706,7 @@ makes the workflow fail visibly. Use `gh workflow run worker-deploy.yml --ref ma
 to retry a deployment; manual runs on other branches are skipped. Production
 deployments are serialized and an in-progress deployment is not cancelled.
 
-For an authorized manual deployment from `worker/`:
+For an authorized manual deployment from `api/`:
 
 ```sh
 bun run check

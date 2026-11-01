@@ -117,7 +117,7 @@ What the prototype does that **can't ship**:
   overlays, so it sits under the labels.
 - **Directions and ETAs** stay on MapKit (`LiveETAProvider`): only the map display changes.
 
-The pipeline lives in a top-level `maps/` directory next to `worker/` and `extension/`: `maps/tiles/`
+The pipeline lives in a top-level `maps/` directory next to `api/` and `extension/`: `maps/tiles/`
 holds the planetiler profile (WS1.2); `maps/style/` will hold the style builder, fonts and sprite
 sources (WS2). The prototype stays in `docs/maps/prototype/` as the reference.
 
@@ -418,10 +418,10 @@ What 3.2 has to carry over from the spike:
   (`MapControls(overLightMap: true)`) and no status bar dimming. The tab bar's labels are still open.
 
 **3.1 Dependency.** [maplibre-gl-native-distribution](https://github.com/maplibre/maplibre-gl-native-distribution)
-is iOS only. The spike added it to `app/Packages/Features/Package.swift` (platforms iOS 26 + macOS 26)
+is iOS only. The spike added it to `apple/Packages/Features/Package.swift` (platforms iOS 26 + macOS 26)
 for RoutesUI only, with `condition: .when(platforms: [.iOS])`; move it to SharedUI with the component,
 and keep MapKit code paths under `#if os(macOS)` ([decision 2](#open-decisions)). Regenerate the
-project (`cd app && xcodegen generate`) and update the module map in `CLAUDE.md`.
+project (`cd apple/app && xcodegen generate`) and update the module map in `CLAUDE.md`.
 [maplibre/swiftui-dsl](https://github.com/maplibre/swiftui-dsl) is iOS-only and experimental: prefer
 our own small `UIViewRepresentable`.
 **Done** (19 October 2026): MapLibre and the `CycleMap/` resources (style, sprite, glyphs) are
@@ -458,7 +458,7 @@ a flag; `-CycleMapCamera` opens on Routes instead, for screenshots.
 
 | Surface | Today (main) | Change |
 |---|---|---|
-| Routes tab map | `RoutesMap` in `app/Packages/Features/Sources/RoutesUI/RoutesMap.swift:31`: `MapReader` at :47, `Map(position:)` at :48, `.mapStyle(look.style)` at :80, tap at :81 with `proxy.convert` at :91; `MapLook` enum at :7 (satellite/hybrid/standard); `RouteCallout` :116, `MapControls` :157. Used at `RoutesView.swift:106` | Add a `cycle` `MapLook` behind the flag, then make it the default. The interactive surface where the cycle map matters most. **Done**: Cycle is first in the menu and the look at launch on iOS (`MapLook.offered`, `.initial`); behind the flag until WS4b. Since 31 October 2026 it's the only look on iOS, so there's no style menu |
+| Routes tab map | `RoutesMap` in `apple/Packages/Features/Sources/RoutesUI/RoutesMap.swift:31`: `MapReader` at :47, `Map(position:)` at :48, `.mapStyle(look.style)` at :80, tap at :81 with `proxy.convert` at :91; `MapLook` enum at :7 (satellite/hybrid/standard); `RouteCallout` :116, `MapControls` :157. Used at `RoutesView.swift:106` | Add a `cycle` `MapLook` behind the flag, then make it the default. The interactive surface where the cycle map matters most. **Done**: Cycle is first in the menu and the look at launch on iOS (`MapLook.offered`, `.initial`); behind the flag until WS4b. Since 31 October 2026 it's the only look on iOS, so there's no style menu |
 | Shortlist cards | `RouteMap(…, style: .card)` at `RoutesUI/ShortlistCard.swift:75` | Static image: `MLNMapSnapshotter`, cached per route + size + scale. **Done** |
 | Thumbnails | `RouteMap(…, style: .thumbnail)` at `RoutesUI/RouteRows.swift:202`, `RideUI/TrackRideSheet.swift:165`, `RideUI/RidesView.swift:382` | Same snapshots. Many per screen: never live map views in lists. **Done** |
 | Ride hero | `RouteMap(…, style: .hero, tint:)` at `SharedUI/RideHero.swift:40`; `RouteMap.swift`: `Map(initialPosition: .rect(framingRect), interactionModes: [])` at :56, `.mapStyle(.imagery)` at :75, `RouteOutline` shape at :93 | [Decision 3](#open-decisions): satellite or cycle map. If cycle map, a non-interactive live view or a snapshot; keep the zoom transition source. **Done**, 31 October 2026: a snapshot (`CycleMapSnapshot.Look.hero`) with hillshade and contours, "© OpenStreetMap Protomaps" in the band under the title block |
@@ -594,7 +594,7 @@ JavaScript; `RoutesMap` already switches on the look, so it would slot in where 
   from an about or credits screen: `CycleMap` shows "© OpenStreetMap" and fades it on the first pan or
   after 5 s, and Preferences → Maps (`MapCreditsView`) lists every credit below with its link.
 - **Protomaps:** basemap tiles ODbL (from OSM); `@protomaps/basemaps` style code BSD-3-Clause.
-- **Montserrat:** SIL OFL 1.1 (`app/Packages/Features/Sources/SharedUI/CycleMap/glyphs/OFL.txt`). Fine to bundle
+- **Montserrat:** SIL OFL 1.1 (`apple/Packages/Features/Sources/SharedUI/CycleMap/glyphs/OFL.txt`). Fine to bundle
   and convert to PBF.
 - **Icons:** Maki and Temaki are CC0. cycle.travel's map-key SVGs are not ours to use.
 - **Terrain:** Mapterhorn's DEM is free to use with a link to

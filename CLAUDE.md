@@ -10,33 +10,26 @@ Do not use the Modern Web Guidance skill in this project unless Dan explicitly a
 
 ## Module map
 
-Modular local SPM package architecture (keepfresh-ios style, adopted Phase 2.5): a thin `App/`
-shell composes packages under `Packages/`. Every package: swift-tools-version 6.2,
-`.library(type: .static)`, platforms `.iOS("27.1")` + `.macOS("27.0")`.
+Read `docs/architecture.md` for the dependency graph, compatibility baseline and extension path.
 
-```
-app/
-├─ project.yml              XcodeGen spec — generates RideOn.xcodeproj (gitignored, not checked in)
-├─ RideOn.xctestplan         shared test plan: RideOnTests + RideOnUITests + ModelsTests + EngineTests
-├─ App/                       app shell target: RideOnApp.swift, Assets.xcassets, entitlements — composes packages, builds AppTab → view mapping; WidgetSync.swift saves the widget snapshot to the App Group, renders its map stills and runs the tracked ride's Live Activity
-├─ Widgets/                   RideOnWidgets extension (iOS + macOS, links Models + DesignSystem only, never SharedUI/MapLibre): one adaptive widget — board (A) or tracked ride (D) — in every family, the Live Activity/Dynamic Island and the Control Centre control. docs/redesign/README.md §8
-├─ Shared/                    compiled into the app and the extension: WidgetStore (App Group `group.com.danbarclay.rideon`), RideLink (`rideon://ride?pick=…&track=1`), WidgetMap (still framing/paths), OpenRideIntent, RideActivityAttributes
-├─ RideOn.icon                Icon Composer app icon bundle
-├─ Packages/
-│   ├─ Models/                 SPM package: value types (Route, RideLog, Bike, Preferences, SavedPlace, DailyContext, BearingSegment) + SwiftData @Model types (RouteModel, RideLogModel, SavedPlaceModel) + RouteMapping + RideWidgetSnapshot (the widgets' Codable data, has ModelsTests) + UnitFormat — platform-free, no UIKit/SwiftUI. Depends on nothing else in-repo. Has ModelsTests (SwiftData round-trip)
-│   ├─ Engine/                 SPM package: scoring engine + GPX parsing + elevation smoothing — platform-free. Depends on Models. Has EngineTests (fast, no simulator)
-│   ├─ Services/               SPM package: ServiceProtocols, AppServices (DI), FixtureWorld, ClassifyService, PreferencesStore, RideOnModelContainer, RouteStats (needs Engine's SpeedModel, so lives here not in Models), Import/ pipeline (RouteImporter, RouteSnapshotService). Depends on Models + Engine + DesignSystem. Ride On API: RideOnAPI (client), RideBoardLoader (Rides tab), RouteLibraryLoader (Routes tab: library, history, shortlist saves with 409 replay, has ServicesTests), RideTracker (the tracked ride, has ServicesTests). Strava integration (Phase 6): KeychainStore (minimal Security.framework wrapper), StravaModels (StravaToken, PolylineDecoder), StravaAuthConfig (client ID/scope/redirect — `// set real client id` marker until a real Strava API app exists), StravaTokenManager (refresh state machine actor over an injected `StravaTokenTransport`, has ServicesTests), StravaOAuthSession (ASWebAuthenticationSession + app-to-app), LiveStravaClient (routes/activities/export via Strava API v3), StravaSyncServices (StravaRouteSyncService, StravaActivitySyncService). Live platform services: LiveETAProvider (MapKit), LiveWeatherProvider (WeatherKit, day-level cache actor), LiveHealthKitStore (`#if os(iOS)`, cycling workouts + HKWorkoutRoute). Has ServicesTests (StravaTokenManager refresh state machine, stubbed transport — `swift test`, no simulator/network needed)
-│   ├─ Router/                 SPM package: AppTab (tab identity/title/icon only — view construction stays in App/, the one target allowed to import every Features package)
-│   ├─ DesignSystem/           SPM package: ConditionPalette, AmbianceStyle, Motion tokens
-│   └─ Features/               SPM package, one manifest, multiple static-library products: RideUI (day selector, card stack, context capsule, breakdown sheet), RoutesUI (Routes tab: full-screen map, floating glass panel with shortlist carousel, library and history; `LiveRoutesView` loads it from the API and saves shortlist edits, the fixture world renders `RouteLibrary.sample`; on iOS its `RoutesMap` is always SharedUI's `CycleMap`, as every map in the app is (no Apple Maps); the Mac keeps MapKit's looks — see docs/maps/README.md WS3), PreferencesUI (Preferences tab, Ideal Temperature, Comfortable Wind, Distance, Account, About — edits `RiderSettingsStore`, which saves to `PATCH /users/me`), RideUI's `RideRequest` carries a widget tap's ride (and Track) into Rides. OnboardingUI (9-step first-run flow — welcome, four reactive dial steps, Strava connect, speed prefill, finish), SharedUI (the closed 8-component DESIGN-SYSTEM.md §6 inventory: RideCard, ConditionChip, FactorRow, ElevationProfile, DialScreen, BestDayBadge, ScoreRing — plus the non-inventory `PermissionPrimingSheet` helper; also `CycleMap`, §6 #17, the cycle.travel-look map: on iOS it depends on MapLibre Native (`maplibre-gl-native-distribution`, iOS-only condition) and bundles the style, sprite and glyphs `maps/style` builds in `CycleMap/`; `CycleMapStill` renders the widgets' map stills). Each depends on Models/Services/DesignSystem as needed
-├─ RideOnTests/                app-layer XCTest integration tests (import pipeline, live-classify smoke check, AppServices wiring)
-└─ RideOnUITests/              XCUITest E2E tests (launch with --fixture-world)
-extension/                    Browser extension (WXT + Preact) for cycle.travel: Chrome MV3, and Safari (macOS + iOS) via the XcodeGen container in extension/safari/ — see extension/README.md
-landing/                      ride-on.cc, the marketing site: Astro 7 static pages + React islands (Motion), Biome, Bun. Built from the Claude Design handoff; the intro map is a live MapLibre map with SharedUI's CycleMap style (scripts/copy-map.ts copies it in at build). Served by the `ride-on-landing` Worker (static assets; www 301s to the apex). `.github/workflows/landing.yml` runs `bun run check`, the Playwright smoke tests (`e2e/`) and, on main, `wrangler deploy` — see landing/README.md
-maps/                         Cycle map data (docs/maps/README.md is the plan): tiles/ is the planetiler profile for the GB cycling overlay (Java, built and tested in Docker) — see maps/tiles/README.md; style/ builds the MapLibre style (TypeScript + Bun) into SharedUI's CycleMap/ resources with its Montserrat glyph PBFs — see maps/style/README.md; hosting/ publishes archives to the `ride-on-maps` R2 bucket, served at https://maps.ride-on.cc — see maps/README.md. `.github/workflows/maps-tiles.yml` rebuilds the overlay monthly (the basemap quarterly) and opens a PR pointing the style at it
-web/                          app.ride-on.cc, the web app: SPEC.md is the product/design/architecture spec, HANDOFF.md where it stands and what's next, design/ the Claude Design source (prototype, screens, generators, fixtures), design-system/ the seed tokens (the Claude Design export replaces them), app/ the Remix 3 Worker (`ride-on-app`): the BFF in front of `ride-on-api` over a service binding, and the map shell — see web/SPEC.md and web/app/README.md
-worker/                       Cloudflare Worker (Hono): GPX upload, route storage and weather-aligned ride recommendations — see worker/CLAUDE.md and docs/api.md
-```
+- `apple/app/`: shared iOS/macOS app shell, widgets, platform resources and XcodeGen project
+- `apple/Packages/Domain`: Foundation values/protocols; `Engine`: pure rules and parsing
+- `apple/Packages/Models`: existing SwiftData identities and domain mappings (do not casually rename)
+- `apple/Packages/Infrastructure`: Networking, Persistence and PlatformServices products
+- `apple/Packages/Services`: application state, loading, tracking, imports and fixture composition
+- `apple/Packages/Features`: independent RideUI, RoutesUI, PreferencesUI and OnboardingUI products; SharedUI owns shared controls, map resources and snapshots
+- `apple/Packages/DesignSystem`: visual tokens; `Router`: tab identities
+- `apple/scripts/`: verification and device delivery
+- `api/`: Bun/Hono/Zod Cloudflare API, generated contracts and existing capability services; read `api/CLAUDE.md` and `api/docs/protocol.md`
+- `extension/`: WXT Chrome/Safari extension and existing Safari container
+- `web/`: web app, design source and handoff; `landing/`: marketing site
+- `maps/`: tile pipeline, map style and R2 hosting
+
+Every Swift package uses tools version 6.2, static library products and the existing
+iOS 27.1/macOS 27.0 minimums. The shell composes sibling feature navigation. Keep
+shared domain/network/storage/application products independent of feature UI.
+The Safari container stays with its browser product; its shared app icon reference
+points into `apple/app`.
 
 ## Browser extensions
 
@@ -52,26 +45,28 @@ else, run `bun run safari:unregister-stale` in `extension/` (see `extension/READ
 
 ## Build & test commands
 
-Regenerate the Xcode project after touching `app/project.yml` or adding/removing files in any target:
+Regenerate the Xcode project after touching `apple/app/project.yml` or adding/removing files in any target:
 
 ```
-cd app && xcodegen generate
+cd apple/app && xcodegen generate
 ```
 
 Per-package unit tests (fast, no simulator needed):
 
 ```
-cd app/Packages/Models && swift test
-cd app/Packages/Engine && swift test
-cd app/Packages/Services && swift test
+cd apple/Packages/Models && swift test
+cd apple/Packages/Engine && swift test
+cd apple/Packages/Infrastructure && swift test
+cd apple/Packages/Services && swift test
+cd apple/Packages/Features && swift test
 ```
 
-(Router, DesignSystem, Features have no test targets yet — no non-trivial logic to cover.)
+(Router and DesignSystem have no test targets. Features contains SharedUI tests.)
 
 Full app test suite (RideOnTests + RideOnUITests + ModelsTests + EngineTests, via the shared test plan) on iOS Simulator:
 
 ```
-xcodebuild -project app/RideOn.xcodeproj -scheme RideOn \
+xcodebuild -project apple/app/RideOn.xcodeproj -scheme RideOn \
   -destination 'platform=iOS Simulator,name=iPhone 17' test
 ```
 
@@ -80,28 +75,28 @@ xcodebuild -project app/RideOn.xcodeproj -scheme RideOn \
 Build only (no tests):
 
 ```
-xcodebuild -project app/RideOn.xcodeproj -scheme RideOn \
+xcodebuild -project apple/app/RideOn.xcodeproj -scheme RideOn \
   -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
 Build the UI test target without running it:
 
 ```
-xcodebuild -project app/RideOn.xcodeproj -scheme RideOn \
+xcodebuild -project apple/app/RideOn.xcodeproj -scheme RideOn \
   -destination 'platform=iOS Simulator,name=iPhone 17' build-for-testing
 ```
 
 macOS build:
 
 ```
-xcodebuild -project app/RideOn.xcodeproj -scheme RideOn -destination 'platform=macOS' build
+xcodebuild -project apple/app/RideOn.xcodeproj -scheme RideOn -destination 'platform=macOS' build
 ```
 
 Run on Dan's phone — **always** this way, never by building another checkout or worktree:
 
 ```
-app/scripts/run-on-device.sh                  # Dan’s iPhone Duo
-app/scripts/run-on-device.sh "Other device"   # or set RIDEON_DEVICE
+apple/scripts/run-on-device.sh                  # Dan’s iPhone Duo
+apple/scripts/run-on-device.sh "Other device"   # or set RIDEON_DEVICE
 ```
 
 It fast-forwards `main` (or refuses a branch that's behind `origin/main`), closes every
@@ -109,7 +104,7 @@ It fast-forwards `main` (or refuses a branch that's behind `origin/main`), close
 and runs through the Xcode app. Device builds can't use `xcodebuild` or the Xcode MCP: Xcode 27 keeps the Apple Account where only the app can
 see it, so they fail with "No Accounts" and can't add a new device to the provisioning profile.
 
-Worker commands: see `worker/CLAUDE.md`. The API-first rebuild is implemented
+Worker commands: see `api/CLAUDE.md`. The API-first rebuild is implemented
 with `/routes`, `/recommendations`, `/users`, `/route-imports`, `/route-sources`
 and `/route-selection`; the API is deployed at
 `https://ride-on-api.barclaysd.workers.dev` (10 October 2026). The existing
@@ -145,7 +140,7 @@ verified working on macOS 2026-07-12.
 
 Launch the app with `--fixture-world` to get seeded fake `WeatherProviding`/`ETAProviding`/
 `HealthStoreProviding`/`StravaClientProtocol` implementations (see
-`app/Packages/Services/Sources/Services/`) instead of real network/entitlements.
+`apple/Packages/Services/Sources/Services/`) instead of real network/entitlements.
 `RideOnUITests` always launches this way. This is the
 only supported way to drive the app in CI/E2E — no live services in tests, ever (PLAN.md
 Testing strategy).
@@ -160,7 +155,7 @@ Testing strategy).
   custom palette is `ConditionPalette` (temperature ramp). `AmbianceStyle` is onboarding-only.
 - §6: the custom component inventory is closed — don't add a component without adding it
   to the doc first.
-- §7 Motion: use the tokens in `app/Packages/DesignSystem/Sources/DesignSystem/Motion.swift`,
+- §7 Motion: use the tokens in `apple/Packages/DesignSystem/Sources/DesignSystem/Motion.swift`,
   don't hand-roll `.animation()` calls.
 
 ## Plan
@@ -170,7 +165,7 @@ Testing strategy).
 (UI shell & screens), and Phase 5 (Onboarding) are done — all eight `RideFactor` providers
 (time budget, wind, temperature, sky, rain, surface match, intent, novelty) are real,
 weighted by `WeightedScorer`, with golden-scenario tests in
-`app/Packages/Engine/Tests/EngineTests/GoldenScenarioTests.swift`; Ride (né Today), Route Detail,
+`apple/Packages/Engine/Tests/EngineTests/GoldenScenarioTests.swift`; Ride (né Today), Route Detail,
 Routes, You, and the first-run onboarding flow are all built per DESIGN-SYSTEM.md.
 Onboarding shows once on first launch (`PreferencesStore.hasCompletedOnboarding`);
 `--reset-onboarding` forces it back on for E2E (`RideOnUITests`'s

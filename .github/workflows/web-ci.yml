@@ -4,9 +4,10 @@ on:
   pull_request:
     paths:
       - "web/app/**"
+      - "api/contracts/client.d.ts"
       - "web/design-system/**"
       # build.ts copies the cycle map style and the extension's icons from these.
-      - "app/Packages/Features/Sources/SharedUI/CycleMap/**"
+      - "apple/Packages/Features/Sources/SharedUI/CycleMap/**"
       - "extension/public/icon/**"
       - ".github/workflows/web-ci.yml"
       - ".github/workflows/web-deploy.yml"

@@ -1,0 +1,149 @@
+import SwiftUI
+import DesignSystem
+import MapKit
+import Domain
+
+/// One route drawn in the accent on a white casing. Not a §6 component. On iOS (`showsCycleMap`)
+/// every style is a `CycleMap` snapshot (§6 #17), and the hero and a card carry the attribution
+/// themselves. The Mac stays on MapKit: the hero and a card are a non-interactive satellite `Map`,
+/// which keeps the Maps attribution visible (§2), and a thumbnail is just the route's outline on a
+/// plain fill, as on the canvas, since a 56pt map is all labels and Legal link.
+public struct RouteMap: View {
+    /// Whether every style is a cycle-map snapshot: on iOS; the Mac stays on MapKit.
+    public static var showsCycleMap: Bool {
+        #if os(iOS)
+        true
+        #else
+        false
+        #endif
+    }
+
+    public enum Style {
+        /// The route with its start marked, sitting in the band between the toolbar and the
+        /// hero's title block.
+        case hero
+        /// The hero's look, smaller, for a Routes shortlist card: the route sits above the
+        /// card's title block.
+        case card
+        /// The route's outline, centred on a plain fill.
+        case thumbnail
+    }
+
+    var route: [Coordinate]
+    var style: Style
+    var tint: Color
+    @Environment(\.self) private var environment
+
+    public init(_ coordinates: [Coordinate], style: Style, tint: Color = .accentColor) {
+        self.route = coordinates
+        self.style = style
+        self.tint = tint
+    }
+
+    private var coordinates: [CLLocationCoordinate2D] {
+        route.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+    }
+
+    public var body: some View {
+        if coordinates.count < 2 {
+            Rectangle().fill(.routeLand).overlay { Image(systemName: "map").foregroundStyle(.secondary) }
+        } else if Self.showsCycleMap {
+            snapshot
+        } else {
+            switch style {
+            case .hero, .card: map
+            case .thumbnail: outline
+            }
+        }
+    }
+
+    @ViewBuilder private var snapshot: some View {
+        #if os(iOS)
+        let look: CycleMapSnapshot.Look = switch style {
+        case .hero: .hero
+        case .card: .card
+        case .thumbnail: .thumbnail
+        }
+        // The thumbnail's route fills the middle 68%, as `outline` does.
+        CycleMapSnapshot(coordinates: route,
+                         framing: style == .thumbnail ? framing(top: 0.16, bottom: 0.16, side: 0.16) : framingRect,
+                         look: look, tint: tint.resolve(in: environment))
+        #endif
+    }
+
+    private var outline: some View {
+        let shape = RouteOutline(coordinates: coordinates, inset: 0.16)
+        let line = StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round)
+        return ZStack {
+            shape.stroke(.routeCasing, style: StrokeStyle(lineWidth: 6.5, lineCap: .round, lineJoin: .round))
+            shape.stroke(tint, style: line)
+        }
+        .background(.routeLand)
+    }
+
+    private var map: some View {
+        // Resolved here: `Map` content drops back to system blue for `.accentColor` once it
+        // re-renders with a new route.
+        let resolved = tint.resolve(in: environment)
+        let tint = Color(resolved)
+        let coordinates = coordinates
+        let (lineWidth, marker, ring): (CGFloat, CGFloat, CGFloat) = style == .card ? (4, 12, 2.5) : (5, 16, 3)
+        return Map(initialPosition: .rect(framingRect), interactionModes: []) {
+            MapPolyline(coordinates: coordinates)
+                .stroke(.white, style: StrokeStyle(lineWidth: lineWidth + 3, lineCap: .round, lineJoin: .round))
+            // Keyed on its colour: a polyline keeps its first stroke, so the tint dimmed behind a
+            // sheet would otherwise stay once the sheet has gone.
+            ForEach([resolved], id: \.self) { _ in
+                MapPolyline(coordinates: coordinates)
+                    .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+            }
+            if let start = coordinates.first {
+                Annotation("Start", coordinate: start) {
+                    Circle()
+                        .fill(tint)
+                        .stroke(.white, lineWidth: ring)
+                        .frame(width: marker, height: marker)
+                }
+                .annotationTitles(.hidden)
+            }
+        }
+        .mapStyle(.imagery)
+    }
+
+    /// The route's bounding box grown by per-edge margins (fractions of the final rect), so it
+    /// sits clear of the toolbar and the title block.
+    private var framingRect: MKMapRect {
+        let (top, bottom, side) = style == .card ? (0.08, 0.49, 0.2) : (0.28, 0.40, 0.14)
+        return framing(top: top, bottom: bottom, side: side)
+    }
+
+    private func framing(top: Double, bottom: Double, side: Double) -> MKMapRect {
+        let box = coordinates.reduce(MKMapRect.null) { box, coordinate in
+            box.union(MKMapRect(origin: MKMapPoint(coordinate), size: MKMapSize(width: 0, height: 0)))
+        }
+        let width = box.width / (1 - 2 * side)
+        let height = box.height / (1 - top - bottom)
+        return MKMapRect(x: box.minX - side * width, y: box.minY - top * height, width: width, height: height)
+    }
+}
+
+/// The route's points projected flat (longitude scaled by latitude) and fitted, aspect intact,
+/// inside the rect less `inset` on every side.
+private struct RouteOutline: Shape {
+    var coordinates: [CLLocationCoordinate2D]
+    var inset: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        guard let first = coordinates.first else { return Path() }
+        let scale = cos(first.latitude * .pi / 180)
+        let points = coordinates.map { CGPoint(x: $0.longitude * scale, y: -$0.latitude) }
+        let xs = points.map(\.x), ys = points.map(\.y)
+        let box = CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+        let frame = rect.insetBy(dx: rect.width * inset, dy: rect.height * inset)
+        let fit = min(frame.width / max(box.width, .ulpOfOne), frame.height / max(box.height, .ulpOfOne))
+        let origin = CGPoint(x: frame.midX - box.width * fit / 2, y: frame.midY - box.height * fit / 2)
+        var path = Path()
+        path.addLines(points.map { CGPoint(x: origin.x + ($0.x - box.minX) * fit, y: origin.y + ($0.y - box.minY) * fit) })
+        return path
+    }
+}

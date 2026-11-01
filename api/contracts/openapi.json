@@ -1,0 +1,4510 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ride On API",
+    "version": "0.42.0",
+    "description": "Library, shortlist and profile contracts. See coverage.json and docs/protocol.md for the remaining API surface."
+  },
+  "servers": [
+    {
+      "url": "https://api.ride-on.cc"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Ride On session token from the browser PKCE handoff."
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "algorithmVersion": {
+            "type": "string"
+          },
+          "revision": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "version",
+          "algorithmVersion",
+          "revision"
+        ]
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "user"
+        ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "timeZone": {
+                "type": "string",
+                "maxLength": 100,
+                "default": "Europe/London"
+              },
+              "riding": {
+                "type": "object",
+                "properties": {
+                  "averageSpeedKph": {
+                    "type": "number",
+                    "minimum": 5,
+                    "maximum": 50
+                  },
+                  "departureStepMinutes": {
+                    "type": "integer",
+                    "minimum": 15,
+                    "maximum": 120
+                  }
+                },
+                "required": [
+                  "averageSpeedKph",
+                  "departureStepMinutes"
+                ],
+                "additionalProperties": false
+              },
+              "preferences": {
+                "type": "object",
+                "properties": {
+                  "temperature": {
+                    "type": "object",
+                    "properties": {
+                      "comfortMinC": {
+                        "type": "number",
+                        "minimum": -30,
+                        "maximum": 50
+                      },
+                      "comfortMaxC": {
+                        "type": "number",
+                        "minimum": -30,
+                        "maximum": 50
+                      },
+                      "coldSensitivity": {
+                        "type": "string",
+                        "enum": [
+                          "standard",
+                          "high"
+                        ],
+                        "default": "standard"
+                      },
+                      "seasonalTolerance": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "cooler-winters"
+                        ],
+                        "default": "none"
+                      }
+                    },
+                    "required": [
+                      "comfortMinC",
+                      "comfortMaxC"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "wind": {
+                    "type": "object",
+                    "properties": {
+                      "preferTailwind": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "prioritiseTailwindOpportunities": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "comfortableHeadwindKph": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      },
+                      "comfortableCrosswindKph": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      },
+                      "comfortableGustKph": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 150
+                      },
+                      "crosswindSensitivity": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 10
+                      }
+                    },
+                    "required": [
+                      "comfortableHeadwindKph",
+                      "comfortableCrosswindKph",
+                      "comfortableGustKph",
+                      "crosswindSensitivity"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "sunshine": {
+                    "type": "object",
+                    "properties": {
+                      "sunnyIntervalsComfort": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "sunnyIntervalsComfort"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "recentRides": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "neutral",
+                          "prefer-variety"
+                        ]
+                      },
+                      "lookbackDays": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 90
+                      }
+                    },
+                    "default": {
+                      "mode": "neutral",
+                      "lookbackDays": 28
+                    },
+                    "required": [
+                      "mode",
+                      "lookbackDays"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "climbing": {
+                    "type": "object",
+                    "properties": {
+                      "preference": {
+                        "type": "string",
+                        "enum": [
+                          "flatter",
+                          "neutral",
+                          "hillier"
+                        ]
+                      }
+                    },
+                    "default": {
+                      "preference": "neutral"
+                    },
+                    "required": [
+                      "preference"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "distance": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "minKm": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 400
+                      },
+                      "maxKm": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 400
+                      }
+                    },
+                    "default": null,
+                    "required": [
+                      "minKm",
+                      "maxKm"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "weights": {
+                    "type": "object",
+                    "properties": {
+                      "temperature": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "wind": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "dryness": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "clearSkies": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "sunshine": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "temperature",
+                      "wind",
+                      "dryness",
+                      "clearSkies",
+                      "sunshine"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minimumStandards": {
+                    "type": "object",
+                    "properties": {
+                      "minimumTemperature": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "fixed"
+                                ]
+                              },
+                              "valueC": {
+                                "type": "number",
+                                "minimum": -50,
+                                "maximum": 60
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "valueC"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "monthly"
+                                ]
+                              },
+                              "valuesC": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "number",
+                                  "minimum": -50,
+                                  "maximum": 60
+                                }
+                              },
+                              "fallbackC": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": -50,
+                                "maximum": 60,
+                                "default": null
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "valuesC"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "maximumTemperatureC": {
+                        "type": "number",
+                        "minimum": -50,
+                        "maximum": 60
+                      },
+                      "maximumGustKph": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 150
+                      },
+                      "maximumPrecipitationProbability": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "maximumPrecipitationRateMmH": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "temperature",
+                  "wind",
+                  "sunshine",
+                  "weights",
+                  "minimumStandards"
+                ],
+                "additionalProperties": false
+              },
+              "forecast": {
+                "type": "object",
+                "properties": {
+                  "representation": {
+                    "type": "string",
+                    "enum": [
+                      "deterministic",
+                      "ensemble-summary"
+                    ]
+                  },
+                  "freshnessBasis": {
+                    "type": "string",
+                    "enum": [
+                      "model-run",
+                      "retrieval-time"
+                    ]
+                  }
+                },
+                "required": [
+                  "representation",
+                  "freshnessBasis"
+                ],
+                "additionalProperties": false
+              },
+              "weather": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "strict"
+                        ]
+                      },
+                      "providerId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "providerId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "ordered-fallback"
+                        ]
+                      },
+                      "providerIds": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "providerIds"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "planning": {
+                "type": "object",
+                "properties": {
+                  "days": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "preset"
+                            ]
+                          },
+                          "preset": {
+                            "type": "string",
+                            "enum": [
+                              "today",
+                              "tomorrow",
+                              "weekend",
+                              "next",
+                              "next-five-days"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "preset"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "range"
+                            ]
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "start",
+                          "end"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "dates"
+                            ]
+                          },
+                          "dates": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            "minItems": 1,
+                            "maxItems": 7
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "dates"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "window": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "daylight"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "start": {
+                            "type": "string",
+                            "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+                          },
+                          "end": {
+                            "type": "string",
+                            "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+                          }
+                        },
+                        "required": [
+                          "start",
+                          "end"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "default": {
+                  "days": {
+                    "kind": "preset",
+                    "preset": "next"
+                  },
+                  "window": "daylight"
+                },
+                "required": [
+                  "days",
+                  "window"
+                ],
+                "additionalProperties": false
+              },
+              "display": {
+                "type": "object",
+                "properties": {
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "km",
+                      "mi"
+                    ]
+                  }
+                },
+                "default": {
+                  "unit": "km"
+                },
+                "required": [
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              "units": {
+                "type": "object",
+                "properties": {
+                  "temperature": {
+                    "type": "string",
+                    "enum": [
+                      "C",
+                      "F"
+                    ]
+                  },
+                  "windSpeed": {
+                    "type": "string",
+                    "enum": [
+                      "kmh",
+                      "mph"
+                    ]
+                  }
+                },
+                "required": [
+                  "temperature",
+                  "windSpeed"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "riding",
+              "preferences",
+              "forecast",
+              "weather"
+            ],
+            "additionalProperties": false
+          },
+          "pause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Pause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weatherProviderId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preferenceLevels": {
+            "type": "object",
+            "properties": {
+              "sunshine": {
+                "type": "string"
+              },
+              "rain": {
+                "type": "string"
+              },
+              "crosswind": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sunshine",
+              "rain",
+              "crosswind"
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "id",
+          "version",
+          "displayName",
+          "createdAt",
+          "updatedAt",
+          "settings",
+          "pause",
+          "weatherProviderId",
+          "preferenceLevels"
+        ],
+        "additionalProperties": false
+      },
+      "Pause": {
+        "type": "object",
+        "properties": {
+          "until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resumesAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pausedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "until",
+          "resumesAt",
+          "pausedAt"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "RouteSources": {
+        "type": "object",
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "importModes": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "gpx-upload"
+                      ]
+                    }
+                  ]
+                },
+                "accountConnection": {
+                  "type": "boolean",
+                  "enum": [
+                    false
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "importModes",
+                "accountConnection"
+              ]
+            }
+          }
+        },
+        "required": [
+          "sources"
+        ]
+      },
+      "RouteImportResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RouteResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "updated",
+                  "unchanged"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          }
+        ]
+      },
+      "RouteSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "distanceM": {
+            "type": "number"
+          },
+          "ascentM": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "originalPointCount": {
+            "type": "integer"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "geometryStatus": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "surfaceSummary": {
+            "$ref": "#/components/schemas/SurfaceSummary"
+          },
+          "source": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "providerId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,63}$"
+              },
+              "externalId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "providerId",
+              "externalId"
+            ],
+            "additionalProperties": false
+          },
+          "version": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "distanceM",
+          "ascentM",
+          "originalPointCount",
+          "warnings",
+          "geometryStatus",
+          "surfaceSummary",
+          "source",
+          "version",
+          "updatedAt"
+        ]
+      },
+      "SurfaceSummary": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unavailable"
+            ]
+          },
+          "pavedM": {
+            "type": "number"
+          },
+          "unpavedM": {
+            "type": "number"
+          },
+          "nonCyclingM": {
+            "type": "number"
+          },
+          "unknownM": {
+            "type": "number"
+          },
+          "classifiedFraction": {
+            "type": "number"
+          },
+          "unpavedFraction": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "providerId": {
+                "type": "string",
+                "enum": [
+                  "cycle-travel"
+                ]
+              },
+              "method": {
+                "type": "string",
+                "enum": [
+                  "route-instructions"
+                ]
+              },
+              "formatVersion": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "enum": [
+                      1
+                    ]
+                  },
+                  {
+                    "type": "number",
+                    "enum": [
+                      2
+                    ]
+                  }
+                ]
+              },
+              "mappingVersion": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              }
+            },
+            "required": [
+              "providerId",
+              "method",
+              "formatVersion",
+              "mappingVersion"
+            ],
+            "additionalProperties": false
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "pavedM",
+          "unpavedM",
+          "nonCyclingM",
+          "unknownM",
+          "classifiedFraction",
+          "unpavedFraction",
+          "source",
+          "capturedAt"
+        ]
+      },
+      "RouteResponse": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "$ref": "#/components/schemas/RouteSummary"
+          }
+        },
+        "required": [
+          "route"
+        ]
+      },
+      "SurfaceInput": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "providerId": {
+                "type": "string",
+                "enum": [
+                  "cycle-travel"
+                ]
+              },
+              "method": {
+                "type": "string",
+                "enum": [
+                  "route-instructions"
+                ]
+              },
+              "formatVersion": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "enum": [
+                      1
+                    ]
+                  },
+                  {
+                    "type": "number",
+                    "enum": [
+                      2
+                    ]
+                  }
+                ]
+              },
+              "mappingVersion": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              }
+            },
+            "required": [
+              "providerId",
+              "method",
+              "formatVersion",
+              "mappingVersion"
+            ],
+            "additionalProperties": false
+          },
+          "geometryDistanceM": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 400000
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fromM": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 400000
+                },
+                "toM": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 400000
+                },
+                "surface": {
+                  "type": "string",
+                  "enum": [
+                    "paved",
+                    "compacted",
+                    "gravel",
+                    "rough-unpaved",
+                    "earth",
+                    "dirt",
+                    "grass",
+                    "sand",
+                    "unpaved",
+                    "unknown",
+                    "non-cycling"
+                  ]
+                },
+                "sourceCode": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "pattern": "^[a-zA-Z0-9:?._-]+$"
+                }
+              },
+              "required": [
+                "fromM",
+                "toM",
+                "surface",
+                "sourceCode"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 5000
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "source",
+          "geometryDistanceM",
+          "sections"
+        ],
+        "additionalProperties": false
+      },
+      "SelectionResponse": {
+        "type": "object",
+        "properties": {
+          "selection": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "routeIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "maxItems": 12
+              },
+              "updatedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "version",
+              "routeIds",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "selection"
+        ]
+      },
+      "RouteList": {
+        "type": "object",
+        "properties": {
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RouteSummary"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "routes",
+          "nextCursor",
+          "limit"
+        ]
+      },
+      "RouteSurface": {
+        "type": "object",
+        "properties": {
+          "routeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "surface": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "source": {
+                "type": "object",
+                "properties": {
+                  "providerId": {
+                    "type": "string",
+                    "enum": [
+                      "cycle-travel"
+                    ]
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "route-instructions"
+                    ]
+                  },
+                  "formatVersion": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "enum": [
+                          1
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          2
+                        ]
+                      }
+                    ]
+                  },
+                  "mappingVersion": {
+                    "type": "number",
+                    "enum": [
+                      1
+                    ]
+                  }
+                },
+                "required": [
+                  "providerId",
+                  "method",
+                  "formatVersion",
+                  "mappingVersion"
+                ],
+                "additionalProperties": false
+              },
+              "geometryDistanceM": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 400000
+              },
+              "sections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "fromM": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 400000
+                    },
+                    "toM": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 400000
+                    },
+                    "surface": {
+                      "type": "string",
+                      "enum": [
+                        "paved",
+                        "compacted",
+                        "gravel",
+                        "rough-unpaved",
+                        "earth",
+                        "dirt",
+                        "grass",
+                        "sand",
+                        "unpaved",
+                        "unknown",
+                        "non-cycling"
+                      ]
+                    },
+                    "sourceCode": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40,
+                      "pattern": "^[a-zA-Z0-9:?._-]+$"
+                    }
+                  },
+                  "required": [
+                    "fromM",
+                    "toM",
+                    "surface",
+                    "sourceCode"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 5000
+              },
+              "sourceHash": {
+                "type": "string"
+              },
+              "capturedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "schemaVersion",
+              "source",
+              "geometryDistanceM",
+              "sections",
+              "sourceHash",
+              "capturedAt"
+            ],
+            "additionalProperties": false
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SurfaceSummary"
+          }
+        },
+        "required": [
+          "routeId",
+          "version",
+          "surface",
+          "summary"
+        ]
+      },
+      "RouteGeometry": {
+        "type": "object",
+        "properties": {
+          "routeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "geometry": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "encoding": {
+                "type": "string",
+                "enum": [
+                  "polyline6"
+                ]
+              },
+              "data": {
+                "type": "string",
+                "maxLength": 1200000
+              },
+              "pointCount": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 100000
+              }
+            },
+            "required": [
+              "version",
+              "encoding",
+              "data",
+              "pointCount"
+            ]
+          }
+        },
+        "required": [
+          "routeId",
+          "version",
+          "geometry"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users": {
+      "post": {
+        "operationId": "createUser",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "weatherProviderId": {
+                        "type": "string",
+                        "enum": [
+                          "apple-weather",
+                          "met-office"
+                        ]
+                      },
+                      "timeZone": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "riding": {
+                        "type": "object",
+                        "properties": {
+                          "averageSpeedKph": {
+                            "type": "number",
+                            "minimum": 5,
+                            "maximum": 50
+                          },
+                          "departureStepMinutes": {
+                            "type": "integer",
+                            "minimum": 15,
+                            "maximum": 120
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "preferences": {
+                        "type": "object",
+                        "properties": {
+                          "temperature": {
+                            "type": "object",
+                            "properties": {
+                              "comfortMinC": {
+                                "type": "number",
+                                "minimum": -30,
+                                "maximum": 50
+                              },
+                              "comfortMaxC": {
+                                "type": "number",
+                                "minimum": -30,
+                                "maximum": 50
+                              },
+                              "coldSensitivity": {
+                                "type": "string",
+                                "enum": [
+                                  "standard",
+                                  "high"
+                                ]
+                              },
+                              "seasonalTolerance": {
+                                "type": "string",
+                                "enum": [
+                                  "none",
+                                  "cooler-winters"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "wind": {
+                            "type": "object",
+                            "properties": {
+                              "preferTailwind": {
+                                "type": "boolean"
+                              },
+                              "prioritiseTailwindOpportunities": {
+                                "type": "boolean"
+                              },
+                              "comfortableHeadwindKph": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "comfortableCrosswindKph": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "comfortableGustKph": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 150
+                              },
+                              "crosswindSensitivity": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 10
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "sunshine": {
+                            "type": "object",
+                            "properties": {
+                              "sunnyIntervalsComfort": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "recentRides": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "neutral",
+                                  "prefer-variety"
+                                ]
+                              },
+                              "lookbackDays": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 90
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "climbing": {
+                            "type": "object",
+                            "properties": {
+                              "preference": {
+                                "type": "string",
+                                "enum": [
+                                  "flatter",
+                                  "neutral",
+                                  "hillier"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "distance": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "minKm": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 400
+                              },
+                              "maxKm": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 400
+                              }
+                            },
+                            "required": [
+                              "minKm",
+                              "maxKm"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "weights": {
+                            "type": "object",
+                            "properties": {
+                              "temperature": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "wind": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "dryness": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "clearSkies": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "sunshine": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "minimumStandards": {
+                            "type": "object",
+                            "properties": {
+                              "minimumTemperature": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "fixed"
+                                        ]
+                                      },
+                                      "valueC": {
+                                        "type": "number",
+                                        "minimum": -50,
+                                        "maximum": 60
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "valueC"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "monthly"
+                                        ]
+                                      },
+                                      "valuesC": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "type": "number",
+                                          "minimum": -50,
+                                          "maximum": 60
+                                        }
+                                      },
+                                      "fallbackC": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ],
+                                        "minimum": -50,
+                                        "maximum": 60,
+                                        "default": null
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "valuesC"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "maximumTemperatureC": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": -50,
+                                "maximum": 60
+                              },
+                              "maximumGustKph": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 150
+                              },
+                              "maximumPrecipitationProbability": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "maximumPrecipitationRateMmH": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 100
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "forecast": {
+                        "type": "object",
+                        "properties": {
+                          "representation": {
+                            "type": "string",
+                            "enum": [
+                              "deterministic",
+                              "ensemble-summary"
+                            ]
+                          },
+                          "freshnessBasis": {
+                            "type": "string",
+                            "enum": [
+                              "model-run",
+                              "retrieval-time"
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "weather": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "strict"
+                                ]
+                              },
+                              "providerId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 100
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "providerId"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "ordered-fallback"
+                                ]
+                              },
+                              "providerIds": {
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "providerIds"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "planning": {
+                        "type": "object",
+                        "properties": {
+                          "days": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "preset"
+                                    ]
+                                  },
+                                  "preset": {
+                                    "type": "string",
+                                    "enum": [
+                                      "today",
+                                      "tomorrow",
+                                      "weekend",
+                                      "next",
+                                      "next-five-days"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "preset"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "range"
+                                    ]
+                                  },
+                                  "start": {
+                                    "type": "string",
+                                    "format": "date"
+                                  },
+                                  "end": {
+                                    "type": "string",
+                                    "format": "date"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "start",
+                                  "end"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "dates"
+                                    ]
+                                  },
+                                  "dates": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "format": "date"
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 7
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "dates"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "window": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "daylight"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "start": {
+                                    "type": "string",
+                                    "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+                                  },
+                                  "end": {
+                                    "type": "string",
+                                    "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+                                  }
+                                },
+                                "required": [
+                                  "start",
+                                  "end"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "display": {
+                        "type": "object",
+                        "properties": {
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "km",
+                              "mi"
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "units": {
+                        "type": "object",
+                        "properties": {
+                          "temperature": {
+                            "type": "string",
+                            "enum": [
+                              "C",
+                              "F"
+                            ]
+                          },
+                          "windSpeed": {
+                            "type": "string",
+                            "enum": [
+                              "kmh",
+                              "mph"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "temperature",
+                          "windSpeed"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "preferenceLevels": {
+                        "type": "object",
+                        "properties": {
+                          "sunshine": {
+                            "type": "string",
+                            "enum": [
+                              "dont-mind",
+                              "nice",
+                              "important"
+                            ]
+                          },
+                          "rain": {
+                            "type": "string",
+                            "enum": [
+                              "dont-mind",
+                              "light-ok",
+                              "avoid"
+                            ]
+                          },
+                          "crosswind": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "normal",
+                              "high"
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "displayName"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/me": {
+      "get": {
+        "operationId": "getUser",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateUser",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740990
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "weatherProviderId": {
+                        "type": "string",
+                        "enum": [
+                          "apple-weather",
+                          "met-office"
+                        ]
+                      },
+                      "timeZone": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "riding": {
+                        "type": "object",
+                        "properties": {
+                          "averageSpeedKph": {
+                            "type": "number",
+                            "minimum": 5,
+                            "maximum": 50
+                          },
+                          "departureStepMinutes": {
+                            "type": "integer",
+                            "minimum": 15,
+                            "maximum": 120
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "preferences": {
+                        "type": "object",
+                        "properties": {
+                          "temperature": {
+                            "type": "object",
+                            "properties": {
+                              "comfortMinC": {
+                                "type": "number",
+                                "minimum": -30,
+                                "maximum": 50
+                              },
+                              "comfortMaxC": {
+                                "type": "number",
+                                "minimum": -30,
+                                "maximum": 50
+                              },
+                              "coldSensitivity": {
+                                "type": "string",
+                                "enum": [
+                                  "standard",
+                                  "high"
+                                ]
+                              },
+                              "seasonalTolerance": {
+                                "type": "string",
+                                "enum": [
+                                  "none",
+                                  "cooler-winters"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "wind": {
+                            "type": "object",
+                            "properties": {
+                              "preferTailwind": {
+                                "type": "boolean"
+                              },
+                              "prioritiseTailwindOpportunities": {
+                                "type": "boolean"
+                              },
+                              "comfortableHeadwindKph": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "comfortableCrosswindKph": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "comfortableGustKph": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 150
+                              },
+                              "crosswindSensitivity": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 10
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "sunshine": {
+                            "type": "object",
+                            "properties": {
+                              "sunnyIntervalsComfort": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "recentRides": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "neutral",
+                                  "prefer-variety"
+                                ]
+                              },
+                              "lookbackDays": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 90
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "climbing": {
+                            "type": "object",
+                            "properties": {
+                              "preference": {
+                                "type": "string",
+                                "enum": [
+                                  "flatter",
+                                  "neutral",
+                                  "hillier"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "distance": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "minKm": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 400
+                              },
+                              "maxKm": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 400
+                              }
+                            },
+                            "required": [
+                              "minKm",
+                              "maxKm"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "weights": {
+                            "type": "object",
+                            "properties": {
+                              "temperature": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "wind": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "dryness": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "clearSkies": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "sunshine": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "minimumStandards": {
+                            "type": "object",
+                            "properties": {
+                              "minimumTemperature": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "fixed"
+                                        ]
+                                      },
+                                      "valueC": {
+                                        "type": "number",
+                                        "minimum": -50,
+                                        "maximum": 60
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "valueC"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "monthly"
+                                        ]
+                                      },
+                                      "valuesC": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "type": "number",
+                                          "minimum": -50,
+                                          "maximum": 60
+                                        }
+                                      },
+                                      "fallbackC": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ],
+                                        "minimum": -50,
+                                        "maximum": 60,
+                                        "default": null
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "valuesC"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "maximumTemperatureC": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": -50,
+                                "maximum": 60
+                              },
+                              "maximumGustKph": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 150
+                              },
+                              "maximumPrecipitationProbability": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "maximumPrecipitationRateMmH": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 100
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "forecast": {
+                        "type": "object",
+                        "properties": {
+                          "representation": {
+                            "type": "string",
+                            "enum": [
+                              "deterministic",
+                              "ensemble-summary"
+                            ]
+                          },
+                          "freshnessBasis": {
+                            "type": "string",
+                            "enum": [
+                              "model-run",
+                              "retrieval-time"
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "weather": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "strict"
+                                ]
+                              },
+                              "providerId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 100
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "providerId"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "ordered-fallback"
+                                ]
+                              },
+                              "providerIds": {
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "providerIds"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "planning": {
+                        "type": "object",
+                        "properties": {
+                          "days": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "preset"
+                                    ]
+                                  },
+                                  "preset": {
+                                    "type": "string",
+                                    "enum": [
+                                      "today",
+                                      "tomorrow",
+                                      "weekend",
+                                      "next",
+                                      "next-five-days"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "preset"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "range"
+                                    ]
+                                  },
+                                  "start": {
+                                    "type": "string",
+                                    "format": "date"
+                                  },
+                                  "end": {
+                                    "type": "string",
+                                    "format": "date"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "start",
+                                  "end"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "dates"
+                                    ]
+                                  },
+                                  "dates": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "format": "date"
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 7
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "dates"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "window": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "daylight"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "start": {
+                                    "type": "string",
+                                    "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+                                  },
+                                  "end": {
+                                    "type": "string",
+                                    "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+                                  }
+                                },
+                                "required": [
+                                  "start",
+                                  "end"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "display": {
+                        "type": "object",
+                        "properties": {
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "km",
+                              "mi"
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "units": {
+                        "type": "object",
+                        "properties": {
+                          "temperature": {
+                            "type": "string",
+                            "enum": [
+                              "C",
+                              "F"
+                            ]
+                          },
+                          "windSpeed": {
+                            "type": "string",
+                            "enum": [
+                              "kmh",
+                              "mph"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "temperature",
+                          "windSpeed"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "preferenceLevels": {
+                        "type": "object",
+                        "properties": {
+                          "sunshine": {
+                            "type": "string",
+                            "enum": [
+                              "dont-mind",
+                              "nice",
+                              "important"
+                            ]
+                          },
+                          "rain": {
+                            "type": "string",
+                            "enum": [
+                              "dont-mind",
+                              "light-ok",
+                              "avoid"
+                            ]
+                          },
+                          "crosswind": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "normal",
+                              "high"
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/me/pause": {
+      "put": {
+        "operationId": "pause",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "until": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "until"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "resume",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/route-sources": {
+      "get": {
+        "operationId": "getSources",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteSources"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/route-imports": {
+      "post": {
+        "operationId": "importRoute",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "providerId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                      },
+                      "externalId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "providerId",
+                      "externalId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "gpx": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5000000
+                  },
+                  "surface": {
+                    "$ref": "#/components/schemas/SurfaceInput"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740990
+                  }
+                },
+                "required": [
+                  "source",
+                  "gpx"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteImportResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteImportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/route-selection": {
+      "get": {
+        "operationId": "getSelection",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateSelection",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740990
+                  },
+                  "routeIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 12
+                  }
+                },
+                "required": [
+                  "expectedVersion",
+                  "routeIds"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/routes": {
+      "get": {
+        "operationId": "getRoutes",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,63}$"
+            },
+            "required": false,
+            "name": "sourceProviderId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "sourceExternalId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "uploadRoute",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/gpx+xml": {
+              "schema": {
+                "type": "string",
+                "description": "UTF-8 GPX, at most 5,000,000 bytes"
+              }
+            },
+            "application/xml": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "text/xml": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/routes/{id}": {
+      "get": {
+        "operationId": "getRoute",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/routes/{id}/surface": {
+      "get": {
+        "operationId": "getRouteSurface",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteSurface"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/routes/{id}/geometry": {
+      "get": {
+        "operationId": "getRouteGeometry",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteGeometry"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

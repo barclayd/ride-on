@@ -158,7 +158,7 @@ Global Spot; its hourly adapter and strict/ordered source selection are now
 implemented and verified locally. BPF v2 remains an optional later product.
 Research, quotas and integration design are recorded in
 [`docs/weather-providers.md`](docs/weather-providers.md), with draft types in
-[`worker/src/weather/contracts.ts`](worker/src/weather/contracts.ts).
+[`api/src/weather/contracts.ts`](api/src/weather/contracts.ts).
 The local ignored live check (`evaluation/met-office-live-check.json`) retrieved all eight required
 series at 18 sample points across six routes. This is not complete spatial coverage
 or a route recommendation. The subsequent local ignored API check (`evaluation/api-live-check.json`)
@@ -381,7 +381,7 @@ Scoring factors (each returns 0–1 + human reason): wind alignment vs segment b
 ## Phase checklist
 
 ### Phase 0 — Foundations
-- [ ] Repo layout: `app/` (XcodeGen project + `RideOnCore` SPM package), `worker/`, docs at root
+- [ ] Repo layout: `app/` (XcodeGen project + `RideOnCore` SPM package), `api/`, docs at root
 - [ ] `project.yml`: iOS 26 + macOS 26 targets, entitlements (WeatherKit, HealthKit, CloudKit), asset catalog, `xcodebuild` verified from CLI
 - [ ] `RideOnCore` package with placeholder tests running via `swift test`
 - [ ] Design tokens in code: `ConditionPalette`, `AmbianceStyle`, motion tokens per DESIGN-SYSTEM.md (accent `#BE5103` in asset catalog)
@@ -525,4 +525,4 @@ Multi-day trips · notifications/morning briefing + good-weather alerts · App I
 
 None.
 
-Settled: worker runs on workers.dev (no custom domain yet — the `*.workers.dev` URL is what gets registered as the Strava callback domain; swapping to a custom domain later means updating Strava app settings). Accent color: burnt orange `#BE5103`. App icon: Icon Composer bundle at `app/RideOn.icon` (glass bike over route map) — wire into project.yml (`ASSETCATALOG_COMPILER_APPICON_NAME: RideOn` + add the .icon to the target) during the Phase 2.5 restructure. Apple Developer Program membership: Dan already has it (Release signing can move to Automatic + real team when Phase 6 needs WeatherKit).
+Settled: worker runs on workers.dev (no custom domain yet — the `*.workers.dev` URL is what gets registered as the Strava callback domain; swapping to a custom domain later means updating Strava app settings). Accent color: burnt orange `#BE5103`. App icon: Icon Composer bundle at `apple/app/RideOn.icon` (glass bike over route map) — wire into project.yml (`ASSETCATALOG_COMPILER_APPICON_NAME: RideOn` + add the .icon to the target) during the Phase 2.5 restructure. Apple Developer Program membership: Dan already has it (Release signing can move to Automatic + real team when Phase 6 needs WeatherKit).

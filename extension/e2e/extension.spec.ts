@@ -3120,7 +3120,7 @@ test('notification browser view shows saved changes safely, handles ended rides 
   context,
 }) => {
   const source = readFileSync(
-    path.resolve('../worker/src/monitoring/browser-page.ts'),
+    path.resolve('../api/src/monitoring/browser-page.ts'),
     'utf8',
   );
   const html = source.match(/const html = `([\s\S]*?)`;/)?.[1];

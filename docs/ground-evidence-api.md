@@ -140,7 +140,7 @@ by this service.
 
 ## Independent rain-gauge validation
 
-Run the explicit diagnostic from `worker/`:
+Run the explicit diagnostic from `api/`:
 
 ```sh
 bun scripts/probe-ground-evidence.ts --live 51.5 -0.1

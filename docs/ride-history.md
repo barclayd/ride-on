@@ -305,7 +305,7 @@ a ride, and do not recompute geometric overlap for every departure time.
   human-reviewed route examples before rollout.
 
 The initial 10-point cap and matcher tolerances remain open to human calibration.
-The local synthetic benchmark (`worker/scripts/benchmark-ride-history.ts`) assessed
+The local synthetic benchmark (`api/scripts/benchmark-ride-history.ts`) assessed
 12 routes of roughly 100 km, 28 historical events over eight paths, and 660
 departures across five days in 213 ms (210 ms geometry preparation). This is local
 wall-clock timing, not a production CPU or network benchmark.

@@ -267,7 +267,7 @@ planning/display, custom levels and conflicts, actual scoring changes, partial
 coverage/gaps, missing elevation, standard breaches, multi-day ordering, provider
 errors and cache reuse across dates, windows and Worker restart.
 
-Run `node scripts/benchmark-planning.ts` from `worker/` for a synthetic benchmark
+Run `node scripts/benchmark-planning.ts` from `api/` for a synthetic benchmark
 using the real local Worker/D1/KV with mocked upstream HTTP and ephemeral signing
 keys. On 10 October 2026, 12 roughly 100 km routes (201 GPX points each), five days
 and 720 departure candidates took 1,429 ms cold and 957 ms warm. There were 144

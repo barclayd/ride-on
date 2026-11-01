@@ -2,7 +2,7 @@
 // the cycle map style, the design tokens, the favicon and the app icon. The Worker itself is bundled by wrangler.
 import { cp, rm } from 'node:fs/promises';
 
-const style = '../../app/Packages/Features/Sources/SharedUI/CycleMap';
+const style = '../../apple/Packages/Features/Sources/SharedUI/CycleMap';
 const maplibre = 'node_modules/maplibre-gl/dist';
 
 await Promise.all(

@@ -26,7 +26,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const error = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status });
 
-/** The API's polyline6 (lat before lon, as `worker/src/rides/geometry.ts` encodes it) as GeoJSON. */
+/** The API's polyline6 (lat before lon, as `api/src/rides/geometry.ts` encodes it) as GeoJSON. */
 export const decodePolyline6 = (data: string): Line => {
   const line: Line = [];
   let offset = 0;

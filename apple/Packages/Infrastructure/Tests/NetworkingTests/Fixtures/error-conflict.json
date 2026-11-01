@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "SELECTION_VERSION_CONFLICT",
+    "message": "Your selection has changed. Read GET /route-selection and reconcile before retrying."
+  }
+}

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { decodePolyline6, libraryGeometry, mapLimit } from './geometry.ts';
 
-// The encoder from worker/src/rides/geometry.ts, for round trips.
+// The encoder from api/src/rides/geometry.ts, for round trips.
 const encode = (points: [number, number][]) => {
   let [lat, lon, data] = [0, 0, ''];
   const put = (delta: number) => {
