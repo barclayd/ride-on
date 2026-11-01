@@ -209,16 +209,16 @@ public final class RiderSettingsStore {
 
     public func load() async {
         guard isLive else { return }
-        guard let session = RideOnSession.shared.credentials?.id else { clearAccount(); return }
+        guard let session = RideOnAPI.sessionIdentity?.id else { clearAccount(); return }
         do {
             async let user: UserResponse = RideOnAPI.send("/users/me")
             async let auth = try? (RideOnAPI.send("/auth/me") as AuthResponse)
             let response = try await user
-            guard RideOnSession.shared.credentials?.id == session, !Task.isCancelled else { return }
+            guard RideOnAPI.sessionIdentity?.id == session, !Task.isCancelled else { return }
             // An edit still waiting to save wins over what the server had.
             if settings == saved { apply(response) } else { version = response.user.version }
             let authentication = await auth
-            guard RideOnSession.shared.credentials?.id == session, !Task.isCancelled else { return }
+            guard RideOnAPI.sessionIdentity?.id == session, !Task.isCancelled else { return }
             email = authentication?.user.email
             providers = authentication?.user.providers ?? []
             phase = .loaded
@@ -272,7 +272,7 @@ public final class RiderSettingsStore {
     }
 
     private func save(_ settings: RiderSettings) async {
-        let session = RideOnSession.shared.credentials?.id
+        let session = RideOnAPI.sessionIdentity?.id
         do {
             let response: UserResponse
             do {
@@ -283,7 +283,7 @@ public final class RiderSettingsStore {
                 let current: UserResponse = try await RideOnAPI.send("/users/me")
                 response = try await RideOnAPI.send("/users/me", method: "PATCH", body: Patch(expectedVersion: current.user.version, settings))
             }
-            guard RideOnSession.shared.credentials?.id == session, !Task.isCancelled else { return }
+            guard RideOnAPI.sessionIdentity?.id == session, !Task.isCancelled else { return }
             version = response.user.version
             saved = settings
             revision += 1

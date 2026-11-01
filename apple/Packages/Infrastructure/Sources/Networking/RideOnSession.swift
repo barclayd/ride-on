@@ -3,13 +3,13 @@ import os
 
 /// A login ID survives process launches and token rotation, but changes on every sign-in.
 /// This prevents a late response or an old account cache crossing a sign-out boundary.
-public final class RideOnSession: @unchecked Sendable {
-    public static let shared = RideOnSession()
+final class RideOnSession: @unchecked Sendable {
+    static let shared = RideOnSession()
     static let changed = Notification.Name("RideOnSessionChanged")
-    public struct Credentials: Sendable {
-        public var id: String
-        public var token: String
-        public var accountID: String?
+    struct Credentials: Sendable {
+        var id: String
+        var token: String
+        var accountID: String?
     }
     private let lock = NSLock()
     private let tokenKey = "ride-on-api-session"
@@ -20,7 +20,7 @@ public final class RideOnSession: @unchecked Sendable {
         KeychainStore.get(account: key).flatMap { String(data: $0, encoding: .utf8) }
     }
 
-    public var credentials: Credentials? {
+    var credentials: Credentials? {
         lock.withLock {
             guard let token = string(tokenKey) else { return nil }
             let id = string(loginKey) ?? UUID().uuidString

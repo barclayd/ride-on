@@ -9,7 +9,7 @@ public enum RideBoardLoader {
     /// `nil` when nothing is shortlisted. A `window` from the Ride Window sheet is saved as the
     /// planning choice (docs/planning-api.md, "Saved planning"); without one, the saved choice is used.
     public static func load(window: RideWindow? = nil) async throws -> RideBoard? {
-        guard let session = RideOnSession.shared.credentials else { return nil }
+        guard let session = RideOnAPI.sessionIdentity else { return nil }
         let result = try await RideBoardRepository.shared.refresh(session: session.id, account: session.accountID,
                                                                   window: window, force: true)
         return try result.board()

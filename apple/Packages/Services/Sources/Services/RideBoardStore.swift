@@ -31,7 +31,7 @@ public final class RideBoardStore {
 
     public convenience init(live: Bool = true) {
         self.init(repository: .shared, live: live, identity: {
-            RideOnSession.shared.credentials.map { ($0.id, $0.accountID) }
+            RideOnAPI.sessionIdentity.map { ($0.id, $0.accountID) }
         })
     }
 

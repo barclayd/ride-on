@@ -17,7 +17,7 @@ actor RideBoardRepository {
 
     init(directory: URL = URL.cachesDirectory.appending(path: "RideBoards"),
          now: @escaping @Sendable () -> Date = { .now },
-         sessionIsCurrent: @escaping @Sendable (String) -> Bool = { RideOnSession.shared.credentials?.id == $0 },
+         sessionIsCurrent: @escaping @Sendable (String) -> Bool = { RideOnAPI.sessionIdentity?.id == $0 },
          fetch: @escaping Fetch = { try await RideOnAPI.data($0, method: $2, body: $1) }) {
         self.disk = RideBoardDiskStore(directory: directory)
         self.now = now

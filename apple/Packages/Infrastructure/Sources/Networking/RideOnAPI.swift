@@ -36,6 +36,16 @@ public enum RideOnAPI {
         var state: String
     }
 
+    /// Application coordination needs account/login identity, never the credential itself.
+    public struct SessionIdentity: Sendable {
+        public let id: String
+        public let accountID: String?
+    }
+
+    public static var sessionIdentity: SessionIdentity? {
+        RideOnSession.shared.credentials.map { SessionIdentity(id: $0.id, accountID: $0.accountID) }
+    }
+
     public static let sessionDidChange = RideOnSession.changed
     public static var isSignedIn: Bool { RideOnSession.shared.credentials != nil }
     public static func signOut() { RideOnSession.shared.signOut() }
