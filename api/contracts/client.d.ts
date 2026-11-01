@@ -465,11 +465,30 @@ export interface components {
             /** Format: uuid */
             routeId: string;
             version: number;
-            surface: components["schemas"]["SurfaceInput"] & ({
+            surface: {
+                /** @enum {number} */
+                schemaVersion: 1;
+                source: {
+                    /** @enum {string} */
+                    providerId: "cycle-travel";
+                    /** @enum {string} */
+                    method: "route-instructions";
+                    formatVersion: 1 | 2;
+                    /** @enum {number} */
+                    mappingVersion: 1;
+                };
+                geometryDistanceM: number;
+                sections: {
+                    fromM: number;
+                    toM: number;
+                    /** @enum {string} */
+                    surface: "paved" | "compacted" | "gravel" | "rough-unpaved" | "earth" | "dirt" | "grass" | "sand" | "unpaved" | "unknown" | "non-cycling";
+                    sourceCode: string;
+                }[];
                 sourceHash: string;
                 /** Format: date-time */
                 capturedAt: string;
-            } | null);
+            } | null;
             summary: components["schemas"]["SurfaceSummary"];
         };
         RouteGeometry: {

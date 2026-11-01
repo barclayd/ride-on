@@ -1219,31 +1219,134 @@
             "type": "integer"
           },
           "surface": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SurfaceInput"
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
               },
-              {
-                "type": [
-                  "object",
-                  "null"
-                ],
+              "source": {
+                "type": "object",
                 "properties": {
-                  "sourceHash": {
-                    "type": "string"
-                  },
-                  "capturedAt": {
+                  "providerId": {
                     "type": "string",
-                    "format": "date-time"
+                    "enum": [
+                      "cycle-travel"
+                    ]
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "route-instructions"
+                    ]
+                  },
+                  "formatVersion": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "enum": [
+                          1
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          2
+                        ]
+                      }
+                    ]
+                  },
+                  "mappingVersion": {
+                    "type": "number",
+                    "enum": [
+                      1
+                    ]
                   }
                 },
                 "required": [
-                  "sourceHash",
-                  "capturedAt"
+                  "providerId",
+                  "method",
+                  "formatVersion",
+                  "mappingVersion"
                 ],
                 "additionalProperties": false
+              },
+              "geometryDistanceM": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 400000
+              },
+              "sections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "fromM": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 400000
+                    },
+                    "toM": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 400000
+                    },
+                    "surface": {
+                      "type": "string",
+                      "enum": [
+                        "paved",
+                        "compacted",
+                        "gravel",
+                        "rough-unpaved",
+                        "earth",
+                        "dirt",
+                        "grass",
+                        "sand",
+                        "unpaved",
+                        "unknown",
+                        "non-cycling"
+                      ]
+                    },
+                    "sourceCode": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40,
+                      "pattern": "^[a-zA-Z0-9:?._-]+$"
+                    }
+                  },
+                  "required": [
+                    "fromM",
+                    "toM",
+                    "surface",
+                    "sourceCode"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 5000
+              },
+              "sourceHash": {
+                "type": "string"
+              },
+              "capturedAt": {
+                "type": "string",
+                "format": "date-time"
               }
-            ]
+            },
+            "required": [
+              "schemaVersion",
+              "source",
+              "geometryDistanceM",
+              "sections",
+              "sourceHash",
+              "capturedAt"
+            ],
+            "additionalProperties": false
           },
           "summary": {
             "$ref": "#/components/schemas/SurfaceSummary"

@@ -43,7 +43,9 @@ export const surfaceInputSchema = z
   })
   .openapi('SurfaceInput');
 export type SurfaceInput = z.infer<typeof surfaceInputSchema>;
-export const surfaceEvidenceSchema = surfaceInputSchema.extend({
+// Flatten the shape: OpenAPI allOf cannot extend a strict named object.
+export const surfaceEvidenceSchema = z.strictObject({
+  ...surfaceInputSchema.shape,
   sourceHash: z.string(),
   capturedAt: z.iso.datetime(),
 });

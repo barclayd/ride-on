@@ -11,6 +11,7 @@ import {
   errorSchema,
   pauseSchema,
   selectionResponseSchema,
+  surfaceResponseSchema,
   userResponseSchema,
 } from '../src/schemas/library.ts';
 import { updateSelectionSchema } from '../src/schemas/selection.ts';
@@ -28,6 +29,59 @@ const validator = (name: string) =>
   });
 
 describe('portable wire contracts', () => {
+  for (const surface of [
+    null,
+    {
+      schemaVersion: 1,
+      source: {
+        providerId: 'cycle-travel',
+        method: 'route-instructions',
+        formatVersion: 2,
+        mappingVersion: 1,
+      },
+      geometryDistanceM: 100,
+      sections: [{ fromM: 0, toM: 100, surface: 'paved', sourceCode: 'paved' }],
+      sourceHash: 'synthetic-hash',
+      capturedAt: '2026-10-14T12:00:00.000Z',
+    },
+  ]) {
+    test(`strict extended surface accepts ${surface === null ? 'null' : 'evidence'} in the portable contract`, () => {
+      const response = {
+        routeId: '138a6c23-8fa8-4db1-840a-80d117994a63',
+        version: 1,
+        surface,
+        summary: {
+          status: 'unavailable',
+          pavedM: 0,
+          unpavedM: 0,
+          nonCyclingM: 0,
+          unknownM: 100,
+          classifiedFraction: 0,
+          unpavedFraction: null,
+          source: null,
+          capturedAt: null,
+        },
+      };
+      const validate = validator('RouteSurface');
+      expect(surfaceResponseSchema.safeParse(response).success).toBe(true);
+      expect(validate(response)).toBe(true);
+      for (const invalid of [
+        undefined,
+        false,
+        ...(surface
+          ? [
+              { ...surface, sourceHash: undefined },
+              { ...surface, surprise: true },
+            ]
+          : []),
+      ]) {
+        const bad = { ...response, surface: invalid };
+        expect(surfaceResponseSchema.safeParse(bad).success).toBe(false);
+        expect(validate(bad)).toBe(false);
+      }
+    });
+  }
+
   test('nullable named references keep null without weakening the shared schema', () => {
     const validate = validator('UserResponse');
     const user = {

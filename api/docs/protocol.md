@@ -49,6 +49,10 @@ With `@hono/zod-openapi` 1.6.3, `.nullable()` on the named `Pause` schema
 widens the shared component. `User.pause` uses an explicit union with null so
 only that property accepts null. A Zod/JSON Schema regression checks both the
 nullable property and the non-null shared component.
+The strict surface-evidence schema reuses `SurfaceInput`'s shape instead of
+extending its named component: generated `allOf` cannot add properties to a
+component that forbids additional properties. Both null and populated evidence
+are covered by the same parity checks.
 
 Schemas under `src/schemas` contain only shape dependencies. Keep storage,
 provider calls and HTTP composition above them. The route registry must not
