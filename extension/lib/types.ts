@@ -361,6 +361,7 @@ export type DaySummary = {
 export type RecommendationKind = 'best_pick' | 'best_available';
 // POST /recommendations with `days`: one ranking across the selected dates.
 export type Recommendations = {
+  recommendationId?: string | null;
   generatedAt: string;
   algorithmVersion: string;
   timeZone: string;
@@ -402,6 +403,69 @@ export type Ride = {
   recordedAt: string;
   updatedAt: string;
   plan?: RidePlan | null;
+  recommendationId?: string | null;
+  experienceVersion?: number;
+  experience?:
+    | (RideExperience & { firstSubmittedAt: string; updatedAt: string })
+    | null;
+  weatherEnrichment?: {
+    status: WeatherEnrichmentStatus;
+    reason: string | null;
+  };
+};
+export type WeatherEnrichmentStatus =
+  | 'not-requested'
+  | 'pending'
+  | 'processing'
+  | 'ready'
+  | 'unavailable';
+export type FeedbackFactor =
+  | 'sunshine'
+  | 'temperature'
+  | 'wind'
+  | 'rain'
+  | 'surface'
+  | 'hills'
+  | 'distance'
+  | 'traffic'
+  | 'company'
+  | 'tiredness'
+  | 'mechanical';
+export type RideExperience = {
+  timing: {
+    startTime: string;
+    durationMinutes: number;
+    precision: 'confirmed' | 'approximate';
+    routeFollowed: 'yes' | 'partly' | 'different' | 'unknown';
+    startedAt?: string;
+    finishedAt?: string;
+  } | null;
+  feedback: {
+    enjoyment: number | null;
+    weatherComfort: number | null;
+    reasons: { factor: FeedbackFactor; impact: 'positive' | 'negative' }[];
+    includeInLearning: boolean;
+  } | null;
+};
+// GET /users/me/learning. The API keeps its `learning` names; the UI calls this
+// Tailored Rides (docs/ride-learning.md).
+export type LearningFactor = 'cold' | 'heat' | 'wind' | 'rain' | 'shade';
+export type LearningProfile = {
+  modelVersion?: string;
+  enabled: boolean;
+  settingsVersion: number;
+  resetAt: string | null;
+  mode: 'shadow';
+  scoringApplied: false;
+  eligibleRideCount: number;
+  feedbackRideCount: number;
+  status: string;
+  factors: {
+    factor: LearningFactor;
+    evidenceCount: number;
+    confidence: number;
+    adjustmentPoints: number;
+  }[];
 };
 // POST /rides/summaries
 export type RideSummary = {

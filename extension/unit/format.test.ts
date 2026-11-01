@@ -704,6 +704,7 @@ test('the view: strip, selected days and weather', () => {
 });
 
 test('the shown window, its end and its picks', () => {
+  if (!shownState.recs) throw new Error('no recommendations');
   const shown = shownOf(shownState, NOW);
   if (!shown) throw new Error('no window');
   expect(shown.dates).toEqual(['2026-10-14']);
@@ -714,10 +715,20 @@ test('the shown window, its end and its picks', () => {
     ['b', '2026-10-14', 2],
   ]);
   expect(shown.meta).toEqual({
+    recommendationId: null,
     generatedAt: '2026-10-14T08:55:00Z',
     algorithmVersion: '2026-10-10',
     attribution,
   });
+  expect(
+    shownOf(
+      {
+        ...shownState,
+        recs: { ...shownState.recs, recommendationId: 'saved-recommendation' },
+      },
+      NOW,
+    )?.meta.recommendationId,
+  ).toBe('saved-recommendation');
   expect(ended(shown, new Date('2026-10-14T12:59:00Z'))).toBe(false);
   expect(ended(shown, new Date('2026-10-14T13:00:00Z'))).toBe(true);
   const daylight = {
