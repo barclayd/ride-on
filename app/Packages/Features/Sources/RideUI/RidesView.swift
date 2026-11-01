@@ -5,6 +5,7 @@ import Engine
 import Services
 import DesignSystem
 import SharedUI
+import RoutesUI
 
 /// The Rides tab (docs/redesign/README.md §1): the window's best ride as a hero, its conditions,
 /// the window's days, then every other tracked route. Its layout follows the space it's given
@@ -17,7 +18,9 @@ public struct RidesView: View {
     var refresh: @MainActor @Sendable () async -> Void
     var apply: @MainActor @Sendable (RideWindow) async -> Void
     @State private var selectedDay: Date
-    @State private var choosingWindow = false
+    /// The open Ride Window's choice: a sheet, or a card over Rides when Rides is beside a ride.
+    @State private var windowDraft: RideWindowDraft?
+    @State private var addingRoute = false
     /// The ride the Track sheet is open for.
     @State private var tracking: RideBoard.Pick?
     /// The tracked ride's `Pick.id` as the bell shows it: it follows `RideTracker` once the sheet has gone.
@@ -54,6 +57,12 @@ public struct RidesView: View {
         self.apply = apply
         let bestDay = board.days.first { $0.best?.id == board.picks.first?.id } ?? board.days.first
         _selectedDay = State(initialValue: bestDay?.date ?? board.window.start)
+    }
+
+    /// Opens with the Ride Window up, for previews.
+    init(board: RideBoard, choosingWindow: Bool) {
+        self.init(board: board)
+        if choosingWindow { _windowDraft = State(initialValue: RideWindowDraft(board: board)) }
     }
 
     /// The selected day's best ride; the window's best when nothing is selected.
@@ -109,7 +118,12 @@ public struct RidesView: View {
                     selectedDay = board.days.first { $0.best?.id == board.picks.first?.id }?.date ?? dates.first ?? board.window.start
                 }
             }
-            .sheet(isPresented: $choosingWindow) { RideWindowSheet(board: board, apply: apply) }
+            // Opening or closing the phone moves the Ride Window between the sheet and the card
+            // over the Rides pane, with what's chosen so far.
+            .sheet(isPresented: Binding { windowDraft != nil && !isSplit } set: { if !$0 && !isSplit { windowDraft = nil } }) {
+                if let windowDraft { RideWindowSheet(draft: windowDraft, apply: apply) }
+            }
+            .sheet(isPresented: $addingRoute) { TrackRouteSheet(onSaved: refresh) }
             // The bell changes once the sheet has gone, so the change is seen.
             .sheet(item: $tracking, onDismiss: showTracked) { pick in
                 TrackRideSheet(pick: pick, isTracking: shownTracked == pick.id, replacing: replacing(pick))
@@ -173,7 +187,7 @@ public struct RidesView: View {
     }
 
     private var windowCapsule: some View {
-        Button { choosingWindow = true } label: {
+        Button { chooseWindow() } label: {
             HStack(spacing: 6) {
                 Image(systemName: "calendar")
                 Text(windowTitle).monospacedDigit()
@@ -184,13 +198,16 @@ public struct RidesView: View {
     }
 
     private var rideWindowButton: some View {
-        Button("Ride Window", systemImage: "calendar") { choosingWindow = true }
+        Button("Ride Window", systemImage: "calendar") { chooseWindow() }
             .accessibilityValue(windowTitle)
     }
 
+    private func chooseWindow() {
+        withAnimation(isSplit ? Motion.panelMaterialize : nil) { windowDraft = RideWindowDraft(board: board) }
+    }
+
     private var trackRouteButton: some View {
-        // ponytail: no-op until tracking a route is redesigned.
-        Button("Track a Route", systemImage: "plus") {}
+        Button("Track a Route", systemImage: "plus") { addingRoute = true }
     }
 
     // MARK: Layouts
@@ -303,6 +320,19 @@ public struct RidesView: View {
             let ridesWidth = (full / 2).rounded(.down) - insets.leading
             ZStack(alignment: .trailing) {
                 ridesPane
+                    .accessibilityHidden(windowDraft != nil)
+                    .overlay {
+                        // The Ride Window over Rides, the ride beside it left as it was.
+                        if let windowDraft {
+                            Color.black.opacity(0.2)
+                                .ignoresSafeArea()
+                                .onTapGesture { closeWindow() }
+                                .accessibilityHidden(true)
+                            RideWindowPane(draft: windowDraft, apply: apply, close: closeWindow)
+                                .padding(8)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
                     .frame(width: ridesWidth)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(fullScreen ? 0 : 1)
@@ -319,6 +349,11 @@ public struct RidesView: View {
         // The rail keeps the ride's actions however Rides scrolls.
         .toolbarMinimizationBehavior(.never, for: .navigationBar)
         #endif
+    }
+
+    private func closeWindow() {
+        guard windowDraft?.applying != true else { return }
+        withAnimation(Motion.panelMaterialize) { windowDraft = nil }
     }
 
     /// Rides beside the open ride: its own bar on top, since the rail belongs to the ride.
@@ -1012,32 +1047,6 @@ struct RouteGPX: Transferable {
         }
         .suggestedFileName { "\($0.route.name).gpx" }
     }
-}
-
-#Preview {
-    NavigationStack {
-        RidesView(board: .sample)
-    }
-    .environment(RideTracker(live: false))
-}
-
-// The iPhone Duo's poses beside the rail (PaneShape), for the canvas: the simulator can't fold.
-#Preview("Tent", traits: .fixedLayout(width: 606, height: 466)) {
-    NavigationStack { RidesView(board: .sample) }
-        .measuresPaneShape()
-        .environment(RideTracker(live: false))
-}
-
-#Preview("Open, landscape", traits: .fixedLayout(width: 879, height: 669)) {
-    NavigationStack { RidesView(board: .sample) }
-        .measuresPaneShape()
-        .environment(RideTracker(live: false))
-}
-
-#Preview("Open, portrait", traits: .fixedLayout(width: 669, height: 951)) {
-    NavigationStack { RidesView(board: .sample) }
-        .measuresPaneShape()
-        .environment(RideTracker(live: false))
 }
 
 /// A widget tap (docs/redesign/README.md §8): Rides shows the ride's day, and with `track` opens its
