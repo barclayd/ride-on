@@ -4,34 +4,33 @@ import DesignSystem
 import SharedUI
 import Services
 
-/// The Ride Window sheet (docs/redesign/README.md §3): which days to plan and the hours to ride in.
-/// Done hands the window to `apply`, which reloads Rides; Cancel drops the changes.
-public struct RideWindowSheet: View {
-    var board: RideBoard
-    var apply: @MainActor @Sendable (RideWindow) async -> Void
-    @Environment(\.locale) private var locale
-    @State private var selection: Set<Date>
-    @State private var custom: Bool
-    @State private var leave: Date
-    @State private var back: Date
-    @State private var applying = false
-    @Environment(\.dismiss) private var dismiss
+/// What the Ride Window is choosing. Rides keeps it while the window is open, so the choice carries
+/// over when the iPhone Duo opens or closes and the sheet becomes a card over the Rides pane, or back.
+@MainActor @Observable
+final class RideWindowDraft {
+    let board: RideBoard
+    var selection: Set<Date>
+    var custom: Bool
+    var leave: Date
+    var back: Date
+    /// Done is saving the window and reloading Rides.
+    var applying = false
 
-    public init(board: RideBoard, apply: @escaping @MainActor @Sendable (RideWindow) async -> Void) {
+    init(board: RideBoard) {
         self.board = board
-        self.apply = apply
-        _selection = State(initialValue: Set(board.days.map(\.date)))
+        selection = Set(board.days.map(\.date))
         let (leave, back) = switch board.hours {
         case .daylight: (8 * 60, 17 * 60)
         case .custom(let leave, let back): (leave, back)
         }
-        _custom = State(initialValue: board.hours != .daylight)
-        _leave = State(initialValue: Self.time(leave, calendar: Self.calendar(board.timeZone)))
-        _back = State(initialValue: Self.time(back, calendar: Self.calendar(board.timeZone)))
+        custom = board.hours != .daylight
+        let calendar = Self.calendar(board.timeZone)
+        self.leave = Self.time(leave, calendar: calendar)
+        self.back = Self.time(back, calendar: calendar)
     }
 
     /// Every forecast day, chosen or not.
-    private var days: [RideBoard.Day] {
+    var days: [RideBoard.Day] {
         let saved = board.forecast.isEmpty ? board.days : board.forecast
         guard !FixtureWorld.isEnabled else { return saved }
         let remaining = saved.filter { $0.date >= today }
@@ -44,118 +43,222 @@ public struct RideWindowSheet: View {
         }
     }
 
-    private var calendar: Calendar { Self.calendar(board.timeZone) }
-    private var today: Date {
+    var calendar: Calendar { Self.calendar(board.timeZone) }
+    var today: Date {
         if FixtureWorld.isEnabled { return (board.forecast.isEmpty ? board.days : board.forecast).first?.date ?? .now }
         return calendar.startOfDay(for: .now)
     }
 
     /// The best ride across the chosen days: one that meets the minimums first, then the highest score.
-    private var bestPick: RideBoard.Pick? {
+    var bestPick: RideBoard.Pick? {
         days.filter { selection.contains($0.date) }.compactMap(\.best)
             .max { ($0.meetsMinimums ? 1 : 0, $0.score) < ($1.meetsMinimums ? 1 : 0, $1.score) }
     }
 
-    private var quickPick: RideWindow.QuickPick? {
+    var quickPick: RideWindow.QuickPick? {
         Self.quickPicks.first { Set($0.days(from: today, calendar: calendar)) == selection }
     }
 
-    private var hours: RideWindow.Hours {
+    var hours: RideWindow.Hours {
         custom ? .custom(leave: Self.minutes(leave, calendar: calendar), back: Self.minutes(back, calendar: calendar)) : .daylight
     }
 
-    private var hoursValid: Bool { !custom || Self.minutes(leave, calendar: calendar) < Self.minutes(back, calendar: calendar) }
+    var hoursValid: Bool { !custom || Self.minutes(leave, calendar: calendar) < Self.minutes(back, calendar: calendar) }
+
+    var canApply: Bool { !selection.isEmpty && hoursValid && !applying }
+
+    var window: RideWindow { RideWindow(days: selection.sorted(), quickPick: quickPick, hours: hours) }
+
+    static let quickPicks: [RideWindow.QuickPick] = [.tomorrow, .weekend, .next]
+
+    static func calendar(_ zone: String) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: zone) ?? .current
+        return calendar
+    }
+
+    private static func time(_ minutes: Int, calendar: Calendar) -> Date {
+        calendar.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: .now) ?? .now
+    }
+
+    private static func minutes(_ date: Date, calendar: Calendar) -> Int {
+        let time = calendar.dateComponents([.hour, .minute], from: date)
+        return (time.hour ?? 0) * 60 + (time.minute ?? 0)
+    }
+}
+
+/// The Ride Window sheet (docs/redesign/README.md §3): which days to plan and the hours to ride in.
+/// Done hands the window to `apply`, which reloads Rides; Cancel drops the changes. On the iPhone
+/// Duo's rail, Cancel sits at the top and Done under it, the accent circle (DESIGN-SYSTEM.md §5).
+public struct RideWindowSheet: View {
+    @State private var draft: RideWindowDraft
+    var apply: @MainActor @Sendable (RideWindow) async -> Void
+    @Environment(\.dismiss) private var dismiss
+    #if os(iOS)
+    @Environment(\.toolbarVerticalEdge) private var toolbarVerticalEdge
+    #endif
+
+    public init(board: RideBoard, apply: @escaping @MainActor @Sendable (RideWindow) async -> Void) {
+        self.init(draft: RideWindowDraft(board: board), apply: apply)
+    }
+
+    init(draft: RideWindowDraft, apply: @escaping @MainActor @Sendable (RideWindow) async -> Void) {
+        _draft = State(initialValue: draft)
+        self.apply = apply
+    }
+
+    private var onRail: Bool {
+        #if os(iOS)
+        toolbarVerticalEdge != nil
+        #else
+        false
+        #endif
+    }
 
     public var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    FlowLayout {
-                        ForEach(Self.quickPicks, id: \.self, content: quickPickButton)
+            RideWindowForm(draft: draft)
+                .navigationTitle("Ride Window")
+                #if os(iOS)
+                // The rail has no title, so it heads the content there.
+                .navigationBarTitleDisplayMode(onRail ? .large : .inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(role: .cancel) { dismiss() }
+                            .tint(.primary)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        // A custom view never shows on the rail, so there Done stays, dimmed, while it saves.
+                        if draft.applying && !onRail {
+                            ProgressView()
+                        } else {
+                            Button(role: .confirm) {
+                                draft.applying = true
+                                Task {
+                                    await apply(draft.window)
+                                    dismiss()
+                                }
+                            }
+                            .disabled(!draft.canApply)
+                        }
                     }
                 }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-
-                Section {
-                    ForEach(days) { day in dayRow(day) }
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                } header: {
-                    Text("Days")
-                } footer: {
-                    if let last = days.last {
-                        Text("Best tracked route each day. Forecast to \(last.date.formatted(dayStyle)).")
+                .overlay {
+                    if draft.applying && onRail {
+                        ProgressView().controlSize(.large)
                     }
                 }
+        }
+        .environment(\.timeZone, draft.calendar.timeZone)
+        .interactiveDismissDisabled(draft.applying)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+}
 
-                Section {
-                    Picker("Hours", selection: $custom.animation(Motion.glassTapLayout)) {
-                        Text("Daylight").tag(false)
-                        Text("Custom").tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    if custom {
-                        DatePicker("Leave After", selection: $leave, displayedComponents: .hourAndMinute)
-                        DatePicker("Back By", selection: $back, displayedComponents: .hourAndMinute)
+/// The Ride Window on the open iPhone Duo in landscape: a card over the Rides pane, with the ride
+/// beside it left as it was. The rail belongs to that ride, so Cancel and Done sit in the card's
+/// own bar (DESIGN-SYSTEM.md §5).
+struct RideWindowPane: View {
+    var draft: RideWindowDraft
+    var apply: @MainActor @Sendable (RideWindow) async -> Void
+    var close: () -> Void
+
+    var body: some View {
+        RideWindowForm(draft: draft)
+            .safeAreaBar(edge: .top) {
+                PaneBar("Ride Window") {
+                    Button("Cancel", systemImage: "xmark", role: .cancel, action: close)
+                    if draft.applying {
+                        ProgressView()
+                            .frame(width: 44, height: 44)
                     } else {
-                        let daylight = (days.first { selection.contains($0.date) && $0.daylight != nil } ?? days.first { $0.daylight != nil })?.daylight
-                        LabeledContent("Leave After", value: daylight.map { "Sunrise, about \($0.start.formatted(.clockTime))" } ?? "Sunrise")
-                        LabeledContent("Back By", value: daylight.map { "Sunset, about \($0.end.formatted(.clockTime))" } ?? "Sunset")
-                    }
-                } header: {
-                    Text("Hours")
-                } footer: {
-                    if !hoursValid {
-                        Text("Back By must be after Leave After.").foregroundStyle(.red)
-                    } else if custom {
-                        Text("Rides start and finish between these times, in daylight.")
-                    } else {
-                        Text("Times follow sunrise and sunset each day. Choose Custom to set your own.")
+                        Button("Done", systemImage: "checkmark") {
+                            draft.applying = true
+                            Task {
+                                await apply(draft.window)
+                                draft.applying = false
+                                close()
+                            }
+                        }
+                        .disabled(!draft.canApply)
                     }
                 }
             }
-            .formStyle(.grouped)
-            .navigationTitle("Ride Window")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(role: .cancel) { dismiss() }
-                        .tint(.primary)
+            .environment(\.timeZone, draft.calendar.timeZone)
+            .background(.groupedBackground)
+            .clipShape(.rect(cornerRadius: CornerRadius.floatingPanel))
+            .shadow(color: .black.opacity(0.28), radius: 20, y: 12)
+    }
+}
+
+/// The Ride Window's quick picks, days and hours, in the sheet or the card over the Rides pane.
+struct RideWindowForm: View {
+    @Bindable var draft: RideWindowDraft
+    @Environment(\.locale) private var locale
+
+    private var days: [RideBoard.Day] { draft.days }
+    private var today: Date { draft.today }
+
+    var body: some View {
+        Form {
+            Section {
+                FlowLayout {
+                    ForEach(RideWindowDraft.quickPicks, id: \.self, content: quickPickButton)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    if applying {
-                        ProgressView()
-                    } else {
-                        Button(role: .confirm) {
-                            applying = true
-                            Task {
-                                await apply(RideWindow(days: selection.sorted(), quickPick: quickPick, hours: hours))
-                                dismiss()
-                            }
-                        }
-                        .disabled(selection.isEmpty || !hoursValid)
-                    }
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+
+            Section {
+                ForEach(days) { day in dayRow(day) }
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            } header: {
+                Text("Days")
+            } footer: {
+                if let last = days.last {
+                    Text("Best tracked route each day. Forecast to \(last.date.formatted(dayStyle)).")
+                }
+            }
+
+            Section {
+                Picker("Hours", selection: $draft.custom.animation(Motion.glassTapLayout)) {
+                    Text("Daylight").tag(false)
+                    Text("Custom").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                if draft.custom {
+                    DatePicker("Leave After", selection: $draft.leave, displayedComponents: .hourAndMinute)
+                    DatePicker("Back By", selection: $draft.back, displayedComponents: .hourAndMinute)
+                } else {
+                    let daylight = (days.first { draft.selection.contains($0.date) && $0.daylight != nil } ?? days.first { $0.daylight != nil })?.daylight
+                    LabeledContent("Leave After", value: daylight.map { "Sunrise, about \($0.start.formatted(.clockTime))" } ?? "Sunrise")
+                    LabeledContent("Back By", value: daylight.map { "Sunset, about \($0.end.formatted(.clockTime))" } ?? "Sunset")
+                }
+            } header: {
+                Text("Hours")
+            } footer: {
+                if !draft.hoursValid {
+                    Text("Back By must be after Leave After.").foregroundStyle(.red)
+                } else if draft.custom {
+                    Text("Rides start and finish between these times, in daylight.")
+                } else {
+                    Text("Times follow sunrise and sunset each day. Choose Custom to set your own.")
                 }
             }
         }
-        .environment(\.timeZone, calendar.timeZone)
-        .interactiveDismissDisabled(applying)
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
+        .formStyle(.grouped)
     }
 
     // MARK: Quick picks
 
-    private static let quickPicks: [RideWindow.QuickPick] = [.tomorrow, .weekend, .next]
-
     private func quickPickButton(_ pick: RideWindow.QuickPick) -> some View {
-        let isSelected = pick == quickPick
+        let isSelected = pick == draft.quickPick
         return Button {
-            withAnimation(Motion.glassTapLayout) { selection = Set(pick.days(from: today, calendar: calendar)) }
+            withAnimation(Motion.glassTapLayout) { draft.selection = Set(pick.days(from: today, calendar: draft.calendar)) }
         } label: {
             Text(pick.title)
                 .font(.subheadline.weight(.semibold))
@@ -172,9 +275,9 @@ public struct RideWindowSheet: View {
     // MARK: Days
 
     private func dayRow(_ day: RideBoard.Day) -> some View {
-        let isSelected = selection.contains(day.date)
+        let isSelected = draft.selection.contains(day.date)
         return Button {
-            withAnimation(Motion.glassTapLayout) { selection.formSymmetricDifference([day.date]) }
+            withAnimation(Motion.glassTapLayout) { draft.selection.formSymmetricDifference([day.date]) }
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -211,7 +314,7 @@ public struct RideWindowSheet: View {
 
     @ViewBuilder
     private func line(_ day: RideBoard.Day) -> some View {
-        if let best = day.best, best.id == bestPick?.id {
+        if let best = day.best, best.id == draft.bestPick?.id {
             Text("\(Image(systemName: "star.fill")) Best pick · \(best.route.name) · \(best.score)")
                 .fontWeight(.semibold)
                 .foregroundStyle(.tint)
@@ -228,23 +331,8 @@ public struct RideWindowSheet: View {
     /// "Wed 14 Oct".
     private var dayStyle: Date.FormatStyle {
         var style = Date.FormatStyle.dateTime.weekday(.abbreviated).day().month(.abbreviated)
-        style.timeZone = calendar.timeZone
+        style.timeZone = draft.calendar.timeZone
         return style
-    }
-
-    private static func calendar(_ zone: String) -> Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: zone) ?? .current
-        return calendar
-    }
-
-    private static func time(_ minutes: Int, calendar: Calendar) -> Date {
-        calendar.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: .now) ?? .now
-    }
-
-    private static func minutes(_ date: Date, calendar: Calendar) -> Int {
-        let time = calendar.dateComponents([.hour, .minute], from: date)
-        return (time.hour ?? 0) * 60 + (time.minute ?? 0)
     }
 }
 

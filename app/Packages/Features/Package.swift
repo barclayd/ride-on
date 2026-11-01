@@ -38,7 +38,8 @@ let package = Package(
             resources: [.copy("CycleMap")]),
         .target(
             name: "RideUI",
-            dependencies: baseDeps + ["SharedUI"]),
+            // RoutesUI for Track a Route, which Rides' + opens.
+            dependencies: baseDeps + ["SharedUI", "RoutesUI"]),
         .target(
             name: "RoutesUI",
             dependencies: baseDeps + ["SharedUI"]),

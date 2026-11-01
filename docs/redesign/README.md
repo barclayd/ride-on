@@ -28,7 +28,7 @@ This doc is updated with every PR that lands a piece of the redesign: tick the i
 | 8 | Wire to the API | 🟡 Rides, Ride detail, Ride Window, Preferences and Routes live; route imports to come | #159, #162, #167, #172, #195 |
 | 9 | Routes tab: map, floating panel, shortlist, library, history | ✅ Done, on the API | #194, #195 |
 | 10 | Cycle map (`CycleMap`, DESIGN-SYSTEM.md §6): cycle.travel's look in place of Apple Maps, [plan](../maps/README.md) | ✅ The only map on iOS: the Routes map, and snapshots on the Rides hero, cards and thumbnails, and live on Ride detail, with cycle lanes, hillshade and contours; the Mac stays on MapKit until a `WKWebView` with MapLibre GL JS replaces it. Before release: [decision 1](../maps/README.md#open-decisions) and Dan's on-device check | #223, #225, #275, #276, #277, #278, #280, #281 |
-| 11 | iPhone Duo ([canvas](https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz), [§10](#10-iphone-duo)): iOS 27.1, the rail, every pose | 🟡 Rides, Ride detail, Routes, Preferences and onboarding in every pose; the sheets on the rail, History's ride beside History and the tracked ride's tent glance to come | #316, #317, #318, #319 |
+| 11 | iPhone Duo ([canvas](https://claude.ai/artifact/FRGsdkv16VgFF414ynK3sz), [§10](#10-iphone-duo)): iOS 27.1, the rail, every pose | 🟡 Rides, Ride detail, Routes, Preferences and onboarding in every pose, and the Ride Window and Track a Route sheets on the rail; History's ride beside History and the tracked ride's tent glance to come | #316, #317, #318, #319, #320 |
 
 Not in scope yet: Onboarding's redesign (it keeps its dials and copy; on the iPhone Duo it's laid
 out beside the rail, [§10](#10-iphone-duo)).
@@ -693,6 +693,16 @@ Onboarding is one step at a time, so closed and open show the same step. The ste
 state and every answer saves to `PreferencesStore` as it changes, so folding only changes the
 layout. Back slides the pages the other way.
 
+Rides' sheets. Ride Window and Track a Route are system sheets with a large title, as the rail
+shows none: Cancel or Close at the top of the rail and Ride Window's Done under it, the prominent
+accent circle. Track a Route lists every saved route with a toggle that tracks it (the shortlist
+Rides ranks, saved straight away as Routes saves it, then Rides reloads), "N of 12 tracked" in its
+header, then where new routes come from; its search sits at the rail's foot. Open, in landscape,
+Ride Window is a card over the Rides pane, 8pt in, with its own `PaneBar` (Cancel and Done) and
+a scrim over Rides that closes it, so the ride beside it stays put. Its choice
+(`RideWindowDraft`) is held by Rides, so opening or closing the phone mid-choice moves it between
+the sheet and the card without losing it. Track a Route stays a sheet in every pose.
+
 Where the build differs from the canvas:
 - Tent keeps the Apple Weather attribution and "Updated" line, below the fold (WeatherKit
   requires it wherever its data shows).
@@ -713,8 +723,16 @@ Where the build differs from the canvas:
   Continue: `.topBarPinnedTrailing` never shows alone on the closed rail, so Continue is the
   `.confirmationAction` (prominent there by itself), and a `.primaryAction` Skip lands between Back
   and Continue. Without the rail there's still no Back.
+- The open Ride Window card's bar is a `PaneBar`: a leading large title with Cancel and Done as
+  glass circles, not the canvas's centred title between text buttons. While Done applies, the
+  rail keeps a disabled Done with a spinner over the sheet (a spinner in its place would drop
+  off the rail).
+- Track a Route's rows show the route's map thumbnail rather than the canvas's tile icons, with
+  no brand-orange Strava tile, and its import rows (GPX, cycle.travel, Strava) are no-ops without
+  chevrons until the import flows are rebuilt on the API, as Routes' "+" menu is. Its blurb says
+  Ride On picks your best ride from what you track, promising no alerts.
 
-**Rail audit** (Rides, Ride detail, Routes, Preferences, Onboarding):
+**Rail audit** (Rides, Ride detail, Routes, Preferences, Onboarding, Rides' sheets):
 
 | Item | Symbol | Where | Priority |
 |---|---|---|---|
@@ -733,6 +751,11 @@ Where the build differs from the canvas:
 | Back | `chevron.left` | Onboarding: top of the rail, after Welcome (`.navigation`) | – |
 | Continue | `arrow.right` | Onboarding: under Back, prominent (`.confirmationAction`) | high |
 | Skip | `forward` | Onboarding: foot of the rail, after Welcome (`.bottomBar`) | – |
+| Cancel | `xmark` | Ride Window sheet: top of the rail (`.cancellationAction`); open, in the card's `PaneBar` | – |
+| Done | `checkmark` | Ride Window sheet: under Cancel, prominent (`.confirmationAction`); open, in the card's `PaneBar` | high |
+| Close | `xmark` | Track a Route: top of the rail (`.cancellationAction`) | – |
+| Search Your Routes | system | Track a Route: foot of the rail (`.searchable`) | – |
+| Track / Stop Tracking | `plus.circle` / `checkmark.circle.fill` | Track a Route: each row's own toggle, not a rail item | – |
 
 - [x] iOS 27.1 and macOS 27.0 deployment targets
 - [x] `PaneShape` from the container size; iPhone Duo keeps the tab bar (`TabRoot`), never the split view
@@ -740,7 +763,7 @@ Where the build differs from the canvas:
 - [x] Ride detail: sheet, side, tent and portrait layouts; pushed and pane chrome; Full Screen / Show Rides
 - [x] Rail items with titles, symbols and priorities; Add to Calendar and Open in cycle.travel in "…"
 - [x] Mid-journey state kept across opening and closing (`RideDetailState`, `FloatingPanel` scroll offset)
-- [ ] Ride Window and Track a Route sheets on the rail (Close at the top, Done under it); open, Ride Window over the Rides pane
+- [x] Ride Window and Track a Route sheets on the rail (Close at the top, Done under it); open, Ride Window over the Rides pane
 - [x] Routes: library leading, map trailing, Full Screen, tent and portrait
 - [ ] History ride beside History
 - [x] Preferences beside Ideal Temperature
