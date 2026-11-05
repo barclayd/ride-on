@@ -32,6 +32,12 @@ and does not replace land-route evidence. Observed rain/gust feeds describe past
 conditions; typhoon-only quantitative precipitation products cannot supply routine
 multi-day forecasts.
 
+The [WRF model distribution](https://opendata.cwa.gov.tw/opendatadoc/Model/M-A0061.pdf)
+offers GRIB2 grids with a documented six-hour output interval to 84 hours. That
+would need a separate model ingestion pipeline and still does not establish our
+hourly evidence contract. Strong-wind warnings describe threshold hazards;
+absence of a warning cannot supply a numerical gust forecast.
+
 The checked public samples contain some forecast times beyond the nominal
 three-day horizon. The adapter reports actual returned bounds and conservatively
 advertises 72 hours; it never promises future availability from one sample.
