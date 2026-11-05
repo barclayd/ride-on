@@ -120,7 +120,7 @@ for (const [code, expected] of [
   );
 
 integration(
-  'Apple is the default before profile creation and for new users; GPX recommendations and branding survive cache restart',
+  'Automatic selects Apple outside Taiwan before profile creation and for new users; GPX recommendations and branding survive cache restart',
   async (h) => {
     h.use(apple());
     const uploaded = await h.send('/routes', {
@@ -152,7 +152,7 @@ integration(
     });
     assert.deepEqual(user.settings.weather, {
       mode: 'strict',
-      providerId: 'apple-weather',
+      providerId: 'automatic',
     });
     assert.deepEqual(user.settings.forecast, {
       representation: 'deterministic',
@@ -179,7 +179,7 @@ integration(
 );
 
 integration(
-  'the existing Met Office profile stays intact while another new user defaults to Apple; overrides do not save',
+  'the existing Met Office profile stays intact while another new user defaults to Automatic; overrides do not save',
   async (h) => {
     h.use(apple());
     const saved = await createUser(h, {
@@ -195,7 +195,7 @@ integration(
     const other = await createUser(h, {}, BOB_TOKEN);
     assert.deepEqual(other.settings.weather, {
       mode: 'strict',
-      providerId: 'apple-weather',
+      providerId: 'automatic',
     });
     await h.restart();
     const rename = await h.send('/users/me', {
@@ -253,12 +253,16 @@ integration(
         ),
       })
       .parse(JSON.parse(body));
-    assert.equal(catalogue.defaultPolicy.providerId, 'apple-weather');
+    assert.equal(catalogue.defaultPolicy.providerId, 'automatic');
     assert.deepEqual(
       catalogue.providers.map((p) => p.id),
-      ['apple-weather', 'met-office'],
+      ['automatic', 'taiwan-weather', 'apple-weather', 'met-office'],
     );
-    assert.ok(catalogue.providers.every((p) => p.configured));
+    assert.ok(
+      catalogue.providers.every(
+        (p) => p.configured === (p.id !== 'taiwan-weather'),
+      ),
+    );
     await createUser(h);
     const route = await upload(h);
     await recommend(h, [route.id]);

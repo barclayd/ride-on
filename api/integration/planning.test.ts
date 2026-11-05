@@ -742,7 +742,12 @@ integration(
       Object.fromEntries(
         providers.providers.map((p) => [p.id, p.forecastHorizonHours]),
       ),
-      { 'apple-weather': 240, 'met-office': 120 },
+      {
+        automatic: 240,
+        'taiwan-weather': 240,
+        'apple-weather': 240,
+        'met-office': 120,
+      },
     );
     const unknown = await recommend(h, [route.id], {
       weather: { mode: 'strict', providerId: 'unregistered' },

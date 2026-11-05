@@ -60,6 +60,29 @@ export const forecastDetailsFor = (
         coordinate: forecast.location.coordinate,
         retrievedAt: forecast.provenance.retrievedAt,
         forecastRunAt: forecast.provenance.forecastRunAt ?? null,
+        ...(forecast.series.some((s) => s.evidence)
+          ? {
+              fieldEvidence: forecast.series.flatMap((s) =>
+                s.evidence
+                  ? [
+                      {
+                        descriptor: s.descriptor,
+                        sources: s.evidence.flatMap((e) => {
+                          const periods = e.periods.filter((p) =>
+                            visits.some(
+                              (v) =>
+                                Date.parse(p.start) < v.end &&
+                                Date.parse(p.end) > v.start,
+                            ),
+                          );
+                          return periods.length ? [{ ...e, periods }] : [];
+                        }),
+                      },
+                    ]
+                  : [],
+              ),
+            }
+          : {}),
         temperatureStatistic: statistic(temperature?.descriptor),
         gustStatistic: statistic(gust?.descriptor),
         routePeriods: visits.map((v) => ({

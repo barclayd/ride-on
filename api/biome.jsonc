@@ -12,6 +12,7 @@
       "!dist",
       "!.wrangler",
       "!src/climate/haduk-grid.json",
+      "!src/weather/taiwan-boundaries.json",
       "!contracts/openapi.json",
       "!contracts/client.d.ts",
       "!contracts/coverage.json"

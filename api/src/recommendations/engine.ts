@@ -18,7 +18,9 @@ import {
   ensembleDescriptors,
   precipitationTypeDescriptor,
 } from '../weather/descriptors.ts';
+import { evidenceLocations } from '../weather/evidence.ts';
 import { summarizePrecipitation } from '../weather/precipitation.ts';
+import { taiwanPrecipitationProbability } from '../weather/taiwan.ts';
 import { assessClimbing, CLIMBING_SHARE } from './climbing.ts';
 import { conditionsSchema } from './conditions.ts';
 import { planDepartures } from './daylight.ts';
@@ -57,7 +59,7 @@ export const requiredWeather = [
   descriptors.precipitationRate,
   descriptors.precipitationProbability,
 ];
-/** Selection policy is independent of provider identity. No statistic is relabelled. */
+/** Explicit product presets keep their native occurrence event and statistics. */
 export const requiredWeatherFor = (
   input: RecommendationInput,
 ): readonly ForecastDescriptor[] => {
@@ -71,7 +73,10 @@ export const requiredWeatherFor = (
     d.windDirection,
     d.windGust,
     d.precipitationRate,
-    d.precipitationProbability,
+    input.weather.mode === 'strict' &&
+    input.weather.providerId === 'taiwan-weather'
+      ? taiwanPrecipitationProbability
+      : d.precipitationProbability,
     ...(input.preferences.weights.clearSkies > 0 ? [d.totalCloudCover] : []),
     ...(input.preferences.weights.sunshine > 0 ? [d.skyCondition] : []),
   ];
@@ -88,6 +93,7 @@ type PreparedWeather = ReadonlyMap<
     values: readonly ReturnType<typeof compileSeries>[];
     temperature: ReturnType<typeof compileTemperature>;
     display: ReturnType<typeof compileDisplayWeather>;
+    components: ReturnType<typeof evidenceLocations>;
   }
 >;
 
@@ -290,18 +296,29 @@ const assessCandidate = (
       continue;
     }
     const resolved = result.location.coordinate;
+    const weather = prepared.get(leg.weatherLocationId);
+    const componentTooFar = weather?.components.some(
+      (e) =>
+        e.periods.some((p) => p.start <= at && at < p.end) &&
+        haversineKm(
+          [leg.coordinate.latitude, leg.coordinate.longitude],
+          [e.coordinate.latitude, e.coordinate.longitude],
+        ) *
+          1000 >
+          maxLocationDistanceM,
+    );
     if (
+      componentTooFar ||
       haversineKm(
         [leg.coordinate.latitude, leg.coordinate.longitude],
         [resolved.latitude, resolved.longitude],
       ) *
         1000 >
-      maxLocationDistanceM
+        maxLocationDistanceM
     ) {
       missing.add('forecast-too-far-from-route');
       continue;
     }
-    const weather = prepared.get(leg.weatherLocationId);
     const values = weather?.values.map((lookup) => lookup(at)) ?? [];
     const temperatureC = weather?.temperature.at(at);
     const temperatureRange = weather?.temperature.range(
@@ -671,7 +688,7 @@ const assessCandidate = (
     conditions.maximumPrecipitationRateMmH > 0
   )
     drawbacks.push(
-      'Precipitation is possible during this ride; the probability shown is the highest local hourly risk, not a whole-ride probability.',
+      'Precipitation is possible during this ride; the probability shown is the highest local risk over its native forecast period, not a whole-ride probability.',
     );
   return {
     status: 'assessed' as const,
@@ -849,6 +866,7 @@ export const recommendRides = (
         id,
         {
           display: compileDisplayWeather(result, requiredWeatherFor(input)),
+          components: evidenceLocations(result, requiredWeatherFor(input)),
           temperature: compileTemperature(
             byDescriptor.get(
               descriptorKey(

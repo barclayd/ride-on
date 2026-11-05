@@ -16,6 +16,7 @@ const config = JSON.stringify({
   privateKey: await exportPKCS8(keys.privateKey),
 });
 const settings = {
+  weatherProviderId: 'apple-weather',
   timeZone: 'Asia/Taipei',
   riding: { window: { start: '06:30', end: '14:00' } },
 };
@@ -224,7 +225,8 @@ integration(
     ]) {
       await h.restart({ CWA_API_KEY: key });
       const result = await recommend(h, ids, {
-        ...settings,
+        timeZone: settings.timeZone,
+        riding: settings.riding,
         weather: { mode: 'strict', providerId: 'cwa' },
       });
       assert.equal(result.recommendedRouteId, null);

@@ -546,7 +546,7 @@ export interface operations {
                     displayName: string;
                     settings?: {
                         /** @enum {string} */
-                        weatherProviderId?: "apple-weather" | "met-office";
+                        weatherProviderId?: "automatic" | "taiwan-weather" | "apple-weather" | "met-office";
                         timeZone?: string;
                         riding?: {
                             averageSpeedKph?: number;
@@ -900,7 +900,7 @@ export interface operations {
                     displayName?: string;
                     settings?: {
                         /** @enum {string} */
-                        weatherProviderId?: "apple-weather" | "met-office";
+                        weatherProviderId?: "automatic" | "taiwan-weather" | "apple-weather" | "met-office";
                         timeZone?: string;
                         riding?: {
                             averageSpeedKph?: number;

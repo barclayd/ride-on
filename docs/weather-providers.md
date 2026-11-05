@@ -21,13 +21,11 @@ credentials and HTTP calls stay inside adapters. Dan's UK policy is Met Office
 only. Other riders can select a
 provider or explicitly allow an ordered fallback list.
 
-From v0.9.0, new profiles and requests without saved settings default to **Apple
-Weather** (`apple-weather`), deterministic values and retrieval-time freshness.
+From v0.43.0, new profiles and requests without saved settings default to **Automatic**, selecting the CWA + Apple composite for Taiwan land routes and Apple elsewhere, with deterministic values and retrieval-time freshness. See [Taiwan weather](cwa-weather.md).
 Existing saved source selections are preserved. Cloud-aware Met Office profiles can
 explicitly select **BPF v2 UK** (`met-office-bpf`) with `ensemble-summary` assessment
 and `retrieval-time` freshness. Both keys have been authenticated locally. Neither
-feed has been established to match the Met Office consumer app exactly. Providers
-are never silently combined or substituted.
+feed has been established to match the Met Office consumer app exactly. Providers are never silently combined: the Taiwan composite is a named product with per-field provenance.
 
 ### Cloud requirement discovered in human grading — 10 October 2026
 

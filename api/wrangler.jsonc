@@ -43,6 +43,7 @@
       "MET_OFFICE_API_KEY",
       "MET_OFFICE_BPF_API_KEY",
       "APPLE_WEATHER_CONFIG_JSON",
+      "CWA_API_KEY",
       "AUTH_CONFIG_JSON"
     ]
   },

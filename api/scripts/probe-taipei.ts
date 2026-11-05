@@ -1,7 +1,7 @@
 /** Explicit live-weather probe: local Worker/D1/KV and synthetic Taipei routes.
- * Uses APPLE_WEATHER_CONFIG_JSON from the environment; never prints credentials.
+ * Uses CWA_API_KEY and APPLE_WEATHER_CONFIG_JSON from the environment; never prints credentials.
  * Run with Node and --env-file pointing to your ignored .dev.vars file.
- * Calls the live WeatherKit API, so this consumes normal provider quota.
+ * Calls the live CWA and WeatherKit APIs, so this consumes normal provider quota.
  */
 import assert from 'node:assert/strict';
 import { Temporal } from '@js-temporal/polyfill';
@@ -13,6 +13,8 @@ import { taipeiGpx, taipeiRoutes } from '../test/fixtures/taipei.ts';
 
 const config = process.env.APPLE_WEATHER_CONFIG_JSON;
 if (!config?.trim()) throw new Error('APPLE_WEATHER_CONFIG_JSON is required.');
+const cwaKey = process.env.CWA_API_KEY;
+if (!cwaKey?.trim()) throw new Error('CWA_API_KEY is required.');
 const now = new Date().toISOString();
 const date = Temporal.Instant.from(now)
   .toZonedDateTimeISO('Asia/Taipei')
@@ -21,14 +23,33 @@ const date = Temporal.Instant.from(now)
   .toString();
 const h = await createHarness();
 try {
-  await h.restart({ TEST_NOW: now, APPLE_WEATHER_CONFIG_JSON: config });
-  // This is the only allowed live host. Unmatched subrequests fail closed.
+  await h.restart({
+    TEST_NOW: now,
+    APPLE_WEATHER_CONFIG_JSON: config,
+    CWA_API_KEY: cwaKey,
+  });
+  // These are the only allowed live hosts. Unmatched subrequests fail closed.
   h.use(
     http.get(
       'https://weatherkit.apple.com/api/v1/weather/en/:latitude/:longitude',
       async ({ request }) =>
         fetch(request.url, {
-          headers: request.headers,
+          headers: {
+            Authorization: request.headers.get('Authorization') ?? '',
+            Accept: 'application/json',
+          },
+          redirect: 'manual',
+          signal: AbortSignal.timeout(15_000),
+        }),
+    ),
+    http.get(
+      'https://opendata.cwa.gov.tw/api/v1/rest/datastore/:dataset',
+      async ({ request }) =>
+        fetch(request.url, {
+          headers: {
+            Authorization: request.headers.get('Authorization') ?? '',
+            Accept: 'application/json',
+          },
           redirect: 'manual',
           signal: AbortSignal.timeout(15_000),
         }),
@@ -50,6 +71,7 @@ try {
   const ids = routes.map((r) => r.id);
   const settings = {
     date,
+    weatherProviderId: 'automatic',
     timeZone: 'Asia/Taipei',
     riding: { window: { start: '06:30', end: '14:00' } },
   };
@@ -69,7 +91,7 @@ try {
     JSON.stringify(
       {
         scope:
-          'Live Apple forecasts through local production API; synthetic Taipei routes; no CWA score or production writes',
+          'Live CWA and Apple forecasts through local production API; synthetic Taipei routes; local storage only',
         generatedAt: now,
         date,
         timeZone: result.timeZone,
@@ -93,11 +115,31 @@ try {
           departuresUnknown: r.departuresUnknown,
           conditions: r.best.conditions,
           drawbacks: r.best.drawbacks,
+          fieldSources: r.best.forecastDetails.locations
+            .flatMap((l) => l.fieldEvidence ?? [])
+            .map((e) => ({
+              field:
+                e.descriptor.kind === 'scalar'
+                  ? e.descriptor.measure.quantity
+                  : e.descriptor.kind,
+              sources: [
+                ...new Set(
+                  e.sources.map((s) => s.provenance.source.providerId),
+                ),
+              ],
+            })),
         })),
         unranked: result.unranked,
         weather: result.weather.locations.map((l) => ({
           status: l.status,
           issues: l.issues,
+          fields: l.fieldEvidence?.map((e) => ({
+            descriptor: e.descriptor,
+            sources: [
+              ...new Set(e.sources.map((s) => s.provenance.source.providerId)),
+            ],
+            methods: [...new Set(e.sources.map((s) => s.method))],
+          })),
         })),
       },
       null,
@@ -106,8 +148,28 @@ try {
   );
   assert.equal(result.rankings.length, 2, 'Both routes must be assessable.');
   assert.ok(result.rankings.every((r) => r.departuresUnknown === 0));
-  assert.equal(result.weather.selectedSource?.providerId, 'apple-weather');
+  assert.equal(result.weather.selectedSource?.providerId, 'taiwan-weather');
   assert.equal(h.requests.length, calls);
+  for (const route of result.rankings) {
+    const evidence = route.best.forecastDetails.locations.flatMap(
+      (l) => l.fieldEvidence ?? [],
+    );
+    for (const [quantity, source] of [
+      ['air-temperature', 'cwa'],
+      ['wind-speed', 'cwa'],
+      ['wind-gust', 'apple-weather'],
+      ['precipitation-rate', 'apple-weather'],
+    ])
+      assert.ok(
+        evidence.some(
+          (e) =>
+            e.descriptor.kind === 'scalar' &&
+            e.descriptor.measure.quantity === quantity &&
+            e.sources.some((s) => s.provenance.source.providerId === source),
+        ),
+        `Missing ${source} ${quantity} evidence during the ride.`,
+      );
+  }
 } finally {
   await h.dispose();
 }

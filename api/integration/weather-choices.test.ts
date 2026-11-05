@@ -187,7 +187,7 @@ integration(
         body: JSON.stringify({ displayName: 'New rider' }),
       }),
     );
-    assert.equal(other.weatherProviderId, 'apple-weather');
+    assert.equal(other.weatherProviderId, 'automatic');
   },
 );
 
@@ -257,11 +257,13 @@ integration(
     assert.deepEqual(
       catalogue.providers.map((p) => [p.id, p.name]),
       [
+        ['automatic', 'Automatic'],
+        ['taiwan-weather', 'CWA + Apple Weather'],
         ['apple-weather', 'Apple Weather'],
         ['met-office', 'Met Office'],
       ],
     );
-    assert.equal(catalogue.defaultProviderId, 'apple-weather');
+    assert.equal(catalogue.defaultProviderId, 'automatic');
     assert.equal(
       catalogue.providers.find((p) => p.id === 'met-office')?.configured,
       false,
