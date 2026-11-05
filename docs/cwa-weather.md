@@ -1,5 +1,55 @@
 # Taiwan CWA weather
 
+## Taipei route checks (2026-11-05)
+
+Two synthetic river-corridor GPX files exercise the real local Worker, route
+import, weather adapters, recommendation API and persistent cache. They are
+test geometry, not surveyed or navigable cycling tracks:
+
+| Route | Distance | Nearest CWA representative points |
+| --- | --- | --- |
+| Northwest corridor | 9.30 km | Datong (1.34 km), Beitou (3.53 km) |
+| East corridor | 7.96 km | Zhongshan (1.90 km), Nangang (2.07 km) |
+
+All four samples resolve to `F-D0047-061`, inside the existing 10 km distance
+limit. Controlled WeatherKit responses verify the current complete-evidence
+scorer with default preferences, 20 km/h pace and a 06:30–14:00 `Asia/Taipei`
+window:
+
+- 22°C, calm and dry gives both routes 100/100.
+- 80% precipitation probability and 2 mm/h gives both routes 58/100:
+  30 temperature points + 20 wind points + 8 dryness points.
+- Wind **from** the east favours the northwest route; reversing it to west
+  favours the eastbound route. Sustained wind stays 28 km/h and gusts 38 km/h
+  after normalisation. A 35 km/h gust limit excludes both routes from meeting
+  the rider's standards, including the route with a tailwind.
+- Morning rain clearing at 10:00 selects a 10:00 local departure for both.
+- 06:30 local maps to 22:30 UTC on the previous day. The complete ride stays
+  inside daylight and the requested window, with no unknown departures.
+- Identical requests after restarting the Worker retain rankings and reuse KV.
+- Strict CWA requests remain unassessable (`not-configured` without a key,
+  `unsupported-variable` with one). Cached Apple results cannot become CWA
+  scores, and neither case spends CWA quota.
+
+These assertions live in `api/integration/taipei-weather.test.ts` and
+`api/test/taipei-weather.test.ts`. They validate algorithm behaviour with
+controlled weather, not forecast accuracy or live CWA authentication.
+
+The live Apple Weather probe on 2026-11-05, requesting 2026-11-06 in Taipei,
+was blocked by `unauthorized` responses with the locally configured credentials.
+Both routes correctly remained unassessable; no live score was verified.
+No CWA key was configured. Repeat the explicit live probe after credentials
+are repaired (it uses provider quota and only local route storage):
+
+```sh
+cd api
+node --env-file=.dev.vars scripts/probe-taipei.ts
+```
+
+The probe prints a sanitised route/score report and fails if either route is
+unassessable, any departure is unknown, or cache reuse changes the result.
+The CWA-only scorer and Taiwan default activation remain outstanding.
+
 Research and public payload inspection: 5 November 2026.
 
 The `cwa` adapter implements `ForecastProvider` for Taiwan's Central Weather

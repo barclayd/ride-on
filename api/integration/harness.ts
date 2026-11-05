@@ -60,6 +60,7 @@ export const createHarness = async (authConfig?: string) => {
     MET_OFFICE_API_KEY: WEATHER_KEY,
     MET_OFFICE_BPF_API_KEY: 'integration-bpf-key-not-a-real-secret',
     APPLE_WEATHER_CONFIG_JSON: '',
+    CWA_API_KEY: '',
   };
   const dispatch = async (outgoing: RuntimeRequest) => {
     const request = new Request(outgoing.url, {
