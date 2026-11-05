@@ -7,6 +7,7 @@ import {
 import type { ForecastCache } from './cache.ts';
 import { weatherProviderChoices, weatherProviderIds } from './choices.ts';
 import type { ForecastProvider, Provenance } from './contracts.ts';
+import { createCwa, cwaAttribution } from './cwa.ts';
 import { createMetOfficeBpf } from './met-office-bpf.ts';
 import { createMetOfficeGlobalSpot } from './met-office-global-spot.ts';
 
@@ -19,6 +20,14 @@ type Registration = {
 };
 /** Internal product registrations retain their stable source/cache identities. */
 const registrations: readonly Registration[] = [
+  {
+    id: 'cwa',
+    forecastHorizonHours: 72,
+    attribution: [cwaAttribution],
+    configured: (env) => Boolean(env.CWA_API_KEY?.trim()),
+    create: (env, _cache, now) =>
+      createCwa({ apiKey: env.CWA_API_KEY ?? '', now }),
+  },
   {
     id: 'apple-weather',
     forecastHorizonHours: 240,
