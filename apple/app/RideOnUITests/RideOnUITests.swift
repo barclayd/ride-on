@@ -2,6 +2,22 @@ import XCTest
 
 @MainActor
 final class RideOnUITests: XCTestCase {
+    func testUKRideKeepsLocalTimesWhenViewedInTaiwan() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--fixture-world", "-AppleLocale", "en_GB"]
+        app.launchEnvironment["TZ"] = "Asia/Taipei"
+        app.launch()
+
+        let hero = heroTitle(in: app, startingWith: "Hilly Loop")
+        XCTAssertTrue(hero.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["09:00"].firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["~12:00"].firstMatch.exists)
+        hero.tap()
+        let departure = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Wednesday' AND label CONTAINS '09:00'")).firstMatch
+        XCTAssertTrue(departure.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Wednesday' AND label CONTAINS '16:00'")).firstMatch.exists)
+    }
+
     func testTabsExistAndRidesShowsTheBestPick() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world"]

@@ -73,7 +73,7 @@ final class RideWindowDraft {
 
     static func calendar(_ zone: String) -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: zone) ?? .current
+        calendar.timeZone = RideDates.timeZone(zone)
         return calendar
     }
 
@@ -195,6 +195,8 @@ struct RideWindowPane: View {
 
 /// The Ride Window's quick picks, days and hours, in the sheet or the card over the Rides pane.
 struct RideWindowForm: View {
+    private var timeZone: TimeZone { draft.calendar.timeZone }
+
     @Bindable var draft: RideWindowDraft
     @Environment(\.locale) private var locale
 
@@ -235,8 +237,8 @@ struct RideWindowForm: View {
                     DatePicker("Back By", selection: $draft.back, displayedComponents: .hourAndMinute)
                 } else {
                     let daylight = (days.first { draft.selection.contains($0.date) && $0.daylight != nil } ?? days.first { $0.daylight != nil })?.daylight
-                    LabeledContent("Leave After", value: daylight.map { "Sunrise, about \($0.start.formatted(.clockTime))" } ?? "Sunrise")
-                    LabeledContent("Back By", value: daylight.map { "Sunset, about \($0.end.formatted(.clockTime))" } ?? "Sunset")
+                    LabeledContent("Leave After", value: daylight.map { "Sunrise, about \($0.start.formatted(.clockTime, in: timeZone))" } ?? "Sunrise")
+                    LabeledContent("Back By", value: daylight.map { "Sunset, about \($0.end.formatted(.clockTime, in: timeZone))" } ?? "Sunset")
                 }
             } header: {
                 Text("Hours")
@@ -320,7 +322,7 @@ struct RideWindowForm: View {
                 .foregroundStyle(.tint)
         } else {
             let parts = [day.best.map { "\($0.route.name) · \($0.score)" }, day.note,
-                         day.forecastEnds.map { "Forecast ends \($0.formatted(.clockTime))" }].compactMap(\.self)
+                         day.forecastEnds.map { "Forecast ends \($0.formatted(.clockTime, in: timeZone))" }].compactMap(\.self)
             Text(parts.isEmpty ? "No ride" : parts.joined(separator: " · "))
                 .foregroundStyle(.secondary)
         }

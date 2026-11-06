@@ -37,7 +37,7 @@ struct RideBoardSnapshot: Codable, Sendable {
     func refreshDate() -> Date {
         guard let response = try? response(), let refresh = response.weather?.refreshAt else { return fetchedAt }
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: response.timeZone) ?? .current
+        calendar.timeZone = RideDates.timeZone(response.timeZone)
         let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: fetchedAt)) ?? fetchedAt
         let departures = (response.rankings.compactMap(\.best) + response.days.compactMap(\.best)).map(\.departureAt)
         return ([refresh, midnight] + departures).min() ?? fetchedAt

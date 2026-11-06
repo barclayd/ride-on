@@ -7,6 +7,8 @@ public struct TrackedRide: Hashable, Sendable, Identifiable {
     public var routeId: UUID
     public var start: Date
     public var finish: Date
+    public var timeZone: String
+    public var rideTimeZone: TimeZone { RideDates.timeZone(timeZone) }
     /// The score when tracking started. It never changes.
     public var originalScore: Int
     /// The last successful check's score; `nil` before one.
@@ -16,11 +18,12 @@ public struct TrackedRide: Hashable, Sendable, Identifiable {
     /// The `RideBoard.Pick.id` of the same route and departure.
     public var pickID: String { "\(routeId)@\(start.timeIntervalSinceReferenceDate)" }
 
-    public init(id: String, routeId: UUID, start: Date, finish: Date, originalScore: Int, latestScore: Int? = nil, check: Check) {
+    public init(id: String, routeId: UUID, start: Date, finish: Date, originalScore: Int, latestScore: Int? = nil, check: Check, timeZone: String = RideDates.defaultTimeZone.identifier) {
         self.id = id
         self.routeId = routeId
         self.start = start
         self.finish = finish
+        self.timeZone = timeZone
         self.originalScore = originalScore
         self.latestScore = latestScore
         self.check = check

@@ -95,13 +95,13 @@ private struct ActivityRideTime: View {
     var body: some View {
         let now = Date.now
         if now < ride.start {
-            Text(short ? ride.rideTime(at: now, short: true) : "\(ride.duration) ride · \(ride.start.clock) → ~\(ride.finish.clock)")
+            Text(short ? ride.rideTime(at: now, short: true) : "\(ride.duration) ride · \(ride.start.clock(in: ride.rideTimeZone)) → ~\(ride.finish.clock(in: ride.rideTimeZone))")
         } else if now < ride.finish {
             let left = Text(timerInterval: ride.start...ride.finish, countsDown: true).monospacedDigit()
             if short {
                 Text("\(left) to go")
             } else {
-                Text("\(left) to go · back ~\(ride.finish.clock)")
+                Text("\(left) to go · back ~\(ride.finish.clock(in: ride.rideTimeZone))")
             }
         } else {
             Text("Ride over")

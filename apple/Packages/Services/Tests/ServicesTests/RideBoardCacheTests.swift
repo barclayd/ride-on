@@ -102,8 +102,8 @@ private struct Harness {
     let server = BoardServer()
     let session = TestSession()
     let directory = URL.temporaryDirectory.appending(path: "RideBoardTests-\(UUID())")
-    func repository() -> RideBoardRepository {
-        RideBoardRepository(directory: directory, now: { start }, sessionIsCurrent: { [session] in session.current?.id == $0 },
+    func repository(resolveTimeZone: @escaping @Sendable (Coordinate) async -> String? = { _ in nil }) -> RideBoardRepository {
+        RideBoardRepository(directory: directory, now: { start }, resolveTimeZone: resolveTimeZone, sessionIsCurrent: { [session] in session.current?.id == $0 },
                             fetch: { [server] in try await server.fetch($0, body: $1, method: $2) })
     }
     func clean() { try? FileManager.default.removeItem(at: directory) }
@@ -118,6 +118,24 @@ private func eventually(_ condition: @Sendable () async -> Bool) async throws {
 }
 
 struct RideBoardCacheTests {
+    @Test func resolvesAndPersistsRouteZoneAcrossOfflineRestoration() async throws {
+        let h = Harness(); defer { h.clean() }
+        let repo = h.repository(resolveTimeZone: { _ in "Asia/Taipei" })
+        let snapshot = try await repo.refresh(session: "login1", account: "rider1")
+        #expect(try snapshot.board()?.picks.first?.timeZone == "Asia/Taipei")
+        await h.server.configure(offline: true)
+        let restored = await h.repository().restore(session: "login1", account: "rider1")
+        #expect(restored?.board?.picks.first?.timeZone == "Asia/Taipei")
+    }
+
+    @Test func enrichesPreviouslyCachedGeometryWithItsZone() async throws {
+        let h = Harness(); defer { h.clean() }
+        _ = try await h.repository().refresh(session: "login1", account: "rider1")
+        let enriched = try await h.repository(resolveTimeZone: { _ in "Asia/Taipei" }).refresh(session: "login1", account: "rider1")
+        #expect(try enriched.board()?.picks.first?.timeZone == "Asia/Taipei")
+        #expect(await h.server.count("/routes/\(routeID)/geometry") == 1)
+    }
+
     @Test func restoresCompleteBoardAcrossProcessWithoutNetwork() async throws {
         let h = Harness(); defer { h.clean() }
         let original = try await h.repository().refresh(session: "login1", account: "rider1")

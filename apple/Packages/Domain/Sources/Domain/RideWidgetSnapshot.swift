@@ -6,6 +6,9 @@ import Foundation
 public struct RideWidgetSnapshot: Codable, Sendable, Equatable {
     /// When the board was ranked: "Updated 09:31".
     public var generatedAt: Date
+    public var timeZone: String?
+    public var rideTimeZone: TimeZone { RideDates.timeZone(timeZone) }
+    public var calendar: Calendar { RideDates.calendar(in: rideTimeZone) }
     public var days: [Day]
     /// The day of the window's best ride, where paging starts.
     public var bestDay: Date?
@@ -28,6 +31,8 @@ public struct RideWidgetSnapshot: Codable, Sendable, Equatable {
         public var ascentM: Double
         public var start: Date
         public var finish: Date
+        public var timeZone: String?
+        public var rideTimeZone: TimeZone { RideDates.timeZone(timeZone) }
         public var score: Int
         public var meetsMinimums: Bool
         public var temperatureC: ClosedRange<Double>
@@ -90,6 +95,7 @@ public extension RideWidgetSnapshot {
     /// `previous` keeps a tracked ride the board has moved past showing until it's over.
     init(board: RideBoard, tracked: TrackedRide?, units: Units, previous: RideWidgetSnapshot? = nil) {
         generatedAt = board.generatedAt
+        timeZone = board.timeZone
         self.units = units
         let best = board.picks.first
         bestDay = (board.days.first { $0.best?.id == best?.id } ?? board.days.first { $0.best != nil })?.date
@@ -108,13 +114,14 @@ public extension RideWidgetSnapshot {
     }
 
     /// The window's days from `date`'s on: past days drop off the widget.
-    func days(from date: Date, calendar: Calendar = .current) -> [Day] {
+    func days(from date: Date, calendar: Calendar? = nil) -> [Day] {
+        let calendar = calendar ?? self.calendar
         let today = calendar.startOfDay(for: date)
         return days.filter { $0.date >= today }
     }
 
     /// The day the widget shows: the one paged to, else the best ride's, else the first left.
-    func day(at date: Date, paged: Date?, calendar: Calendar = .current) -> Day? {
+    func day(at date: Date, paged: Date?, calendar: Calendar? = nil) -> Day? {
         let days = days(from: date, calendar: calendar)
         return days.first { $0.date == paged } ?? days.first { $0.date == bestDay } ?? days.first
     }
@@ -127,7 +134,7 @@ extension RideWidgetSnapshot.Ride {
         // ponytail: every nth point, not a curve-aware simplification; 120 keeps a loop's shape at widget size.
         let step = max(1, coordinates.count / 120)
         self.init(id: pick.id, name: pick.route.name, distanceKm: pick.route.distanceKm, ascentM: pick.route.ascentM,
-                  start: pick.start, finish: pick.finish, score: pick.score, meetsMinimums: pick.meetsMinimums,
+                  start: pick.start, finish: pick.finish, timeZone: pick.timeZone, score: pick.score, meetsMinimums: pick.meetsMinimums,
                   temperatureC: pick.conditions.temperatureC, windKph: pick.conditions.windKph, wind: pick.conditions.wind,
                   gustKph: pick.conditions.gustKph, sky: pick.conditions.sky,
                   loop: stride(from: 0, to: coordinates.count, by: step).map { coordinates[$0] },
@@ -175,7 +182,8 @@ public extension RideWidgetSnapshot.Ride {
     /// When the ride is, for where it's got to (docs/redesign/README.md §8): "Wed 09:00 · ~3h ride"
     /// before the day, "09:00 → ~12:00 · ~3h ride" on the morning, "1h 40m to go · back ~12:00" while
     /// riding, "Ride over" after. `short` fits a small widget's chip.
-    func rideTime(at now: Date, short: Bool = false, calendar: Calendar = .current, locale: Locale = .current) -> String {
+    func rideTime(at now: Date, short: Bool = false, calendar: Calendar? = nil, locale: Locale = .current) -> String {
+        let calendar = calendar ?? RideDates.calendar(in: rideTimeZone)
         let clock = { (date: Date) in date.formatted(Self.clock(calendar: calendar, locale: locale)) }
         if now >= finish { return "Ride over" }
         if now >= start {

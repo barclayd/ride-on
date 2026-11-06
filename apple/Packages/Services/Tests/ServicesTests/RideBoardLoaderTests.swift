@@ -56,6 +56,12 @@ final class RideBoardLoaderTests: XCTestCase {
         XCTAssertEqual(board.picks.count, 1)
         XCTAssertEqual(pick.route.name, "Hilly Loop")
         XCTAssertEqual(pick.score, 86)
+        XCTAssertEqual(pick.timeZone, "Europe/London")
+        let taiwan = RideBoardLoader.board(from: response,
+            routes: [route: .init(coordinates: [], cycleTravelURL: nil, timeZone: "Asia/Taipei")], summaries: [])
+        XCTAssertEqual(taiwan.picks.first?.timeZone, "Asia/Taipei")
+        XCTAssertEqual(taiwan.days.first?.best?.timeZone, "Asia/Taipei")
+        XCTAssertEqual(taiwan.details[pick.id]?.pick.timeZone, "Asia/Taipei")
         XCTAssertEqual(pick.conditions.sky, .sunnySpells)
         XCTAssertEqual(pick.conditions.wind, .tailwind)
         XCTAssertNotNil(pick.lastRidden)

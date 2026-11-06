@@ -70,6 +70,13 @@ priority, and preserve the boolean on unrelated preference edits.
 
 ## 1. Rides (tab)
 
+Ride dates and clocks use the time zone at the route's start, including departures,
+returns, hourly forecasts, tracking, saved plans, widgets and Live Activities. The
+app resolves and caches an IANA zone with route geometry; until it is available,
+the API's saved planning zone applies. Travelling does not change displayed ride
+times. Daylight saving follows the date of the ride. Calendar exports retain this
+zone and the original instants; board day selection remains in its planning zone.
+
 | Light | Dark |
 |---|---|
 | <img src="screens/rides-light.png" width="300"> | <img src="screens/rides-dark.png" width="300"> |

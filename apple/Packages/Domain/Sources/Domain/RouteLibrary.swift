@@ -78,12 +78,15 @@ public extension RouteLibrary {
 
     struct Plan: Hashable, Sendable {
         public var start: Date
+        public var timeZone: String
+        public var rideTimeZone: TimeZone { RideDates.timeZone(timeZone) }
         public var temperatureC: Double
         public var windKph: Double
         public var sky: RideBoard.Sky
 
-        public init(start: Date, temperatureC: Double, windKph: Double, sky: RideBoard.Sky) {
+        public init(start: Date, temperatureC: Double, windKph: Double, sky: RideBoard.Sky, timeZone: String = RideDates.defaultTimeZone.identifier) {
             self.start = start
+            self.timeZone = timeZone
             self.temperatureC = temperatureC
             self.windKph = windKph
             self.sky = sky

@@ -5,6 +5,8 @@ import Domain
 /// day's best score. Days with a ride are buttons that select the day; a rained-off day shows
 /// its sky and a stub and can't be selected.
 public struct DayStrip: View {
+    @Environment(\.timeZone) private var timeZone
+
     var days: [RideBoard.Day]
     @Binding var selection: Date
 
@@ -45,7 +47,7 @@ public struct DayStrip: View {
             .contentShape(.rect(cornerRadius: 14))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(day.date.formatted(.dateTime.weekday(.wide)))
+        .accessibilityLabel(day.date.formatted(.dateTime.weekday(.wide), in: timeZone))
         .accessibilityValue("Best ride scores \(best.score)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -60,14 +62,14 @@ public struct DayStrip: View {
                 .frame(width: 26, height: 4)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(day.date.formatted(.dateTime.weekday(.wide))), no ride, \(day.sky.title)")
+        .accessibilityLabel("\(day.date.formatted(.dateTime.weekday(.wide), in: timeZone)), no ride, \(day.sky.title)")
     }
 
     private func column(_ day: RideBoard.Day, @ViewBuilder top: () -> some View) -> some View {
         VStack(spacing: 6) {
             Spacer(minLength: 0)
             top()
-            Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
+            Text(day.date.formatted(.dateTime.weekday(.abbreviated), in: timeZone))
                 .font(.footnote.weight(.semibold))
                 // Five columns can't fit "Wed" at accessibility sizes; shrink rather than break it.
                 .lineLimit(1)

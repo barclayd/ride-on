@@ -57,7 +57,7 @@ public final class RideTracker {
     public func track(_ pick: RideBoard.Pick) async throws {
         guard isLive else {
             ride = TrackedRide(id: UUID().uuidString, routeId: pick.route.id, start: pick.start, finish: pick.finish,
-                               originalScore: pick.score, latestScore: pick.score, check: .checked(at: .now, changes: []))
+                               originalScore: pick.score, latestScore: pick.score, check: .checked(at: .now, changes: []), timeZone: pick.timeZone)
             return
         }
         guard let ref = pick.recommendationRef else { throw Self.expired }
@@ -143,7 +143,7 @@ public final class RideTracker {
             else if refresh.result == "unavailable" { .failed(reason(refresh.reasonCode), lastChecked: refresh.lastSuccessfulAssessmentAt) }
             else { .due(lastChecked: refresh.lastSuccessfulAssessmentAt) }
         return TrackedRide(id: ride.id, routeId: ride.routeId, start: ride.departureAt, finish: ride.finishAt,
-                           originalScore: original, latestScore: latest, check: check)
+                           originalScore: original, latestScore: latest, check: check, timeZone: ride.timeZone)
     }
 
     nonisolated static func changes(_ comparison: Comparison, from baseline: Snapshot, to latest: Snapshot) -> [TrackedRide.Change] {
@@ -225,6 +225,7 @@ public final class RideTracker {
     }
 
     struct Ride: Decodable {
+        var timeZone: String
         var id: String
         var routeId: UUID
         var departureAt: Date

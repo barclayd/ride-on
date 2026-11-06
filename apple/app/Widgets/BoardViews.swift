@@ -7,6 +7,8 @@ import DesignSystem
 /// Widgets A, the departure board (docs/redesign/README.md §8): the paged day's best ride on its
 /// map, the window's days below. A tap opens the ride; Track opens its Track sheet.
 struct BoardView: View {
+    @Environment(\.timeZone) private var timeZone
+
     var family: WidgetFamily
     var snapshot: RideWidgetSnapshot
     /// The day shown: paged to, else the best.
@@ -46,7 +48,7 @@ struct BoardView: View {
             VStack(alignment: .leading, spacing: 1) {
                 if let ride = day.ride {
                     HStack {
-                        Text(ride.start.clock).font(.system(size: 24, weight: .bold)).monospacedDigit()
+                        Text(ride.start.clock(in: ride.rideTimeZone)).font(.system(size: 24, weight: .bold)).monospacedDigit()
                         Spacer(minLength: 4)
                         ScorePill(score: ride.score, meetsMinimums: ride.meetsMinimums, best: isBest(day))
                     }
@@ -67,8 +69,8 @@ struct BoardView: View {
 
     private func startLine(_ ride: RideWidgetSnapshot.Ride, finish: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text(ride.start.clock).font(.system(size: 30, weight: .bold)).monospacedDigit()
-            if finish { Text("→ ~\(ride.finish.clock)").font(.system(size: 13)).foregroundStyle(.secondary) }
+            Text(ride.start.clock(in: ride.rideTimeZone)).font(.system(size: 30, weight: .bold)).monospacedDigit()
+            if finish { Text("→ ~\(ride.finish.clock(in: ride.rideTimeZone))").font(.system(size: 13)).foregroundStyle(.secondary) }
             Spacer(minLength: 2)
             ScorePill(score: ride.score, meetsMinimums: ride.meetsMinimums, best: isBest(day))
         }
@@ -111,10 +113,10 @@ struct BoardView: View {
                     HStack(spacing: 4) {
                         if isBest(day) { Image(systemName: "star.fill").foregroundStyle(.tint) }
                         if let ride = day.ride {
-                            Text("\(ride.start.weekday) \(ride.start.clock) → ~\(ride.finish.clock) · \(ride.name)")
+                            Text("\(ride.start.weekday(in: ride.rideTimeZone)) \(ride.start.clock(in: ride.rideTimeZone)) → ~\(ride.finish.clock(in: ride.rideTimeZone)) · \(ride.name)")
                             ScorePill(score: ride.score, meetsMinimums: ride.meetsMinimums, best: isBest(day))
                         } else {
-                            Text(day.date.weekdayDay)
+                            Text(day.date.weekdayDay(in: timeZone))
                         }
                     }
                     .lineLimit(1)
@@ -135,7 +137,7 @@ struct BoardView: View {
         return HStack(spacing: 0) {
             MapPanel(ride: best.ride, shape: .square, units: units, hours: true)
                 .overlay(alignment: .topLeading) {
-                    Label(best.ride.map { "\($0.start.weekday) · \($0.name)" } ?? best.date.weekdayDay, systemImage: "star.fill")
+                    Label(best.ride.map { "\($0.start.weekday(in: $0.rideTimeZone)) · \($0.name)" } ?? best.date.weekdayDay(in: timeZone), systemImage: "star.fill")
                         .labelStyle(StarLabel())
                         .mapChip()
                         .padding(8)
@@ -145,7 +147,7 @@ struct BoardView: View {
                 header(days)
                 if let ride = best.ride {
                     HStack {
-                        Heading(text: "★ Best · \(ride.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))", tint: .rideAccent)
+                        Heading(text: "★ Best · \(ride.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated), in: ride.rideTimeZone))", tint: .rideAccent)
                         Spacer()
                         trackLink(ride, onMap: false)
                     }
@@ -176,21 +178,21 @@ struct BoardView: View {
             let star = isBest(best) ? "★ " : ""
             switch family {
             case .accessoryInline:
-                Text("\(star)\(ride.start.weekday) \(ride.start.clock) · \(ride.score) · \(ride.name)") // the name truncates, not the score
+                Text("\(star)\(ride.start.weekday(in: ride.rideTimeZone)) \(ride.start.clock(in: ride.rideTimeZone)) · \(ride.score) · \(ride.name)") // the name truncates, not the score
             case .accessoryCircular:
                 ZStack {
                     AccessoryWidgetBackground()
                     VStack(spacing: 0) {
-                        Text(ride.start.weekday.uppercased()).font(.system(size: 9, weight: .semibold))
-                        Text(ride.start.clock).font(.system(size: 14, weight: .bold)).minimumScaleFactor(0.7)
+                        Text(ride.start.weekday(in: ride.rideTimeZone).uppercased()).font(.system(size: 9, weight: .semibold))
+                        Text(ride.start.clock(in: ride.rideTimeZone)).font(.system(size: 14, weight: .bold)).minimumScaleFactor(0.7)
                         Text("\(star)\(ride.score)").font(.system(size: 10, weight: .semibold)).widgetAccentable()
                     }
                 }
             default:
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("\(star)\(ride.start.weekday) \(ride.start.clock) · \(ride.score)").font(.headline).widgetAccentable()
+                    Text("\(star)\(ride.start.weekday(in: ride.rideTimeZone)) \(ride.start.clock(in: ride.rideTimeZone)) · \(ride.score)").font(.headline).widgetAccentable()
                     // The finish gives way before the name truncates.
-                    ViewThatFits(in: .horizontal) { Text("\(ride.name) · back ~\(ride.finish.clock)"); Text(ride.name) }
+                    ViewThatFits(in: .horizontal) { Text("\(ride.name) · back ~\(ride.finish.clock(in: ride.rideTimeZone))"); Text(ride.name) }
                     Text(ride.meetsMinimums ? ride.note : "⚠ \(ride.note)").foregroundStyle(.secondary)
                 }
                 .lineLimit(1)
@@ -205,7 +207,7 @@ struct BoardView: View {
     // MARK: Parts
 
     private var dayLabel: some View {
-        Label(day.date.weekdayDay.uppercased(), systemImage: "star.fill")
+        Label(day.date.weekdayDay(in: timeZone).uppercased(), systemImage: "star.fill")
             .labelStyle(StarLabel(shown: isBest(day)))
     }
 
@@ -242,10 +244,10 @@ struct BoardView: View {
     private func header(_ days: [RideWidgetSnapshot.Day]) -> some View {
         HStack {
             if let first = days.first, let last = days.last {
-                Heading(text: "Next \(days.count) days · \(first.date.weekdayDay) – \(last.date.weekdayDay)")
+                Heading(text: "Next \(days.count) days · \(first.date.weekdayDay(in: timeZone)) – \(last.date.weekdayDay(in: timeZone))")
             }
             Spacer()
-            Label("Updated \(snapshot.generatedAt.clock)", systemImage: "clock")
+            Label("Updated \(snapshot.generatedAt.clock(in: timeZone))", systemImage: "clock")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
         }
     }
@@ -310,6 +312,8 @@ private struct Pager: View {
 
 /// The medium widget's days: weekday and score, the one shown tinted. A tap pages to it.
 private struct DayStrip: View {
+    @Environment(\.timeZone) private var timeZone
+
     var days: [RideWidgetSnapshot.Day]
     var shown: Date
     var best: Date?
@@ -319,7 +323,7 @@ private struct DayStrip: View {
             ForEach(days.prefix(7), id: \.date) { day in
                 Button(intent: PageDay(day: day.date)) {
                     VStack(spacing: 0) {
-                        Text(day.date.weekday).font(.system(size: 9)).foregroundStyle(.secondary)
+                        Text(day.date.weekday(in: timeZone)).font(.system(size: 9)).foregroundStyle(.secondary)
                         Text(day.ride.map { "\($0.score)" } ?? "–")
                             .font(.system(size: 12, weight: .bold))
                             .monospacedDigit()
@@ -338,6 +342,8 @@ private struct DayStrip: View {
 
 /// One day of the board: a tap shows it on the map.
 private struct BoardRow: View {
+    @Environment(\.timeZone) private var timeZone
+
     var day: RideWidgetSnapshot.Day
     var selected: Bool
     var best: Bool
@@ -346,9 +352,9 @@ private struct BoardRow: View {
     var body: some View {
         Button(intent: PageDay(day: day.date)) {
             HStack(spacing: 6) {
-                Text(day.date.weekdayDay).fontWeight(.semibold).frame(width: 46, alignment: .leading)
+                Text(day.date.weekdayDay(in: timeZone)).fontWeight(.semibold).frame(width: 46, alignment: .leading)
                 if let ride = day.ride {
-                    Text(ride.start.clock).monospacedDigit().foregroundStyle(.secondary)
+                    Text(ride.start.clock(in: ride.rideTimeZone)).monospacedDigit().foregroundStyle(.secondary)
                     Text(ride.name)
                     Spacer(minLength: 2)
                     Text(units.temperatures(ride.temperatureC)).foregroundStyle(.secondary)
@@ -380,7 +386,7 @@ private struct FlightRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            end(ride.start.clock, "Leave", alignment: .leading)
+            end(ride.start.clock(in: ride.rideTimeZone), "Leave", alignment: .leading)
             VStack(spacing: 3) {
                 HStack(spacing: 4) {
                     Dash()
@@ -390,7 +396,7 @@ private struct FlightRow: View {
                 .frame(height: 26)
                 Text("\(ride.name) · \(units.distance(ride.distanceKm))").font(.system(size: 10)).foregroundStyle(.secondary)
             }
-            end("~\(ride.finish.clock)", "Back", alignment: .trailing)
+            end("~\(ride.finish.clock(in: ride.rideTimeZone))", "Back", alignment: .trailing)
         }
         .foregroundStyle(.primary)
     }

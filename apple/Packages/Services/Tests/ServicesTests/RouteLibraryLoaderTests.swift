@@ -80,6 +80,7 @@ final class RouteLibraryLoaderTests: XCTestCase {
         XCTAssertEqual(ride.riddenOn, Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 3)))
         let plan = try XCTUnwrap(ride.plan)
         XCTAssertEqual(plan.start, try Date("2026-10-03T08:00:00Z", strategy: .iso8601))
+        XCTAssertEqual(plan.timeZone, "Europe/London")
         XCTAssertEqual(plan.temperatureC, 12)
         XCTAssertEqual(plan.windKph, 15)
         XCTAssertEqual(plan.sky, .sunny)

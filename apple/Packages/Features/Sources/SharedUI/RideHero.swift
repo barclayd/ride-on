@@ -63,9 +63,9 @@ public struct RideHero: View {
     }
 
     private var titleBlock: some View {
-        let date = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
-        let start = pick.start.formatted(.clockTime)
-        let finish = pick.finish.formatted(.clockTime)
+        let date = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide), in: pick.rideTimeZone)
+        let start = pick.start.formatted(.clockTime, in: pick.rideTimeZone)
+        let finish = pick.finish.formatted(.clockTime, in: pick.rideTimeZone)
         let distance = UnitFormat.distance(km: pick.route.distanceKm, system: unitSystem, fractionDigits: 0)
         let climb = UnitFormat.elevation(m: pick.route.ascentM, system: unitSystem)
 

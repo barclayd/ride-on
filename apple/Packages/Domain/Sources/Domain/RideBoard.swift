@@ -7,7 +7,7 @@ import Foundation
 public struct RideBoard: Hashable, Sendable {
     public var window: DateInterval
     public var generatedAt: Date
-    public var timeZone: String = TimeZone.current.identifier
+    public var timeZone: String = RideDates.defaultTimeZone.identifier
     public var expired = false
     /// Every route that fits the window at its best departure, best first.
     public var picks: [Pick]
@@ -95,6 +95,7 @@ public extension RideBoard {
         public var route: RouteSummary
         public var start: Date
         public var finish: Date
+        public var timeZone: String
         /// 0–100.
         public var score: Int
         public var conditions: Conditions
@@ -123,8 +124,9 @@ public extension RideBoard {
         }
 
         public init(route: RouteSummary, start: Date, finish: Date, score: Int, conditions: Conditions, meetsMinimums: Bool = true, lastRidden: Date? = nil, change: Int? = nil,
-                    pointsLost: [String: Double] = [:], recommendationRef: String? = nil) {
+                    pointsLost: [String: Double] = [:], recommendationRef: String? = nil, timeZone: String = RideDates.defaultTimeZone.identifier) {
             self.route = route
+            self.timeZone = timeZone
             self.start = start
             self.finish = finish
             self.score = score

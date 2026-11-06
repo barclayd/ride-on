@@ -1,3 +1,4 @@
+import PlatformServices
 import Persistence
 import Networking
 import Foundation
@@ -7,7 +8,8 @@ import Engine
 /// Network, JSON, geometry and atomic cache writes run on this actor, never the UI actor.
 actor RideBoardRepository {
     typealias Fetch = @Sendable (String, Data?, String) async throws -> Data
-    static let shared = RideBoardRepository()
+    static let shared = RideBoardRepository(resolveTimeZone: { await RouteTimeZone.identifier(at: $0) })
+    private let resolveTimeZone: @Sendable (Coordinate) async -> String?
     private let disk: RideBoardDiskStore
     private let fetch: Fetch
     private let now: @Sendable () -> Date
@@ -17,10 +19,12 @@ actor RideBoardRepository {
 
     init(directory: URL = URL.cachesDirectory.appending(path: "RideBoards"),
          now: @escaping @Sendable () -> Date = { .now },
+         resolveTimeZone: @escaping @Sendable (Coordinate) async -> String? = { _ in nil },
          sessionIsCurrent: @escaping @Sendable (String) -> Bool = { RideOnAPI.sessionIdentity?.id == $0 },
          fetch: @escaping Fetch = { try await RideOnAPI.data($0, method: $2, body: $1) }) {
         self.disk = RideBoardDiskStore(directory: directory)
         self.now = now
+        self.resolveTimeZone = resolveTimeZone
         self.sessionIsCurrent = sessionIsCurrent
         self.fetch = fetch
     }
@@ -75,7 +79,7 @@ actor RideBoardRepository {
         try check(id, session: session)
         guard let accountID = user.id, account == nil || account == accountID else { throw CancellationError() }
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = user.settings?.timeZone.flatMap(TimeZone.init(identifier:)) ?? .current
+        calendar.timeZone = RideDates.timeZone(user.settings?.timeZone)
         if let window {
             let patch = RideBoardLoader.PlanningPatch(expectedVersion: user.version, settings: .init(planning: .init(
                 days: window.quickPick.map { .init(kind: "preset", preset: $0.rawValue) } ?? .dates(window.days, calendar: calendar),
@@ -145,6 +149,7 @@ actor RideBoardRepository {
         let object: [String: Any] = ["request": try JSONSerialization.jsonObject(with: body),
                                    "profile": try JSONSerialization.jsonObject(with: profile),
                                    "selection": selection, "routes": routes.mapValues { $0.version! },
+                                   "timeZones": routes.compactMapValues { $0.info.timeZone },
                                    "history": summary.historyRevision!]
         return RideBoardSnapshot.hash(try JSONSerialization.data(withJSONObject: object, options: .sortedKeys))
     }
@@ -161,7 +166,12 @@ actor RideBoardRepository {
                         fallback.complete = false
                         return (id, fallback)
                     }
-                    if let version = route.version, let cached = previous[id], cached.version == version, cached.complete { return (id, cached) }
+                    if let version = route.version, var cached = previous[id], cached.version == version, cached.complete {
+                        if cached.info.timeZone == nil, let start = cached.info.coordinates.first {
+                            cached.info.timeZone = await self.resolveTimeZone(start)
+                        }
+                        return (id, cached)
+                    }
                     let source = route.source
                     let url = source.flatMap { $0.providerId == "cycle-travel" ? URL(string: "https://cycle.travel/map/journey/\($0.externalId)") : nil }
                     guard let data = try await self.optional("/routes/\(id)/geometry"),
@@ -170,7 +180,10 @@ actor RideBoardRepository {
                         return (id, .init(version: route.version, info: .init(coordinates: [], cycleTravelURL: url), complete: false))
                     }
                     let coordinates = geometry.geometry.map { PolylineDecoder.decode($0.data, precision: 6) } ?? []
-                    return (id, .init(version: route.version, info: .init(coordinates: coordinates, cycleTravelURL: url), complete: true))
+                    let timeZone: String?
+                    if let start = coordinates.first { timeZone = await self.resolveTimeZone(start) }
+                    else { timeZone = nil }
+                    return (id, .init(version: route.version, info: .init(coordinates: coordinates, cycleTravelURL: url, timeZone: timeZone), complete: true))
                 }
             }
             var result: [String: CachedRideRoute] = [:]
