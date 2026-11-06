@@ -9,7 +9,7 @@ import type {
   ProviderIssue,
   RequestedLocation,
 } from './contracts.ts';
-import catalogue from './cwa-locations.json';
+import catalogue from './cwa-locations.json' with { type: 'json' };
 import { descriptorKey, weatherDescriptors as weather } from './descriptors.ts';
 import { readBoundedJson } from './http.ts';
 import { forecastRequestSchema } from './validation.ts';

@@ -141,6 +141,16 @@ export type ForecastSeries = Readonly<{
   descriptor: ForecastDescriptor;
   /** Sorted by valid time; preserve native intervals instead of inventing hours. */
   samples: readonly ForecastSample[];
+  /** Composite products retain the original event, place, clock and processing
+   * for each portion of a field. Absent on unchanged single-source adapters. */
+  evidence?: readonly Readonly<{
+    provenance: Provenance;
+    location: ResolvedLocation;
+    descriptor: ForecastDescriptor;
+    method: 'native' | 'linear-interpolation' | 'circular-interpolation';
+    nativeTimeStepSeconds: number;
+    periods: readonly TimeRange[];
+  }>[];
 }>;
 
 export type ForecastRequest = Readonly<{

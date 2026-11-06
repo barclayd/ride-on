@@ -4,6 +4,8 @@ import {
   preferencesSchema,
   ridingWindowSchema,
 } from '../src/recommendations/input.ts';
+import { fieldEvidenceSchema } from '../src/weather/evidence.ts';
+import { forecastDescriptorSchema } from '../src/weather/validation.ts';
 import { routeGpx } from './fixtures.ts';
 import { type Harness, RIDE_DATE } from './harness.ts';
 
@@ -70,6 +72,12 @@ const statistic = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('percentile'), percentile: z.number() }),
 ]);
 const period = z.object({ start: z.iso.datetime(), end: z.iso.datetime() });
+const fieldEvidence = z.array(
+  z.object({
+    descriptor: forecastDescriptorSchema,
+    sources: z.array(fieldEvidenceSchema),
+  }),
+);
 const forecastDetails = z.object({
   temperatureMethod: z.literal('linear-interpolation'),
   locations: z
@@ -83,6 +91,7 @@ const forecastDetails = z.object({
         temperatureStatistic: statistic.nullable(),
         gustStatistic: statistic.nullable(),
         routePeriods: z.array(period),
+        fieldEvidence: fieldEvidence.optional(),
         temperatures: z.array(
           z.object({ at: z.iso.datetime(), celsius: z.number().nullable() }),
         ),
@@ -252,6 +261,7 @@ const responseSchema = z.object({
         id: z.string(),
         status: z.enum(['complete', 'partial', 'unavailable']),
         issues: z.array(issue),
+        fieldEvidence: fieldEvidence.optional(),
         provenance: z
           .object({
             source: z.object({ providerId: z.string() }),

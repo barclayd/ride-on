@@ -7,7 +7,7 @@ const document = app.getOpenAPI31Document({
   openapi: '3.1.0',
   info: {
     title: 'Ride On API',
-    version: '0.42.0',
+    version: '0.43.0',
     description:
       'Library, shortlist and profile contracts. See coverage.json and docs/protocol.md for the remaining API surface.',
   },

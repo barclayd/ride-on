@@ -2,14 +2,16 @@ import { z } from 'zod';
 import type {
   ForecastProvider,
   ForecastRequest,
+  ForecastSample,
   LocationForecastResult,
 } from './contracts.ts';
 import { descriptorKey, optionalDisplayDescriptors } from './descriptors.ts';
 import {
-  coordinateSchema,
-  forecastDescriptorSchema,
-  utcInstant,
-} from './validation.ts';
+  fieldEvidenceSchema,
+  provenanceSchema,
+  resolvedLocationSchema,
+} from './evidence.ts';
+import { forecastDescriptorSchema, utcInstant } from './validation.ts';
 
 export type ForecastCache = Readonly<{
   get: (key: string) => Promise<string | null>;
@@ -54,44 +56,13 @@ export const isFreshForecast = (
 /** Validated cacheable evidence; offline calibration uses the same snapshot shape. */
 const forecastSnapshotSchema = z.object({
   status: z.enum(['complete', 'partial']),
-  location: z.object({
-    requested: z.object({ id: z.string(), coordinate: coordinateSchema }),
-    coordinate: coordinateSchema,
-    sourceLocationId: z.string().nullable(),
-    distanceFromRequestedM: z.number().nonnegative(),
-    method: z.enum([
-      'nearest-site',
-      'grid-cell',
-      'interpolated',
-      'exact',
-      'provider-location',
-    ]),
-  }),
-  provenance: z.object({
-    source: z.object({
-      providerId: z.string(),
-      productId: z.string(),
-      adapterVersion: z.string(),
-    }),
-    dataVersion: z.string().nullable(),
-    forecastRunAt: utcInstant.optional(),
-    retrievedAt: utcInstant,
-    expiresAt: utcInstant.optional(),
-    attribution: z.array(
-      z.object({
-        text: z.string(),
-        url: z.string(),
-        logo: z
-          .object({ lightUrl: z.string(), darkUrl: z.string() })
-          .optional(),
-        notice: z.string().optional(),
-      }),
-    ),
-  }),
+  location: resolvedLocationSchema,
+  provenance: provenanceSchema,
   issuedAt: utcInstant.nullable(),
   series: z.array(
     z.object({
       descriptor: forecastDescriptorSchema,
+      evidence: z.array(fieldEvidenceSchema).optional(),
       samples: z.array(
         z.object({
           validAt: utcInstant,
@@ -128,6 +99,30 @@ const forecastSnapshotSchema = z.object({
     }),
   ),
 });
+const sampleBounds = (sample: ForecastSample) =>
+  sample.time.kind === 'period' &&
+  (sample.time.aggregation !== 'mean' ||
+    Date.parse(sample.time.range.end) - Date.parse(sample.time.range.start) >=
+      3_600_000)
+    ? ([
+        Date.parse(sample.time.range.start),
+        Date.parse(sample.time.range.end),
+      ] as const)
+    : ([
+        Date.parse(sample.validAt),
+        Date.parse(sample.validAt) + 3_600_000,
+      ] as const);
+const contiguous = (samples: readonly ForecastSample[]) =>
+  samples.length > 0 &&
+  samples.every((sample, index) => {
+    const previous = samples[index - 1];
+    return (
+      sample.value !== null &&
+      (!previous ||
+        (sampleBounds(sample)[0] >= sampleBounds(previous)[0] &&
+          sampleBounds(sample)[0] <= sampleBounds(previous)[1]))
+    );
+  });
 export const cachedForecastSchema = forecastSnapshotSchema.refine(
   (result) =>
     !result.issues.some((i) => i.code === 'missing-data') ||
@@ -142,17 +137,9 @@ export const cachedForecastSchema = forecastSnapshotSchema.refine(
           optionalDisplayDescriptors.some(
             (d) => descriptorKey(d) === descriptorKey(descriptor),
           ) ||
-          (samples.length > 0 &&
-            samples.every(
-              (sample, index) =>
-                sample.value !== null &&
-                (index === 0 ||
-                  Date.parse(sample.validAt) -
-                    Date.parse(samples[index - 1]?.validAt ?? '') ===
-                    3_600_000),
-            )),
+          contiguous(samples),
       )),
-  'Only missing sunshine may be retained in an otherwise complete hourly snapshot.',
+  'Only missing sunshine may be retained in an otherwise continuous snapshot.',
 );
 
 /** Source fallback must assess the requested comparison, not unused prefetched hours. */
@@ -171,10 +158,20 @@ const forRequestedRange = (
       result.series.find(
         (s) => descriptorKey(s.descriptor) === descriptorKey(descriptor),
       )?.samples ?? [];
-    const times = samples.map((s) => Date.parse(s.validAt));
     return (
-      Math.min(Infinity, ...times) <= first &&
-      Math.max(-Infinity, ...times) >= last
+      Math.min(
+        Infinity,
+        ...samples.map((s) =>
+          Math.min(Date.parse(s.validAt), sampleBounds(s)[0]),
+        ),
+      ) <= first &&
+      Math.max(
+        -Infinity,
+        ...samples.map((s) =>
+          Math.max(Date.parse(s.validAt) + 3_600_000, sampleBounds(s)[1]),
+        ),
+      ) >=
+        last + 3_600_000
     );
   });
   const issues = result.issues.filter(
@@ -268,6 +265,17 @@ export const withForecastCache = (
             return {
               ...result,
               location: { ...result.location, requested: location },
+              series: result.series.map((s) => ({
+                ...s,
+                ...(s.evidence
+                  ? {
+                      evidence: s.evidence.map((e) => ({
+                        ...e,
+                        location: { ...e.location, requested: location },
+                      })),
+                    }
+                  : {}),
+              })),
             };
           } catch {
             return null;

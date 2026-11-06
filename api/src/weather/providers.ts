@@ -10,6 +10,7 @@ import type { ForecastProvider, Provenance } from './contracts.ts';
 import { createCwa, cwaAttribution } from './cwa.ts';
 import { createMetOfficeBpf } from './met-office-bpf.ts';
 import { createMetOfficeGlobalSpot } from './met-office-global-spot.ts';
+import { createTaiwanWeather } from './taiwan.ts';
 
 type Registration = {
   id: string;
@@ -20,6 +21,23 @@ type Registration = {
 };
 /** Internal product registrations retain their stable source/cache identities. */
 const registrations: readonly Registration[] = [
+  {
+    id: 'taiwan-weather',
+    forecastHorizonHours: 240,
+    attribution: [cwaAttribution, appleWeatherAttribution],
+    configured: (env) =>
+      Boolean(env.CWA_API_KEY?.trim()) &&
+      parseAppleWeatherConfig(env.APPLE_WEATHER_CONFIG_JSON) !== null,
+    create: (env, _cache, now) =>
+      createTaiwanWeather({
+        cwa: createCwa({ apiKey: env.CWA_API_KEY ?? '', now }),
+        apple: createAppleWeather({
+          config: env.APPLE_WEATHER_CONFIG_JSON,
+          now,
+        }),
+        now,
+      }),
+  },
   {
     id: 'cwa',
     forecastHorizonHours: 72,
@@ -72,6 +90,16 @@ const registrations: readonly Registration[] = [
 export const describeWeatherProviders = (env: Env) =>
   weatherProviderIds.map((id) => {
     const choice = weatherProviderChoices[id];
+    if (id === 'automatic')
+      return {
+        id,
+        name: choice.name,
+        forecastHorizonHours: 240,
+        configured:
+          parseAppleWeatherConfig(env.APPLE_WEATHER_CONFIG_JSON) !== null,
+        recommendedSettings: choice.settings,
+        attribution: [cwaAttribution, appleWeatherAttribution],
+      };
     const product = registrations.find(
       (r) => r.id === choice.settings.weather.providerId,
     );

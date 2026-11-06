@@ -228,7 +228,7 @@ export const defaultSettings: Settings = {
     representation: 'deterministic',
     freshnessBasis: 'retrieval-time',
   },
-  weather: { mode: 'strict', providerId: 'apple-weather' },
+  weather: { mode: 'strict', providerId: 'automatic' },
 };
 const checkSettingsConflicts = (
   patch: {

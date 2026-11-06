@@ -3,9 +3,36 @@ import type { WeatherSourcePolicy } from './contracts.ts';
 /** User-facing providers are separate from technical forecast products. A choice
  * resolves to one compatible source/statistic/freshness preset, never a mix of
  * whichever product happens to return the most favourable weather. */
-export const weatherProviderIds = ['apple-weather', 'met-office'] as const;
+export const weatherProviderIds = [
+  'automatic',
+  'taiwan-weather',
+  'apple-weather',
+  'met-office',
+] as const;
 export type WeatherProviderId = (typeof weatherProviderIds)[number];
 export const weatherProviderChoices = {
+  automatic: {
+    name: 'Automatic',
+    sourceIds: ['automatic'],
+    settings: {
+      weather: { mode: 'strict', providerId: 'automatic' },
+      forecast: {
+        representation: 'deterministic',
+        freshnessBasis: 'retrieval-time',
+      },
+    },
+  },
+  'taiwan-weather': {
+    name: 'CWA + Apple Weather',
+    sourceIds: ['taiwan-weather'],
+    settings: {
+      weather: { mode: 'strict', providerId: 'taiwan-weather' },
+      forecast: {
+        representation: 'deterministic',
+        freshnessBasis: 'retrieval-time',
+      },
+    },
+  },
   'apple-weather': {
     name: 'Apple Weather',
     sourceIds: ['apple-weather'],

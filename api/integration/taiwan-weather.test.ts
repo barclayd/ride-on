@@ -1,0 +1,411 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { exportPKCS8, generateKeyPair } from 'jose';
+import { HttpResponse, http } from 'msw/http';
+import { z } from 'zod';
+import catalogue from '../src/weather/cwa-locations.json' with { type: 'json' };
+import { appleWeatherFixture } from '../test/fixtures/apple-weather.ts';
+import { taipeiGpx, taipeiRoutes } from '../test/fixtures/taipei.ts';
+import { first, recommend, upload } from './client.ts';
+import { createHarness, type Harness } from './harness.ts';
+
+const keys = await generateKeyPair('ES256', { extractable: true });
+const config = JSON.stringify({
+  teamId: 'TESTTEAM01',
+  keyId: 'TESTKEY001',
+  serviceId: 'cc.ride-on.synthetic-taiwan',
+  privateKey: await exportPKCS8(keys.privateKey),
+});
+const settings = {
+  timeZone: 'Asia/Taipei',
+  riding: { window: { start: '06:30', end: '14:00' } },
+};
+const apple = (
+  options: {
+    gust?: number;
+    rain?: number;
+    missingGust?: boolean;
+    unknownSky?: boolean;
+  } = {},
+) =>
+  http.get(
+    'https://weatherkit.apple.com/api/v1/weather/en/:latitude/:longitude',
+    ({ params }) => {
+      const data = appleWeatherFixture({
+        latitude: Number(params.latitude),
+        longitude: Number(params.longitude),
+        start: '2026-10-09T12:00:00Z',
+        hours: 120,
+      });
+      for (const row of data.forecastHourly.hours) {
+        Object.assign(row, {
+          temperature: 22,
+          windSpeed: 0,
+          windGust: options.gust ?? 0,
+          precipitationAmount: options.rain ?? 0,
+          precipitationChance: 0,
+          cloudCover: 0,
+        });
+        if (options.missingGust) Reflect.deleteProperty(row, 'windGust');
+        if (options.unknownSky) row.conditionCode = 'NewUnknownSymbol';
+      }
+      return HttpResponse.json(data);
+    },
+  );
+const cwa = (
+  options: {
+    probability?: number;
+    wind?: number;
+    direction?: string;
+    clearsAt?: string;
+  } = {},
+) =>
+  http.get(
+    'https://opendata.cwa.gov.tw/api/v1/rest/datastore/:dataset',
+    ({ request, params }) => {
+      assert.equal(request.headers.get('Authorization'), 'synthetic-cwa-key');
+      const url = new URL(request.url);
+      assert.equal(url.searchParams.has('Authorization'), false);
+      const sites = catalogue.filter(
+        (s) =>
+          s.datasetId === params.dataset &&
+          url.searchParams.get('LocationName')?.split(',').includes(s.name),
+      );
+      assert.ok(sites.length);
+      const start = Date.parse('2026-10-09T13:00:00Z');
+      const elements = [
+        ['溫度', 'Temperature', '22'],
+        ['體感溫度', 'ApparentTemperature', '22'],
+        ['風速', 'WindSpeed', String(options.wind ?? 0)],
+        ['風向', 'WindDirection', options.direction ?? '東風'],
+        [
+          '3小時降雨機率',
+          'ProbabilityOfPrecipitation',
+          String(options.probability ?? 0),
+        ],
+      ];
+      return HttpResponse.json({
+        success: 'true',
+        result: { resource_id: params.dataset },
+        records: {
+          Locations: [
+            {
+              Dataid: String(params.dataset).slice(2),
+              Location: sites.map((s) => ({
+                LocationName: s.name,
+                Geocode: s.geocode,
+                Latitude: String(s.latitude),
+                Longitude: String(s.longitude),
+                WeatherElement: elements.map(
+                  ([ElementName = '', key = '', value = '']) => ({
+                    ElementName,
+                    Time: Array.from({ length: 25 }, (_, i) => {
+                      const at = start + i * 3 * 3600000;
+                      const iso = new Date(at).toISOString();
+                      const rain = key === 'ProbabilityOfPrecipitation';
+                      return {
+                        ...(rain
+                          ? {
+                              StartTime: iso,
+                              EndTime: new Date(at + 3 * 3600000).toISOString(),
+                            }
+                          : { DataTime: iso }),
+                        ElementValue: [
+                          {
+                            [key]:
+                              rain &&
+                              options.clearsAt &&
+                              at >= Date.parse(options.clearsAt)
+                                ? '0'
+                                : value,
+                          },
+                        ],
+                      };
+                    }),
+                  }),
+                ),
+              })),
+            },
+          ],
+        },
+      });
+    },
+  );
+const integration = (
+  name: string,
+  run: (h: Harness, ids: string[]) => Promise<void>,
+) =>
+  test(name, { timeout: 30000 }, async () => {
+    const h = await createHarness();
+    try {
+      await h.restart({
+        APPLE_WEATHER_CONFIG_JSON: config,
+        CWA_API_KEY: 'synthetic-cwa-key',
+      });
+      const ids: string[] = [];
+      for (const route of taipeiRoutes) {
+        const r = await h.send('/routes', {
+          contentType: 'application/gpx+xml',
+          body: taipeiGpx(route),
+        });
+        assert.equal(r.status, 201);
+        ids.push(
+          z.object({ route: z.object({ id: z.uuid() }) }).parse(await r.json())
+            .route.id,
+        );
+      }
+      await run(h, ids);
+    } finally {
+      await h.dispose();
+      assert.deepEqual(h.unexpected, []);
+      assert.deepEqual(h.handlerErrors, []);
+    }
+  });
+
+integration(
+  'automatic Taiwan scoring uses both sources, local daylight and durable field evidence',
+  async (h, ids) => {
+    h.use(cwa(), apple());
+    const result = await recommend(h, ids, settings);
+    assert.equal(result.weather.selectedSource?.providerId, 'taiwan-weather');
+    assert.equal(result.rankings.length, 2);
+    assert.deepEqual(result.unranked, []);
+    for (const route of result.rankings) {
+      assert.equal(route.best.score, 100);
+      assert.equal(route.best.departureAt, '2026-10-09T22:30:00.000Z');
+      assert.equal(route.departuresUnknown, 0);
+      assert.ok(
+        Date.parse(route.best.departureAt) >= Date.parse(route.daylight.start),
+      );
+      assert.ok(
+        Date.parse(route.best.finishAt) <= Date.parse(route.daylight.end),
+      );
+    }
+    const evidence = first(result.weather.locations).fieldEvidence ?? [];
+    const probability = first(
+      evidence.filter((e) => e.descriptor.kind === 'probability'),
+    );
+    assert.ok(
+      probability.sources.some(
+        (s) =>
+          s.nativeTimeStepSeconds === 10800 &&
+          s.provenance.source.providerId === 'cwa',
+      ),
+    );
+    assert.ok(
+      evidence.some(
+        (e) =>
+          e.descriptor.kind === 'scalar' &&
+          e.descriptor.measure.quantity === 'wind-gust' &&
+          e.sources.every(
+            (s) => s.provenance.source.providerId === 'apple-weather',
+          ),
+      ),
+    );
+    const calls = h.requests.length;
+    // Four route samples, batched into one CWA county request and four Apple calls.
+    assert.equal(calls, 5);
+    await h.restart();
+    const cached = await recommend(h, ids, settings);
+    assert.equal(h.requests.length, calls);
+    assert.deepEqual(cached.rankings, result.rankings);
+    assert.deepEqual(cached.weather.locations, result.weather.locations);
+    const nextResponse = await h.send('/recommendations/next-windows', {
+      body: JSON.stringify({
+        routeIds: ids,
+        after: { date: '2026-10-09', window: 'daylight' },
+        timeZone: settings.timeZone,
+      }),
+    });
+    assert.equal(nextResponse.status, 200, await nextResponse.clone().text());
+    const next = z
+      .object({
+        windows: z.array(z.unknown()),
+        weather: z.object({
+          selectedSource: z.object({ providerId: z.string() }),
+        }),
+      })
+      .parse(await nextResponse.json());
+    assert.equal(next.weather.selectedSource.providerId, 'taiwan-weather');
+    assert.ok(next.windows.length > 0);
+    assert.equal(h.requests.length, calls);
+  },
+);
+
+integration(
+  'CWA probability and Apple rainfall produce the expected rain penalty of 58',
+  async (h, ids) => {
+    h.use(cwa({ probability: 80 }), apple({ rain: 2 }));
+    const result = await recommend(h, ids, settings);
+    assert.equal(result.rankings.length, 2);
+    for (const route of result.rankings) {
+      assert.equal(route.best.score, 58);
+      assert.equal(route.best.conditions.maximumPrecipitationProbability, 0.8);
+      assert.equal(route.best.conditions.maximumPrecipitationRateMmH, 2);
+      assert.equal(route.best.conditions.maximumPrecipitationAmountMm, 2);
+      assert.equal(route.departuresUnknown, 0);
+    }
+  },
+);
+
+for (const direction of ['東風', '西風'])
+  integration(
+    `CWA ${direction} reverses route preference while Apple gusts enforce minimum standards`,
+    async (h, ids) => {
+      h.use(cwa({ wind: 8, direction }), apple({ gust: 38 }));
+      const result = await recommend(h, ids, settings);
+      assert.equal(result.rankings.length, 2);
+      assert.equal(
+        result.recommendedRouteId,
+        ids[direction === '東風' ? 0 : 1],
+      );
+      for (const route of result.rankings) {
+        assert.equal(route.best.conditions.averageWindSpeedKph, 28.8);
+        assert.equal(route.best.conditions.maximumGustKph, 38);
+        assert.equal(route.departuresUnknown, 0);
+      }
+      const limited = await recommend(h, ids, {
+        ...settings,
+        preferences: { minimumStandards: { maximumGustKph: 35 } },
+      });
+      assert.equal(limited.minimumStandardsStatus, 'none_meet');
+      assert.ok(
+        limited.rankings.every((r) =>
+          r.best.standards.failures.some(
+            (f) => f.standard === 'maximumGustKph' && f.actual === 38,
+          ),
+        ),
+      );
+    },
+  );
+
+integration(
+  'CWA three-hour rain events influence every hour until their end',
+  async (h, ids) => {
+    h.use(cwa({ probability: 80, clearsAt: '2026-10-10T01:00:00Z' }), apple());
+    const result = await recommend(h, ids, settings);
+    assert.equal(result.rankings.length, 2);
+    assert.ok(
+      result.rankings.every(
+        (r) =>
+          r.best.departureAt === '2026-10-10T01:00:00.000Z' &&
+          r.best.score === 100,
+      ),
+    );
+  },
+);
+
+integration(
+  'Apple-only coverage beyond CWA horizon and optional sunshine remain assessable',
+  async (h, ids) => {
+    h.use(cwa(), apple());
+    const result = await recommend(h, ids, {
+      ...settings,
+      date: '2026-10-13',
+      preferences: { weights: { clearSkies: 0.2, sunshine: 0.2 } },
+    });
+    assert.equal(result.rankings.length, 2);
+    assert.ok(
+      result.rankings.every(
+        (r) => r.best.score === 100 && r.departuresUnknown === 0,
+      ),
+    );
+    const weather = await recommend(h, ids, {
+      ...settings,
+      preferences: { weights: { clearSkies: 0.2, sunshine: 0.2 } },
+    });
+    assert.equal(weather.rankings.length, 2);
+    assert.ok(weather.rankings.every((r) => r.best.score === 100));
+  },
+);
+
+integration(
+  'missing supplementary gusts prevent scores and do not become calm weather',
+  async (h, ids) => {
+    h.use(cwa(), apple({ missingGust: true }));
+    const result = await recommend(h, ids, settings);
+    assert.deepEqual(result.rankings, []);
+    assert.equal(result.unranked.length, 2);
+    assert.ok(result.unranked.every((r) => r.status === 'unassessable'));
+  },
+);
+
+integration(
+  'CWA failure is disclosed by Apple field evidence and still supplies complete ride forecasts',
+  async (h, ids) => {
+    h.use(
+      http.get(
+        'https://opendata.cwa.gov.tw/api/v1/rest/datastore/:dataset',
+        () => new HttpResponse(null, { status: 503 }),
+      ),
+      apple(),
+    );
+    const result = await recommend(h, ids, settings);
+    assert.equal(result.rankings.length, 2);
+    const evidence = result.weather.locations
+      .flatMap((l) => l.fieldEvidence ?? [])
+      .flatMap((e) => e.sources);
+    assert.ok(evidence.length > 0);
+    assert.ok(
+      evidence.every((e) => e.provenance.source.providerId === 'apple-weather'),
+    );
+  },
+);
+
+integration(
+  'saved Apple choice is respected and mixed-country comparisons use global coverage regardless of time zone',
+  async (h, ids) => {
+    h.use(apple());
+    const saved = await h.send('/users', {
+      body: JSON.stringify({
+        displayName: 'Existing rider',
+        settings: { weatherProviderId: 'apple-weather' },
+      }),
+    });
+    assert.equal(saved.status, 201);
+    const explicit = await recommend(h, ids, settings);
+    assert.equal(explicit.weather.selectedSource?.providerId, 'apple-weather');
+    const uk = await upload(h);
+    const mixed = await recommend(h, [...ids, uk.id], {
+      ...settings,
+      weatherProviderId: 'automatic',
+    });
+    assert.equal(mixed.weather.selectedSource?.providerId, 'apple-weather');
+    assert.ok(
+      h.requests.every(
+        (r) => new URL(r.url).hostname === 'weatherkit.apple.com',
+      ),
+    );
+  },
+);
+
+integration(
+  'Apple supplement quota failure is not retried as a second Apple policy',
+  async (h, ids) => {
+    h.use(
+      cwa(),
+      http.get(
+        'https://weatherkit.apple.com/api/v1/weather/en/:latitude/:longitude',
+        () =>
+          new HttpResponse(null, {
+            status: 429,
+            headers: { 'Retry-After': '600' },
+          }),
+      ),
+    );
+    const result = await recommend(h, ids, settings);
+    assert.equal(result.recommendedRouteId, null);
+    assert.equal(result.weather.attempts.length, 1);
+    assert.equal(result.weather.selectedSource?.providerId, 'taiwan-weather');
+    assert.ok(
+      result.weather.locations.every((l) =>
+        l.issues.some((i) => i.code === 'rate-limited'),
+      ),
+    );
+    assert.ok(
+      h.requests.filter(
+        (r) => new URL(r.url).hostname === 'weatherkit.apple.com',
+      ).length <= 4,
+    );
+  },
+);

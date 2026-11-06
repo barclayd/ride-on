@@ -216,7 +216,7 @@ test('the catalogue has all 368 unique representative points including outlying 
     expect(catalogue.some((s) => s.geocode === geocode)).toBe(true);
   expect(defaultSettings.weather).toEqual({
     mode: 'strict',
-    providerId: 'apple-weather',
+    providerId: 'automatic',
   });
 });
 

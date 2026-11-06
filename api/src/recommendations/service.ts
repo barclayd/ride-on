@@ -28,6 +28,7 @@ import {
   forecastHorizonHours,
 } from '../weather/providers.ts';
 import { getForecastForPolicy, rateLimited } from '../weather/source-policy.ts';
+import { taiwanRoutes } from '../weather/taiwan-region.ts';
 import { planDepartures } from './daylight.ts';
 import { recommendRides, requiredWeatherFor } from './engine.ts';
 import { forecastRefreshSeconds } from './freshness.ts';
@@ -83,8 +84,15 @@ export const evaluateComparisons = async (
     startedAt,
     input.timeZone,
   );
-  const qualityFor = (forecast: RecommendationInput['forecast']) => ({
+  const qualityFor = (
+    forecast: RecommendationInput['forecast'],
+    weather = input.weather,
+  ) => ({
     ...quality,
+    maxTimeStepSeconds:
+      weather.mode === 'strict' && weather.providerId === 'taiwan-weather'
+        ? 10800
+        : quality.maxTimeStepSeconds,
     maxAgeSeconds:
       forecast.freshnessBasis === 'retrieval-time'
         ? refreshAfterSeconds
@@ -206,7 +214,7 @@ export const evaluateComparisons = async (
           locations,
           range,
           required: requiredWeatherFor({ ...input, ...settings }),
-          ...qualityFor(settings.forecast),
+          ...qualityFor(settings.forecast, settings.weather),
           freshnessBasis: settings.forecast.freshnessBasis,
         }
       : null;
@@ -221,15 +229,29 @@ export const evaluateComparisons = async (
     return { settings, request, selected };
   };
   const requestedProviderId = weatherProviderIdForPolicy(input.weather);
-  let forecast = await fetchForecast({
-    weather: input.weather,
-    forecast: input.forecast,
-  });
+  const automatic =
+    input.weather.mode === 'strict' && input.weather.providerId === 'automatic';
+  const initialSettings = automatic
+    ? {
+        weather:
+          weatherProviderChoices[
+            taiwanRoutes(routes) ? 'taiwan-weather' : 'apple-weather'
+          ].settings.weather,
+        forecast: input.forecast,
+      }
+    : {
+        weather: input.weather,
+        forecast: input.forecast,
+      };
+  let forecast = await fetchForecast(initialSettings);
   // A provider out of quota can't finish this comparison, so the whole comparison
   // moves to Apple Weather: one source per comparison, never a mix of locations.
   // Advanced ordered-fallback policies (no provider choice) keep their own list.
   const quota =
-    requestedProviderId && requestedProviderId !== quotaFallbackProviderId
+    requestedProviderId &&
+    initialSettings.weather.mode === 'strict' &&
+    initialSettings.weather.providerId !== quotaFallbackProviderId &&
+    initialSettings.weather.providerId !== 'taiwan-weather'
       ? rateLimited(forecast.selected)
       : null;
   let fallback: { reason: 'rate-limited'; retryAt: string | null } | null =
@@ -262,7 +284,7 @@ export const evaluateComparisons = async (
       };
   }
   const { settings, request, selected } = forecast;
-  const requestedQuality = qualityFor(settings.forecast);
+  const requestedQuality = qualityFor(settings.forecast, settings.weather);
   const results = selected?.results ?? [];
   const forecastCheckedAt = now().getTime();
   // Until then the same request reuses this evidence, so clients can keep the ranking. Null: ask again.
@@ -445,6 +467,11 @@ export const evaluateComparisons = async (
               status: result.status,
               distanceFromRequestedM: result.location.distanceFromRequestedM,
               provenance: result.provenance,
+              fieldEvidence: result.series.flatMap((s) =>
+                s.evidence
+                  ? [{ descriptor: s.descriptor, sources: s.evidence }]
+                  : [],
+              ),
               issues: result.issues,
             },
       ),
