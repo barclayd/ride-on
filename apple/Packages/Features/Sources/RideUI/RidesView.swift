@@ -11,6 +11,8 @@ import SharedUI
 /// (DESIGN-SYSTEM.md §5, iPhone Duo): one column, two columns standing in a tent, a grid on the
 /// open phone in portrait, and Rides beside the open ride on the open phone in landscape.
 public struct RidesView: View {
+    private var timeZone: TimeZone { board.rideTimeZone }
+
     var trackRoute: (@escaping @MainActor @Sendable () async -> Void) -> AnyView
     var board: RideBoard
     var refreshStatus: String?
@@ -136,7 +138,7 @@ public struct RidesView: View {
                 let track = request.track
                 request.pickID = nil
                 guard let pick = (board.picks + board.days.compactMap(\.best)).first(where: { $0.id == id }) else { return }
-                if let day = board.days.first(where: { $0.best?.id == id }) ?? board.days.first(where: { Calendar.current.isDate($0.date, inSameDayAs: pick.start) }) {
+                if let day = board.days.first(where: { $0.best?.id == id }) ?? board.days.first(where: { board.calendar.isDate($0.date, inSameDayAs: pick.start) }) {
                     selectedDay = day.date
                 }
                 // Beside Rides, the requested day's best ride takes the pane.
@@ -144,6 +146,8 @@ public struct RidesView: View {
                 if track { tracking = trackable(pick) }
             }
             .onChange(of: tracker?.ride?.pickID) { if tracking == nil { showTracked() } }
+            .environment(\.timeZone, board.rideTimeZone)
+            .environment(\.calendar, board.calendar)
             .toolbar { toolbarItems }
     }
 
@@ -440,7 +444,7 @@ public struct RidesView: View {
     private func replacing(_ pick: RideBoard.Pick) -> String? {
         guard let ride = tracker?.ride, ride.pickID != pick.id else { return nil }
         let name = (board.picks + board.days.compactMap(\.best)).first { $0.route.id == ride.routeId }?.route.name
-        let when = "\(ride.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))), \(ride.start.formatted(.clockTime))"
+        let when = "\(ride.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated), in: ride.rideTimeZone)), \(ride.start.formatted(.clockTime, in: ride.rideTimeZone))"
         return [name, when].compactMap(\.self).joined(separator: " · ")
     }
 
@@ -448,7 +452,7 @@ public struct RidesView: View {
     /// the ride is tracked; on a card it's a filled circle, gold while tracked.
     private func trackButton(_ pick: RideBoard.Pick, onMap: Bool) -> some View {
         let isOn = shownTracked == pick.id
-        let day = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        let day = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide), in: pick.rideTimeZone)
         return Button {
             tracking = trackable(pick)
         } label: {
@@ -626,15 +630,15 @@ public struct RidesView: View {
     /// "Best pick · Wednesday 14 October"; standing in a tent, just the weekday.
     private func kicker(_ pick: RideBoard.Pick, short: Bool) -> String {
         let day = short
-            ? pick.start.formatted(.dateTime.weekday(.wide))
-            : pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
+            ? pick.start.formatted(.dateTime.weekday(.wide), in: pick.rideTimeZone)
+            : pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide), in: pick.rideTimeZone)
         return "\(eyebrow(pick)) · \(day)"
     }
 
     /// "09:00 → ~12:00 · 51 km · 640 m".
     private func meta(_ pick: RideBoard.Pick) -> String {
-        let start = pick.start.formatted(.clockTime)
-        let finish = pick.finish.formatted(.clockTime)
+        let start = pick.start.formatted(.clockTime, in: pick.rideTimeZone)
+        let finish = pick.finish.formatted(.clockTime, in: pick.rideTimeZone)
         let distance = UnitFormat.distance(km: pick.route.distanceKm, system: unitSystem, fractionDigits: 0)
         let climb = UnitFormat.elevation(m: pick.route.ascentM, system: unitSystem)
         return "\(start) → ~\(finish) · \(distance) · \(climb)"
@@ -657,7 +661,7 @@ public struct RidesView: View {
         var line = Text(verdict)
             .foregroundStyle(pick.meetsMinimums || previousPlan ? AnyShapeStyle(.secondary) : AnyShapeStyle(.belowMinimums))
         if let ridden = pick.lastRidden {
-            line = Text("\(line) · Last ridden \(ridden.formatted(.dateTime.day().month(.abbreviated)))")
+            line = Text("\(line) · Last ridden \(ridden.formatted(.dateTime.day().month(.abbreviated), in: timeZone))")
         }
         if let change = pick.change, change != 0 {
             let badge = Text("\(change > 0 ? "▲" : "▼") \(abs(change))")
@@ -676,9 +680,9 @@ public struct RidesView: View {
 
     /// The ride's day and times, flight-board style: leave, how long, back.
     private func planHeader(_ pick: RideBoard.Pick) -> some View {
-        let date = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
-        let leave = pick.start.formatted(.clockTime)
-        let back = pick.finish.formatted(.clockTime)
+        let date = pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide), in: pick.rideTimeZone)
+        let leave = pick.start.formatted(.clockTime, in: pick.rideTimeZone)
+        let back = pick.finish.formatted(.clockTime, in: pick.rideTimeZone)
         let length = pick.finish.timeIntervalSince(pick.start)
         let spoken = Duration.seconds(length).formatted(.units(allowed: [.hours, .minutes], width: .wide))
         let duration = "About \(Self.hoursMinutes(length))"
@@ -727,7 +731,7 @@ public struct RidesView: View {
                 else { Verdict(meetsMinimums: pick.meetsMinimums) }
             }
             let lastRidden = pick.lastRidden.map {
-                Text("Last ridden \($0.formatted(.dateTime.day().month(.abbreviated)))")
+                Text("Last ridden \($0.formatted(.dateTime.day().month(.abbreviated), in: timeZone))")
                     .font(.footnote.weight(.regular))
                     .foregroundStyle(Color.secondary)
             }
@@ -789,12 +793,12 @@ public struct RidesView: View {
     private var windowTitle: String {
         let last = board.window.end.addingTimeInterval(-1)
         let style = Date.FormatStyle.dateTime.weekday(.abbreviated).day()
-        return "\(board.window.start.formatted(style)) – \(last.formatted(style))"
+        return "\(board.window.start.formatted(style, in: board.rideTimeZone)) – \(last.formatted(style, in: board.rideTimeZone))"
     }
 
     private var windowFootnote: String {
         let washouts = board.days.filter { $0.best == nil && $0.sky == .rain }
-            .map { "\($0.date.formatted(.dateTime.weekday(.wide))) has rain from dawn to dusk." }
+            .map { "\($0.date.formatted(.dateTime.weekday(.wide), in: timeZone)) has rain from dawn to dusk." }
         return (["Best ride each day."] + washouts).joined(separator: " ")
     }
 
@@ -820,9 +824,9 @@ public struct RidesView: View {
     }
 
     private func pickRow(_ pick: RideBoard.Pick) -> some View {
-        let day = pick.start.formatted(.dateTime.weekday(.abbreviated))
-        let start = pick.start.formatted(.clockTime)
-        let finish = pick.finish.formatted(.clockTime)
+        let day = pick.start.formatted(.dateTime.weekday(.abbreviated), in: pick.rideTimeZone)
+        let start = pick.start.formatted(.clockTime, in: pick.rideTimeZone)
+        let finish = pick.finish.formatted(.clockTime, in: pick.rideTimeZone)
         let distance = UnitFormat.distance(km: pick.route.distanceKm, system: unitSystem, fractionDigits: 0)
         return Button { open(pick) } label: {
             row(pick.route, tint: pick.meetsMinimums ? .accentColor : .gray) {
@@ -914,7 +918,7 @@ public struct RidesView: View {
 
     private var updatedTime: String {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: board.timeZone) ?? .current
+        calendar.timeZone = board.rideTimeZone
         var format = calendar.isDateInToday(board.generatedAt)
             ? Date.FormatStyle.dateTime.hour().minute()
             : Date.FormatStyle.dateTime.day().month(.abbreviated).hour().minute()

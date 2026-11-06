@@ -21,6 +21,7 @@ struct RideWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "RideWidget", provider: RideProvider()) { entry in
             RideWidgetView(entry: entry)
+                .environment(\.timeZone, entry.snapshot?.rideTimeZone ?? RideDates.defaultTimeZone)
                 .tint(.rideAccent)
                 .containerBackground(for: .widget) { Color.cardBackground }
         }
@@ -66,7 +67,7 @@ struct RideProvider: TimelineProvider {
             dates.formUnion(stride(from: ride.start, through: ride.finish, by: 300))
             dates.formUnion([ride.finish, ride.finish.addingTimeInterval(2 * 3600)])
         }
-        if let midnight = Calendar.current.nextDate(after: now, matching: DateComponents(hour: 0), matchingPolicy: .nextTime) {
+        if let midnight = (snapshot?.calendar ?? RideDates.calendar(in: RideDates.defaultTimeZone)).nextDate(after: now, matching: DateComponents(hour: 0), matchingPolicy: .nextTime) {
             dates.insert(midnight)
         }
         let entries = dates.filter { $0 >= now }.sorted().map { RideEntry(date: $0, snapshot: snapshot, paged: paged) }
@@ -102,6 +103,7 @@ struct RideWidgetView: View {
     var body: some View {
         if let snapshot = entry.snapshot, let tracked = snapshot.trackedRide(at: entry.date) {
             TrackedView(family: family, tracked: tracked, units: snapshot.units, date: entry.date)
+                .environment(\.timeZone, tracked.ride.rideTimeZone)
         } else if let snapshot = entry.snapshot, let day = snapshot.day(at: entry.date, paged: entry.paged) {
             BoardView(family: family, snapshot: snapshot, day: day, date: entry.date)
         } else {

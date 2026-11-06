@@ -16,6 +16,8 @@ import Services
 /// narrow, a 380pt column beside the map when wide, a 310pt column with the score at display size
 /// in tent, and the map above a two-column panel in open portrait.
 public struct RideDetailView: View {
+    private var timeZone: TimeZone { pick.rideTimeZone }
+
     var incomingBoard: RideBoard
     var suppliedPreviousPlan: Bool
     var pick: RideBoard.Pick
@@ -164,6 +166,8 @@ public struct RideDetailView: View {
             guard !Task.isCancelled else { return }
             elevation = points
         }
+        .environment(\.timeZone, pick.rideTimeZone)
+        .environment(\.calendar, pick.calendar)
         .toolbar { toolbarItems }
         .alert("Couldn't add to Calendar", isPresented: $calendarFailed) {} message: {
             Text("Allow Ride On to add events in Settings › Privacy & Security › Calendars.")
@@ -509,7 +513,7 @@ public struct RideDetailView: View {
 
     @ViewBuilder
     private var eyebrowLine: some View {
-        let day = departure.start.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        let day = departure.start.formatted(.dateTime.weekday(.wide).day().month(.wide), in: timeZone)
         Group {
             if isPickDeparture, let eyebrow {
                 Label("\(eyebrow) · \(day)", systemImage: previousPlan ? "clock" : "star.fill")
@@ -526,7 +530,7 @@ public struct RideDetailView: View {
     private var metaLine: String {
         let distance = UnitFormat.distance(km: pick.route.distanceKm, system: unitSystem, fractionDigits: 0)
         let ascent = UnitFormat.elevation(m: pick.route.ascentM, system: unitSystem)
-        return "\(departure.start.formatted(.clockTime)) → ~\(departure.finish.formatted(.clockTime)) · \(distance) · \(ascent)"
+        return "\(departure.start.formatted(.clockTime, in: timeZone)) → ~\(departure.finish.formatted(.clockTime, in: timeZone)) · \(distance) · \(ascent)"
     }
 
     /// Temperature, wind, sky and rain for the chosen departure; the pick's own match its card on Rides.
@@ -726,8 +730,8 @@ public struct RideDetailView: View {
 
     /// "since 07:00 · last ridden 29 Sep", after the change badge.
     private var historyLine: String {
-        let since = pick.change == nil ? nil : detail.changeSince.map { "since \($0.formatted(.clockTime))" }
-        let ridden = pick.lastRidden.map { "last ridden \($0.formatted(.dateTime.day().month(.abbreviated)))" }
+        let since = pick.change == nil ? nil : detail.changeSince.map { "since \($0.formatted(.clockTime, in: timeZone))" }
+        let ridden = pick.lastRidden.map { "last ridden \($0.formatted(.dateTime.day().month(.abbreviated), in: timeZone))" }
         let line = [since, ridden].compactMap(\.self).joined(separator: " · ")
         return since == nil ? line.prefix(1).uppercased() + line.dropFirst() : line
     }
@@ -758,7 +762,7 @@ public struct RideDetailView: View {
     private func forecastHour(_ hour: RideDetail.Hour) -> some View {
         let isLarge = dynamicTypeSize.isAccessibilitySize
         let layout = isLarge ? AnyLayout(FlowLayout(spacing: 12)) : AnyLayout(VStackLayout(spacing: 6))
-        let time = hour.time.formatted(.clockTime)
+        let time = hour.time.formatted(.clockTime, in: timeZone)
         let wind = UnitFormat.speed(kph: hour.windKph, system: speedSystem)
         let rain = (hour.rainChance).formatted(.percent.precision(.fractionLength(0)))
         return layout {
@@ -806,8 +810,8 @@ public struct RideDetailView: View {
 
     private var calendarButton: some View {
         let added = addedToCalendar == departure.id
-        let day = departure.start.formatted(.dateTime.weekday(.abbreviated))
-        let times = "\(day) \(departure.start.formatted(.clockTime))–\(departure.finish.formatted(.clockTime))"
+        let day = departure.start.formatted(.dateTime.weekday(.abbreviated), in: timeZone)
+        let times = "\(day) \(departure.start.formatted(.clockTime, in: timeZone))–\(departure.finish.formatted(.clockTime, in: timeZone))"
         return Button {
             Task { await addToCalendar(departure) }
         } label: {
@@ -855,6 +859,7 @@ public struct RideDetailView: View {
             }
             let event = EKEvent(eventStore: store)
             event.title = "Ride: \(pick.route.name)"
+            event.timeZone = pick.rideTimeZone
             event.startDate = departure.start
             event.endDate = departure.finish
             event.url = pick.route.cycleTravelURL
@@ -887,7 +892,7 @@ public struct RideDetailView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 4) {
             WeatherAttributionFooter(board.credits)
-            Text("Updated \(board.generatedAt.formatted(.clockTime)).")
+            Text("Updated \(board.generatedAt.formatted(.clockTime, in: timeZone)).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

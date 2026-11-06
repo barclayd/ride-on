@@ -194,14 +194,16 @@ struct WindOnTheRide: View {
 
 /// The ride's start under the bar's leading edge and its finish under the trailing one.
 private struct RideTimes: View {
+    @Environment(\.timeZone) private var timeZone
+
     var start: Date
     var finish: Date
 
     var body: some View {
         HStack {
-            Text(start.formatted(.clockTime))
+            Text(start.formatted(.clockTime, in: timeZone))
             Spacer()
-            Text("~\(finish.formatted(.clockTime))")
+            Text("~\(finish.formatted(.clockTime, in: timeZone))")
         }
         .font(.caption)
         .foregroundStyle(.secondary)

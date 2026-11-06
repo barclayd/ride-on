@@ -48,17 +48,17 @@ extension RideBoard.Wind {
 }
 
 extension Date {
-    var clock: String { formatted(.clockTime) }
+    func clock(in zone: TimeZone) -> String { formatted(.clockTime, in: zone) }
     /// "Wed 14".
-    var weekdayDay: String { formatted(.dateTime.weekday(.abbreviated).day()) }
-    var weekday: String { formatted(.dateTime.weekday(.abbreviated)) }
+    func weekdayDay(in zone: TimeZone) -> String { formatted(.dateTime.weekday(.abbreviated).day(), in: zone) }
+    func weekday(in zone: TimeZone) -> String { formatted(.dateTime.weekday(.abbreviated), in: zone) }
 
     /// "Today", "Tomorrow" or "Wed", from `now`.
-    func dayWord(from now: Date) -> String {
-        let calendar = Calendar.current
+    func dayWord(from now: Date, in zone: TimeZone) -> String {
+        let calendar = RideDates.calendar(in: zone)
         if calendar.isDate(self, inSameDayAs: now) { return "Today" }
         if let next = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(self, inSameDayAs: next) { return "Tomorrow" }
-        return weekday
+        return weekday(in: zone)
     }
 }
 
@@ -205,6 +205,8 @@ private struct Marker: View {
 
 /// Up to two hours, pinned where the rider will be then.
 private struct HourChips: View {
+    private var timeZone: TimeZone { ride.rideTimeZone }
+
     var ride: RideWidgetSnapshot.Ride
     var path: Path
     var size: CGSize
@@ -220,7 +222,7 @@ private struct HourChips: View {
         ForEach(pinned, id: \.0) { hour, at in
             let left = at.x > size.width * 0.6
             HStack(spacing: 2) {
-                Text("\(hour.time.clock) · \(units.degrees(hour.temperatureC))")
+                Text("\(hour.time.clock(in: timeZone)) · \(units.degrees(hour.temperatureC))")
                 Image(systemName: ride.wind.systemImage).foregroundStyle(ride.wind.tint)
                 Text(units.wind(hour.windKph))
             }
@@ -390,6 +392,8 @@ struct Conds: View {
 
 /// "Along the ride": one cell an hour.
 struct HourCells: View {
+    private var timeZone: TimeZone { ride.rideTimeZone }
+
     var ride: RideWidgetSnapshot.Ride
     var units: RideWidgetSnapshot.Units
 
@@ -397,7 +401,7 @@ struct HourCells: View {
         HStack(spacing: 0) {
             ForEach(ride.hours.prefix(4), id: \.self) { hour in
                 VStack(spacing: 3) {
-                    Text(hour.time.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)))).foregroundStyle(.secondary)
+                    Text(hour.time.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)), in: timeZone)).foregroundStyle(.secondary)
                     Image(systemName: hour.sky.systemImage).symbolRenderingMode(.multicolor).frame(height: 14)
                     Text(units.degrees(hour.temperatureC)).font(.system(size: 13, weight: .semibold))
                     HStack(spacing: 1) {

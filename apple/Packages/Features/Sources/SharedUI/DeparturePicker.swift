@@ -5,6 +5,8 @@ import Domain
 /// Like `DayStrip`, one `Button` per tile with the selected trait, so VoiceOver reads a set of
 /// choices. Tiles stack at accessibility sizes.
 public struct DeparturePicker: View {
+    @Environment(\.timeZone) private var timeZone
+
     var departures: [RideDetail.Departure]
     @Binding var selection: Date
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -26,8 +28,8 @@ public struct DeparturePicker: View {
 
     private func tile(_ departure: RideDetail.Departure) -> some View {
         let isSelected = departure.id == selection
-        let day = departure.start.formatted(.dateTime.weekday(.abbreviated).day())
-        let time = departure.start.formatted(.clockTime)
+        let day = departure.start.formatted(.dateTime.weekday(.abbreviated).day(), in: timeZone)
+        let time = departure.start.formatted(.clockTime, in: timeZone)
         let accent = isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
         return Button {
             withAnimation(.smooth) { selection = departure.id }
@@ -45,7 +47,7 @@ public struct DeparturePicker: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(departure.start.formatted(.dateTime.weekday(.wide).day().month(.wide))), \(time)")
+        .accessibilityLabel("\(departure.start.formatted(.dateTime.weekday(.wide).day().month(.wide), in: timeZone)), \(time)")
         .accessibilityValue("Scores \(departure.score)")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }

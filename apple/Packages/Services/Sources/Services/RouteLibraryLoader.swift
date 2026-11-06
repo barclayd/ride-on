@@ -147,7 +147,7 @@ public enum RouteLibraryLoader {
             let route = RouteLibrary.Route(id: id, name: ride.route.name, distanceKm: ride.route.distanceM / 1000, ascentM: ride.route.ascentM ?? 0,
                                            unpaved: saved?.unpaved, source: saved?.source ?? .gpxFile, lastRidden: saved?.lastRidden,
                                            coordinates: saved?.coordinates ?? [])
-            return RouteLibrary.Ride(id: ride.id, route: route, riddenOn: riddenOn, plan: ride.plan.map(plan))
+            return RouteLibrary.Ride(id: ride.id, route: route, riddenOn: riddenOn, plan: ride.plan.map { plan($0, timeZone: ride.timeZone) })
         }
         return RouteLibrary(routes: mapped, shortlist: shortlist, shortlistLimit: shortlistLimit, rides: history)
     }
@@ -163,10 +163,10 @@ public enum RouteLibraryLoader {
 
     /// The forecast saved when the ride was planned: the middle of its temperature range, the
     /// average wind and the sky over most of the distance.
-    static func plan(_ plan: Ride.Plan) -> RouteLibrary.Plan {
+    static func plan(_ plan: Ride.Plan, timeZone: String? = nil) -> RouteLibrary.Plan {
         let c = plan.conditions
         return RouteLibrary.Plan(start: plan.departureAt, temperatureC: ((c.temperatureC.minimum + c.temperatureC.maximum) / 2).rounded(),
-                                 windKph: c.averageWindSpeedKph, sky: RideBoardLoader.sky(c))
+                                 windKph: c.averageWindSpeedKph, sky: RideBoardLoader.sky(c), timeZone: RideDates.timeZone(timeZone).identifier)
     }
 
     /// "2026-10-03" → midnight that day here: a calendar day, never a time (docs/ride-history.md).
@@ -210,6 +210,7 @@ extension RouteLibraryLoader {
     }
 
     struct Ride: Decodable {
+        var timeZone: String?
         struct Snapshot: Decodable { var name: String; var distanceM: Double; var ascentM: Double? }
         struct Plan: Decodable { var departureAt: Date; var conditions: RideBoardLoader.Conditions }
         var id: String

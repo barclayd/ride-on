@@ -473,9 +473,9 @@ public struct RoutesView: View {
 
     private func status(for id: UUID) -> ShortlistStatus {
         if let pick = pick(for: id) {
-            if pick.id == board?.picks.first?.id { return .best(day: pick.start.formatted(.dateTime.weekday(.abbreviated))) }
+            if pick.id == board?.picks.first?.id { return .best(day: pick.start.formatted(.dateTime.weekday(.abbreviated), in: pick.rideTimeZone)) }
             if !pick.meetsMinimums { return .belowMinimums }
-            return .ranked(start: "\(pick.start.formatted(.dateTime.weekday(.abbreviated))) \(pick.start.formatted(.clockTime))")
+            return .ranked(start: "\(pick.start.formatted(.dateTime.weekday(.abbreviated), in: pick.rideTimeZone)) \(pick.start.formatted(.clockTime, in: pick.rideTimeZone))")
         }
         return board?.unfit.contains { $0.route.id == id } == true ? .tooLong : .checking
     }

@@ -39,7 +39,7 @@ public enum RideBoardLoader {
 
     static func board(from response: Recommendation, routes: [String: RouteInfo], summaries: [Summary], units: ProseUnits = .init(nil, nil)) -> RideBoard {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: response.timeZone) ?? .current
+        calendar.timeZone = RideDates.timeZone(response.timeZone)
         func day(_ string: String) -> Date? {
             let parts = string.split(separator: "-").compactMap { Int($0) }
             guard parts.count == 3 else { return nil }
@@ -59,14 +59,14 @@ public enum RideBoardLoader {
             let pick = RideBoard.Pick(route: route, start: best.departureAt, finish: best.finishAt, score: Int(best.score.rounded()),
                                       conditions: conditions(best.conditions), meetsMinimums: best.standards.status != "below",
                                       lastRidden: lastRidden[id], change: change(best), pointsLost: best.pointsLost?.compactMapValues(\.self) ?? [:],
-                                      recommendationRef: best.recommendationRef)
+                                      recommendationRef: best.recommendationRef, timeZone: routes[id]?.timeZone ?? response.timeZone)
             let others = ([result.best].compactMap { $0 } + result.alternatives).filter { $0.departureAt != best.departureAt }
             let preferences = response.resolvedPreferences
             details[pick.id] = RideDetail(pick: pick, changeSince: best.previous?.generatedAt,
                                           notes: preferences.map { notes(best, fit: result.distanceFit, preferences: $0, units: units) } ?? notes(best.drawbacks),
                                           elevation: [],
                                           departures: ([best] + others).prefix(4).map {
-                                              departure($0, route: route, preferences: preferences, units: units, timeZone: calendar.timeZone)
+                                              departure($0, route: route, preferences: preferences, units: units, timeZone: pick.rideTimeZone)
                                           })
             return pick
         }
@@ -380,6 +380,7 @@ extension RideBoardLoader {
     struct RouteInfo: Codable, Sendable {
         var coordinates: [Coordinate]
         var cycleTravelURL: URL?
+        var timeZone: String?
     }
 
     struct SelectionResponse: Decodable, Sendable {

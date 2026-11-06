@@ -10,6 +10,8 @@ import SharedUI
 /// the sheet has gone. The API doesn't notify yet (`RideTracker.notifies`), so until it does the
 /// sheet promises a check each time the rider looks, not an alert.
 struct TrackRideSheet: View {
+    private var timeZone: TimeZone { pick.rideTimeZone }
+
     var pick: RideBoard.Pick
     var isTracking: Bool
     /// The other plan this one replaces, as "Hilly Loop · Thu 17 Oct, 08:00". Fixed when the sheet opens.
@@ -157,8 +159,8 @@ struct TrackRideSheet: View {
     }
 
     private var rideCard: some View {
-        let day = pick.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
-        let times = "\(pick.start.formatted(.clockTime)) → ~\(pick.finish.formatted(.clockTime))"
+        let day = pick.start.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated), in: pick.rideTimeZone)
+        let times = "\(pick.start.formatted(.clockTime, in: pick.rideTimeZone)) → ~\(pick.finish.formatted(.clockTime, in: pick.rideTimeZone))"
         // Tracking shows the latest check's score; the hero keeps the one it was ranked with.
         let score = isTracking ? shown?.latestScore ?? pick.score : pick.score
         return HStack(spacing: 12) {
@@ -179,7 +181,7 @@ struct TrackRideSheet: View {
         .padding(.trailing, 14)
         .background(.cardBackground, in: .rect(cornerRadius: 22))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(pick.route.name), \(pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide))), leave \(pick.start.formatted(.clockTime)), back about \(pick.finish.formatted(.clockTime)). Score \(score).")
+        .accessibilityLabel("\(pick.route.name), \(pick.start.formatted(.dateTime.weekday(.wide).day().month(.wide), in: pick.rideTimeZone)), leave \(pick.start.formatted(.clockTime, in: pick.rideTimeZone)), back about \(pick.finish.formatted(.clockTime, in: pick.rideTimeZone)). Score \(score).")
     }
 
     // MARK: Triggers
@@ -187,7 +189,7 @@ struct TrackRideSheet: View {
     /// A limit the rider hasn't set has no alert, so its row goes.
     private var triggerRows: [(symbol: String, tint: Color, text: String)] {
         let standards = settings?.settings?.preferences.minimumStandards
-        let month = Calendar.current.component(.month, from: pick.start)
+        let month = pick.calendar.component(.month, from: pick.start)
         return [
             ("cloud.rain", .rain, "Rain moves in"),
             standards?.maximumGustKph.map { ("wind", .cyan, "Gusts pass your \(UnitFormat.speed(kph: $0, system: speedSystem)) limit") },
@@ -349,8 +351,8 @@ struct TrackRideSheet: View {
 
     /// " at 10:30", or " on Thursday at 10:30" when it's another day.
     private func when(_ start: Date) -> String {
-        let day = Calendar.current.isDate(start, inSameDayAs: pick.start) ? "" : " on \(start.formatted(.dateTime.weekday(.wide)))"
-        return "\(day) at \(start.formatted(.clockTime))"
+        let day = pick.calendar.isDate(start, inSameDayAs: pick.start) ? "" : " on \(start.formatted(.dateTime.weekday(.wide), in: timeZone))"
+        return "\(day) at \(start.formatted(.clockTime, in: timeZone))"
     }
 
     private func ago(_ date: Date) -> String {

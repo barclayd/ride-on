@@ -62,7 +62,7 @@ struct IdealTemperatureView: View {
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(pick.route.name).font(.headline).lineLimit(1)
-                Text("\(pick.start.formatted(.dateTime.weekday(.abbreviated))) · \(UnitFormat.temperatureRange(c: temperature, locale: locale))")
+                Text("\(pick.start.formatted(.dateTime.weekday(.abbreviated), in: pick.rideTimeZone)) · \(UnitFormat.temperatureRange(c: temperature, locale: locale))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

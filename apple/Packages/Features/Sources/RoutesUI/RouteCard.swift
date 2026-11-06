@@ -47,7 +47,7 @@ struct RouteCard: View {
             }
             if let pick {
                 NavigationLink(value: pick) {
-                    Text("See \(pick.start.formatted(.dateTime.weekday(.wide)))’s Ride")
+                    Text("See \(pick.start.formatted(.dateTime.weekday(.wide), in: pick.rideTimeZone))’s Ride")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                 }

@@ -101,7 +101,7 @@ struct ComfortableWindView: View {
     private func fitRow(_ pick: RideBoard.Pick, _ preferences: RiderSettings.Preferences) -> some View {
         let conditions = pick.conditions
         let fit = fit(conditions, preferences)
-        let day = pick.start.formatted(.dateTime.weekday(.abbreviated))
+        let day = pick.start.formatted(.dateTime.weekday(.abbreviated), in: pick.rideTimeZone)
         let detail = if case .gusts = fit {
             "Gusts \(speed(conditions.gustKph))"
         } else {

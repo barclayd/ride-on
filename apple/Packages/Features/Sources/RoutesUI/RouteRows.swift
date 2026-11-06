@@ -91,7 +91,7 @@ struct HistoryRow: View {
                             .padding(.trailing, 6)
                         Image(systemName: "wind")
                             .accessibilityLabel("Wind")
-                        Text("\(UnitFormat.speed(kph: plan.windKph, system: speedSystem)) · Planned \(plan.start.formatted(.clockTime))")
+                        Text("\(UnitFormat.speed(kph: plan.windKph, system: speedSystem)) · Planned \(plan.start.formatted(.clockTime, in: plan.rideTimeZone))")
                     }
                     .monospacedDigit()
                 } else {

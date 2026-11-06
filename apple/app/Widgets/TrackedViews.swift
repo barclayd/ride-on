@@ -6,6 +6,8 @@ import DesignSystem
 /// Widgets D, the tracked ride (docs/redesign/README.md §8): the score and conditions first, the ride
 /// time where "leave in" was, the ridden part of the loop gold.
 struct TrackedView: View {
+    @Environment(\.timeZone) private var timeZone
+
     var family: WidgetFamily
     var tracked: RideWidgetSnapshot.Tracked
     var units: RideWidgetSnapshot.Units
@@ -121,14 +123,14 @@ struct TrackedView: View {
                     title
                     Spacer()
                     if let checked = tracked.checkedAt {
-                        Text("Checked \(checked.clock)").font(.system(size: 10)).foregroundStyle(.secondary)
+                        Text("Checked \(checked.clock(in: timeZone))").font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                 }
                 HStack(spacing: 14) {
                     arc(124)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(ride.name).font(.system(size: 17, weight: .bold))
-                        Text("\(units.distance(ride.distanceKm)) · \(units.climb(ride.ascentM)) · \(ride.start.clock) → ~\(ride.finish.clock)")
+                        Text("\(units.distance(ride.distanceKm)) · \(units.climb(ride.ascentM)) · \(ride.start.clock(in: ride.rideTimeZone)) → ~\(ride.finish.clock(in: ride.rideTimeZone))")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                         Conds(tracked: tracked, units: units, size: 15)
                     }
@@ -147,7 +149,7 @@ struct TrackedView: View {
 
     /// "🔔 HILLY LOOP · TODAY", in the committed gold.
     private var title: some View {
-        Label("\(ride.name) · \(ride.start.dayWord(from: date))".uppercased(), systemImage: "bell.fill")
+        Label("\(ride.name) · \(ride.start.dayWord(from: date, in: ride.rideTimeZone))".uppercased(), systemImage: "bell.fill")
             .font(.system(size: 10, weight: .semibold))
             .kerning(0.4)
             .foregroundStyle(Color.committed)
