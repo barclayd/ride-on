@@ -178,6 +178,27 @@ public struct PreferencesView: View {
                     Row("Ideal Temperature", "thermometer.medium", .orange)
                 }
             }
+            Toggle(isOn: Binding(
+                get: { preferences.temperature.seasonalTolerance == .coolerWinters },
+                set: { settings.wrappedValue.preferences.temperature.seasonalTolerance = $0 ? .coolerWinters : .disabled }
+            )) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Seasonal Scoring")
+                        Text("Allow cooler rides using local monthly averages, where available.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Text("🍂")
+                        .font(.system(size: 20))
+                        .frame(width: Tile.size, height: Tile.size)
+                        .background(.orange.opacity(0.15), in: .rect(cornerRadius: 7))
+                        .accessibilityHidden(true)
+                }
+            }
+            .tint(Color.accentColor)
+            .accessibilityIdentifier("preferences.seasonalScoring")
             link(.wind) {
                 LabeledContent {
                     Text("Up to \(UnitFormat.speed(kph: preferences.wind.comfortableHeadwindKph, system: speedSystem, locale: locale))")

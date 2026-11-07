@@ -440,6 +440,7 @@ speed green, interval grey, Strava orange, Health white with red heart, Apple bl
 
 Build:
 - [x] Form with all sections, menus, stepper, segmented units, Health toggle
+- [x] 🍂 Seasonal Scoring toggle below Ideal Temperature, using the saved `seasonalTolerance` choice; local monthly averages relax cold scoring only when enabled, leaving the ideal range and deal-breakers unchanged
 - [x] Distance range editor (push)
 - [x] Settings model mirroring the API `settings` shape, held in an `@Observable` store
 - [x] Strava account connection, disconnect and completed cycling history (backend rollout pending)
