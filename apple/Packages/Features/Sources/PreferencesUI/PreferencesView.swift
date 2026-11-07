@@ -185,7 +185,7 @@ public struct PreferencesView: View {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Seasonal Scoring")
-                        Text("Allow cooler rides using local monthly averages, where available.")
+                        Text("Score cooler rides using local monthly averages, where available.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
