@@ -42,7 +42,15 @@ public struct RiderSettings: Hashable, Sendable {
         public var distance: Distance?
         public var minimumStandards: MinimumStandards
 
-        public struct Temperature: Codable, Hashable, Sendable { public var comfortMinC, comfortMaxC: Double }
+        public struct Temperature: Codable, Hashable, Sendable {
+            public var comfortMinC, comfortMaxC: Double
+            /// Missing on older profiles; leave it unsent until the rider makes a choice.
+            public var seasonalTolerance: SeasonalTolerance?
+
+            public enum SeasonalTolerance: String, Codable, Sendable {
+                case disabled = "none", coolerWinters = "cooler-winters"
+            }
+        }
         /// `crosswindSensitivity` is left out: the API rejects it alongside `preferenceLevels.crosswind`,
         /// which is how the app sets it.
         public struct Wind: Codable, Hashable, Sendable {
