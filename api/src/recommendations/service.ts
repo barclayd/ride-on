@@ -34,6 +34,7 @@ import { recommendRides, requiredWeatherFor } from './engine.ts';
 import { forecastRefreshSeconds } from './freshness.ts';
 import type { RecommendationInput } from './input.ts';
 import { daySummary, mergeDays } from './multi-day.ts';
+import { createScoreReplay } from './replay.ts';
 import {
   attachPreviousScores,
   createScoreBaselineStore,
@@ -52,6 +53,7 @@ export type ComparisonContext = {
   signal: AbortSignal;
   now: () => Date;
   startedAt: Date;
+  includeReplay?: boolean;
   /** Preview dates reuse evidence without forcing a refresh for an unselected day. */
   refreshDates?: readonly string[];
   pinned?: { routeId: string; departureAt: string; input: RecommendationInput };
@@ -74,6 +76,7 @@ export const evaluateComparisons = async (
     signal,
     now,
     startedAt,
+    includeReplay = false,
     refreshDates = inputs.map((i) => i.date),
     dependencies,
     pinned,
@@ -417,6 +420,19 @@ export const evaluateComparisons = async (
       const regionalInput = { ...requested, ...forecast.settings };
       return {
         input: regionalInput,
+        ...(includeReplay
+          ? {
+              replay: createScoreReplay(
+                forecast.routes,
+                regionalInput,
+                dayResults,
+                startedAt.getTime(),
+                quality.maxLocationDistanceM,
+                3,
+                history,
+              ),
+            }
+          : {}),
         result: recommendRides(
           forecast.routes,
           regionalInput,
@@ -479,6 +495,13 @@ export const evaluateComparisons = async (
   );
   const commonForecast = forecasts[0]?.settings.forecast ?? input.forecast;
   return {
+    ...(includeReplay
+      ? {
+          replay: comparisons.flatMap((comparison) =>
+            comparison.regional.flatMap((region) => region.replay ?? []),
+          ),
+        }
+      : {}),
     comparisons: comparisons.map(
       ({ regional: _regional, ...comparison }) => comparison,
     ),

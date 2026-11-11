@@ -7,7 +7,7 @@ const document = app.getOpenAPI31Document({
   openapi: '3.1.0',
   info: {
     title: 'Ride On API',
-    version: '0.44.1',
+    version: '0.45.0',
     description:
       'Library, shortlist and profile contracts. See coverage.json and docs/protocol.md for the remaining API surface.',
   },
@@ -39,7 +39,10 @@ for (const operation of documented) {
 const coverage = {
   documented,
   existingHandlers: runtime.filter((route) => !documented.includes(route)),
-  delegated: ['Better Auth /api/auth/* (vendor-owned protocol)'],
+  delegated: [
+    'Better Auth /api/auth/* (vendor-owned protocol)',
+    'MCP /mcp (SDK-owned protocol; schemas discovered through tools/list)',
+  ],
 };
 const artifacts = {
   'openapi.json': `${JSON.stringify(document, null, 2)}\n`,

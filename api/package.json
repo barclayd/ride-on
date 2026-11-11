@@ -23,22 +23,27 @@
     "contracts:check": "bun scripts/contracts.ts --check"
   },
   "dependencies": {
-    "@better-auth/passkey": "1.7.7",
+    "@better-auth/mcp": "1.7.21",
+    "@better-auth/oauth-provider": "1.7.21",
+    "@better-auth/passkey": "1.7.21",
     "@block65/webcrypto-web-push": "2.0.0",
+    "@garmin/fitsdk": "21.221.0",
     "@hono/zod-openapi": "1.6.3",
     "@js-temporal/polyfill": "0.5.1",
-    "better-auth": "1.7.7",
+    "@modelcontextprotocol/server": "2.4.0",
+    "better-auth": "1.7.21",
     "hono": "^4.12.27",
     "jose": "6.2.12",
     "saxes": "6.0.0",
     "suncalc": "^2.1.1",
-    "zod": "^4.4.3"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "13.1.0",
     "@biomejs/biome": "^2.5.2",
     "@cloudflare/workers-types": "5.20261009.1",
     "@levischuck/tiny-cbor": "0.2.11",
+    "@modelcontextprotocol/client": "2.4.0",
     "@types/bun": "^1.3.14",
     "@typescript/native-preview": "^7.0.0-dev.20260703.1",
     "ajv": "8.20.0",

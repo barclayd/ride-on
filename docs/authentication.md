@@ -1,5 +1,9 @@
 # Ride On authentication
 
+Agent connections use a separate OAuth grant, consent and revocation flow. See
+[MCP setup and authorisation](mcp.md). Normal app APIs still require sessions;
+MCP credentials cannot call them.
+
 The v0.6 API uses Better Auth 1.7.7 on Cloudflare Workers with native D1 storage.
 Apple, Google and passkeys share one login identity, which maps to one cycling
 profile. Product APIs accept authenticated sessions only. Weather scoring, saved preferences, imports and route ownership use the same contracts.
