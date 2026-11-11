@@ -3,6 +3,7 @@ import { AppError } from '../errors.ts';
 import { haversineKm, isValidLatLon } from '../geo.ts';
 import { encodeGeometry } from '../rides/geometry.ts';
 import type { Coordinate } from '../weather/contracts.ts';
+import { filteredAscent } from './elevation.ts';
 import type { Route } from './model.ts';
 
 type GpxPoint = Coordinate & { elevation: number | null };
@@ -150,7 +151,6 @@ export const importGpx = async (
   }
   if (points.length < 2) fail('A route needs at least two distinct points.');
   const cumulative = [0];
-  let ascentM = 0;
   let completeElevation = true;
   for (let i = 0; i < points.length; i++) {
     const current = points[i];
@@ -162,15 +162,16 @@ export const importGpx = async (
       if (gap > 5000)
         fail('A gap between consecutive route points exceeds 5 km.');
       cumulative.push((cumulative.at(-1) ?? 0) + gap);
-      if (previous.elevation !== null && current.elevation !== null)
-        ascentM += Math.max(0, current.elevation - previous.elevation);
     }
   }
   const distanceM = cumulative.at(-1) ?? 0;
   if (distanceM < 100 || distanceM > 400_000)
     fail('Routes must be between 100 metres and 400 kilometres.');
   if (!completeElevation) warnings.add('MISSING_ELEVATION');
-  else warnings.add('ASCENT_IS_UNSMOOTHED_ESTIMATE');
+  else warnings.add('ASCENT_IS_FILTERED_ESTIMATE');
+  const ascentM = completeElevation
+    ? filteredAscent(points.flatMap((point) => point.elevation ?? []))
+    : null;
   const at = (metres: number) => {
     let low = 1;
     let high = cumulative.length - 1;
@@ -233,7 +234,7 @@ export const importGpx = async (
       byte.toString(16).padStart(2, '0'),
     ).join(''),
     distanceM,
-    ascentM: completeElevation ? ascentM : null,
+    ascentM,
     originalPointCount: pointCount,
     warnings: [...warnings],
     legs,

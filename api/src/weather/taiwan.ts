@@ -1,3 +1,4 @@
+import { haversineKm } from '../geo.ts';
 import type {
   ForecastDescriptor,
   ForecastProvider,
@@ -285,8 +286,27 @@ export const createTaiwanWeather = (options: {
             'The Taiwan weather product covers Taiwan land routes.',
           ),
         );
-      const cwa = usable(cw.get(requested.id)),
-        apple = usable(ap.get(requested.id));
+      const candidate = usable(cw.get(requested.id));
+      // A township can be near the query point but too far from the route
+      // sections it represents. Choose the supplement before composing fields;
+      // the scorer still checks every component's actual location independently.
+      const cwa =
+        candidate &&
+        (request.coverageCoordinates?.[requested.id] ?? []).every(
+          (coordinate) =>
+            haversineKm(
+              [coordinate.latitude, coordinate.longitude],
+              [
+                candidate.location.coordinate.latitude,
+                candidate.location.coordinate.longitude,
+              ],
+            ) *
+              1000 <=
+            request.maxLocationDistanceM,
+        )
+          ? candidate
+          : null;
+      const apple = usable(ap.get(requested.id));
       if (!apple) {
         const issues = ap.get(requested.id)?.issues;
         return failure(

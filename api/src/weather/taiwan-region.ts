@@ -39,7 +39,8 @@ export const isTaiwanCoordinate = ({ latitude, longitude }: Coordinate) =>
       ),
   );
 
-/** One comparison uses one policy. Mixed-country routes keep global coverage. */
+/** All samples and leg midpoints must lie in Taiwan. Applied to each route
+ * independently so foreign routes in the shortlist cannot suppress CWA. */
 export const taiwanRoutes = (routes: readonly Route[]) =>
   routes.length > 0 &&
   routes.every((route) =>

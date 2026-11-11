@@ -1,4 +1,4 @@
-# Weather provider choices — API 0.43.0
+# Weather provider choices — API 0.44.0
 
 The public picker offers **Automatic** (`automatic`), **CWA + Apple Weather**
 (`taiwan-weather`), **Apple Weather** (`apple-weather`) and **Met Office**
@@ -27,7 +27,7 @@ Content-Type: application/json
 }
 ```
 
-Use `"automatic"` for location-based selection, or `"apple-weather"` for an explicit global provider. The API selects compatible source,
+Taiwan routes always use CWA + Apple Weather. For other routes, `"automatic"` selects Apple Weather and explicit choices retain their selected provider. The API selects compatible source,
 representation and freshness settings together and preserves unrelated preferences.
 POST `/users` accepts the same field inside `settings` for profile creation.
 The user returned by create, get and patch includes `weatherProviderId` alongside
@@ -52,10 +52,10 @@ forecast/coverage fields, not the presence of this label.
 
 ## Selection policy and compatibility
 
-- Automatic is the default for new profiles and requests without saved settings.
-  A comparison whose route samples and legs are all within Taiwan land boundaries
-  uses CWA + Apple Weather. Other or mixed-country comparisons use Apple Weather.
-  The rider's time zone does not determine geographic coverage.
+- Taiwan routes always select CWA + Apple Weather, overriding saved and temporary
+  provider choices and advanced policies. The geographic check is per route,
+  so UK routes in the same shortlist cannot suppress CWA. Non-Taiwan routes use
+  the saved/requested policy; Automatic resolves to Apple Weather.
 - CWA + Apple Weather uses CWA township temperatures, sustained wind and native
   three-hour precipitation probabilities, with Apple hourly gusts, rainfall and
   missing fields/periods. It has its own cache/source identity. Field evidence
@@ -68,10 +68,9 @@ forecast/coverage fields, not the presence of this label.
   present this number as a guarantee for every date/location/parameter.
 - Choosing Apple selects its deterministic hourly product and retrieval-time
   freshness.
-- Existing stored policies, including saved Apple choices, are **not migrated or rewritten**. Select Automatic to enable geographic selection. A Global Spot
-  profile still uses Global Spot until its owner explicitly selects a new
-  provider choice; a saved BPF profile still uses BPF. Both display “Met Office”.
-  This avoids changing calibrated recommendations merely because a picker opened.
+- Existing stored policies are **not migrated or rewritten**. They continue to
+  govern non-Taiwan routes. The Taiwan override is applied at evaluation time,
+  with the deterministic/retrieval-time preset required by the composite.
 - For that reason, an older Global Spot profile may have a shorter actual horizon
   than the catalogue's current Met Office choice. Always use recommendation
   availability metadata for the dates a user can assess.
@@ -80,9 +79,9 @@ forecast/coverage fields, not the presence of this label.
   BPF configuration determines the new Met Office choice's `configured` flag; it
   is not a health or quota check.
 - **Quota exhaustion is the one exception (v0.42.0).** When a Met Office location comes
-  back `rate-limited`, the provider can't finish the comparison, so the whole
-  comparison moves to Apple Weather's deterministic preset: one source for every
-  location and day, never a mix. The response says so:
+  back `rate-limited`, the provider can't finish the comparison, so the non-Taiwan
+  group moves to Apple Weather's deterministic preset. Taiwan keeps its CWA-first
+  product. The response says so:
   - `weather.requestedProviderId` stays `met-office`.
   - `weather.selectedProvider` / `selectedSource` name Apple Weather.
   - `weather.attempts` lists the Met Office attempt, then Apple's.
@@ -107,6 +106,20 @@ forecast/coverage fields, not the presence of this label.
   Preserve them or display a custom state; do not silently save the default while
   rendering the picker. Their selected forecast still has a provider label when
   its source belongs to a known provider.
+
+## Mixed-region responses
+
+`weather.routeSources[]` identifies each route's selected source/provider,
+forecast representation, freshness/quality requirements and quota fallback.
+For a single policy group the existing top-level source, quality and fallback
+fields retain their meaning. With multiple groups those fields are `null`;
+`weather.attempts`, attribution and location evidence include both groups.
+Top-level `forecast.representation` or `freshnessBasis` is `mixed` only when the
+groups use different values. The exact values always remain in `routeSources`.
+CWA's native probability event is never evaluated as Apple's hourly event or
+Met Office's ensemble statistic. Previous-score and tracking context identities
+retain the regional source choices; a provider change cannot appear to be a
+weather-driven score change.
 
 ## Backend structure and verification
 

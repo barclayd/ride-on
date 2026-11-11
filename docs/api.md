@@ -352,7 +352,7 @@ Supports one GPX 1.0/1.1 track or route per file, including connected track
 segments. Rejects malformed XML, DTDs, invalid coordinates, disconnected segments,
 multiple tracks/routes, gaps over 5 km, files over 5 MB, more than 50,000 points,
 and routes outside 100 m–400 km. Duplicate consecutive points are removed. Missing
-elevation remains unknown; available ascent is an unsmoothed estimate. Traversal
+elevation remains unknown; available ascent is a filtered estimate. Traversal
 order is preserved. GPX export is the current Garmin/cycle.travel import path;
 there are no account connections yet.
 
@@ -838,9 +838,15 @@ Weather is fetched for that diagnostic when a departure is feasible. Known zero
 ascent is valid flat terrain. An impossible time window still returns `no_feasible_departure` first.
 Neutral can assess routes without elevation using weather and any distance preference.
 
-Available ascent remains an **unsmoothed GPX estimate**, with the existing
-`ASCENT_IS_UNSMOOTHED_ESTIMATE` warning. GPS noise, elevation source and point
-density can affect it. This release does not claim reliable steepness, adjust
+New imports use a **filtered GPX ascent estimate**, with the
+`ASCENT_IS_FILTERED_ESTIMATE` warning. A 10 m descent buffer prevents small
+vertical oscillations from being repeatedly counted, while gradual climbs
+accumulate even when individual steps are smaller than the buffer. This is
+independent of point density and does not promise identical totals to a provider
+using a different terrain model. Legacy records keep their existing estimate
+until the original GPX is reimported; identical source imports upgrade the derived
+ascent once, retaining the route ID and incrementing its version. Noise and
+elevation-source resolution can still affect the estimate. This release does not claim reliable steepness, adjust
 ride duration for climbing, or add maximum-ascent restrictions. Climbing-only
 changes need no new weather variables and reuse compatible cached forecasts.
 

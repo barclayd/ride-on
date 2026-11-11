@@ -85,32 +85,58 @@ export const importSourceRoute = async (
     input.expectedVersion !== current.version
   )
     throw conflict();
+  // Identical bytes can safely upgrade this derived fact without requiring a
+  // client to know the filtering version. Keep the route ID and guard the write
+  // with its current version, just like an explicit source refresh.
+  const repairsElevation =
+    current.route.sourceHash === route.sourceHash &&
+    current.route.name === route.name &&
+    current.route.warnings.includes('ASCENT_IS_UNSMOOTHED_ESTIMATE') &&
+    route.warnings.includes('ASCENT_IS_FILTERED_ESTIMATE') &&
+    sameSurfaceEvidence(current.route.surface, route.surface);
   if (
     current.route.sourceHash === route.sourceHash &&
     current.route.name === route.name
   ) {
     if (
       (current.route.geometry || !route.geometry) &&
-      sameSurfaceEvidence(current.route.surface, route.surface)
+      sameSurfaceEvidence(current.route.surface, route.surface) &&
+      !repairsElevation
     )
       return { outcome: 'unchanged', record: current };
     // Even identical source bytes can enrich geometry or surfaces, but only with an
     // explicit version to avoid changing a route behind another client's back.
-    if (input.expectedVersion === undefined) throw conflict();
+    if (input.expectedVersion === undefined && !repairsElevation)
+      throw conflict();
   }
-  if (input.expectedVersion === undefined) throw conflict();
+  if (input.expectedVersion === undefined && !repairsElevation)
+    throw conflict();
   const record: RouteRecord = {
-    route: {
-      ...route,
-      id: current.route.id,
-      createdAt: current.route.createdAt,
-    },
+    route: repairsElevation
+      ? {
+          ...current.route,
+          ascentM: route.ascentM,
+          warnings: current.route.warnings.map((warning) =>
+            warning === 'ASCENT_IS_UNSMOOTHED_ESTIMATE'
+              ? 'ASCENT_IS_FILTERED_ESTIMATE'
+              : warning,
+          ),
+        }
+      : {
+          ...route,
+          id: current.route.id,
+          createdAt: current.route.createdAt,
+        },
     source,
     version: current.version + 1,
     updatedAt: input.importedAt,
   };
   if (
-    !(await store.replaceImported(input.ownerId, record, input.expectedVersion))
+    !(await store.replaceImported(
+      input.ownerId,
+      record,
+      input.expectedVersion ?? current.version,
+    ))
   )
     throw conflict();
   return { outcome: 'updated', record };

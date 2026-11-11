@@ -224,6 +224,7 @@ export const withForecastCache = (
           JSON.stringify({
             source: provider.source,
             coordinate: location.coordinate,
+            coverageCoordinates: request.coverageCoordinates?.[location.id],
             locationId: options.keyByLocationId ? location.id : undefined,
             coverage:
               options.forecastHorizonHours === undefined

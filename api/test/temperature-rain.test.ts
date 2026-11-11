@@ -111,7 +111,7 @@ test('every returned trace keeps ten-minute points, exact finish, unique ordered
   expect(trace.points.every((p) => p[2] !== null)).toBe(true);
   expect(trace.usual).not.toBeNull();
   expect(best.temperatureAssessment.seasonal.status).toBe('disabled');
-  expect(ALGORITHM_VERSION).toBe('comfort-v0.17');
+  expect(ALGORITHM_VERSION).toBe('comfort-v0.18');
 });
 
 test('section entry wins at a boundary, with the outgoing extremum preserved immediately before it', async () => {

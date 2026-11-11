@@ -54,3 +54,21 @@ test('duplicate points and connected segments do not add fictitious distance', a
   expect(route.distanceM).toBeCloseTo(3335.85, 0);
   expect(route.warnings).toContain('DUPLICATE_POINTS_REMOVED');
 });
+
+test('planner elevation oscillations are filtered while missing elevation stays unknown', async () => {
+  const heights = [0, 100, 96, 100, 97, 100, 50, 100, 0];
+  const track = (missing = false) =>
+    gpx(
+      `<trk><trkseg>${heights
+        .map(
+          (height, i) =>
+            `<trkpt lat="${51.5 + i * 0.001}" lon="-0.1">${missing && i === 3 ? '' : `<ele>${height}</ele>`}</trkpt>`,
+        )
+        .join('')}</trkseg></trk>`,
+    );
+  const filtered = await importGpx(track());
+  expect(filtered.ascentM).toBe(140);
+  expect(filtered.warnings).toContain('ASCENT_IS_FILTERED_ESTIMATE');
+  expect(filtered.warnings).not.toContain('ASCENT_IS_UNSMOOTHED_ESTIMATE');
+  expect((await importGpx(track(true))).ascentM).toBeNull();
+});

@@ -89,7 +89,7 @@ integration(
     h.use(apple());
     const result = await recommend(h, ids, settings);
     assert.equal(result.timeZone, 'Asia/Taipei');
-    assert.equal(result.weather.selectedSource?.providerId, 'apple-weather');
+    assert.equal(result.weather.selectedSource?.providerId, 'taiwan-weather');
     assert.equal(result.rankings.length, 2);
     assert.deepEqual(result.unranked, []);
     for (const route of result.rankings) {
@@ -213,32 +213,26 @@ integration(
 );
 
 integration(
-  'Taipei CWA requests remain unassessable and cannot borrow cached Apple scores',
+  'Taiwan geographic selection also overrides advanced policies and reuses only the composite cache',
   async (h, ids) => {
     h.use(apple());
     const baseline = await recommend(h, ids, settings);
     assert.equal(baseline.rankings.length, 2);
     const calls = h.requests.length;
-    for (const [key, code] of [
-      ['', 'not-configured'],
-      ['synthetic-cwa-key', 'unsupported-variable'],
+    for (const weather of [
+      { mode: 'strict', providerId: 'cwa' },
+      {
+        mode: 'ordered-fallback',
+        providerIds: ['met-office', 'apple-weather'],
+      },
     ]) {
-      await h.restart({ CWA_API_KEY: key });
       const result = await recommend(h, ids, {
         timeZone: settings.timeZone,
         riding: settings.riding,
-        weather: { mode: 'strict', providerId: 'cwa' },
+        weather,
       });
-      assert.equal(result.recommendedRouteId, null);
-      assert.deepEqual(result.rankings, []);
-      assert.equal(result.unranked.length, 2);
-      assert.ok(result.unranked.every((r) => r.status === 'unassessable'));
-      assert.ok(result.weather.locations.length > 0);
-      assert.ok(
-        result.weather.locations.every((l) =>
-          l.issues.some((i) => i.code === code),
-        ),
-      );
+      assert.equal(result.weather.selectedSource?.providerId, 'taiwan-weather');
+      assert.deepEqual(result.rankings, baseline.rankings);
       assert.equal(h.requests.length, calls);
     }
   },

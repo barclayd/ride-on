@@ -21,7 +21,7 @@ credentials and HTTP calls stay inside adapters. Dan's UK policy is Met Office
 only. Other riders can select a
 provider or explicitly allow an ordered fallback list.
 
-From v0.43.0, new profiles and requests without saved settings default to **Automatic**, selecting the CWA + Apple composite for Taiwan land routes and Apple elsewhere, with deterministic values and retrieval-time freshness. See [Taiwan weather](cwa-weather.md).
+From v0.44.0, every Taiwan land route uses the CWA-first composite regardless of the saved/requested provider, with deterministic values and retrieval-time freshness. Other routes retain their selected policy; Automatic selects Apple elsewhere. See [Taiwan weather](cwa-weather.md).
 Existing saved source selections are preserved. Cloud-aware Met Office profiles can
 explicitly select **BPF v2 UK** (`met-office-bpf`) with `ensemble-summary` assessment
 and `retrieval-time` freshness. Both keys have been authenticated locally. Neither
@@ -294,19 +294,17 @@ and hourly rain probabilities cannot simply be added into a whole-ride risk.
 
 ## Source preferences and failures
 
-Dan's cloud-aware profile uses `{ mode: 'strict', providerId: 'met-office-bpf' }`;
-the new-user default is `apple-weather`; existing stored Met Office policies are
-not rewritten. If a selected
-source is unavailable, report unavailable evidence. Do not silently substitute
-another provider. In particular, a forecast failure must not produce a claim that
-all routes fail the rider's minimum standards.
+Taiwan routes always use the CWA-first composite. The saved/requested provider
+continues to govern non-Taiwan routes; Automatic resolves to Apple. A mixed
+shortlist keeps these groups separate through forecast retrieval, freshness and
+scoring, then ranks the candidates together. Source choices and statistics remain
+explicit in `weather.routeSources` and per-location evidence.
 
-For other riders, an ordered fallback is opt-in. Try only listed providers and
-record the source actually used plus why fallback occurred. As the initial
-policy, choose one provider for the comparison rather than filling individual
-missing fields from different sources. Do not pick whichever provider predicts
-the nicest weather. Product selection within one provider also has to satisfy
-the declared evidence requirements and remain visible in provenance.
+Advanced ordered fallbacks remain opt-in outside Taiwan. Met Office quota
+fallback applies only to the non-Taiwan group. Missing evidence stays missing;
+a forecast failure must not become a claim that every route fails the rider's
+minimum standards. The Taiwan product's existing Apple supplements and field
+fallbacks remain identified, rather than claiming those values come from CWA.
 
 ## Performance and quota design
 
