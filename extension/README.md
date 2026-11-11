@@ -11,6 +11,7 @@ using the Ride On API (v0.9.0). Design: handoff 3 (`design_handoff_ride_on_v2`),
   (distance and climbing for this search or as usual, auto-synced profile, forecast provider).
 - **cycle.travel `/user/journeys`** — "Tracked routes" module, date · time button, per-row chips.
   Journeys are imported as GPX (with elevation) when tracked, and re-imported when edited on cycle.travel.
+- **Ride feedback** — optional enjoyment, weather comfort and up to two reasons after check-in or from History. Exact or approximate ride times and confirming the route let the API match the weather you rode in. Preferences › Tailored Rides shows which rides count and can pause it or start afresh; it's being tested and doesn't change scores yet. Requires API v0.42.0 ([#302](https://github.com/barclayd/ride-on/pull/302)); merge the API first. See [the contract](../docs/ride-learning.md).
 - **Weather attribution** from the results (Apple Weather logo, legal link and notice; "Powered by
   Met Office data") shows under the rides and in Preferences, not on the page.
 

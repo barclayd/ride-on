@@ -9,11 +9,13 @@ import type {
   Climbing,
   Conditions,
   Departure,
+  LearningProfile,
   NextWindows,
   Pause,
   PreferencesPatch,
   Recommendations,
   Ride,
+  RideExperience,
   RideSummary,
   RouteSummary,
   Selection,
@@ -86,6 +88,7 @@ export type Shown = {
 };
 // The response the picks came from, sent with a logged ride's plan.
 export type PlanMeta = {
+  recommendationId?: string | null;
   generatedAt: string;
   algorithmVersion: string;
   attribution: Attribution[];
@@ -133,9 +136,13 @@ export type State = {
   checkin: Checkin | null;
   next: NextWindows | null; // suggestions while expired
   rides: Ride[]; // newest first
+  learning: LearningProfile | null;
   ridesCursor: string | null;
   summaries: Record<string, RideSummary>; // by route ID, for ride tags
   pendingDeletes: { id: string; at: number }[]; // removed in History, sent after the undo window
+  // Feedback removed in History, sent after its undo window (the ride itself stays).
+  pendingRemovals: PendingRemoval[];
+  removeFailures: Record<string, WriteFailure>; // removals the API refused, by ride ID
   // Route highlight derived from the account’s pinned departure.
   alertRouteId: string | null;
   tracker: Tracker;
@@ -145,8 +152,19 @@ export type State = {
   pause: Pause | null;
 };
 
+export type PendingRemoval = {
+  id: string;
+  at: number;
+  expectedVersion: number;
+  expectedRideVersion: number;
+};
+
+// Why a feedback write failed, so the UI can show its own copy instead of the API's message.
+export type WriteFailure = 'offline' | 'conflict' | 'timing';
+
 export const initialState: State = {
   auth: 'signed-out',
+  learning: null,
   signingInWith: null,
   signInError: null,
   user: null,
@@ -176,6 +194,8 @@ export const initialState: State = {
   ridesCursor: null,
   summaries: {},
   pendingDeletes: [],
+  pendingRemovals: [],
+  removeFailures: {},
   alertRouteId: null,
   tracker: { ready: false, ride: null, version: 0, error: null },
   triggers: {},
@@ -259,7 +279,29 @@ export type Message =
   | { type: 'checkin'; answer: 'no' | 'undo' | 'updated' }
   | { type: 'deleteRide'; id: string }
   | { type: 'undoDelete'; id: string }
-  | { type: 'moreRides' };
+  | { type: 'moreRides' }
+  | {
+      type: 'saveRideExperience';
+      id: string;
+      expectedVersion: number;
+      expectedRideVersion: number;
+      experience: RideExperience;
+    }
+  | {
+      type: 'removeRideExperience';
+      id: string;
+      expectedVersion: number;
+      expectedRideVersion: number;
+    }
+  | { type: 'undoRemoveExperience'; id: string }
+  | { type: 'loadRide'; id: string }
+  | { type: 'loadLearning' }
+  | {
+      type: 'saveLearning';
+      expectedVersion: number;
+      enabled: boolean;
+      reset?: boolean;
+    };
 
 export type JourneyGpx = {
   externalId: string;
@@ -269,5 +311,7 @@ export type JourneyGpx = {
   surface?: SurfaceInput;
 };
 
-export const send = (message: Message): Promise<{ error?: string }> =>
+export const send = (
+  message: Message,
+): Promise<{ error?: string; failure?: WriteFailure }> =>
   browser.runtime.sendMessage(message);

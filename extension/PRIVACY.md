@@ -1,6 +1,6 @@
 # Ride On for cycle.travel — privacy policy
 
-_Last updated: 18 October 2026_
+_Last updated: 30 October 2026_
 
 Ride On is a Chrome and Safari extension that recommends which of your saved cycle.travel routes
 to ride, and when, from the weather forecast. It uses the Ride On API at `https://api.ride-on.cc`.
@@ -28,13 +28,29 @@ to ride, and when, from the weather forecast. It uses the Ride On API at `https:
   information needed to deliver messages. Turning notifications off or signing out requests
   removal of that installation's registration.
 
+- **Optional ride feedback.** You can save enjoyment and weather-comfort ratings, up to two reasons,
+  actual or approximate ride times, and whether you followed the saved route. If you use a ride to
+  tailor your rides, we use its feedback and reconstructed historical weather to evaluate a personal
+  comfort model. While Tailored Rides is being tested, the model does not change your
+  recommendations. You can edit or remove feedback in History, and pause Tailored Rides or start
+  afresh in Preferences. Starting afresh stops earlier feedback being used and keeps your ride
+  history and ratings.
+- **Recommendation records.** We save the settings, route identities, weather provenance and best
+  results behind a recommendation so we can compare recommendations with later feedback. Unlinked
+  records are removed after 90 days; records linked to saved rides are retained with that context.
+
 To score your routes, the Ride On API sends route coordinates and times to its weather providers
 (Apple Weather and the Met Office). The extension doesn't contact them directly.
+
+For included feedback with ride times and a confirmed route, the API also sends rounded route
+locations and the relevant dates to Open-Meteo. It does not send your name, account ID or ratings.
+Historical weather is an estimate of conditions along the saved route. Shared weather cache entries
+contain no rider identity and expire after six hours (recent estimates) or 30 days (reanalysis).
 
 ## Stored on your device
 
 Your session token and notification registration are kept in the extension's private storage,
-separate from webpage data. Settings, recent rides and recommendations, and cached tracking and
+separate from webpage data. Settings, recent rides, feedback, Tailored Rides settings and recommendations, and cached tracking and
 pause status are kept in extension storage. The account's tracked plan and pause also live on
 the server. While you're signed in, Safari's extension shares your session and email address with
 the Ride On companion app on the same device, in their private Apple Keychain group, so the app
@@ -50,6 +66,10 @@ used for anything unrelated to recommending rides, and isn't used to decide cred
 for lending. The extension runs only on `cycle.travel/user/journeys` and reads nothing else you browse.
 
 ## Deleting your data
+
+Removing feedback clears its stored ratings, timing and weather association and stops it being used
+for Tailored Rides. Deleting a ride also removes its feedback and weather association. Weather requests
+already in progress may finish, but deleted feedback cannot be restored by their results.
 
 To delete your Ride On account, its routes and rides, open an issue at
 https://github.com/barclayd/ride-on/issues asking for deletion (don't include personal details there;
