@@ -77,6 +77,7 @@ public struct CycleMap: View {
     var tint: Color
     var camera: Camera
     var callout: AnyView?
+    var calloutTitle: String?
     var moved: (MKMapRect) -> Void
     var select: (UUID) -> Void
 
@@ -92,7 +93,7 @@ public struct CycleMap: View {
     ///   - select: The line within 22pt of a tap, the closest if several are.
     public init(lines: [Line], selected: Line? = nil, stretches: [Stretch] = [], pin: Pin? = nil,
                 tint: Color = .accentColor, camera: Camera,
-                callout: AnyView? = nil, moved: @escaping (MKMapRect) -> Void = { _ in },
+                callout: AnyView? = nil, calloutTitle: String? = nil, moved: @escaping (MKMapRect) -> Void = { _ in },
                 select: @escaping (UUID) -> Void = { _ in }) {
         self.lines = lines
         self.selected = selected
@@ -101,6 +102,7 @@ public struct CycleMap: View {
         self.tint = tint
         self.camera = camera
         self.callout = callout
+        self.calloutTitle = calloutTitle
         self.moved = moved
         self.select = select
     }
@@ -112,7 +114,8 @@ public struct CycleMap: View {
                 MapView(lines: lines, selected: selected,
                         stretches: stretches.map { .init(coordinates: $0.coordinates, colour: uiColor($0.color)) },
                         pin: pin, tint: uiColor(tint),
-                        camera: camera, callout: callout, insets: geometry.safeAreaInsets,
+                        camera: camera, callout: callout, calloutTitle: calloutTitle, insets: geometry.safeAreaInsets,
+                        viewportWidth: geometry.size.width,
                         moved: { uncredit(); moved($0) }, select: select)
                     .ignoresSafeArea()
                 if credited {
@@ -220,8 +223,10 @@ private struct MapView: UIViewRepresentable {
     var tint: UIColor
     var camera: CycleMap.Camera
     var callout: AnyView?
+    var calloutTitle: String?
     /// The SwiftUI safe area, as the map's content inset: the view fills the screen and draws under it.
     var insets: EdgeInsets
+    var viewportWidth: CGFloat
     var moved: (MKMapRect) -> Void
     var select: (UUID) -> Void
 
@@ -260,7 +265,7 @@ private struct MapView: UIViewRepresentable {
         coordinator.select = select
         coordinator.camera = camera
         coordinator.draw(lines: lines, selected: selected, stretches: stretches, tint: tint, in: view)
-        coordinator.show(callout, in: view)
+        coordinator.show(callout, title: calloutTitle, in: view, viewportWidth: viewportWidth)
         coordinator.show(pin, tint: tint, in: view)
         let contentInset = UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing)
         let insetChanged = view.contentInset != contentInset
@@ -503,7 +508,7 @@ private struct MapView: UIViewRepresentable {
         // MARK: Callout
 
         /// Pins `content` above the selected line's northernmost point, or takes it away.
-        func show(_ content: AnyView?, in mapView: MLNMapView) {
+        func show(_ content: AnyView?, title: String?, in mapView: MLNMapView, viewportWidth: CGFloat) {
             guard let content, let top = selected?.coordinates.max(by: { $0.latitude < $1.latitude }) else {
                 if mapView.annotations?.contains(where: { $0 === calloutAnnotation }) == true { mapView.removeAnnotation(calloutAnnotation) }
                 return
@@ -519,11 +524,15 @@ private struct MapView: UIViewRepresentable {
                 calloutView.scalesWithViewingDistance = false
                 calloutHost = host
             }
-            let size = calloutHost!.sizeThatFits(in: UIView.layoutFittingExpandedSize)
+            // The annotation must fit its map pane, including on the Duo's
+            // narrower split view. An unbounded proposal prevents truncation.
+            let width = min(260, max(1, viewportWidth - 32))
+            let size = calloutHost!.sizeThatFits(in: CGSize(width: width, height: UIView.layoutFittingExpandedSize.height))
             calloutView.bounds = CGRect(origin: .zero, size: size)
             calloutHost!.view.frame = calloutView.bounds
             // Its bottom edge on the point.
             calloutView.centerOffset = CGVector(dx: 0, dy: -size.height / 2)
+            calloutAnnotation.title = title
             calloutAnnotation.coordinate = CLLocationCoordinate2D(top)
             if mapView.annotations?.contains(where: { $0 === calloutAnnotation }) != true { mapView.addAnnotation(calloutAnnotation) }
         }
