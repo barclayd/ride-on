@@ -182,7 +182,7 @@ export const createApp = (
   registerRoute(app, libraryRoutes.health, (c) =>
     c.json({
       ok: true,
-      version: '0.44.0',
+      version: '0.44.1',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),

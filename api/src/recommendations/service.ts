@@ -328,7 +328,12 @@ export const evaluateComparisons = async (
     }),
   );
   const uniform = forecasts.length === 1 ? forecasts[0] : undefined;
-  const settings = uniform?.settings ?? input;
+  // Only provider settings may override a day's input. Spreading the entire
+  // first input here would replace every mixed-region date with its preview date.
+  const settings: ForecastSettings = uniform?.settings ?? {
+    weather: input.weather,
+    forecast: input.forecast,
+  };
   const selected = uniform?.selected ?? null;
   const results = forecasts.flatMap(
     (forecast) => forecast.selected?.results ?? [],

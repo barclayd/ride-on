@@ -1,5 +1,7 @@
 # Ride On API MVP
 
+API v0.44.1 preserves each selected and preview date when a shortlist combines Taiwan and non-Taiwan weather providers. CWA continues to override the saved provider for Taiwan routes.
+
 API v0.43.0 adds **Automatic** weather selection: Taiwan land-route comparisons use **CWA + Apple Weather**, and other or mixed-country comparisons use Apple. CWA supplies township temperatures, sustained wind and native three-hour rain probabilities; Apple supplies hourly gusts, rainfall and missing coverage. New profiles default to Automatic; saved choices remain unchanged. Per-field sources and interpolation are retained in `weather.locations[].fieldEvidence` and each candidate's `forecastDetails`. See [Taiwan weather](cwa-weather.md) and [provider choices](weather-provider-choices.md). Comfort weights remain `comfort-v0.17`.
 
 API v0.42.0 moves a comparison to Apple Weather when the rider's Met Office choice is out of quota, instead of returning every route as `unassessable`. `weather.fallback` (`{ reason: "rate-limited", retryAt }`, or `null`) says when this happened; `weather.requestedProviderId` keeps the rider's choice. See [provider choices](weather-provider-choices.md). Scoring stays `comfort-v0.17`.
