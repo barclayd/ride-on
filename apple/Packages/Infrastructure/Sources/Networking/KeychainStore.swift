@@ -23,7 +23,8 @@ public enum KeychainStore {
         guard status == errSecItemNotFound else { return false }
         var attributes = query
         attributes[kSecValueData as String] = data
-        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        attributes[kSecAttrAccessible as String] = account.hasPrefix("ride-on-api-")
+            ? kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly : kSecAttrAccessibleAfterFirstUnlock
         return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
     }
 

@@ -12,6 +12,9 @@ public struct RouteImportSheet: View {
     @State private var saving = false
     @State private var receipt: RouteFile.Receipt?
     @Environment(\.dismiss) private var dismiss
+    #if os(iOS)
+    @Environment(\.toolbarVerticalEdge) private var toolbarVerticalEdge
+    #endif
 
     public init(load: @escaping @Sendable () async throws -> RouteFile, close: (@MainActor () -> Void)? = nil) {
         self.load = load
@@ -58,7 +61,7 @@ public struct RouteImportSheet: View {
             }
             .navigationTitle("Import Route")
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(toolbarVerticalEdge == nil ? .inline : .large)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
