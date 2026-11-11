@@ -71,6 +71,8 @@ targets:
     info:
       path: Generated/RideOn-Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Declares a (blank) launch screen so iOS renders the app at native
         # resolution — without this key the app runs letterboxed in
         # compatibility mode.
@@ -166,6 +168,8 @@ targets:
     info:
       path: Generated/RideOnWidgets-Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Ride On
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
@@ -199,6 +203,8 @@ targets:
     info:
       path: Generated/RideOnShare-Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Ride On
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
