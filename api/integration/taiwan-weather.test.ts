@@ -524,6 +524,84 @@ for (const provider of ['automatic', 'apple-weather', 'met-office'])
     },
   );
 
+for (const provider of ['met-office', 'apple-weather'])
+  integration(
+    `mixed-country app planning preserves every date and Taiwan scores with ${provider}`,
+    async (h, ids) => {
+      h.use(cwa(), apple(), bpf());
+      const saved = await h.send('/users', {
+        body: JSON.stringify({
+          displayName: 'Travelling rider',
+          settings: { weatherProviderId: provider, timeZone: 'Europe/London' },
+        }),
+      });
+      assert.equal(saved.status, 201);
+      const uk = await upload(h);
+      for (const extra of [{}, { weatherProviderId: provider }]) {
+        const response = await h.send('/recommendations', {
+          body: JSON.stringify({
+            routeIds: [uk.id, ...ids],
+            days: { kind: 'preset', preset: 'next-five-days' },
+            previewDays: 7,
+            riding: { window: 'daylight' },
+            ...extra,
+          }),
+        });
+        assert.equal(response.status, 200);
+        const result = z
+          .object({
+            days: z.array(z.object({ date: z.string() })),
+            rankings: z.array(
+              z.object({
+                routeId: z.string(),
+                best: z.object({
+                  departureAt: z.string(),
+                  forecastDetails: z.object({
+                    locations: z.array(
+                      z.object({
+                        source: z.object({ providerId: z.string() }),
+                      }),
+                    ),
+                  }),
+                }),
+              }),
+            ),
+          })
+          .parse(await response.json());
+        assert.deepEqual(
+          result.days.map((day: { date: string }) => day.date),
+          [
+            '2026-10-09',
+            '2026-10-10',
+            '2026-10-11',
+            '2026-10-12',
+            '2026-10-13',
+            '2026-10-14',
+            '2026-10-15',
+          ],
+        );
+        assert.equal(result.rankings.length, 3);
+        for (const id of ids) {
+          const route = result.rankings.find(
+            (r: { routeId: string }) => r.routeId === id,
+          );
+          assert.ok(route?.best);
+          // The requested calendar uses London summer time in this fixture.
+          assert.ok(
+            Date.parse(route.best.departureAt) >=
+              Date.parse('2026-10-09T23:00:00Z'),
+          );
+          assert.ok(
+            route.best.forecastDetails.locations.every(
+              (l: { source: { providerId: string } }) =>
+                l.source.providerId === 'taiwan-weather',
+            ),
+          );
+        }
+      }
+    },
+  );
+
 integration(
   'Met Office quota fallback in a mixed shortlist cannot switch Taiwan away from CWA',
   async (h, ids) => {

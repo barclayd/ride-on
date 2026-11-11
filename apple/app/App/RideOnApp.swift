@@ -186,7 +186,13 @@ private func destination(for tab: AppTab) -> some View {
 /// The Routes tab, and the Ride detail its shortlist cards push (RoutesUI can't import RideUI).
 private struct RoutesPage: View {
     @Environment(RideBoardStore.self) private var rides
-    @State private var sampleLibrary = RouteLibrary.sample
+    @State private var sampleLibrary: RouteLibrary = {
+        var library = RouteLibrary.sample
+        if FixtureWorld.isEnabled, let name = UserDefaults.standard.string(forKey: "FixtureRouteName") {
+            library.routes[0].name = name
+        }
+        return library
+    }()
     @Environment(RiderSettingsStore.self) private var settings: RiderSettingsStore?
 
     var body: some View {

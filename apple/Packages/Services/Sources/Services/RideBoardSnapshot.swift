@@ -36,6 +36,9 @@ struct RideBoardSnapshot: Codable, Sendable {
     /// A forecast deadline never extends the validity of departures or a relative calendar choice.
     func refreshDate() -> Date {
         guard let response = try? response(), let refresh = response.weather?.refreshAt else { return fetchedAt }
+        // Older mixed-provider responses repeated the first preview date and
+        // lost the selected days' rankings. Refresh those snapshots immediately.
+        guard Set(response.days.map(\.date)).count == response.days.count else { return fetchedAt }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = RideDates.timeZone(response.timeZone)
         let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: fetchedAt)) ?? fetchedAt

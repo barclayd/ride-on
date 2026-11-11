@@ -2,6 +2,27 @@ import XCTest
 
 @MainActor
 final class RideOnUITests: XCTestCase {
+    func testLongRouteNameFitsMapCallout() {
+        let app = XCUIApplication()
+        let name = "Saturday 14 November 2026 - Riverside to Mountain View via the Coast Road and Harbour"
+        app.launchArguments += ["--fixture-world", "-FixtureRouteName", name]
+        app.launch()
+        app.buttons["Routes"].tap()
+        let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        card.tap()
+        let callout = app.otherElements["cycle-map"].buttons.matching(NSPredicate(format: "label CONTAINS %@", name)).firstMatch
+        XCTAssertTrue(callout.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(callout.frame.width, 260)
+        XCTAssertGreaterThan(callout.frame.width, 100)
+        XCTAssertLessThanOrEqual(callout.frame.height, 80)
+        XCTAssertTrue(callout.label.contains(name), "Accessibility retains the complete route name")
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Long route name on map"
+        capture.lifetime = .keepAlways
+        add(capture)
+    }
+
     func testUKRideKeepsLocalTimesWhenViewedInTaiwan() {
         let app = XCUIApplication()
         app.launchArguments += ["--fixture-world", "-AppleLocale", "en_GB"]

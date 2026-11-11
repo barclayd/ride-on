@@ -118,6 +118,28 @@ private func eventually(_ condition: @Sendable () async -> Bool) async throws {
 }
 
 struct RideBoardCacheTests {
+    @Test func refreshesCachedForecastWithRepeatedPreviewDates() async throws {
+        let h = Harness(); defer { h.clean() }
+        var snapshot = try await h.repository().refresh(session: "login1", account: "rider1")
+        let recommendation = try #require(snapshot.recommendation)
+        var response = try #require(try JSONSerialization.jsonObject(with: recommendation) as? [String: Any])
+        let days = try #require(response["days"] as? [[String: Any]])
+        response["days"] = Array(repeating: days[0], count: 7)
+        response["rankings"] = []
+        snapshot.recommendation = try JSONSerialization.data(withJSONObject: response)
+        let file = try #require(FileManager.default.contentsOfDirectory(at: h.directory, includingPropertiesForKeys: nil).first)
+        try JSONEncoder().encode(snapshot).write(to: file)
+
+        #expect(snapshot.refreshDate() == start)
+        #expect(!snapshot.canReuse(at: start))
+        let repository = h.repository()
+        let restored = try #require(await repository.restore(session: "login1", account: "rider1"))
+        #expect(restored.refreshAt == start)
+        let refreshed = try await repository.refresh(session: "login1", account: "rider1")
+        #expect(await h.server.count("/recommendations") == 2)
+        #expect(try refreshed.board()?.picks.first?.score == 86)
+    }
+
     @Test func resolvesAndPersistsRouteZoneAcrossOfflineRestoration() async throws {
         let h = Harness(); defer { h.clean() }
         let repo = h.repository(resolveTimeZone: { _ in "Asia/Taipei" })

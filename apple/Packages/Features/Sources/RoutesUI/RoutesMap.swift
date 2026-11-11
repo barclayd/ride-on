@@ -75,7 +75,7 @@ struct RoutesMap: View {
             calloutDetail.map { AnyView(RouteCallout(name: selected.name, detail: $0)) }
         }
         return CycleMap(lines: lines, selected: selected.map { CycleMap.Line(id: $0.id, coordinates: $0.coordinates) },
-                        tint: Color(accent), camera: cycleCamera, callout: callout,
+                        tint: Color(accent), camera: cycleCamera, callout: callout, calloutTitle: selected?.name,
                         moved: { camera = .rect($0) }, select: select)
     }
 
@@ -166,12 +166,15 @@ private struct RouteCallout: View {
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
+                    .truncationMode(.tail)
                 Text(detail)
                     .font(.footnote)
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .lineLimit(1)
+            .frame(maxWidth: 238)
             .padding(.vertical, 6)
             .padding(.horizontal, 11)
             .background(.cardBackground, in: .rect(cornerRadius: CornerRadius.badge))
