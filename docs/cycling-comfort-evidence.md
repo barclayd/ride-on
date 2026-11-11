@@ -121,6 +121,52 @@ Wind/rain scoring changes are deferred until those inputs and calibration exist.
 The research accumulated here is the rationale and implementation direction,
 not evidence that arbitrary new multipliers have been validated.
 
+## Route-specific gradient, elevation and exposure
+
+The API currently retains section positions, distances and headings, and total
+ascent. Its climbing preference uses ascent per kilometre; it does not measure
+section gradient or rider effort. Weather arrival times assume constant speed,
+so distance weighting currently stands in for time weighting. Imported GPX
+altitudes are used for ascent but are not retained on recommendation legs.
+The app's elevation display is not evidence that the API already scores those
+local slopes.
+
+The next route-aware model should:
+
+1. Retain a versioned elevation profile with source and missing-data status.
+   Smooth elevation over distance before estimating grade; reject isolated
+   spikes, and preserve genuine sustained climbs. Missing elevation must not
+   silently mean flat ground.
+2. Estimate section speed and arrival time using gradient, heading, wind and
+   rider-specific pace or power evidence. A steeper climb does not by itself
+   prove greater metabolic power: riders may maintain effort and slow down.
+   Do not infer watts, fitness or body mass from gradient alone.
+3. Sample weather at those revised arrival times and weight thermal/wetness
+   exposure by time. A slow climb deserves more exposure weight than a fast
+   descent of the same distance. Recalculate departure-window feasibility too.
+4. Calculate apparent airflow from rider velocity and the wind vector. Use it
+   for thermal exchange separately from headwind effort and crosswind control.
+   A hot slow climb and a cold wet descent need different treatment; avoid a
+   single generic hill multiplier or double-counting climbing preference.
+5. Add shade, altitude weather corrections and surface/control interactions
+   only when their evidence is available. Elevation does not establish shade,
+   road wetness, ice, grip or actual local wind; avoid correcting temperature
+   twice if the forecast already accounts for terrain.
+
+The [UCI heat guide](https://assets.ctfassets.net/761l7gh5x5an/716JED6hjzxjx4NJarMGnF/dd351ea31195ade0da04858b44d9e176/HIGH_TEMPERATURE_DURING_ROAD_CYCLING_EVENTS.pdf)
+explicitly identifies reduced cooling during slower uphill cycling. For a
+mechanical speed/power foundation, [Martin et al., 1998](https://pubmed.ncbi.nlm.nih.gov/28121252/)
+validated a road-cycling power model against measurements, including aerodynamic,
+air-velocity, gradient and rolling-resistance parameters (abstract reviewed).
+Its accuracy with known parameters does not transfer automatically to an app
+with estimated rider inputs, and mechanical power is not itself thermal comfort.
+
+Validate against recorded segment times and, where available, measured power;
+then test matched-distance routes with different slope distributions, reversed
+routes, sustained versus brief climbs, pauses, noisy/missing elevation and
+weather changes during a slow climb. This work is a follow-up design, not an
+implemented claim of `comfort-v0.19`.
+
 ## Verification and limits
 
 `api/test/temperature-comfort.test.ts` covers continuity, symmetric preference
