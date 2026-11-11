@@ -90,6 +90,9 @@ export const forecastRequestSchema = z
       )
       .min(1)
       .max(256),
+    coverageCoordinates: z
+      .record(z.string(), z.array(coordinateSchema).max(1000))
+      .optional(),
     range: z.object({ start: utcInstant, end: utcInstant }),
     required: z.array(forecastDescriptorSchema).min(1).max(32),
     maxTimeStepSeconds: z.number().positive(),

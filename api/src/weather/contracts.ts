@@ -155,6 +155,9 @@ export type ForecastSeries = Readonly<{
 
 export type ForecastRequest = Readonly<{
   locations: readonly RequestedLocation[];
+  /** Route sections represented by each sample. Composite providers use these
+   * to choose components within maxLocationDistanceM of the entire section. */
+  coverageCoordinates?: Readonly<Record<string, readonly Coordinate[]>>;
   range: TimeRange;
   required: readonly ForecastDescriptor[];
   maxTimeStepSeconds: number;

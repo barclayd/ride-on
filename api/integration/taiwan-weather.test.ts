@@ -166,6 +166,52 @@ const integration = (
   });
 
 integration(
+  'CWA selection covers the route sections beyond each weather sample',
+  async (h) => {
+    h.use(cwa(), apple());
+    // Synthetic coastal line, not a surveyed cycling track or a user's GPX.
+    const points = [
+      [23.59, 121.51],
+      [23.62, 121.52],
+      [23.65, 121.53],
+      [23.68, 121.535],
+      [23.71, 121.54],
+      [23.74, 121.545],
+      [23.77, 121.55],
+    ];
+    const response = await h.send('/routes', {
+      contentType: 'application/gpx+xml',
+      body: `<gpx version="1.1"><trk><name>Hualien synthetic coast</name><trkseg>${points.map(([lat, lon]) => `<trkpt lat="${lat}" lon="${lon}"><ele>10</ele></trkpt>`).join('')}</trkseg></trk></gpx>`,
+    });
+    assert.equal(response.status, 201);
+    const { route } = z
+      .object({ route: z.object({ id: z.uuid() }) })
+      .parse(await response.json());
+    const result = await recommend(h, [route.id], {
+      ...settings,
+      weatherProviderId: 'met-office',
+    });
+    assert.equal(result.weather.selectedSource?.providerId, 'taiwan-weather');
+    assert.equal(result.rankings.length, 1);
+    assert.deepEqual(result.unranked, []);
+    assert.equal(first(result.rankings).departuresUnknown, 0);
+    const temperatures = result.weather.locations
+      .flatMap((l) => l.fieldEvidence ?? [])
+      .filter(
+        (e) =>
+          e.descriptor.kind === 'scalar' &&
+          e.descriptor.measure.quantity === 'air-temperature',
+      );
+    const sources = new Set(
+      temperatures.flatMap((e) =>
+        e.sources.map((s) => s.provenance.source.providerId),
+      ),
+    );
+    assert.deepEqual(sources, new Set(['cwa', 'apple-weather']));
+  },
+);
+
+integration(
   'automatic Taiwan scoring uses both sources, local daylight and durable field evidence',
   async (h, ids) => {
     h.use(cwa(), apple());

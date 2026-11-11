@@ -28,7 +28,10 @@ product normally contributes the first three days. Actual available periods,
 distance and freshness still determine whether a ride can be assessed. No source
 is extrapolated to fill a missing horizon. Mountain routes beyond the 10 km
 representative-point limit use Apple where valid; an unavailable supplement leaves
-the affected ride unassessable. No missing value becomes zero, dry or calm weather.
+the route unassessable. Selection checks every route section represented by each
+weather sample, so a nearby township cannot disqualify more distant sections after
+composition. Those section coordinates also form part of the composite cache key.
+No missing value becomes zero, dry or calm weather.
 
 ## Field mapping and scoring
 

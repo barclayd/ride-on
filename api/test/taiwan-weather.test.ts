@@ -112,6 +112,58 @@ const series = (r: LocationForecastResult, descriptor: ForecastDescriptor) =>
     ),
   );
 
+test('composite source selection and cache account for every represented route section', async () => {
+  const h = setup();
+  const values = new Map<string, string>();
+  const cached = withForecastCache(
+    h.provider,
+    {
+      get: async (key) => values.get(key) ?? null,
+      put: async (key, value) => {
+        values.set(key, value);
+      },
+    },
+    { now },
+  );
+  const get = async (id: string, latitude: number) =>
+    available(
+      present(
+        (
+          await cached.getForecast(
+            {
+              ...request,
+              locations: [{ ...cwaLocation, id }],
+              coverageCoordinates: {
+                [id]: [{ ...cwaLocation.coordinate, latitude }],
+              },
+            },
+            new AbortController().signal,
+          )
+        )[0],
+      ),
+    );
+  const nearby = await get('nearby', cwaLocation.coordinate.latitude);
+  expect(
+    series(nearby, d.airTemperature).evidence?.[0]?.provenance.source
+      .providerId,
+  ).toBe('cwa');
+  const distant = await get('distant', cwaLocation.coordinate.latitude + 0.1);
+  expect(
+    series(distant, d.airTemperature).evidence?.[0]?.provenance.source
+      .providerId,
+  ).toBe('apple-weather');
+  expect(h.calls()).toBe(4);
+  await get('renamed', cwaLocation.coordinate.latitude + 0.1);
+  expect(h.calls()).toBe(4);
+  expect(
+    series(
+      await get('near-again', cwaLocation.coordinate.latitude),
+      d.airTemperature,
+    ).evidence?.[0]?.provenance.source.providerId,
+  ).toBe('cwa');
+  expect(h.calls()).toBe(4);
+});
+
 test('Taiwan combines real adapter contracts with native CWA probabilities and Apple hourly rain and gusts', async () => {
   const h = setup();
   const result = available(await h.get());

@@ -244,6 +244,23 @@ export const evaluateComparisons = async (
           range && groupLocations.length
             ? {
                 locations: groupLocations,
+                ...(settings.weather.mode === 'strict' &&
+                settings.weather.providerId === 'taiwan-weather'
+                  ? {
+                      coverageCoordinates: Object.fromEntries(
+                        groupLocations.map((location) => [
+                          location.id,
+                          group.routes.flatMap((route) =>
+                            route.legs
+                              .filter(
+                                (leg) => leg.weatherLocationId === location.id,
+                              )
+                              .map((leg) => leg.coordinate),
+                          ),
+                        ]),
+                      ),
+                    }
+                  : {}),
                 range,
                 required: requiredWeatherFor({ ...input, ...settings }),
                 ...qualityFor(settings.forecast, settings.weather),
