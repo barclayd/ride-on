@@ -10,6 +10,7 @@ import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from 'jose';
 import { z } from 'zod';
 import { AppError } from '../errors.ts';
 import type { Env } from '../types.ts';
+import { agentAuthPlugins } from './mcp.ts';
 
 const httpsUrl = z.url().refine((value) => {
   const url = new URL(value);
@@ -106,125 +107,127 @@ export const authConfig = (env: Pick<Env, 'AUTH_CONFIG_JSON'>): AuthConfig => {
   }
 };
 
-export const authOptions = (config: AuthConfig): BetterAuthOptions => ({
-  appName: 'Ride On',
-  baseURL: config.baseUrl,
-  basePath: '/api/auth',
-  secret: config.secret,
-  trustedOrigins: [
-    config.baseUrl,
-    ...config.trustedOrigins,
-    'https://appleid.apple.com',
-  ],
-  logger: { disabled: true },
-  user: { modelName: 'auth_user' },
-  session: {
-    modelName: 'auth_session',
-    expiresIn: 7 * 86400,
-    updateAge: 86400,
-    freshAge: 600,
-    cookieCache: { enabled: false },
-  },
-  account: {
-    modelName: 'auth_account',
-    encryptOAuthTokens: true,
-    storeStateStrategy: 'database',
-    accountLinking: {
-      enabled: true,
-      disableImplicitLinking: true,
-      allowDifferentEmails: true,
-      allowUnlinkingAll: false,
+export const authOptions = (config: AuthConfig) =>
+  ({
+    appName: 'Ride On',
+    baseURL: config.baseUrl,
+    basePath: '/api/auth',
+    secret: config.secret,
+    trustedOrigins: [
+      config.baseUrl,
+      ...config.trustedOrigins,
+      'https://appleid.apple.com',
+    ],
+    logger: { disabled: true },
+    user: { modelName: 'auth_user' },
+    session: {
+      modelName: 'auth_session',
+      expiresIn: 7 * 86400,
+      updateAge: 86400,
+      freshAge: 600,
+      cookieCache: { enabled: false },
     },
-  },
-  verification: { modelName: 'auth_verification' },
-  rateLimit: {
-    enabled: true,
-    storage: 'database',
-    modelName: 'auth_rate_limit',
-    window: 60,
-    max: 60,
-  },
-  advanced: {
-    database: { generateId: 'uuid' },
-    ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
-    useSecureCookies: true,
-    cookiePrefix: 'ride-on',
-    // Apple posts its callback cross-site; the signed state cookie must survive.
-    cookies: { state: { attributes: { sameSite: 'none', secure: true } } },
-  },
-  socialProviders: {
-    ...(config.google
-      ? {
-          google: {
-            ...config.google,
-            getUserInfo: verifiedProfile(
-              'google',
-              config.google.clientId,
-              googleProvider(config.google).getUserInfo,
-            ),
-          },
-        }
-      : {}),
-    ...(config.apple
-      ? {
-          apple: async () => {
-            const apple = config.apple;
-            if (!apple) throw new Error('Apple is not configured');
-            const clientSecret = await new SignJWT({})
-              .setProtectedHeader({ alg: 'ES256', kid: apple.keyId })
-              .setIssuer(apple.teamId)
-              .setSubject(apple.clientId)
-              .setAudience('https://appleid.apple.com')
-              .setIssuedAt()
-              .setExpirationTime('1h')
-              .sign(await importPKCS8(apple.privateKey, 'ES256'));
-            return {
-              clientId: apple.clientId,
-              clientSecret,
+    account: {
+      modelName: 'auth_account',
+      encryptOAuthTokens: true,
+      storeStateStrategy: 'database',
+      accountLinking: {
+        enabled: true,
+        disableImplicitLinking: true,
+        allowDifferentEmails: true,
+        allowUnlinkingAll: false,
+      },
+    },
+    verification: { modelName: 'auth_verification' },
+    rateLimit: {
+      enabled: true,
+      storage: 'database',
+      modelName: 'auth_rate_limit',
+      window: 60,
+      max: 60,
+    },
+    advanced: {
+      database: { generateId: 'uuid' },
+      ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
+      useSecureCookies: true,
+      cookiePrefix: 'ride-on',
+      // Apple posts its callback cross-site; the signed state cookie must survive.
+      cookies: { state: { attributes: { sameSite: 'none', secure: true } } },
+    },
+    socialProviders: {
+      ...(config.google
+        ? {
+            google: {
+              ...config.google,
               getUserInfo: verifiedProfile(
-                'apple',
-                apple.clientId,
-                appleProvider({ clientId: apple.clientId, clientSecret })
-                  .getUserInfo,
+                'google',
+                config.google.clientId,
+                googleProvider(config.google).getUserInfo,
               ),
-            };
+            },
+          }
+        : {}),
+      ...(config.apple
+        ? {
+            apple: async () => {
+              const apple = config.apple;
+              if (!apple) throw new Error('Apple is not configured');
+              const clientSecret = await new SignJWT({})
+                .setProtectedHeader({ alg: 'ES256', kid: apple.keyId })
+                .setIssuer(apple.teamId)
+                .setSubject(apple.clientId)
+                .setAudience('https://appleid.apple.com')
+                .setIssuedAt()
+                .setExpirationTime('1h')
+                .sign(await importPKCS8(apple.privateKey, 'ES256'));
+              return {
+                clientId: apple.clientId,
+                clientSecret,
+                getUserInfo: verifiedProfile(
+                  'apple',
+                  apple.clientId,
+                  appleProvider({ clientId: apple.clientId, clientSecret })
+                    .getUserInfo,
+                ),
+              };
+            },
+          }
+        : {}),
+    },
+    plugins: [
+      ...agentAuthPlugins(config.baseUrl),
+      bearer(),
+      passkey({
+        rpID: config.passkeyRpId ?? new URL(config.baseUrl).hostname,
+        rpName: 'Ride On',
+        origin: [config.baseUrl, ...config.trustedOrigins],
+        schema: { passkey: { modelName: 'auth_passkey' } },
+        authenticatorSelection: {
+          residentKey: 'required',
+          userVerification: 'required',
+        },
+        registration: {
+          requireSession: true,
+          afterVerification: async ({ verification }) => {
+            if (!verification.registrationInfo?.userVerified)
+              throw new APIError('BAD_REQUEST', {
+                code: 'USER_VERIFICATION_REQUIRED',
+                message: 'Verify with your device PIN or biometrics.',
+              });
           },
-        }
-      : {}),
-  },
-  plugins: [
-    bearer(),
-    passkey({
-      rpID: config.passkeyRpId ?? new URL(config.baseUrl).hostname,
-      rpName: 'Ride On',
-      origin: [config.baseUrl, ...config.trustedOrigins],
-      schema: { passkey: { modelName: 'auth_passkey' } },
-      authenticatorSelection: {
-        residentKey: 'required',
-        userVerification: 'required',
-      },
-      registration: {
-        requireSession: true,
-        afterVerification: async ({ verification }) => {
-          if (!verification.registrationInfo?.userVerified)
-            throw new APIError('BAD_REQUEST', {
-              code: 'USER_VERIFICATION_REQUIRED',
-              message: 'Verify with your device PIN or biometrics.',
-            });
         },
-      },
-      authentication: {
-        afterVerification: async ({ verification }) => {
-          if (!verification.authenticationInfo.userVerified)
-            throw new APIError('BAD_REQUEST', {
-              code: 'USER_VERIFICATION_REQUIRED',
-              message: 'Verify with your device PIN or biometrics.',
-            });
+        authentication: {
+          afterVerification: async ({ verification }) => {
+            if (!verification.authenticationInfo.userVerified)
+              throw new APIError('BAD_REQUEST', {
+                code: 'USER_VERIFICATION_REQUIRED',
+                message: 'Verify with your device PIN or biometrics.',
+              });
+          },
         },
-      },
-    }),
-  ],
-});
+      }),
+    ],
+  }) satisfies BetterAuthOptions;
 
 export const createIdentity = (env: Env) => {
   const config = authConfig(env);

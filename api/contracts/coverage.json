@@ -22,7 +22,16 @@
     "DELETE /rides/{id}",
     "DELETE /tracked-rides/{id}",
     "GET /.well-known/apple-app-site-association",
+    "GET /.well-known/oauth-authorization-server/api/auth",
+    "GET /.well-known/oauth-protected-resource",
+    "GET /.well-known/oauth-protected-resource/mcp",
+    "GET /api/auth/.well-known/oauth-authorization-server",
     "GET /api/auth/error",
+    "GET /auth/agents",
+    "GET /auth/agents/connections",
+    "GET /auth/agents/consent",
+    "GET /auth/agents/page.js",
+    "GET /auth/agents/sign-in",
     "GET /auth/browser/authorize",
     "GET /auth/browser/complete",
     "GET /auth/browser/done",
@@ -57,6 +66,7 @@
     "PATCH /rides/{id}",
     "PATCH /tracked-rides/{id}",
     "PATCH /users/me/learning",
+    "POST /auth/agents/revoke",
     "POST /auth/browser/exchange",
     "POST /auth/browser/start",
     "POST /connections/strava/complete",
@@ -76,6 +86,7 @@
     "PUT /routes/{id}/geometry"
   ],
   "delegated": [
-    "Better Auth /api/auth/* (vendor-owned protocol)"
+    "Better Auth /api/auth/* (vendor-owned protocol)",
+    "MCP /mcp (SDK-owned protocol; schemas discovered through tools/list)"
   ]
 }

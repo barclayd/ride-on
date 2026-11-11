@@ -11,7 +11,8 @@ import {
 } from '../src/strava/import-service.ts';
 import type { Env } from '../src/types.ts';
 
-// Only time and request logging differ from production. Storage, authentication,
+// Time, request logging and simulated browser navigation differ from production.
+// Storage, authentication,
 // weather transport, source selection, caching and scoring use real defaults.
 export default {
   scheduled: worker.scheduled,
@@ -20,6 +21,15 @@ export default {
     env: Env & { TEST_NOW: string },
     context: ExecutionContext,
   ) {
+    // Node fetch overwrites Sec-Fetch-Mode with cors. Model a browser's
+    // top-level navigation explicitly when testing OAuth redirects.
+    if (request.headers.get('x-test-navigation') === '1') {
+      const headers = new Headers(request.headers);
+      headers.delete('x-test-navigation');
+      headers.set('Sec-Fetch-Mode', 'navigate');
+      headers.set('Accept', 'text/html');
+      request = new Request(request, { headers });
+    }
     const now = () => new Date(env.TEST_NOW);
     if (new URL(request.url).pathname === '/__test/strava-dispatch') {
       const jobs: unknown[] = [];

@@ -10,6 +10,7 @@ import {
   requireSession,
   sessionHeaders,
 } from './access.ts';
+import { agentPages } from './agent-pages.ts';
 import { browserRoutes } from './browser.ts';
 import { authConfig, createIdentity } from './config.ts';
 import { linkedProviders } from './providers.ts';
@@ -26,8 +27,15 @@ const socialInput = z.strictObject({
   errorCallbackURL: z.string().max(2048).optional(),
   newUserCallbackURL: z.string().max(2048).optional(),
   disableRedirect: z.boolean().optional(),
+  oauth_query: z.string().max(16_000).optional(),
 });
 const allowed = new Map([
+  ['/oauth2/authorize', ['GET']],
+  ['/oauth2/token', ['POST']],
+  ['/oauth2/register', ['POST']],
+  ['/oauth2/revoke', ['POST']],
+  ['/oauth2/consent', ['POST']],
+  ['/oauth2/public-client', ['GET']],
   ['/sign-in/social', ['POST']],
   ['/link-social', ['POST']],
   ['/unlink-account', ['POST']],
@@ -51,6 +59,20 @@ const allowed = new Map([
 
 export const identityRoutes = () => {
   const app = new Hono<Bindings>();
+  app.route('/', agentPages());
+  for (const path of [
+    '/.well-known/oauth-protected-resource',
+    '/.well-known/oauth-protected-resource/mcp',
+    '/.well-known/oauth-authorization-server/api/auth',
+    '/api/auth/.well-known/oauth-authorization-server',
+  ])
+    app.get(path, async (c) => {
+      const response = await createIdentity(c.env).auth.handler(c.req.raw);
+      const headers = new Headers(response.headers);
+      headers.set('Access-Control-Allow-Origin', '*');
+      headers.delete('Access-Control-Allow-Credentials');
+      return new Response(response.body, { status: response.status, headers });
+    });
   app.use('*', async (c, next) => {
     c.header('Referrer-Policy', 'no-referrer');
     await next();
@@ -97,7 +119,10 @@ export const identityRoutes = () => {
     if (!allowed.get(path)?.includes(c.req.method)) return c.notFound();
     const identity = createIdentity(c.env);
     let body: Uint8Array | string | undefined;
-    if (!path.startsWith('/callback/'))
+    if (
+      !path.startsWith('/callback/') &&
+      !['/oauth2/token', '/oauth2/register', '/oauth2/revoke'].includes(path)
+    )
       checkCookieOrigin(c.req.raw, identity.config);
     if (
       [
