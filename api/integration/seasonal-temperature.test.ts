@@ -91,7 +91,9 @@ integration(
     );
     const temporary = await recommendMetOffice(h, [route.id], {
       preferences: {
-        temperature: { coldSensitivity: 'standard', seasonalTolerance: 'none' },
+        // Restore the original range too: changing its upper bound now moves
+        // the midpoint and therefore changes cold comfort.
+        temperature: user.settings.preferences.temperature,
       },
     });
     assert.equal(
