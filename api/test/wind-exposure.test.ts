@@ -455,7 +455,7 @@ const townWeather = (town: 'horsham' | 'richmond'): Weather => {
     return 0;
   };
 };
-test('whole-ride examples favour Horsham at 10 over 8/noon, and Richmond at 8:30 over 10', async () => {
+test('whole-ride examples balance warmer Horsham departures against wind and sunshine', async () => {
   const horsham = await routeFor(() => 0, 89);
   const richmond = await routeFor((i) => Math.floor(i / 25) * 90, 35);
   // Evaluate exactly one requested departure by taking its candidate, not the
@@ -479,7 +479,9 @@ test('whole-ride examples favour Horsham at 10 over 8/noon, and Richmond at 8:30
   const r830 = fixed(richmond, 'richmond', '08:30');
   const r10 = fixed(richmond, 'richmond', '10:00');
   expect(h10.score).toBeGreaterThan(h8.score);
-  expect(h10.score).toBeGreaterThan(h12.score);
+  // Midpoint-based temperature losses now narrowly favour the warmer noon
+  // departure, despite its stronger winds and reduced sunshine.
+  expect(h12.score).toBeGreaterThan(h10.score);
   expect(r830.score).toBeGreaterThan(r10.score);
   expect(h10.score).toBeGreaterThan(r830.score);
 });

@@ -1364,13 +1364,17 @@ algorithm-version bump and no weather refetch is needed for this addition.
 `preferences.temperature.comfortMinC` and `comfortMaxC` define an equally
 comfortable band, including both endpoints. All temperatures inside the saved
 band receive full temperature comfort; there is no extra reward for moving
-towards its middle or warmer end. Outside it, the existing comfort curve falls
-with distance from the nearest boundary. Minimum standards remain separate.
+towards its middle or warmer end. From `comfort-v0.19`, losses outside the band
+continue increasing and accelerate with distance from its midpoint. An independent
+heat screen also limits overall scores above 35°C regardless of that band or
+temperature weight. Its exact thresholds are conservative product policy, not
+medical cut-offs. See [research and scoring decisions](cycling-comfort-evidence.md).
+Minimum standards remain separate.
 
 From v0.26.0, explicit `coldSensitivity: "high"` and/or
 `seasonalTolerance: "cooler-winters"` select the [seasonal temperature model](seasonal-temperature.md).
-The description of the original linear curve below applies to the default
-`standard` / `none` choices. New profiles and old saved profiles keep those defaults.
+The historical linear curve below has been superseded by `comfort-v0.19`.
+New profiles and old saved profiles retain `standard` / `none` choices.
 
 The engine combines that comfort with the saved `weights.temperature`,
 `weights.sunshine` and `sunshine.sunnyIntervalsComfort`. A positive sunshine
@@ -1380,13 +1384,13 @@ There is no special rule tied to Dan, a named route, a departure time or fixed
 temperatures from the interview.
 
 The 14 October follow-up confirms that Dan's existing 16–32°C band means equal
-temperature preference throughout. With his saved weights, the current algorithm
-already prefers 8°C sunny over 12°C with sunny intervals, 14°C with intervals over
+temperature preference throughout. With his saved weights and standard sensitivity, the algorithm
+prefers 8°C sunny over 12°C with sunny intervals, 14°C with intervals over
 8°C sunny, and 16°C sunny over 20°C with intervals (likewise 22°C over 26°C).
 `api/test/temperature-sunshine-calibration.test.ts` preserves these comparisons
 and verifies that another ideal band, zero sunshine importance or zero temperature
-importance changes the outcome. No scoring change or algorithm-version bump is
-needed for this calibration.
+importance changes the outcome. The newer high-sensitivity temperature curve
+changes the close 8°C sun / 12°C intervals comparison; see the evidence record.
 
 Calibration answers describe personal intent and must be represented in saved
 preferences before they affect that rider's recommendations. They do not change

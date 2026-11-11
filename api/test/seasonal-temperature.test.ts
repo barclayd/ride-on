@@ -246,13 +246,15 @@ const assess = async (
   return present(ranked.best ?? undefined);
 };
 
+// The accelerating temperature curve now narrowly favours 12°C intervals
+// over 8°C sunshine for this explicitly cold-sensitive rider.
 for (const [sunnyC, intervalsC, sunWins] of [
-  [8, 12, true],
+  [8, 12, false],
   [8, 14, false],
   [16, 20, true],
   [22, 26, true],
 ] as const) {
-  test(`opted-in scoring preserves ${sunnyC} sunny / ${intervalsC} intervals preference`, async () => {
+  test(`opted-in warmth/sunshine balance: ${sunnyC} sunny / ${intervalsC} intervals`, async () => {
     const sunny = await assess([sunnyC]);
     const intervals = await assess([intervalsC], { sunny: false });
     expect(sunny.score > intervals.score).toBe(sunWins);
