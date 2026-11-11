@@ -72,7 +72,20 @@ The maximum-only scoring version remains stable when adding display minimums;
 a separate display version identifies the combined bundle. The scoring climate
 version participates in score-baseline keys.
 
-## Calculation
+## Current temperature scoring (comfort-v0.19)
+
+The shared cold/hot preference curve now grows without a cap and accelerates
+with distance from the saved midpoint. High cold sensitivity and seasonal
+relaxation remain explicit. Extreme heat also limits the overall score
+independently of the preferred range and temperature importance.
+
+See [the evidence and decision record](cycling-comfort-evidence.md) for the exact
+formula, heat-screen policy, scientific sources, calibration limitations and
+wind/rain research. The older equations and replay results below describe the
+previous algorithm; they are not current score guarantees. In particular, the
+new high-sensitivity fixture narrowly favours 12°C sunny intervals over 8°C sun.
+
+## Calculation before comfort-v0.19
 
 Let `L` be the saved ideal minimum and `N` the local seasonal reference in °C.
 With `cooler-winters`, lower the effective cold threshold by
@@ -125,7 +138,7 @@ Actual `conditions.temperatureC`, forecast details and hard-standard failure
 evidence always retain the forecast temperatures. UI score explanations should
 use `pointsLost`, with the assessment describing why seasonal tolerance applied.
 
-## Calibration evidence
+## Historical calibration evidence (comfort-v0.16)
 
 The saved 14 October route-wide forecast replay, with the interviewed 16–32°C
 band, temperature/wind/dryness/sunshine weights 0.15/0.40/0.20/0.25 and explicit

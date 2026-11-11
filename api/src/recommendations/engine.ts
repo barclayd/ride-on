@@ -45,12 +45,12 @@ import { compileSeries } from './weather-sampling.ts';
 
 export { sampleAt } from './weather-sampling.ts';
 
-import { temperatureComfort } from './temperature-comfort.ts';
+import { heatScoreCeiling, temperatureComfort } from './temperature-comfort.ts';
 import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
 import { meanWindFrom } from './wind-direction.ts';
 import { windStretchesFor } from './wind-stretches.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.18';
+export const ALGORITHM_VERSION = 'comfort-v0.19';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,
@@ -586,14 +586,24 @@ const assessCandidate = (
   const climbingShare = climbing.status === 'assessed' ? CLIMBING_SHARE : 0;
   const distanceShare = distance.comfort === null ? 0 : DISTANCE_SHARE;
   const weatherShare = 1 - climbingShare - distanceShare;
+  // Use unrounded section extrema: even a hot section can warrant a less
+  // favourable recommendation. Preferences and non-weather bonuses cannot
+  // remove this conservative heat screen.
+  const heatCeiling = heatScoreCeiling(
+    Math.max(...rows.map((row) => row.temperatureRange.maximum.value)),
+  );
   const combinedScore = (
     weather: number,
     climbingComfort = climbing.comfort ?? 0,
     distanceComfort = distance.comfort ?? 0,
+    idealTemperature = false,
   ) =>
-    weatherShare * weather +
-    climbingShare * 100 * climbingComfort +
-    distanceShare * 100 * distanceComfort;
+    Math.min(
+      idealTemperature ? 100 : heatCeiling,
+      weatherShare * weather +
+        climbingShare * 100 * climbingComfort +
+        distanceShare * 100 * distanceComfort,
+    );
   const score = combinedScore(weatherScore);
   const rideHours = Array.from(
     { length: Math.ceil(durationMs / HOUR) },
@@ -624,13 +634,16 @@ const assessCandidate = (
   const gain = (base: number) =>
     round(Math.max(0, afterHistory(base) - finalScore));
   const weatherGain = (factor: WeatherFactor) =>
-    weights[factor] === 0
+    weights[factor] === 0 && !(factor === 'temperature' && heatCeiling < 100)
       ? null
       : factor === 'sunshine' && unknownSunshine.length
         ? null
         : gain(
             combinedScore(
               100 * clamp((unassistedScore(factor) + assistancePoints) / 100),
+              undefined,
+              undefined,
+              factor === 'temperature',
             ),
           );
   const pointsLost = {
@@ -644,10 +657,9 @@ const assessCandidate = (
       ? gain(combinedScore(weatherScore, undefined, 1))
       : null,
   };
-  const scoreWithoutAssistance =
-    score -
-    weatherShare *
-      Math.max(0, weatherScore - 100 * clamp(unassistedWeatherScore / 100));
+  const scoreWithoutAssistance = combinedScore(
+    100 * clamp(unassistedWeatherScore / 100),
+  );
   const drawbacks: string[] = [];
   if (sunshineAssessment && sunshineAssessment.status !== 'complete')
     drawbacks.push(
@@ -673,6 +685,10 @@ const assessCandidate = (
     drawbacks.push('Some sections are cooler than your comfort range.');
   if (conditions.temperatureC.maximum > preferences.temperature.comfortMaxC)
     drawbacks.push('Some sections are warmer than your comfort range.');
+  if (heatCeiling < 100)
+    drawbacks.push(
+      'High air temperatures limit this score regardless of your preferred range. Humidity, sun, effort and acclimatisation can increase heat strain; this is not a safety assessment.',
+    );
   if (conditions.maximumHeadwindKph > preferences.wind.comfortableHeadwindKph)
     drawbacks.push('Some sections have headwinds above your comfort setting.');
   if (conditions.maximumCrosswindKph > preferences.wind.comfortableCrosswindKph)
@@ -774,7 +790,7 @@ const assessCandidate = (
         conditions.skyConditionDistanceFractions === null
           ? null
           : round(100 * mean('sunshine')),
-      temperature: round(100 * mean('temperature')),
+      temperature: round(Math.min(100 * mean('temperature'), heatCeiling)),
       wind: round(100 * mean('wind')),
       dryness: round(100 * mean('dryness')),
       clearSkies:
