@@ -40,7 +40,7 @@ public struct RouteImportSheet: View {
                             LabeledContent("Source", value: "Direct import")
                         }
                         Section {
-                            Label("Saved to your route library", systemImage: "books.vertical")
+                            Label("Adds to your route library", systemImage: "books.vertical")
                         } footer: {
                             Text("You can choose whether to track this route in Ride On.")
                         }
@@ -65,7 +65,7 @@ public struct RouteImportSheet: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(role: .close) { finish() }.disabled(saving)
+                    Button(role: .close) { finish() }.tint(.primary).disabled(saving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if receipt != nil {
@@ -81,7 +81,7 @@ public struct RouteImportSheet: View {
             }
             .overlay { if saving { ProgressView("Adding route…").padding().background(.regularMaterial, in: .rect(cornerRadius: 16)) } }
         }
-        .tint(Color.accentColor)
+        .tint(Color("AccentColor", bundle: .main))
         .interactiveDismissDisabled(saving)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
