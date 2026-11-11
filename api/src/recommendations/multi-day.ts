@@ -101,7 +101,9 @@ export const daySummary = (
   input: RecommendationInput,
   result: DailyResult,
   forecasts: readonly LocationForecastResult[],
-  required: readonly ForecastDescriptor[],
+  required:
+    | readonly ForecastDescriptor[]
+    | ReadonlyMap<string, readonly ForecastDescriptor[]>,
   nowMs: number,
   maxLocationDistanceM = 10_000,
 ) => {
@@ -113,11 +115,17 @@ export const daySummary = (
   );
   // Sunshine is an optional preference factor. Missing symbols retain
   // explicit uncertainty in the assessment without erasing usable hours.
-  const essential = required.filter(
-    (d) => !(d.kind === 'category' && d.quantity === 'sky-condition'),
-  );
   const evidence = new Map(
-    [...byId].map(([id, r]) => [id, forecastIntervals(r, essential)]),
+    [...byId].map(([id, r]) => {
+      const descriptors = 'get' in required ? required.get(id) : required;
+      const essential = descriptors?.filter(
+        (d) => !(d.kind === 'category' && d.quantity === 'sky-condition'),
+      );
+      const intervals: ReturnType<typeof forecastIntervals> = essential
+        ? forecastIntervals(r, essential)
+        : [];
+      return [id, intervals] as const;
+    }),
   );
   const windows = routes.map((route) => {
     const plan = planDepartures(route, input, nowMs);

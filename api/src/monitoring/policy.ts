@@ -78,6 +78,13 @@ export const referenceFor = async (
     history: snapshot.context.history,
     algorithm: snapshot.context.algorithmVersion,
     source: snapshot.context.weather.selectedSource,
+    routeSources: snapshot.context.weather.routeSources?.map(
+      ({ routeId, selectedSource, forecast }) => ({
+        routeId,
+        selectedSource,
+        forecast,
+      }),
+    ),
   }),
   score: snapshot.pick.candidate.score,
   failures: snapshot.pick.candidate.standards.failures

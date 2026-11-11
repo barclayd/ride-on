@@ -33,7 +33,7 @@ import { planDepartures } from './daylight.ts';
 import { recommendRides, requiredWeatherFor } from './engine.ts';
 import { forecastRefreshSeconds } from './freshness.ts';
 import type { RecommendationInput } from './input.ts';
-import { daySummary } from './multi-day.ts';
+import { daySummary, mergeDays } from './multi-day.ts';
 import {
   attachPreviousScores,
   createScoreBaselineStore,
@@ -62,8 +62,8 @@ export type ComparisonContext = {
   };
 };
 type ForecastSettings = Pick<RecommendationInput, 'weather' | 'forecast'>;
-/** One history snapshot and one provider selection for a bounded set of date/window
- * comparisons. Callers supply identical settings apart from their dates and windows. */
+/** One history snapshot and geographically selected providers for a bounded set
+ * of comparisons. Callers supply identical settings apart from dates and windows. */
 export const evaluateComparisons = async (
   routes: readonly Route[],
   inputs: readonly RecommendationInput[],
@@ -206,100 +206,158 @@ export const evaluateComparisons = async (
         ).toISOString(),
       }
     : null;
-  // One deadline covers the rider's provider and any quota fallback.
+  // One deadline covers both regions and any non-Taiwan quota fallback.
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
-  const fetchForecast = async (settings: ForecastSettings) => {
-    const request: ForecastRequest | null = range
-      ? {
-          locations,
-          range,
-          required: requiredWeatherFor({ ...input, ...settings }),
-          ...qualityFor(settings.forecast, settings.weather),
-          freshnessBasis: settings.forecast.freshnessBasis,
-        }
-      : null;
-    const selected = request
-      ? await getForecastForPolicy(
-          providers,
-          settings.weather,
-          request,
-          deadline,
-        )
-      : null;
-    return { settings, request, selected };
-  };
   const requestedProviderId = weatherProviderIdForPolicy(input.weather);
-  const automatic =
-    input.weather.mode === 'strict' && input.weather.providerId === 'automatic';
-  const initialSettings = automatic
-    ? {
-        weather:
-          weatherProviderChoices[
-            taiwanRoutes(routes) ? 'taiwan-weather' : 'apple-weather'
-          ].settings.weather,
-        forecast: input.forecast,
-      }
-    : {
-        weather: input.weather,
-        forecast: input.forecast,
-      };
-  let forecast = await fetchForecast(initialSettings);
-  // A provider out of quota can't finish this comparison, so the whole comparison
-  // moves to Apple Weather: one source per comparison, never a mix of locations.
-  // Advanced ordered-fallback policies (no provider choice) keep their own list.
-  const quota =
-    requestedProviderId &&
-    initialSettings.weather.mode === 'strict' &&
-    initialSettings.weather.providerId !== quotaFallbackProviderId &&
-    initialSettings.weather.providerId !== 'taiwan-weather'
-      ? rateLimited(forecast.selected)
-      : null;
-  let fallback: { reason: 'rate-limited'; retryAt: string | null } | null =
-    null;
-  if (quota) {
-    const next = await fetchForecast(
-      weatherProviderChoices[quotaFallbackProviderId].settings,
-    );
-    const attempts = [
-      ...(forecast.selected?.attempts ?? []),
-      ...(next.selected?.attempts ?? []),
-    ];
-    const usable = next.selected?.attempts.some(
-      (attempt) => attempt.status !== 'unavailable',
-    );
-    const kept = usable ? next : forecast;
-    forecast = {
-      ...kept,
-      selected: kept.selected && { ...kept.selected, attempts },
-    };
-    if (usable)
-      fallback = {
-        reason: 'rate-limited',
-        retryAt:
-          quota.retryAfterSeconds === null
-            ? null
-            : new Date(
-                now().getTime() + quota.retryAfterSeconds * 1000,
-              ).toISOString(),
-      };
+  const groups = new Map<
+    string,
+    { routes: Route[]; settings: ForecastSettings }
+  >();
+  for (const route of routes) {
+    // Geography overrides every saved/requested choice, including advanced policies.
+    const settings: ForecastSettings = taiwanRoutes([route])
+      ? weatherProviderChoices['taiwan-weather'].settings
+      : input.weather.mode === 'strict' &&
+          input.weather.providerId === 'automatic'
+        ? {
+            weather: weatherProviderChoices['apple-weather'].settings.weather,
+            forecast: input.forecast,
+          }
+        : { weather: input.weather, forecast: input.forecast };
+    const key = JSON.stringify(settings);
+    const group = groups.get(key) ?? { routes: [], settings };
+    group.routes.push(route);
+    groups.set(key, group);
   }
-  const { settings, request, selected } = forecast;
-  const requestedQuality = qualityFor(settings.forecast, settings.weather);
-  const results = selected?.results ?? [];
+  const forecasts = await Promise.all(
+    [...groups.values()].map(async (group) => {
+      const ids = new Set(
+        group.routes.flatMap((route) =>
+          route.weatherLocations.map((l) => l.id),
+        ),
+      );
+      const groupLocations = locations.filter((location) =>
+        ids.has(location.id),
+      );
+      const fetchForecast = async (settings: ForecastSettings) => {
+        const request: ForecastRequest | null =
+          range && groupLocations.length
+            ? {
+                locations: groupLocations,
+                range,
+                required: requiredWeatherFor({ ...input, ...settings }),
+                ...qualityFor(settings.forecast, settings.weather),
+                freshnessBasis: settings.forecast.freshnessBasis,
+              }
+            : null;
+        const selected = request
+          ? await getForecastForPolicy(
+              providers,
+              settings.weather,
+              request,
+              deadline,
+            )
+          : null;
+        return { settings, request, selected };
+      };
+      let forecast = await fetchForecast(group.settings);
+      // Quota fallback applies only within this group. Taiwan always keeps its
+      // CWA-first product and never retries an Apple supplement quota failure.
+      const quota =
+        requestedProviderId &&
+        group.settings.weather.mode === 'strict' &&
+        group.settings.weather.providerId !== quotaFallbackProviderId &&
+        group.settings.weather.providerId !== 'taiwan-weather'
+          ? rateLimited(forecast.selected)
+          : null;
+      let fallback: { reason: 'rate-limited'; retryAt: string | null } | null =
+        null;
+      if (quota) {
+        const next = await fetchForecast(
+          weatherProviderChoices[quotaFallbackProviderId].settings,
+        );
+        const attempts = [
+          ...(forecast.selected?.attempts ?? []),
+          ...(next.selected?.attempts ?? []),
+        ];
+        const usable = next.selected?.attempts.some(
+          (attempt) => attempt.status !== 'unavailable',
+        );
+        const kept = usable ? next : forecast;
+        forecast = {
+          ...kept,
+          selected: kept.selected && { ...kept.selected, attempts },
+        };
+        if (usable)
+          fallback = {
+            reason: 'rate-limited',
+            retryAt:
+              quota.retryAfterSeconds === null
+                ? null
+                : new Date(
+                    now().getTime() + quota.retryAfterSeconds * 1000,
+                  ).toISOString(),
+          };
+      }
+      return {
+        ...forecast,
+        routes: group.routes,
+        fallback,
+        quality: {
+          ...qualityFor(forecast.settings.forecast, forecast.settings.weather),
+          freshnessBasis: forecast.settings.forecast.freshnessBasis,
+        },
+      };
+    }),
+  );
+  const uniform = forecasts.length === 1 ? forecasts[0] : undefined;
+  const settings = uniform?.settings ?? input;
+  const selected = uniform?.selected ?? null;
+  const results = forecasts.flatMap(
+    (forecast) => forecast.selected?.results ?? [],
+  );
+  const byLocation = new Map(
+    forecasts.flatMap((forecast) =>
+      forecast.routes.flatMap((route) =>
+        route.weatherLocations.map(
+          (location) => [location.id, forecast] as const,
+        ),
+      ),
+    ),
+  );
+  const requiredByLocation = new Map(
+    [...byLocation].map(
+      ([id, forecast]) =>
+        [id, requiredWeatherFor({ ...input, ...forecast.settings })] as const,
+    ),
+  );
+  const qualityOf = (result: (typeof results)[number]) =>
+    byLocation.get(
+      result.status === 'unavailable'
+        ? result.requested.id
+        : result.location.requested.id,
+    )?.quality ?? { ...quality, freshnessBasis: input.forecast.freshnessBasis };
+  const routeSources = forecasts
+    .flatMap((forecast) =>
+      forecast.routes.map((route) => ({
+        routeId: route.id,
+        selectedSource: forecast.selected?.source ?? null,
+        selectedProvider: weatherProviderForSource(
+          forecast.selected?.source.providerId,
+        ),
+        forecast: forecast.settings.forecast,
+        quality: { ...forecast.quality, refreshAfterSeconds },
+        fallback: forecast.fallback,
+      })),
+    )
+    .sort((a, b) => a.routeId.localeCompare(b.routeId));
   const forecastCheckedAt = now().getTime();
   // Until then the same request reuses this evidence, so clients can keep the ranking. Null: ask again.
   const staleAt = Math.min(
     ...results.map((result) =>
       result.status === 'unavailable'
         ? NaN
-        : forecastStaleAt(
-            result,
-            {
-              ...requestedQuality,
-              freshnessBasis: settings.forecast.freshnessBasis,
-            },
-            refreshAfterSeconds,
-          ),
+        : forecastStaleAt(result, qualityOf(result), refreshAfterSeconds),
     ),
   );
   const refreshAt = Number.isFinite(staleAt)
@@ -319,15 +377,7 @@ export const evaluateComparisons = async (
     // same-day preview. Keep that preview unknown until the rider selects it.
     const dayResults = results.map((result) =>
       result.status === 'unavailable' ||
-      isFreshForecast(
-        result,
-        {
-          ...requestedQuality,
-          freshnessBasis: settings.forecast.freshnessBasis,
-        },
-        forecastCheckedAt,
-        dayTtl,
-      )
+      isFreshForecast(result, qualityOf(result), forecastCheckedAt, dayTtl)
         ? result
         : {
             ...result,
@@ -341,50 +391,92 @@ export const evaluateComparisons = async (
             ],
           },
     );
-    const result = recommendRides(
-      routes,
-      dayInput,
-      dayResults,
-      startedAt.getTime(),
-      quality.maxLocationDistanceM,
-      3,
-      history,
-      undefined,
-      outlines,
-    );
+    const regional = forecasts.map((forecast) => {
+      const regionalInput = { ...requested, ...forecast.settings };
+      return {
+        input: regionalInput,
+        result: recommendRides(
+          forecast.routes,
+          regionalInput,
+          dayResults,
+          startedAt.getTime(),
+          quality.maxLocationDistanceM,
+          3,
+          history,
+          undefined,
+          outlines,
+        ),
+        forecast,
+      };
+    });
+    const result =
+      regional.length === 1 && regional[0]
+        ? regional[0].result
+        : mergeDays(
+            regional.map((part) => part.result),
+            Object.keys(input.preferences.minimumStandards).length > 0,
+          );
     return {
       input: dayInput,
       result,
+      regional,
       summary: daySummary(
         routes,
         dayInput,
         result,
         dayResults,
-        requiredWeatherFor(dayInput),
+        requiredByLocation,
         startedAt.getTime(),
         quality.maxLocationDistanceM,
       ),
     };
   });
-  await attachPreviousScores(
-    comparisons,
-    routes,
-    ownerId,
-    startedAt,
-    selected?.source ?? null,
-    {
-      revision: history.revision,
-      status: history.status,
-      matcherVersion: history.matcherVersion,
-      affectedRouteIds: [...history.affectedRouteIds].sort(),
-      affectedRideIds: [...history.affectedRideIds].sort(),
-    },
-    dependencies.scoreBaselines ?? createScoreBaselineStore(env.ROUTES_DB),
+  await Promise.all(
+    forecasts.map((forecast) =>
+      attachPreviousScores(
+        comparisons.flatMap((comparison) =>
+          comparison.regional.filter((part) => part.forecast === forecast),
+        ),
+        forecast.routes,
+        ownerId,
+        startedAt,
+        forecast.selected?.source ?? null,
+        {
+          revision: history.revision,
+          status: history.status,
+          matcherVersion: history.matcherVersion,
+          affectedRouteIds: [...history.affectedRouteIds].sort(),
+          affectedRideIds: [...history.affectedRideIds].sort(),
+        },
+        dependencies.scoreBaselines ?? createScoreBaselineStore(env.ROUTES_DB),
+      ),
+    ),
   );
+  const pinnedForecast = forecasts.find((forecast) =>
+    forecast.routes.some((route) => route.id === pinned?.routeId),
+  );
+  const commonForecast = forecasts[0]?.settings.forecast ?? input.forecast;
   return {
-    comparisons,
-    /** The forecast settings actually used: Apple Weather's after a quota fallback. */
-    forecast: settings.forecast,
+    comparisons: comparisons.map(
+      ({ regional: _regional, ...comparison }) => comparison,
+    ),
+    // Mixed comparisons retain each route's exact statistics in routeSources.
+    forecast: {
+      representation: forecasts.every(
+        (forecast) =>
+          forecast.settings.forecast.representation ===
+          commonForecast.representation,
+      )
+        ? commonForecast.representation
+        : ('mixed' as const),
+      freshnessBasis: forecasts.every(
+        (forecast) =>
+          forecast.settings.forecast.freshnessBasis ===
+          commonForecast.freshnessBasis,
+      )
+        ? commonForecast.freshnessBasis
+        : ('mixed' as const),
+    },
     pinnedRefreshAt: pinnedRoute
       ? (() => {
           const ids = new Set(pinnedRoute.weatherLocations.map((l) => l.id));
@@ -400,14 +492,7 @@ export const evaluateComparisons = async (
               .map((r) =>
                 r.status === 'unavailable'
                   ? NaN
-                  : forecastStaleAt(
-                      r,
-                      {
-                        ...requestedQuality,
-                        freshnessBasis: settings.forecast.freshnessBasis,
-                      },
-                      refreshAfterSeconds,
-                    ),
+                  : forecastStaleAt(r, qualityOf(r), refreshAfterSeconds),
               ),
           );
           return Number.isFinite(expiry)
@@ -419,7 +504,7 @@ export const evaluateComparisons = async (
       pinned && pinnedRoute
         ? recommendRides(
             [pinnedRoute],
-            { ...pinned.input, ...settings },
+            { ...pinned.input, ...(pinnedForecast?.settings ?? settings) },
             results,
             startedAt.getTime(),
             quality.maxLocationDistanceM,
@@ -444,15 +529,22 @@ export const evaluateComparisons = async (
       requestedProviderId,
       selectedProvider: weatherProviderForSource(selected?.source.providerId),
       selectedSource: selected?.source ?? null,
-      attempts: selected?.attempts ?? [],
-      fallback,
-      quality: {
-        ...requestedQuality,
-        freshnessBasis: settings.forecast.freshnessBasis,
-        refreshAfterSeconds,
-      },
+      attempts: forecasts.flatMap(
+        (forecast) => forecast.selected?.attempts ?? [],
+      ),
+      fallback: uniform?.fallback ?? null,
+      routeSources,
+      quality: uniform ? { ...uniform.quality, refreshAfterSeconds } : null,
       refreshAt,
-      descriptors: request?.required ?? [],
+      descriptors: [
+        ...new Map(
+          forecasts.flatMap((forecast) =>
+            (forecast.request?.required ?? []).map(
+              (descriptor) => [JSON.stringify(descriptor), descriptor] as const,
+            ),
+          ),
+        ).values(),
+      ],
       range,
       cache: cacheReads,
       locations: results.map((result) =>

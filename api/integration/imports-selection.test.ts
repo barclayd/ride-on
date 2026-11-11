@@ -80,6 +80,60 @@ const select = (
   });
 
 integration(
+  'identical reimports repair legacy ascent once without replacing the route or shortlist',
+  async (h) => {
+    const changes = {
+      gpx: payload.gpx.replaceAll('/>', '><ele>100</ele></trkpt>'),
+    };
+    const imported = await readImport(await importRide(h, changes));
+    await select(h, [imported.route.id]);
+    const db = await h.runtime.getD1Database('ROUTES_DB');
+    const row = await db
+      .prepare('SELECT route_json FROM routes WHERE owner_id = ? AND id = ?')
+      .bind('alice', imported.route.id)
+      .first<{ route_json: string }>();
+    assert.ok(row);
+    const correct = JSON.parse(row.route_json);
+    const legacy = {
+      ...correct,
+      ascentM: correct.ascentM + 1000,
+      warnings: correct.warnings.map((warning: string) =>
+        warning === 'ASCENT_IS_FILTERED_ESTIMATE'
+          ? 'ASCENT_IS_UNSMOOTHED_ESTIMATE'
+          : warning,
+      ),
+    };
+    await db
+      .prepare('UPDATE routes SET route_json = ? WHERE owner_id = ? AND id = ?')
+      .bind(JSON.stringify(legacy), 'alice', imported.route.id)
+      .run();
+    assert.equal(
+      (await importRide(h, { ...changes, expectedVersion: 9 })).status,
+      409,
+    );
+    const repaired = await readImport(await importRide(h, changes));
+    assert.equal(repaired.outcome, 'updated');
+    assert.equal(repaired.route.id, imported.route.id);
+    assert.equal(repaired.route.version, 2);
+    assert.equal(repaired.route.createdAt, imported.route.createdAt);
+    const stored = await db
+      .prepare('SELECT route_json FROM routes WHERE owner_id = ? AND id = ?')
+      .bind('alice', imported.route.id)
+      .first<{ route_json: string }>();
+    assert.ok(stored);
+    assert.deepEqual(JSON.parse(stored.route_json), correct);
+    const repeated = await readImport(await importRide(h, changes));
+    assert.equal(repeated.outcome, 'unchanged');
+    assert.equal(repeated.route.version, 2);
+    assert.deepEqual(
+      (await readSelection(await h.send('/route-selection'))).routeIds,
+      [imported.route.id],
+    );
+    assert.equal((await list(h)).routes.length, 1);
+  },
+);
+
+integration(
   'surface enrichment survives storage, preserves identity and scores, and remains owner scoped',
   async (h) => {
     const initial = await readImport(await importRide(h));

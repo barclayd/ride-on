@@ -182,7 +182,7 @@ export const createApp = (
   registerRoute(app, libraryRoutes.health, (c) =>
     c.json({
       ok: true,
-      version: '0.43.0',
+      version: '0.44.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -771,7 +771,13 @@ export const createApp = (
       routes,
       raw.days ?? { kind: 'dates', dates: [input.date] },
       input,
-      comparison.weather.selectedSource,
+      comparison.weather.routeSources.map(
+        ({ routeId, selectedSource, forecast }) => ({
+          routeId,
+          selectedSource,
+          forecast,
+        }),
+      ),
       {
         ...comparison.history,
         affectedRouteIds: [...comparison.history.affectedRouteIds].sort(),
@@ -964,7 +970,9 @@ export const createApp = (
       riding: input.riding,
       forecast: comparison.forecast,
       assumptions: [
-        ...(comparison.weather.selectedSource?.providerId === 'taiwan-weather'
+        ...(comparison.weather.routeSources.some(
+          (route) => route.selectedSource?.providerId === 'taiwan-weather',
+        )
           ? [
               'Taiwan forecasts prefer CWA township temperatures and sustained winds, with bounded interpolation across gaps of at most three hours. CWA rain probabilities retain their three-hour event of at least 0.1 mm. Apple Weather supplies hourly gusts, rainfall and other missing fields or periods; field evidence identifies each source and native interval.',
             ]
@@ -989,12 +997,16 @@ export const createApp = (
               'Sunshine comfort uses forecast weather symbols: sunny, sunny intervals or other conditions. Category shares describe route sections, not sunshine duration or probability. Unknown symbols remain missing and contribute neutral comfort (0.5) only in the combined score; sunshineAssessment reports the unknown distance fraction. They do not block otherwise usable forecast coverage.',
             ]
           : []),
-        ...(comparison.forecast.representation === 'ensemble-summary'
+        ...(comparison.weather.routeSources.some(
+          (route) => route.forecast.representation === 'ensemble-summary',
+        )
           ? [
               'Weather uses marginal 50th-percentile values and ensemble-mean wind direction, not a joint scenario. Hourly precipitation probability is for more than 0 mm in its native interval.',
             ]
           : []),
-        ...(comparison.forecast.freshnessBasis === 'retrieval-time'
+        ...(comparison.weather.routeSources.some(
+          (route) => route.forecast.freshnessBasis === 'retrieval-time',
+        )
           ? [
               'Freshness is measured since retrieval only; the age of the underlying forecast model may be unknown.',
             ]

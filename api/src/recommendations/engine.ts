@@ -50,7 +50,7 @@ import { windAssistanceBenefit, windExposure } from './wind-comfort.ts';
 import { meanWindFrom } from './wind-direction.ts';
 import { windStretchesFor } from './wind-stretches.ts';
 
-export const ALGORITHM_VERSION = 'comfort-v0.17';
+export const ALGORITHM_VERSION = 'comfort-v0.18';
 export const requiredWeather = [
   descriptors.airTemperature,
   descriptors.windSpeed,

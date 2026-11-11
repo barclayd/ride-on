@@ -42,7 +42,7 @@ const upload = async (h: Harness, ascentM: number | null, longitude = -1) => {
   assert.equal(route.ascentM, ascentM);
   assert.ok(
     route.warnings.includes(
-      ascentM === null ? 'MISSING_ELEVATION' : 'ASCENT_IS_UNSMOOTHED_ESTIMATE',
+      ascentM === null ? 'MISSING_ELEVATION' : 'ASCENT_IS_FILTERED_ESTIMATE',
     ),
   );
   return route;

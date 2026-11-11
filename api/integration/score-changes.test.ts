@@ -482,6 +482,6 @@ integration(
     const usable = await recommend(h, [route.id]);
     assert.ok(first(usable.rankings).best.score > 0);
     assert.equal(first(usable.rankings).best.scoreChange, null);
-    assert.equal(usable.algorithmVersion, 'comfort-v0.17');
+    assert.equal(usable.algorithmVersion, 'comfort-v0.18');
   },
 );

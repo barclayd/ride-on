@@ -3,8 +3,11 @@ import { test } from 'node:test';
 import { exportPKCS8, generateKeyPair } from 'jose';
 import { HttpResponse, http } from 'msw/http';
 import { z } from 'zod';
+import type { publicTracking } from '../src/tracking/store.ts';
 import catalogue from '../src/weather/cwa-locations.json' with { type: 'json' };
+import { BPF_ENDPOINT } from '../src/weather/met-office-bpf.ts';
 import { appleWeatherFixture } from '../test/fixtures/apple-weather.ts';
+import { bpfFixture, bpfSites } from '../test/fixtures/bpf.ts';
 import { taipeiGpx, taipeiRoutes } from '../test/fixtures/taipei.ts';
 import { first, recommend, upload } from './client.ts';
 import { createHarness, type Harness } from './harness.ts';
@@ -352,30 +355,148 @@ integration(
   },
 );
 
-integration(
-  'saved Apple choice is respected and mixed-country comparisons use global coverage regardless of time zone',
-  async (h, ids) => {
-    h.use(apple());
-    const saved = await h.send('/users', {
-      body: JSON.stringify({
-        displayName: 'Existing rider',
-        settings: { weatherProviderId: 'apple-weather' },
+const bpf = (quota = false) =>
+  http.get(`${BPF_ENDPOINT}/collections/*`, ({ request }) => {
+    if (quota)
+      return new HttpResponse(null, {
+        status: 429,
+        headers: { 'Retry-After': '600' },
+      });
+    const site = new URL(request.url).pathname.split('/locations/')[1];
+    if (!site)
+      return HttpResponse.json(
+        bpfSites(
+          Array.from({ length: 13 }, (_, i) => ({
+            latitude: 51.2 + i * 0.03,
+            longitude: -1,
+          })),
+        ),
+      );
+    const [, latitude, longitude] = decodeURIComponent(site).split(':');
+    return HttpResponse.json(
+      bpfFixture({
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        probabilities: request.url.includes('uk-spot-probabilities'),
       }),
-    });
-    assert.equal(saved.status, 201);
-    const explicit = await recommend(h, ids, settings);
-    assert.equal(explicit.weather.selectedSource?.providerId, 'apple-weather');
-    const uk = await upload(h);
-    const mixed = await recommend(h, [...ids, uk.id], {
-      ...settings,
-      weatherProviderId: 'automatic',
-    });
-    assert.equal(mixed.weather.selectedSource?.providerId, 'apple-weather');
-    assert.ok(
-      h.requests.every(
-        (r) => new URL(r.url).hostname === 'weatherkit.apple.com',
-      ),
     );
+  });
+
+for (const provider of ['automatic', 'apple-weather', 'met-office'])
+  integration(
+    `Taiwan overrides saved and requested ${provider}, including mixed-country shortlists`,
+    async (h, ids) => {
+      h.use(cwa({ probability: 80 }), apple(), bpf());
+      const saved = await h.send('/users', {
+        body: JSON.stringify({
+          displayName: 'Existing rider',
+          settings: { weatherProviderId: provider },
+        }),
+      });
+      assert.equal(saved.status, 201);
+      const profile = await (await h.send('/users/me')).json();
+      for (const extra of [{}, { weatherProviderId: provider }]) {
+        const explicit = await recommend(h, ids, { ...settings, ...extra });
+        assert.equal(
+          explicit.weather.selectedSource?.providerId,
+          'taiwan-weather',
+        );
+        assert.equal(explicit.rankings.length, 2);
+        assert.ok(
+          explicit.rankings.every(
+            (r) => r.best.conditions.maximumPrecipitationProbability === 0.8,
+          ),
+        );
+      }
+      const uk = await upload(h);
+      const mixedSettings = {
+        timeZone: 'Europe/London',
+        riding: { window: 'daylight' },
+      };
+      const mixed = await recommend(h, [...ids, uk.id], mixedSettings);
+      assert.equal(mixed.weather.selectedSource, null);
+      assert.equal(mixed.rankings.length, 3);
+      assert.ok(mixed.rankings.every((r) => r.departuresUnknown === 0));
+      for (const route of mixed.rankings) {
+        const expected = ids.includes(route.routeId)
+          ? 'taiwan-weather'
+          : provider === 'met-office'
+            ? 'met-office-bpf'
+            : 'apple-weather';
+        assert.ok(
+          route.best.forecastDetails.locations.every(
+            (location) => location.source.providerId === expected,
+          ),
+        );
+        assert.equal(
+          route.best.conditions.maximumPrecipitationProbability,
+          ids.includes(route.routeId)
+            ? 0.8
+            : provider === 'met-office'
+              ? 0.081
+              : 0,
+        );
+      }
+      const calls = h.requests.length;
+      await h.restart();
+      const cached = await recommend(h, [...ids, uk.id], mixedSettings);
+      assert.deepEqual(cached.rankings, mixed.rankings);
+      assert.equal(h.requests.length, calls);
+      assert.deepEqual(await (await h.send('/users/me')).json(), profile);
+      // Reversing input order must not change regional selection or scores.
+      const reversed = await recommend(
+        h,
+        [uk.id, ...ids].reverse(),
+        mixedSettings,
+      );
+      assert.deepEqual(reversed.rankings, mixed.rankings);
+      const next = await h.send('/recommendations/next-windows', {
+        body: JSON.stringify({
+          routeIds: [...ids, uk.id],
+          after: { date: '2026-10-09', window: 'daylight' },
+          timeZone: mixedSettings.timeZone,
+        }),
+      });
+      assert.equal(next.status, 200, await next.clone().text());
+      const nextResult = z
+        .object({
+          weather: z.object({
+            routeSources: z.array(
+              z.object({
+                routeId: z.string(),
+                selectedSource: z.object({ providerId: z.string() }).nullable(),
+              }),
+            ),
+          }),
+        })
+        .parse(await next.json());
+      assert.ok(
+        nextResult.weather.routeSources
+          .filter((r) => ids.includes(r.routeId))
+          .every((r) => r.selectedSource?.providerId === 'taiwan-weather'),
+      );
+    },
+  );
+
+integration(
+  'Met Office quota fallback in a mixed shortlist cannot switch Taiwan away from CWA',
+  async (h, ids) => {
+    h.use(cwa({ probability: 80 }), apple(), bpf(true));
+    const uk = await upload(h);
+    const result = await recommend(h, [...ids, uk.id], {
+      timeZone: 'Europe/London',
+      weatherProviderId: 'met-office',
+      riding: { window: 'daylight' },
+    });
+    assert.equal(result.rankings.length, 3);
+    for (const route of result.rankings)
+      assert.ok(
+        route.best.forecastDetails.locations.every(
+          (l) =>
+            l.source.providerId ===
+            (route.routeId === uk.id ? 'apple-weather' : 'taiwan-weather'),
+        ),
+      );
   },
 );
 
@@ -406,6 +527,112 @@ integration(
       h.requests.filter(
         (r) => new URL(r.url).hostname === 'weatherkit.apple.com',
       ).length <= 4,
+    );
+  },
+);
+
+integration(
+  'tracked Taiwan departures retain CWA across saved-provider changes and mixed comparisons',
+  async (h, ids) => {
+    h.use(cwa(), apple(), bpf());
+    const uk = await upload(h);
+    assert.equal(
+      (
+        await h.send('/users', {
+          body: JSON.stringify({
+            displayName: 'Traveller',
+            settings: {
+              weatherProviderId: 'met-office',
+              timeZone: 'Europe/London',
+            },
+          }),
+        })
+      ).status,
+      201,
+    );
+    const response = await h.send('/recommendations', {
+      body: JSON.stringify({ routeIds: [...ids, uk.id], date: '2026-10-10' }),
+    });
+    assert.equal(response.status, 200);
+    const recommendation = z
+      .object({
+        forecast: z.object({
+          representation: z.string(),
+          freshnessBasis: z.string(),
+        }),
+        days: z.array(
+          z.object({
+            availability: z.string(),
+            coverage: z.array(
+              z.object({
+                routeId: z.string(),
+                intervals: z.array(z.unknown()),
+              }),
+            ),
+          }),
+        ),
+        rankings: z.array(
+          z.object({
+            routeId: z.string(),
+            best: z.object({ recommendationRef: z.string() }),
+          }),
+        ),
+      })
+      .parse(await response.json());
+    assert.equal(recommendation.forecast.representation, 'mixed');
+    assert.equal(recommendation.forecast.freshnessBasis, 'retrieval-time');
+    assert.equal(first(recommendation.days).availability, 'full');
+    assert.ok(
+      first(recommendation.days).coverage.every(
+        (route) => route.intervals.length > 0,
+      ),
+    );
+    const taiwan = recommendation.rankings.find((r) => ids.includes(r.routeId));
+    assert.ok(taiwan);
+    const tracked = await h.send('/tracked-rides', {
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: JSON.stringify({
+        recommendationRef: taiwan.best.recommendationRef,
+        expectedTrackingVersion: 0,
+        replaceTrackedRideId: null,
+      }),
+    });
+    assert.equal(tracked.status, 201, await tracked.clone().text());
+    const created = (await tracked.json()) as {
+      ride: ReturnType<typeof publicTracking>;
+    };
+    assert.equal(created.ride.refresh.result, 'assessed');
+    assert.equal(
+      (
+        await h.send('/users/me', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedVersion: 1,
+            settings: { weatherProviderId: 'apple-weather' },
+          }),
+        })
+      ).status,
+      200,
+    );
+    const refreshed = await h.send(
+      `/tracked-rides/${created.ride.id}/refresh`,
+      { method: 'POST' },
+    );
+    assert.equal(refreshed.status, 200, await refreshed.clone().text());
+    const latest = (await (
+      await h.send(`/tracked-rides/${created.ride.id}`)
+    ).json()) as { ride: ReturnType<typeof publicTracking> };
+    assert.equal(latest.ride.refresh.result, 'assessed');
+    assert.ok(
+      latest.ride.latestAssessment?.pick.candidate.forecastDetails.locations.every(
+        (l) => l.source.providerId === 'taiwan-weather',
+      ),
+    );
+    assert.equal(
+      latest.ride.latestAssessment?.context.weather.routeSources.find(
+        (r) => r.routeId === taiwan.routeId,
+      )?.selectedSource?.providerId,
+      'taiwan-weather',
     );
   },
 );

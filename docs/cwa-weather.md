@@ -1,4 +1,4 @@
-# Taiwan weather — API 0.43.0
+# Taiwan weather — API 0.44.0
 
 Taiwan rides can use the complete scoring contract through **CWA + Apple Weather**
 (`taiwan-weather`, product `cwa-township-apple-hourly`). CWA is preferred for the
@@ -9,19 +9,19 @@ and still rejects unsupported fields or invented hourly resolution.
 
 ## Selection and coverage
 
-New profiles and requests without saved settings default to **Automatic**
-(`weatherProviderId: "automatic"`). A comparison uses the Taiwan product when all
-route weather samples and leg midpoints are inside Taiwan land boundaries;
-otherwise it uses Apple. The rule includes Penghu, Kinmen, Matsu, Green Island and
-Orchid Island, and does not classify nearby mainland locations by station distance
-or by the rider's time zone. Coastal boundary uncertainty conservatively keeps the
-global provider. A mixed-country comparison uses one global product throughout.
+Every Taiwan route uses **CWA + Apple Weather**, regardless of the saved or
+request-level weather provider (including Met Office, Apple and advanced policies).
+Selection is per route: all weather samples and leg midpoints must be inside
+Taiwan land boundaries. The rule includes Penghu, Kinmen, Matsu, Green Island and
+Orchid Island, and does not use the rider's time zone. Coastal boundary
+uncertainty conservatively keeps the non-Taiwan policy.
 
-Existing saved Apple or Met Office selections are preserved. Select Automatic to
-activate geographic selection, or explicitly select `taiwan-weather` to request
-the composite. The latter reports outside coverage for foreign locations. Both
-recommendation endpoints, tracked-ride refreshes and the persistent forecast cache
-use the same policy. [Provider-choice contract](weather-provider-choices.md).
+A mixed shortlist fetches and assesses Taiwan routes with the CWA-first
+composite, and other routes with the selected provider (Apple for Automatic).
+The groups retain their own statistical descriptors, freshness checks and cache
+identities before their scored candidates are ranked together. Saved settings
+are not rewritten. Both recommendation endpoints and tracked-ride refreshes
+apply this policy. [Provider-choice contract](weather-provider-choices.md).
 
 The advertised composite horizon is up to 240 hours through Apple. CWA's township
 product normally contributes the first three days. Actual available periods,

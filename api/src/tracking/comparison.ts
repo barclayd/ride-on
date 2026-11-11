@@ -47,6 +47,22 @@ export const compareTracking = (baseline: Snapshot, latest: Snapshot) => {
     !equal(
       baseline.context.weather.selectedSource,
       latest.context.weather.selectedSource,
+    ) ||
+    !equal(
+      baseline.context.weather.routeSources?.map(
+        ({ routeId, selectedSource, forecast }) => ({
+          routeId,
+          selectedSource,
+          forecast,
+        }),
+      ),
+      latest.context.weather.routeSources?.map(
+        ({ routeId, selectedSource, forecast }) => ({
+          routeId,
+          selectedSource,
+          forecast,
+        }),
+      ),
     )
   )
     contextChanges.push('weather_source');
