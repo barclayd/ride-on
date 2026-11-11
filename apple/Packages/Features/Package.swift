@@ -5,6 +5,7 @@ let package = Package(
     name: "Features",
     platforms: [.iOS("27.1"), .macOS("27.0")],
     products: [
+        .library(name: "RouteImportUI", type: .static, targets: ["RouteImportUI"]),
         .library(name: "SharedUI", type: .static, targets: ["SharedUI"]),
         .library(name: "RideUI", type: .static, targets: ["RideUI"]),
         .library(name: "RoutesUI", type: .static, targets: ["RoutesUI"]),
@@ -21,6 +22,7 @@ let package = Package(
         .package(url: "https://github.com/maplibre/maplibre-gl-native-distribution", exact: "6.31.0"),
     ],
     targets: [
+        .target(name: "RouteImportUI", dependencies: [.product(name: "RouteFiles", package: "Infrastructure"), .product(name: "Networking", package: "Infrastructure")]),
         .target(name: "SharedUI", dependencies: [
             .product(name: "DesignSystem", package: "DesignSystem"),
             .product(name: "Domain", package: "Domain"),
@@ -40,6 +42,7 @@ let package = Package(
             "SharedUI"
         ]),
         .target(name: "RoutesUI", dependencies: [
+            "RouteImportUI",
             .product(name: "DesignSystem", package: "DesignSystem"),
             .product(name: "Domain", package: "Domain"),
             .product(name: "Networking", package: "Infrastructure"),

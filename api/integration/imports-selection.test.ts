@@ -295,11 +295,13 @@ integration(
       .parse(await discovery.json()).sources;
     assert.deepEqual(
       providers.map((p) => p.id),
-      ['cycle-travel', 'garmin', 'strava'],
+      ['direct-import', 'cycle-travel', 'garmin', 'strava'],
     );
     const externalId = '9876543210123456789';
     const ids: string[] = [];
-    for (const { id: providerId } of providers) {
+    for (const { id: providerId } of providers.filter(
+      (provider) => provider.id !== 'direct-import',
+    )) {
       const response = await importRide(h, {
         source: { providerId, externalId },
       });
@@ -700,5 +702,30 @@ integration(
       '?unexpected=1',
     ])
       assert.equal((await h.send(`/routes${query}`)).status, 400);
+  },
+);
+
+integration(
+  'direct file imports are idempotent, owner scoped and do not change the shortlist',
+  async (h) => {
+    const source = { providerId: 'direct-import', externalId: 'a'.repeat(64) };
+    const request = { source, name: 'Forest & lanes' };
+    const first = await importRide(h, request);
+    assert.equal(first.status, 201);
+    const saved = await readImport(first);
+    assert.equal(saved.route.source?.providerId, 'direct-import');
+    const retry = await readImport(await importRide(h, request));
+    assert.equal(retry.outcome, 'unchanged');
+    assert.equal(retry.route.id, saved.route.id);
+    assert.equal((await list(h)).routes.length, 1);
+    assert.equal((await list(h, '', BOB_TOKEN)).routes.length, 0);
+    assert.deepEqual(
+      (await readSelection(await h.send('/route-selection'))).routeIds,
+      [],
+    );
+    const invalid = await importRide(h, {
+      source: { ...source, externalId: '123' },
+    });
+    assert.equal(invalid.status, 400);
   },
 );

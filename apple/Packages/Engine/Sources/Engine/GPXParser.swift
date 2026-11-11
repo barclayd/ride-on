@@ -73,6 +73,7 @@ public enum GPXParser {
         let delegate = GPXXMLDelegate()
         let xmlParser = XMLParser(data: data)
         xmlParser.delegate = delegate
+        xmlParser.shouldResolveExternalEntities = false
 
         let success = xmlParser.parse()
 
@@ -205,6 +206,7 @@ private final class GPXXMLDelegate: NSObject, XMLParserDelegate {
     var points: [GPXTrackPoint] = []
     var error: GPXParserError?
 
+    private var sawRoot = false
     private var characterBuffer = ""
     private var isCapturingPoint = false
     private var isCapturingEle = false
@@ -222,6 +224,16 @@ private final class GPXXMLDelegate: NSObject, XMLParserDelegate {
     }()
     private let dateFormatter = ISO8601DateFormatter()
 
+    func parser(_ parser: XMLParser, foundInternalEntityDeclarationWithName name: String, value: String?) {
+        error = .malformedDocument("Entity declarations are not supported")
+        parser.abortParsing()
+    }
+
+    func parser(_ parser: XMLParser, foundExternalEntityDeclarationWithName name: String, publicID: String?, systemID: String?) {
+        error = .malformedDocument("Entity declarations are not supported")
+        parser.abortParsing()
+    }
+
     func parser(
         _ parser: XMLParser,
         didStartElement elementName: String,
@@ -229,6 +241,14 @@ private final class GPXXMLDelegate: NSObject, XMLParserDelegate {
         qualifiedName qName: String?,
         attributes attributeDict: [String: String] = [:]
     ) {
+        if !sawRoot {
+            sawRoot = true
+            guard elementName == "gpx" else {
+                error = .malformedDocument("Expected a GPX document")
+                parser.abortParsing()
+                return
+            }
+        }
         characterBuffer = ""
         switch elementName {
         case "gpx":

@@ -182,3 +182,20 @@ semantics and representative fixtures. Extend the existing integration harness
 contract assertions, regenerate the artifacts, and update each affected client.
 Keep wire evolution independent of stored schema evolution. Compile every
 platform you claim; declaring it in Package.swift is insufficient.
+
+
+## iOS route sharing
+
+`RideOnShare` is an iOS-only share extension. It links the small `RouteImportUI`
+feature and Infrastructure's `RouteFiles` product (Engine + Networking + Domain),
+without maps, SwiftData or the app's platform services. The full app uses the same
+screen for document opening and file picking. Attachment data is read inside the
+item-provider callback before the temporary representation expires; reads and
+uploads are capped at 5 MB. FIT normalization retains coordinates and elevation.
+
+The existing `group.com.danbarclay.rideon` App Group shares API-session keychain
+items on iOS. On first launch after updating, the app moves its existing private
+session entries to that group. Tokens never go into defaults or shared files.
+A signed-out extension asks the user to open/sign in to Ride On and share again.
+The extension needs its own App ID/profile (`com.danbarclay.rideon.share`) with
+that App Group assigned before a signed build can be distributed.

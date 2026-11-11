@@ -10,6 +10,7 @@ import DesignSystem
 import SharedUI
 import RideUI
 import RoutesUI
+import RouteImportUI
 import PreferencesUI
 import OnboardingUI
 
@@ -20,6 +21,8 @@ struct RideOnApp: App {
     @State private var riderSettings = RiderSettingsStore(live: !FixtureWorld.isEnabled)
     @State private var rideTracker = RideTracker(live: !FixtureWorld.isEnabled)
     @State private var rideBoard = RideBoardStore(live: !FixtureWorld.isEnabled)
+    private struct OpenedRoute: Identifiable { let id = UUID(); let url: URL }
+    @State private var openedRoute: OpenedRoute?
     @State private var rideRequest = RideRequest()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -93,6 +96,7 @@ struct RideOnApp: App {
                 .task(id: WidgetWake(board: widgetBoard, tracked: rideTracker.ride, units: widgetUnits, active: scenePhase == .active)) {
                     await syncWidgets(active: scenePhase == .active)
                 }
+                .sheet(item: $openedRoute) { RouteImportSheet(fileURL: $0.url) }
                 .onOpenURL { url in
                     // Before Strava's router, which takes every rideon:// URL.
                     if let link = RideLink(url) {
@@ -102,7 +106,7 @@ struct RideOnApp: App {
                     #if os(iOS)
                     if StravaAuthCallbackRouter.shared.handle(url: url) { return }
                     #endif
-                    Task { await importOpenedGPX(at: url) }
+                    if url.isFileURL { openedRoute = OpenedRoute(url: url) }
                 }
         }
         .modelContainer(modelContainer)
@@ -163,14 +167,6 @@ struct RideOnApp: App {
         #if os(iOS)
         RideBoardBackgroundRefresh.schedule(after: rideBoard.nextRefresh)
         #endif
-    }
-
-    /// Share-sheet / "Open in Ride On" GPX handoff — declared in
-    /// `project.yml`'s `CFBundleDocumentTypes`/`UTImportedTypeDeclarations`.
-    @MainActor
-    private func importOpenedGPX(at url: URL) async {
-        let importer = RouteImporter(classifyClient: services.classify, elevationClient: services.elevation, modelContext: modelContainer.mainContext)
-        _ = try? await importer.importGPX(fileURL: url)
     }
 }
 

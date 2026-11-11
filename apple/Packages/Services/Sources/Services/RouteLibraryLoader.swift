@@ -157,6 +157,7 @@ public enum RouteLibraryLoader {
         case "cycle-travel": .cycleTravel
         case "strava": .strava
         case "garmin": .garmin
+        case "direct-import": .directImport
         default: .gpxFile
         }
     }

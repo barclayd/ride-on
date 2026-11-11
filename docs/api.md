@@ -1871,3 +1871,17 @@ optional top-level `recommendationId` for diagnostic snapshots; existing per-pic
 does not affect live scores. `GET /users/me/learning` also returns
 `feedbackRideCount`, and paused accounts keep their counts with zero adjustments.
 Apply migration `0021_ride_learning.sql` before release.
+
+
+### Direct GPX and FIT imports
+
+Apple clients import shared files through `POST /route-imports` using provider
+`direct-import`. Its external ID is a lowercase SHA-256 of the normalized GPX
+(including the route name), so retrying or sharing the same named route reuses
+its library entry. FIT courses and activities are converted to GPX on device;
+the API retains the existing GPX validation and owner-scoped storage. Imports
+never change the tracked shortlist. `GET /route-sources` includes Direct import.
+
+The sending app is not reliably exposed by the iOS share extension API. The GPX
+creator describes the exporter, which may differ from the sender, so the library
+uses **Direct import** without claiming a connection to that service.

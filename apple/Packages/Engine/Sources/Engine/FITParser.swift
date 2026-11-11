@@ -35,10 +35,13 @@ public enum FITParser {
             throw FITParserError.malformedFile("unsupported header size \(bytes[0])")
         }
         let dataSize = bytes[4...7].reversed().reduce(0) { $0 << 8 | Int($1) }
+        guard headerSize + dataSize <= bytes.count else {
+            throw FITParserError.malformedFile("truncated file")
+        }
         var reader = ByteReader(
             bytes: bytes,
             offset: headerSize,
-            limit: min(headerSize + dataSize, bytes.count)
+            limit: headerSize + dataSize
         )
 
         var definitions: [UInt8: MessageDefinition] = [:]
@@ -61,7 +64,7 @@ public enum FITParser {
             guard let definition = definitions[localType] else {
                 throw FITParserError.malformedFile("data message before its definition (local type \(localType))")
             }
-            try readDataMessage(definition, reader: &reader, points: &points, name: &name)
+            try readDataMessage(definition, reader: &reader, points: &points, name: &name, compressedTimestamp: isCompressedTimestamp)
         }
 
         guard !points.isEmpty else { throw FITParserError.noTrackPoints }
@@ -80,7 +83,8 @@ public enum FITParser {
         _ definition: MessageDefinition,
         reader: inout ByteReader,
         points: inout [GPXTrackPoint],
-        name: inout String?
+        name: inout String?,
+        compressedTimestamp: Bool
     ) throws {
         var latitude: Double?
         var longitude: Double?
@@ -88,6 +92,8 @@ public enum FITParser {
         var time: Date?
 
         for field in definition.fields {
+            // A compressed header replaces the timestamp field in the data record.
+            if compressedTimestamp && field.number == 253 { continue }
             let value = try reader.slice(field.size)
             switch definition.global {
             case Self.recordMessage:
