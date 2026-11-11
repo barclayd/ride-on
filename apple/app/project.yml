@@ -36,7 +36,11 @@ targets:
       - path: Shared
       - path: RideOn.icon
     dependencies:
+      - target: RideOnShare
+        platformFilter: iOS
       - target: RideOnWidgets
+      - package: Features
+        product: RouteImportUI
       - package: Router
       - package: Domain
       - package: Models
@@ -180,6 +184,40 @@ targets:
         CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]: Widgets/RideOnWidgets-iOS.entitlements
         CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: Widgets/RideOnWidgets-iOS.entitlements
         CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: Widgets/RideOnWidgets-macOS.entitlements
+
+  RideOnShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+      - path: App/Assets.xcassets
+    dependencies:
+      - package: Infrastructure
+        product: RouteFiles
+      - package: Features
+        product: RouteImportUI
+    info:
+      path: Generated/RideOnShare-Info.plist
+      properties:
+        CFBundleDisplayName: Ride On
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsFileWithMaxCount: 1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danbarclay.rideon.share
+        PRODUCT_NAME: RideOnShare
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: R2GGK3VN2C
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/RideOnShare.entitlements
 
   RideOnTests:
     type: bundle.unit-test

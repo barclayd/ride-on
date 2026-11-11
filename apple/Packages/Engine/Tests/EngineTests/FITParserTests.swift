@@ -67,3 +67,23 @@ private func makeFITCourse(points: [(lat: Double, lon: Double, eleM: Double)]) -
     data.replaceSubrange(latOffset..<latOffset + 4, with: [0xFF, 0xFF, 0xFF, 0x7F])
     #expect(throws: FITParserError.noTrackPoints) { try FITParser.parse(data: data) }
 }
+
+
+@Test func rejectsTruncatedFITPayloadEvenAtARecordBoundary() {
+    var data = makeFITCourse(points: [(51.5, -0.1, 15), (51.51, -0.11, 20)])
+    data.removeLast(17) // One complete record and the trailing CRC.
+    #expect(throws: FITParserError.self) { try FITParser.parse(data: data) }
+}
+
+@Test func compressedTimestampRecordsKeepCoordinatesAligned() throws {
+    var data = makeFITCourse(points: [(51.5, -0.1, 15), (51.51, -0.11, 20)])
+    let second = 12 + 9 + 17 + 18 + 15
+    data[second] = 0xA1 // Compressed timestamp, local record type 1.
+    data.removeSubrange((second + 11)..<(second + 15))
+    let size = UInt32(data.count - 14)
+    data.replaceSubrange(4..<8, with: withUnsafeBytes(of: size.littleEndian, Array.init))
+    let track = try FITParser.parse(data: data)
+    #expect(track.points.count == 2)
+    #expect(abs(track.points[1].coordinate.latitude - 51.51) < 0.000001)
+    #expect(track.points[1].elevationM == 20)
+}

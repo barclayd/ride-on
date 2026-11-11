@@ -4,6 +4,7 @@ import CoreLocation
 import Domain
 import DesignSystem
 import SharedUI
+import RouteImportUI
 
 /// The Routes tab (docs/redesign/README.md, "Routes"): every shortlisted loop on one map, under a
 /// floating panel holding the shortlist Rides ranks, then the rest of the library and the rides
@@ -21,6 +22,7 @@ public struct RoutesView: View {
     @Binding private var library: RouteLibrary
     @State private var selection: Selection?
     @State private var segment = Segment.library
+    @State private var importingFile = false
     @State private var query = ""
     @State private var detent = PanelDetent.medium
     @State private var camera: MapCameraPosition
@@ -92,6 +94,7 @@ public struct RoutesView: View {
             }
         }
         .navigationTitle("Routes")
+        .routeFileImporter(isPresented: $importingFile)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(removing: .title)
@@ -375,9 +378,8 @@ public struct RoutesView: View {
     }
 
     @ViewBuilder private var addRoutesItems: some View {
-        // ponytail: no-ops until the import flows are rebuilt on the API (docs/redesign/README.md, "Routes").
-        Button {} label: {
-            Label("Import GPX File", systemImage: "doc")
+        Button { importingFile = true } label: {
+            Label("Import GPX or FIT File", systemImage: "doc")
         }
         Button {} label: {
             Text("From cycle.travel")
@@ -486,7 +488,7 @@ public struct RoutesView: View {
     private var libraryList: some View {
         let routes = libraryRoutes.filter(matches)
         if library.routes.isEmpty {
-            emptyNote("Routes you import with the Ride On extension on cycle.travel appear here.")
+            emptyNote("Share a GPX or FIT file to Ride On, or import routes with the cycle.travel extension.")
         } else if routes.isEmpty {
             emptyNote(query.isEmpty ? "Every route is on your shortlist." : "No library routes match.")
         } else {

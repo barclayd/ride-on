@@ -4,6 +4,7 @@ import Domain
 import Services
 import DesignSystem
 import SharedUI
+import RouteImportUI
 
 /// Track a Route, from Rides' + (docs/redesign/README.md §10): your saved routes, each with a
 /// toggle that puts it on the shortlist Rides ranks or takes it off, and where new routes come
@@ -20,6 +21,7 @@ public struct TrackRouteSheet: View {
     @State private var saved: RouteLibraryLoader.Shortlist?
     @State private var saving = false
     @State private var saveError: String?
+    @State private var importingFile = false
     @State private var query = ""
     @Environment(\.dismiss) private var dismiss
     #if os(iOS)
@@ -61,6 +63,10 @@ public struct TrackRouteSheet: View {
                 }
         }
         .task { await load() }
+        .routeFileImporter(isPresented: $importingFile)
+        .onReceive(NotificationCenter.default.publisher(for: .routeLibraryDidImport)) { _ in
+            Task { await load() }
+        }
         .onChange(of: library.shortlist) { Task { await save() } }
         .alert("Couldn't Save Your Routes", isPresented: Binding { saveError != nil } set: { if !$0 { saveError = nil } }) {
             Button("OK", role: .cancel) {}
@@ -121,9 +127,8 @@ public struct TrackRouteSheet: View {
             }
 
             Section("Import") {
-                // ponytail: no-ops until the import flows are rebuilt on the API, as in Routes' Add Routes menu.
-                Button {} label: {
-                    ImportLabel("From a GPX File", systemImage: "doc")
+                Button { importingFile = true } label: {
+                    ImportLabel("From a GPX or FIT File", systemImage: "doc")
                 }
                 Button {} label: {
                     ImportLabel("From cycle.travel", detail: "With the Ride On browser extension", systemImage: "safari")

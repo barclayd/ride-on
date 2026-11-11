@@ -99,6 +99,7 @@ final class RouteLibraryLoaderTests: XCTestCase {
         XCTAssertEqual(RouteLibraryLoader.source(Source(providerId: "garmin")), .garmin)
         XCTAssertEqual(RouteLibraryLoader.source(Source(providerId: "komoot")), .gpxFile)
         XCTAssertEqual(RouteLibraryLoader.source(nil), .gpxFile)
+        XCTAssertEqual(RouteLibraryLoader.source(Source(providerId: "direct-import")), .directImport)
     }
 
     func testMergeReplaysAdditionsAndRemovalsOntoNewerShortlist() {

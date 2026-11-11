@@ -1,5 +1,8 @@
 import Foundation
 import os
+#if os(iOS)
+import Darwin
+#endif
 
 /// A login ID survives process launches and token rotation, but changes on every sign-in.
 /// This prevents a late response or an old account cache crossing a sign-out boundary.
@@ -16,12 +19,32 @@ final class RideOnSession: @unchecked Sendable {
     private let loginKey = "ride-on-api-login"
     private let accountKey = "ride-on-api-account"
 
+    /// The app and share extension can rotate/sign out the same session at once.
+    /// Serialise the read/check/write across processes as well as across threads.
+    private func withSessionLock<T>(_ body: () -> T) -> T {
+        lock.withLock {
+            #if os(iOS)
+            let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.danbarclay.rideon")?
+                .appendingPathComponent("api-session.lock")
+            let descriptor = url.map { Darwin.open($0.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR) } ?? -1
+            if descriptor >= 0 { flock(descriptor, LOCK_EX) }
+            defer {
+                if descriptor >= 0 {
+                    flock(descriptor, LOCK_UN)
+                    Darwin.close(descriptor)
+                }
+            }
+            #endif
+            return body()
+        }
+    }
+
     private func string(_ key: String) -> String? {
         KeychainStore.get(account: key).flatMap { String(data: $0, encoding: .utf8) }
     }
 
     var credentials: Credentials? {
-        lock.withLock {
+        withSessionLock {
             guard let token = string(tokenKey) else { return nil }
             let id = string(loginKey) ?? UUID().uuidString
             if string(loginKey) == nil { KeychainStore.set(Data(id.utf8), account: loginKey) }
@@ -30,7 +53,7 @@ final class RideOnSession: @unchecked Sendable {
     }
 
     func signIn(token: String) {
-        lock.withLock {
+        withSessionLock {
             KeychainStore.delete(account: accountKey)
             KeychainStore.set(Data(UUID().uuidString.utf8), account: loginKey)
             KeychainStore.set(Data(token.utf8), account: tokenKey)
@@ -39,7 +62,7 @@ final class RideOnSession: @unchecked Sendable {
     }
 
     func signOut(ifSession expected: String? = nil) {
-        let changed = lock.withLock {
+        let changed = withSessionLock {
             if let expected, string(loginKey) != expected { return false }
             for key in [tokenKey, loginKey, accountKey] { KeychainStore.delete(account: key) }
             return true
@@ -48,7 +71,7 @@ final class RideOnSession: @unchecked Sendable {
     }
 
     func identify(account: String, session: String) {
-        lock.withLock {
+        withSessionLock {
             guard string(loginKey) == session else { return }
             KeychainStore.set(Data(account.utf8), account: accountKey)
         }
@@ -56,7 +79,7 @@ final class RideOnSession: @unchecked Sendable {
 
     func refresh(_ token: String?, using original: Credentials) {
         guard let token, !token.isEmpty else { return }
-        lock.withLock {
+        withSessionLock {
             guard string(loginKey) == original.id, string(tokenKey) == original.token else { return }
             KeychainStore.set(Data(token.utf8), account: tokenKey)
         }

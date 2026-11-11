@@ -857,3 +857,13 @@ the [coordinated rollout](../strava.md); route imports and speed suggestions rem
 Sensitivity stays hidden until the API returns a level (v0.25.0). "How Your Routes Fit" is empty
 until a saved or fresh board is available. The Rides day strip doesn't show the sheet's "Rain until 15:00"
 style notes yet.
+
+
+### File sharing and imports
+
+GPX and FIT files can be shared to Ride On on iOS, opened with the app, or chosen
+from Routes → Add Routes and Track a Route. The shared Import Route sheet uses a
+native form with an editable name, Direct import attribution and a single Import
+action. It confirms only after the account library accepts the route, reports
+invalid files/sign-in/network errors, and leaves tracking as a separate choice.
+The library reloads after import and when returning from another app.

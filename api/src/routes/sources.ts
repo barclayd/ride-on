@@ -48,6 +48,14 @@ const gpxSource = (id: string, name: string): RouteSourceProvider => ({
 /** GPX exported by the user/client; these adapters do not sign in to external accounts. */
 export const routeSourceProviders: ReadonlyMap<string, RouteSourceProvider> =
   new Map([
+    [
+      'direct-import',
+      {
+        ...gpxSource('direct-import', 'Direct import'),
+        normalizeExternalId: (value: string) =>
+          validateInput(z.string().regex(/^[a-f0-9]{64}$/), value),
+      },
+    ],
     ['cycle-travel', gpxSource('cycle-travel', 'Cycle.travel')],
     ['garmin', gpxSource('garmin', 'Garmin Connect')],
     ['strava', gpxSource('strava', 'Strava')],

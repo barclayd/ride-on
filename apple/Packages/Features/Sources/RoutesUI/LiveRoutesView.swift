@@ -2,6 +2,7 @@ import Networking
 import SwiftUI
 import Domain
 import Services
+import RouteImportUI
 
 /// The Routes tab on live data: the saved routes, shortlist and ride history from the Ride On
 /// API. Adding or removing a shortlisted route saves straight away with `PUT /route-selection`,
@@ -9,6 +10,7 @@ import Services
 public struct LiveRoutesView: View {
     private enum Phase { case loading, signedOut, failed(String), loaded }
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var phase = Phase.loading
     @State private var library = RouteLibrary(routes: [], shortlist: [], rides: [])
     /// The shortlist as the API last confirmed it; edits save over it.
@@ -25,6 +27,12 @@ public struct LiveRoutesView: View {
             .navigationTitle("Routes")
             // Loads again on every return to the tab, picking up routes imported elsewhere.
             .task { await load() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await load() } }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .routeLibraryDidImport)) { _ in
+                Task { await load() }
+            }
             .onChange(of: library.shortlist) { Task { await save() } }
             .alert("Couldn't Save Your Shortlist", isPresented: Binding { saveError != nil } set: { if !$0 { saveError = nil } }) {
                 Button("OK", role: .cancel) {}

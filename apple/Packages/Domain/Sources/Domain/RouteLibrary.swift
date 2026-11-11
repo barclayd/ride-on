@@ -47,7 +47,7 @@ public extension RouteLibrary {
     }
 
     enum Source: String, Hashable, Sendable {
-        case cycleTravel, strava, garmin, gpxFile
+        case cycleTravel, strava, garmin, gpxFile, directImport
 
         public var title: String {
             switch self {
@@ -55,6 +55,7 @@ public extension RouteLibrary {
             case .strava: "Strava"
             case .garmin: "Garmin"
             case .gpxFile: "GPX file"
+            case .directImport: "Direct import"
             }
         }
     }
