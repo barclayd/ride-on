@@ -1,5 +1,5 @@
 import { verifyOAuthQueryParams } from '@better-auth/oauth-provider';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { html } from 'hono/html';
 import { z } from 'zod';
 import { AppError } from '../errors.ts';
@@ -30,12 +30,14 @@ const verifiedQuery = async (request: Request, identity: Identity) => {
     );
   return new URLSearchParams(query);
 };
-const page = (
+export const agentPage = (
   mode: string,
   content: ReturnType<typeof html>,
+  footer = html`<p class="muted">You can disconnect an agent at any time from <a href="/auth/agents">Agent access</a>.</p>`,
 ) => html`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Agent access · Ride On</title><style>
 :root{font:17px/1.55 system-ui,sans-serif;color-scheme:light dark;accent-color:#248a3d}body{margin:0;background:Canvas;color:CanvasText}main{max-width:34rem;margin:7vh auto;padding:1.5rem}h1{font-size:2rem;line-height:1.15;letter-spacing:-.04em}h2{font-size:1.1rem}p{margin:.8rem 0}.brand{font-weight:700;color:#248a3d}.muted{color:GrayText;font-size:.9rem}section{border-block-start:1px solid GrayText;padding:1rem 0;margin-top:1.5rem}button{font:inherit;border:1px solid GrayText;border-radius:.6rem;padding:.65rem 1rem;margin:.4rem .5rem .4rem 0;background:ButtonFace;color:ButtonText;cursor:pointer}button.primary{background:#248a3d;color:white;border-color:#248a3d}button:disabled{opacity:.5;cursor:wait}button:focus-visible,a:focus-visible{outline:3px solid Highlight;outline-offset:3px}a{color:LinkText}li{margin:.65rem 0;overflow-wrap:anywhere}[hidden]{display:none!important}.account{overflow-wrap:anywhere}@media(prefers-color-scheme:dark){.brand{color:#30d158}}
-</style><script src="/auth/agents/page.js" defer></script></head><body><main data-mode="${mode}"><p class="brand">Ride On</p>${content}<p id="status" role="status" aria-live="polite"></p><p class="muted">You can disconnect an agent at any time from <a href="/auth/agents">Agent access</a>.</p></main></body></html>`;
+.setup-code{font:700 1.6rem ui-monospace,monospace;letter-spacing:.12em}
+</style><script src="/auth/agents/page.js" defer></script></head><body><main data-mode="${mode}"><p class="brand">Ride On</p>${content}<p id="status" role="status" aria-live="polite"></p>${footer}</main></body></html>`;
 
 export const agentPageScript = `
 'use strict';
@@ -50,10 +52,11 @@ const request = async (path, body) => {
 const query = new URLSearchParams(location.search);
 const signed = new Set(['sig', 'ba_param', ...query.getAll('ba_param')]);
 const oauthQuery = new URLSearchParams([...query].filter(([key]) => signed.has(key))).toString();
+const keyRequest = document.getElementById('key-request')?.value;
 const go = url => { const target = new URL(url); if (!['https:', 'http:'].includes(target.protocol) && !target.protocol.includes('claude') && !target.protocol.includes('codex')) throw new Error('Return to your agent to finish connecting.'); location.assign(target.href); };
 const act = async (button, action) => { button.disabled = true; status.textContent = ''; try { await action(); } catch (error) { status.textContent = error.message; button.disabled = false; } };
 document.querySelectorAll('[data-provider]').forEach(button => button.onclick = () => act(button, async () => {
-  const callbackURL = location.origin + (oauthQuery ? '/auth/agents/consent?' + oauthQuery : '/auth/agents');
+  const callbackURL = location.origin + (keyRequest ? '/auth/agents/key?request=' + encodeURIComponent(keyRequest) : oauthQuery ? '/auth/agents/consent?' + oauthQuery : '/auth/agents');
   const result = await request('/api/auth/sign-in/social', { provider: button.dataset.provider, callbackURL, errorCallbackURL: location.href, disableRedirect: true, ...(oauthQuery ? { oauth_query: oauthQuery } : {}) });
   go(result.url);
 }));
@@ -65,6 +68,18 @@ document.querySelectorAll('[data-accept]').forEach(button => button.onclick = ()
 }));
 const switchButton = document.getElementById('switch');
 if (switchButton) switchButton.onclick = () => act(switchButton, async () => { await request('/api/auth/sign-out', {}); location.assign('/auth/agents/sign-in?' + oauthQuery); });
+const confirmSetup = document.getElementById('confirm-setup');
+const approveKey = document.getElementById('approve-key');
+const denyKey = document.getElementById('deny-key');
+const switchKey = document.getElementById('switch-key');
+if (confirmSetup && approveKey) confirmSetup.onchange = () => { approveKey.disabled = !confirmSetup.checked; };
+const decideKey = async accept => {
+  await request('/auth/api-key-requests/decision', { requestId: keyRequest, userCode: document.getElementById('setup-code').textContent, accept });
+  location.reload();
+};
+if (approveKey) approveKey.onclick = () => act(approveKey, async () => { if (!confirmSetup.checked) throw new Error('Check the setup code first.'); await decideKey(true); });
+if (denyKey) denyKey.onclick = () => act(denyKey, () => decideKey(false));
+if (switchKey) switchKey.onclick = () => act(switchKey, async () => { await request('/api/auth/sign-out', {}); location.reload(); });
 if (mode === 'connections') request('/auth/agents/connections').then(({ connections }) => {
   const list = document.getElementById('connections');
   if (!connections.length) { list.textContent = 'No agents are connected to this account.'; return; }
@@ -78,15 +93,19 @@ if (mode === 'connections') request('/auth/agents/connections').then(({ connecti
 }).catch(error => { status.textContent = error.message; });
 `;
 
+export const agentPageHeaders = (c: Context<Bindings>) => {
+  c.header(
+    'Content-Security-Policy',
+    "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+  );
+  c.header('Referrer-Policy', 'no-referrer');
+  c.header('X-Content-Type-Options', 'nosniff');
+};
+
 export const agentPages = () => {
   const app = new Hono<Bindings>();
   app.use('/auth/agents*', async (c, next) => {
-    c.header(
-      'Content-Security-Policy',
-      "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-    );
-    c.header('Referrer-Policy', 'no-referrer');
-    c.header('X-Content-Type-Options', 'nosniff');
+    agentPageHeaders(c);
     await next();
   });
   app.get('/auth/agents/page.js', (c) => {
@@ -100,7 +119,7 @@ export const agentPages = () => {
       (provider) => identity.config[provider],
     );
     return c.html(
-      page(
+      agentPage(
         'sign-in',
         html`<h1>Connect your agent</h1><p>Sign in to the Ride On account whose preferences and routes you want your agent to use.</p><section>${providers.map((provider) => html`<button type="button" data-provider="${provider}">Continue with ${provider === 'apple' ? 'Apple' : 'Google'}</button>`)}${!providers.length ? html`<p>Sign-in is temporarily unavailable. Please try again later.</p>` : ''}</section><p class="muted">You’ll review the permissions before any access is granted.</p>`,
       ),
@@ -123,7 +142,7 @@ export const agentPages = () => {
         'This connection requested an unsupported permission.',
       );
     return c.html(
-      page(
+      agentPage(
         'consent',
         html`<h1>Allow ${client.client_name || 'this agent'} to use Ride On?</h1><p class="account">Signed in as <strong>${session.user.email}</strong></p><p>The agent’s name is supplied by its developer. You’ll return to <strong>${redirect.host || redirect.protocol}</strong>.</p><section><h2>Permissions</h2><ul>${scopes.map((scope) => html`<li><label><input type="checkbox" name="scope" value="${scope}" checked> ${scopeDescriptions[scope]}</label></li>`)}</ul></section><button class="primary" type="button" data-accept="true">Allow access</button><button type="button" data-accept="false">Cancel</button><p><button id="switch" type="button">Use a different account</button></p>`,
       ),
@@ -136,7 +155,7 @@ export const agentPages = () => {
     });
     if (!session) return c.redirect('/auth/agents/sign-in');
     return c.html(
-      page(
+      agentPage(
         'connections',
         html`<h1>Your connected agents</h1><p class="account">${session.user.email}</p><p>Manage which agents can use your personal preferences and route library.</p><div id="connections"></div>`,
       ),

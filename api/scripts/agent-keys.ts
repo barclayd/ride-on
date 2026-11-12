@@ -1,6 +1,7 @@
 import { constants } from 'node:fs';
 import { open, unlink } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
+import { pairAgentKey } from './pair-agent-key.ts';
 
 // Internal account tooling. Credentials are read from private files, never argv.
 const main = async () => {
@@ -11,8 +12,9 @@ const main = async () => {
       session: { type: 'string' },
       name: { type: 'string' },
       scopes: { type: 'string' },
-      days: { type: 'string', default: '90' },
+      days: { type: 'string' },
       out: { type: 'string' },
+      'start-only': { type: 'boolean', default: false },
       local: { type: 'boolean', default: false },
       'local-port': { type: 'string', default: '8787' },
       help: { type: 'boolean', default: false },
@@ -21,6 +23,8 @@ const main = async () => {
   const [command, id] = positionals;
   if (values.help) {
     console.log(`Usage:
+  bun scripts/agent-keys.ts pair --name Al --scopes preferences:read,routes:read,rides:score --out /private/al.json
+  bun scripts/agent-keys.ts pair --out /private/al.json
   bun scripts/agent-keys.ts create --session /private/session.txt --name Al --scopes preferences:read,routes:read,rides:score --out /private/al.json
   bun scripts/agent-keys.ts list --session /private/session.txt
   bun scripts/agent-keys.ts revoke <key-id> --session /private/session.txt
@@ -28,8 +32,29 @@ const main = async () => {
 --days 90 sets expiry (1–365 days). --local targets http://127.0.0.1:8787.
 Use --local-port to select a different local development port.
 The session file must contain an existing account session token and have mode 600.
+Pair supports phone approval without a local session. Repeat with the same --out
+to resume. --start-only prints the approval link and exits; repeat to collect it.
 Creation requires a sign-in within the last 10 minutes. The output file is created
 with mode 600 and must not already exist. No secrets are printed.`);
+    return;
+  }
+  const port = Number(values['local-port']);
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error('Use a valid local port.');
+  const base = values.local
+    ? `http://127.0.0.1:${port}`
+    : 'https://api.ride-on.cc';
+  if (command === 'pair') {
+    if (positionals.length !== 1 || !values.out || values.session)
+      throw new Error('Pair requires --out and does not use --session.');
+    await pairAgentKey({
+      base,
+      out: values.out,
+      name: values.name,
+      scopes: values.scopes,
+      days: values.days,
+      startOnly: values['start-only'],
+    });
     return;
   }
   if (
@@ -59,12 +84,6 @@ with mode 600 and must not already exist. No secrets are printed.`);
   } finally {
     await sessionFile.close();
   }
-  const port = Number(values['local-port']);
-  if (!Number.isInteger(port) || port < 1 || port > 65535)
-    throw new Error('Use a valid local port.');
-  const base = values.local
-    ? `http://127.0.0.1:${port}`
-    : 'https://api.ride-on.cc';
   const request = async (path: string, method: string, body?: unknown) => {
     const response = await fetch(`${base}${path}`, {
       method,
@@ -98,7 +117,7 @@ with mode 600 and must not already exist. No secrets are printed.`);
       const response = await request('/auth/api-keys', 'POST', {
         name: values.name,
         scopes: values.scopes?.split(','),
-        expiresInDays: Number(values.days),
+        expiresInDays: Number(values.days ?? 90),
       });
       const created = (await response.json()) as {
         id: string;

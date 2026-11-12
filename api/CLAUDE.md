@@ -56,7 +56,7 @@ bun run lint:fix
 - `src/app.ts`: HTTP composition; `createApp` accepts test dependencies. `src/index.ts` owns Worker lifecycle exports.
 - `src/schemas/`, `src/http/`, `contracts/`: API-owned schemas, route registration and generated portable contracts. See `docs/protocol.md` for explicit coverage and parser compatibility.
 - `src/identity/`: Better Auth Google/Apple/passkeys, session-only access, stable owner bindings and PKCE browser handoff. See `../docs/authentication.md`.
-- `src/agents/`: shared MCP/HTTP agent operations. `/agent/v1/*` uses scoped account API keys; `/mcp` stays OAuth-only. Key management requires account sessions. See `../docs/agent-api.md`. App APIs remain session-only; key management is backend-only.
+- `src/agents/`: shared MCP/HTTP agent operations. `/agent/v1/*` uses scoped account API keys; `/mcp` stays OAuth-only. Key management requires account sessions. See `../docs/agent-api.md`. App APIs remain session-only; key management is backend-only apart from the isolated phone approval flow for internal setup.
 - `src/body.ts`, `request.ts`, `errors.ts`: bounded input and errors.
 - `src/routes/`: GPX normalization, replaceable source adapters, versioned source imports, paginated owner-scoped D1 persistence and saved shortlists. Imports never select rides; recommendations always take explicit route IDs.
 - `src/rides/`: owner-scoped history, immutable geometry, idempotent logging and bounded overlap assessment.
