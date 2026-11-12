@@ -1,9 +1,10 @@
 # Account API keys and agent HTTP API
 
-API v0.46.0 exposes the five [MCP tools](mcp.md) as ordinary JSON HTTP endpoints
+API v0.47.0 exposes the five [MCP tools](mcp.md) as ordinary JSON HTTP endpoints
 at `https://api.ride-on.cc/agent/v1/`. They use the same validation, saved rider
 preferences, route import service, scoring algorithm and replay evidence as MCP.
-There are no new account screens or changes to the existing apps.
+The apps and account-management screens are unchanged. An isolated setup page lets
+you approve an internal API key from your phone.
 
 ## Create, list and revoke keys
 
@@ -52,6 +53,59 @@ bits and the `ro_agent_` prefix; D1 stores only its SHA-256 hash and a short
 identifying prefix. List results omit the secret and hash. All responses use
 `Cache-Control: no-store`. Revoking the account's app session does not revoke
 its independently issued API keys; revoke the keys explicitly when required.
+
+## Phone-only setup
+
+The internal command can prepare the key on the Mac while the account owner signs
+in and approves on their phone. No Mac browser session is needed, and neither the
+account session nor the key is copied through chat.
+
+```sh
+bun scripts/agent-keys.ts pair --name Al --scopes preferences:read,routes:read,rides:score --days 90 --out /private/al-ride-on-key.json
+```
+
+Open the printed HTTPS link on the phone, sign in to the existing Ride On account,
+check the matching setup code, review the permissions and approve. The link alone
+cannot activate or retrieve a credential. Only approve a request you initiated:
+the name is supplied by the requesting computer. The command saves the approved
+key privately and prints only its metadata and file path.
+
+The approval link lasts **15 minutes**. Approval requires a login within the last
+10 minutes and the account's existing rider profile. It does not change profiles,
+create accounts or grant more than the displayed scopes and lifetime. Cancelled
+or expired requests cannot activate a key. Repeated or simultaneous approvals
+create only one key and preserve the 20-active-key account limit.
+
+Before contacting Ride On, the command saves a random 256-bit key and immutable
+request options to `<out>.pending` with mode `600`. The server stores only its
+hash. An independent random identifier identifies the public approval link.
+The phone authorizes that key hash; polling proves possession of the key and
+returns metadata, never an account session. This is an internal API-key pairing
+protocol, **not** an OAuth device grant; MCP OAuth is unchanged.
+
+If the command stops, repeat it with the **same output path** to resume safely:
+
+```sh
+bun scripts/agent-keys.ts pair --out /private/al-ride-on-key.json
+```
+
+`--start-only` prepares the link and exits; repeat the command to collect an
+approved key. Pending files are never overwritten or followed through symlinks.
+Approved requests can be recovered for 24 hours after their original deadline,
+provided their key has not been revoked. The command removes its pending file
+after saving the final credential. Keep the pending file private until recovery;
+it contains the key. An existing output file is never overwritten. Polling every
+five seconds does not require a session; requests are rate limited by IP.
+
+| Method and path | Authorization | Purpose |
+| --- | --- | --- |
+| `POST /auth/api-key-requests` | Newly generated key as Bearer | Prepare or resume immutable `name`, `scopes`, `expiresInDays` |
+| `POST /auth/api-key-requests/status` | Same key as Bearer | Poll with `{}`; receive status and approved metadata |
+| `GET /auth/agents/key?request=…` | Phone session after sign-in | Review the request, code, account, permissions and expiry |
+| `POST /auth/api-key-requests/decision` | Fresh account session | Approve/cancel with `requestId`, `userCode`, `accept`; trusted Origin required for cookies |
+
+This still depends on the Mac for file storage and agent execution. It does not
+create a hosted Dot secret store or change an agent's network permissions.
 
 ## Internal command
 

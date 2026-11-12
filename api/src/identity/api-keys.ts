@@ -10,9 +10,9 @@ import { copySessionHeaders } from './routes.ts';
 
 const DAY = 86_400_000;
 const RATE_LIMIT = 60;
-const metadataColumns =
+export const metadataColumns =
   'id, name, prefix, scopes, created_at, expires_at, revoked_at, last_used_at';
-type KeyRecord = {
+export type KeyRecord = {
   id: string;
   name: string;
   prefix: string;
@@ -22,7 +22,7 @@ type KeyRecord = {
   revoked_at: number | null;
   last_used_at: number | null;
 };
-const metadata = (row: KeyRecord) => ({
+export const keyMetadata = (row: KeyRecord) => ({
   id: row.id,
   name: row.name,
   prefix: row.prefix,
@@ -34,14 +34,14 @@ const metadata = (row: KeyRecord) => ({
   lastUsedAt:
     row.last_used_at === null ? null : new Date(row.last_used_at).toISOString(),
 });
-const hashKey = async (token: string) =>
+export const hashKey = async (token: string) =>
   Array.from(
     new Uint8Array(
       await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)),
     ),
     (byte) => byte.toString(16).padStart(2, '0'),
   ).join('');
-const createKeySchema = z.strictObject({
+export const createKeySchema = z.strictObject({
   name: z.string().trim().min(1).max(80),
   scopes: z
     .array(z.enum(agentScopes))
@@ -115,7 +115,7 @@ export const apiKeyRoutes = () => {
         'Revoke an unused API key before creating another (20 active keys maximum).',
       );
     // The full key exists only in this response. It cannot be retrieved later.
-    return c.json({ key, ...metadata(row) }, 201);
+    return c.json({ key, ...keyMetadata(row) }, 201);
   });
   app.get('/auth/api-keys', async (c) => {
     const account = await session(c);
@@ -127,7 +127,7 @@ export const apiKeyRoutes = () => {
         .all<KeyRecord>();
     const keys = rows.results.slice(0, limit);
     return c.json({
-      keys: keys.map(metadata),
+      keys: keys.map(keyMetadata),
       nextCursor: rows.results.length > limit ? keys.at(-1)?.id : null,
     });
   });

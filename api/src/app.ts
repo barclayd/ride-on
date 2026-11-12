@@ -16,6 +16,7 @@ import { createRouter, registerRoute } from './http/routes.ts';
 import { resolveAccess } from './identity/access.ts';
 import { apiKeyRoutes } from './identity/api-keys.ts';
 import { authConfig } from './identity/config.ts';
+import { keyRequestRoutes } from './identity/key-requests.ts';
 import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
 import { mcpRoutes } from './mcp/server.ts';
 import { browserNotificationRoutes } from './monitoring/browser-page.ts';
@@ -185,7 +186,7 @@ export const createApp = (
   registerRoute(app, libraryRoutes.health, (c) =>
     c.json({
       ok: true,
-      version: '0.46.0',
+      version: '0.47.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -198,6 +199,7 @@ export const createApp = (
   app.route('/', identityRoutes());
   app.route('/', mcpRoutes(dependencies));
   app.route('/', apiKeyRoutes());
+  app.route('/', keyRequestRoutes());
   app.route('/', agentApiRoutes(dependencies));
   app.route('/', browserNotificationRoutes());
   app.route('/', stravaPublicRoutes());
