@@ -1,6 +1,6 @@
 # Ride On API MVP
 
-API v0.45.0 adds an OAuth-authenticated [MCP server](mcp.md) for Claude and Codex, with saved preferences, route-library access, GPX/FIT imports and reproducible scoring.
+API v0.46.0 adds backend-only [account API keys and agent HTTP endpoints](agent-api.md) for saved preferences, route-library access, GPX/FIT imports and reproducible scoring. These share the existing OAuth-authenticated [MCP server](mcp.md) implementation; existing app APIs remain session-only.
 
 API v0.44.1 preserves each selected and preview date when a shortlist combines Taiwan and non-Taiwan weather providers. CWA continues to override the saved provider for Taiwan routes.
 

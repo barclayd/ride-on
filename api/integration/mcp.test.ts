@@ -372,6 +372,36 @@ integration(
       const rankings = savedScore.structuredContent
         ?.rankings as typeof output.rankings;
       assert.equal(rankings[0]?.best.score, output.rankings[0].best.score);
+      const issued = await h.send('/auth/api-keys', {
+        body: JSON.stringify({ name: 'HTTP comparison', scopes: agentScopes }),
+      });
+      assert.equal(issued.status, 201);
+      const { key } = (await issued.json()) as { key: string };
+      const httpScore = await h.send('/agent/v1/score_routes', {
+        token: key,
+        body: JSON.stringify({ routeIds: [route.id], date: RIDE_DATE }),
+      });
+      assert.equal(httpScore.status, 200);
+      assert.deepEqual(
+        await httpScore.json(),
+        savedScore.structuredContent,
+        'HTTP and MCP return exactly the same scoring result',
+      );
+      const duplicate = await h.send('/agent/v1/add_route', {
+        token: key,
+        body: JSON.stringify({ file }),
+      });
+      assert.equal(
+        ((await duplicate.json()) as { outcome: string }).outcome,
+        'unchanged',
+      );
+      for (const path of ['/auth/api-keys', '/agent/v1/get_preferences'])
+        assert.equal(
+          (await h.send(path, { token: alice.access_token, body: '{}' }))
+            .status,
+          401,
+        );
+
       assert.equal(
         (await h.send('/users/me', { token: alice.access_token })).status,
         401,

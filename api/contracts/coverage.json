@@ -17,6 +17,7 @@
     "PUT /users/me/pause"
   ],
   "existingHandlers": [
+    "DELETE /auth/api-keys/{id}",
     "DELETE /connections/strava",
     "DELETE /push-devices/{id}",
     "DELETE /rides/{id}",
@@ -32,6 +33,7 @@
     "GET /auth/agents/consent",
     "GET /auth/agents/page.js",
     "GET /auth/agents/sign-in",
+    "GET /auth/api-keys",
     "GET /auth/browser/authorize",
     "GET /auth/browser/complete",
     "GET /auth/browser/done",
@@ -66,7 +68,9 @@
     "PATCH /rides/{id}",
     "PATCH /tracked-rides/{id}",
     "PATCH /users/me/learning",
+    "POST /agent/v1/{operation}",
     "POST /auth/agents/revoke",
+    "POST /auth/api-keys",
     "POST /auth/browser/exchange",
     "POST /auth/browser/start",
     "POST /connections/strava/complete",

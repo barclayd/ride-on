@@ -1,8 +1,11 @@
 # Ride On authentication
 
-Agent connections use a separate OAuth grant, consent and revocation flow. See
-[MCP setup and authorisation](mcp.md). Normal app APIs still require sessions;
-MCP credentials cannot call them.
+MCP connections use a separate OAuth grant, consent and revocation flow. See
+[MCP setup and authorisation](mcp.md). Internal HTTP agents can use scoped,
+expiring [account API keys](agent-api.md) for `/agent/v1/*` (v0.46.0).
+Normal app APIs still require sessions; neither type of agent credential can
+call them. API-key creation/list/revocation is backend-only and requires the
+owning account's session. Creation additionally requires a recent sign-in.
 
 The v0.6 API uses Better Auth 1.7.7 on Cloudflare Workers with native D1 storage.
 Apple, Google and passkeys share one login identity, which maps to one cycling
