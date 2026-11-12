@@ -1,5 +1,6 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
+import { agentApiRoutes } from './agents/routes.ts';
 import { readBoundedBody } from './body.ts';
 import { AppError } from './errors.ts';
 import { assessGround, assessmentWindowError } from './ground/assessment.ts';
@@ -13,6 +14,7 @@ import { collectGroundEvidence } from './ground/service.ts';
 import { libraryRoutes } from './http/library.ts';
 import { createRouter, registerRoute } from './http/routes.ts';
 import { resolveAccess } from './identity/access.ts';
+import { apiKeyRoutes } from './identity/api-keys.ts';
 import { authConfig } from './identity/config.ts';
 import { copySessionHeaders, identityRoutes } from './identity/routes.ts';
 import { mcpRoutes } from './mcp/server.ts';
@@ -183,7 +185,7 @@ export const createApp = (
   registerRoute(app, libraryRoutes.health, (c) =>
     c.json({
       ok: true,
-      version: '0.45.0',
+      version: '0.46.0',
       algorithmVersion: ALGORITHM_VERSION,
       revision: c.env.CF_VERSION_METADATA?.tag || null,
     }),
@@ -195,6 +197,8 @@ export const createApp = (
   );
   app.route('/', identityRoutes());
   app.route('/', mcpRoutes(dependencies));
+  app.route('/', apiKeyRoutes());
+  app.route('/', agentApiRoutes(dependencies));
   app.route('/', browserNotificationRoutes());
   app.route('/', stravaPublicRoutes());
   for (const path of [

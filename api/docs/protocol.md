@@ -23,6 +23,11 @@ Recommendation, tracking, history, push and integration endpoints retain their
 existing handlers, validators and protocol documentation. Better Auth owns its
 `/api/auth/*` protocol. Their next contract extraction should preserve those
 boundaries rather than representing them as unconstrained generated DTOs.
+The account-key management and `/agent/v1/*` endpoints are documented in
+[the agent HTTP API](../../docs/agent-api.md), outside this generated contract.
+The HTTP agent and MCP transports share strict schemas and handlers in
+`src/agents/service.ts`; their score outputs and cross-transport imports are
+checked for parity in the Workers integration suite.
 See [the API reference](../../docs/api.md), [authentication](../../docs/authentication.md),
 [tracking](../../docs/ride-tracking-api.md) and [Strava](../../docs/strava.md).
 

@@ -14,7 +14,7 @@ liveTest('deployed API identifies the recommendation build', async () => {
   };
   expect(health).toMatchObject({
     ok: true,
-    version: '0.45.0',
+    version: '0.46.0',
     algorithmVersion: ALGORITHM_VERSION,
   });
   if (process.env.EXPECTED_REVISION)
@@ -51,3 +51,26 @@ liveTest('deployed pause writes require authentication', async () => {
   for (const method of ['PUT', 'DELETE'])
     expect((await fetch(`${url}/users/me/pause`, { method })).status).toBe(401);
 });
+
+liveTest(
+  'deployed account key management and agent API require authentication',
+  async () => {
+    for (const path of [
+      '/auth/api-keys',
+      '/agent/v1/get_preferences',
+      '/agent/v1/list_routes',
+      '/agent/v1/add_route',
+      '/agent/v1/score_routes',
+      '/agent/v1/score_route_file',
+    ]) {
+      const response = await fetch(`${url}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      expect(response.status).toBe(401);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+    }
+    expect((await fetch(`${url}/auth/api-keys`)).status).toBe(401);
+  },
+);

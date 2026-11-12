@@ -5,6 +5,10 @@ own Ride On account with Apple or Google and approves access in the browser.
 Finish creating your rider profile in Ride On first. App sessions and API keys
 cannot authenticate the MCP; the agent receives its own OAuth credentials.
 
+For internal integrations that use ordinary HTTPS and an account API key,
+the same five operations are available through the [agent HTTP API](agent-api.md).
+Both transports share their schemas and implementation.
+
 ## Codex
 
 ```sh
