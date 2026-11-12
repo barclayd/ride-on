@@ -14,12 +14,30 @@ liveTest('deployed API identifies the recommendation build', async () => {
   };
   expect(health).toMatchObject({
     ok: true,
-    version: '0.44.1',
+    version: '0.45.0',
     algorithmVersion: ALGORITHM_VERSION,
   });
   if (process.env.EXPECTED_REVISION)
     expect(health.revision).toBe(process.env.EXPECTED_REVISION);
 });
+liveTest(
+  'deployed MCP requires delegated OAuth and advertises its resource',
+  async () => {
+    const response = await fetch(`${url}/mcp`);
+    expect(response.status).toBe(401);
+    expect(response.headers.get('WWW-Authenticate')).toContain(
+      '/.well-known/oauth-protected-resource/mcp',
+    );
+    const metadata = await fetch(
+      `${url}/.well-known/oauth-protected-resource/mcp`,
+    );
+    expect(metadata.status).toBe(200);
+    expect(await metadata.json()).toMatchObject({
+      resource: `${url}/mcp`,
+      authorization_servers: [`${url}/api/auth`],
+    });
+  },
+);
 liveTest('deployed private route list requires authentication', async () => {
   expect((await fetch(`${url}/routes`)).status).toBe(401);
 });
